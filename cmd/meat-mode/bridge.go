@@ -1,6 +1,21 @@
 package main
 
-import "errors"
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
 
-// runBridge is wired to internal/bridge by meat-d0i.3.
-func runBridge(args []string) error { return errors.New("bridge: not built yet") }
+	"github.com/yourfriendaaron/meat-mode/internal/bridge"
+)
+
+// runBridge runs `meat-mode bridge <command>`.
+func runBridge(args []string) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	env, err := bridge.DefaultEnv(version)
+	if err != nil {
+		return err
+	}
+	return bridge.Main(ctx, args, env)
+}
