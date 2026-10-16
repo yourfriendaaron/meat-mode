@@ -11,7 +11,7 @@ The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges (
 
 ## App API
 
-The app relies on the deployment's network boundary (LAN or VPN). No login in v1. Because it has no credentials, the hub refuses requests another site could make from the user's browser:
+The app relies on the network boundary: it is reached only over Tailscale (docs/deploy.md), so only the user's own devices reach it. No login in v1. The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `http://` on localhost only). Because it has no credentials, the hub refuses requests another site could make from the user's browser:
 
 - A `Host` other than `localhost`, `127.0.0.1`, `[::1]`, the host of `MEAT_MODE_PUBLIC_URL` or one listed in `MEAT_MODE_ALLOWED_HOSTS` gets `421` (on `/api/` and the app's pages).
 - An `/api/` request (any method) or a non-GET page request whose `Origin` is neither the request's own origin nor that of `MEAT_MODE_PUBLIC_URL` gets `403`, and so does an `/api/` request whose `Sec-Fetch-Site` is `same-site` or `cross-site`. A plain subresource load such as an image carries no `Origin`, so in a browser too old to send `Sec-Fetch-Site` a hostile page can still tie up event stream slots.

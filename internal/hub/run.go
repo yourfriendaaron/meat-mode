@@ -46,6 +46,9 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
 	st, err := store.Open(cfg.DataDir)
 	if err != nil {
 		return err
