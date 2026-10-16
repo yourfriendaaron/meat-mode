@@ -7,3 +7,9 @@ Status: designed, not built yet.
 ## Contributing
 
 Run `scripts/setup.sh` after cloning. This repo is public; read `AGENTS.md` before committing anything.
+
+Tests:
+
+- `go test ./...` for the hub and the bridge.
+- `pnpm --dir web test` for frontend modules, and `pnpm --dir web test:e2e` for the UI against a fake hub.
+- `pnpm --dir e2e test` for the end-to-end suite: the app in Chromium, a real hub, two bridges and scratch beads repos in a temp directory. It needs Go, `pnpm install` in both `web/` and `e2e/`, and `bd` 1.3 or newer on `PATH`; without `bd` it skips. Set `E2E_IMAGE=<image>` to run the hub from a built image (`docker build -t meat-mode:dev .`) instead of the binary.
