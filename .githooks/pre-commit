@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Block commits that would publish personal data, secrets or machine state.
+set -euo pipefail
+root=$(git rev-parse --show-toplevel)
+"$root/scripts/public-safety.sh"
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --staged --redact --no-banner "$root"
+else
+  echo "pre-commit: gitleaks not installed; CI will run it." >&2
+fi
