@@ -45,7 +45,7 @@ Publish port 8080 only to loopback (as above) and put HTTPS in front of it:
 - **Reverse proxy** (Caddy, nginx, Traefik, or your NAS's built-in proxy): proxy `https://meat-mode.example.com` to `http://127.0.0.1:8080`. The app uses a long-lived request for live updates (`/api/events`, server-sent events), so turn off response buffering for that path if your proxy buffers.
 - **Tailscale Service**: define the Service in the Tailscale admin console, then on the hub host run `tailscale serve --bg --service=svc:<name> --https=443 http://127.0.0.1:8080` and approve the host. The app is then at `https://<name>.<your tailnet>.ts.net` for devices on your tailnet.
 
-Set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub, so links in reminders open the right place.
+Set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub, so links in reminders open the right place. The app refuses requests under any name but `localhost`, `127.0.0.1` and the names you allow, so set `MEAT_MODE_PUBLIC_URL` or `MEAT_MODE_ALLOWED_HOSTS` to the names you open the app at.
 
 The app itself has no login. It relies on the network boundary: keep it on your LAN or VPN, and do not expose it to the internet.
 

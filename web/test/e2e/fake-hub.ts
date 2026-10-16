@@ -138,6 +138,12 @@ export class FakeHub {
     const method = req.method();
     this.requests.push(`${method} ${path}`);
 
+    // The real hub refuses a state change without a JSON content type (415).
+    const ctype = (await req.headerValue("content-type")) ?? "";
+    if (method !== "GET" && method !== "HEAD" && !/^application\/json(\s*;\s*charset=[^;]+)?$/i.test(ctype)) {
+      return this.json(route, 415, { error: "Content-Type must be application/json" });
+    }
+
     if (method === "GET" && path === "/api/state") return this.json(route, 200, this.state());
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
