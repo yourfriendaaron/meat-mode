@@ -40,3 +40,7 @@ web/static/*
 !web/static/.gitkeep
 /meat-mode
 /bin/
+
+# Agent harness worktrees and local settings
+.claude/
+.worktrees/
