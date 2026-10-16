@@ -98,9 +98,7 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 	case api.KindDone, api.KindReopen, api.KindDismiss:
 		p = api.Payload{}
 	case api.KindSnooze:
-		if p.Until == nil {
-			return a, false, invalidf("snooze needs payload.until")
-		}
+		// No until clears the snooze: Undo of a first snooze.
 		p = api.Payload{Until: p.Until, Previous: p.Previous}
 	case api.KindNote:
 		if strings.TrimSpace(p.Text) == "" {

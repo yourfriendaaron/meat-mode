@@ -36,7 +36,7 @@ The app relies on the deployment's network boundary (LAN or VPN). No login in v1
 |---|---|---|---|
 | `done` | `key` | `{}` | status `closed`, close reason `Done in Meat Mode` |
 | `reopen` | `key` | `{}` | status `open` |
-| `snooze` | `key` | `{"until": time, "previous": time or null}` | `deferUntil = until` |
+| `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<MEAT_MODE_USER>-app` |
 | `add` | `bridge` + `repo` | `{"title": "…", "due": time or null}` | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |

@@ -237,7 +237,6 @@ func TestActionValidationOverHTTP(t *testing.T) {
 		{"not json", http.StatusBadRequest},
 		{api.NewAction{ID: aid1, Kind: "launch", Key: "laptop/garden/gd-1"}, http.StatusBadRequest},
 		{api.NewAction{ID: aid1, Kind: api.KindDone, Key: "laptop/garden/gd-404"}, http.StatusNotFound},
-		{api.NewAction{ID: aid1, Kind: api.KindSnooze, Key: "laptop/garden/gd-1"}, http.StatusBadRequest},
 		{api.NewAction{ID: aid1, Kind: api.KindNote, Key: "laptop/garden/gd-1", Payload: api.Payload{Text: strings.Repeat("x", 10001)}}, http.StatusBadRequest},
 		{api.NewAction{ID: aid1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden"}, http.StatusBadRequest},
 		{api.NewAction{ID: aid1, Kind: api.KindAdd, Bridge: "laptop", Repo: "chores", Payload: api.Payload{Title: "Mop"}}, http.StatusBadRequest},

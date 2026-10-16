@@ -281,7 +281,6 @@ func TestAppendValidation(t *testing.T) {
 		{"missing key", api.NewAction{ID: id1, Kind: api.KindDone}, ErrInvalid},
 		{"unknown item", api.NewAction{ID: id1, Kind: api.KindDone, Key: "laptop/garden/gd-9"}, ErrNotFound},
 		{"unknown bridge", api.NewAction{ID: id1, Kind: api.KindDone, Key: "desk/garden/gd-1"}, ErrNotFound},
-		{"snooze without until", api.NewAction{ID: id1, Kind: api.KindSnooze, Key: "laptop/garden/gd-1"}, ErrInvalid},
 		{"empty note", api.NewAction{ID: id1, Kind: api.KindNote, Key: "laptop/garden/gd-1", Payload: api.Payload{Text: "  "}}, ErrInvalid},
 		{"long note", api.NewAction{ID: id1, Kind: api.KindNote, Key: "laptop/garden/gd-1", Payload: api.Payload{Text: strings.Repeat("a", MaxNoteLen+1)}}, ErrInvalid},
 		{"add without title", api.NewAction{ID: id1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden"}, ErrInvalid},
@@ -573,5 +572,19 @@ func TestReplaceReposDropsItemsWhenOptedOut(t *testing.T) {
 	st, _ := s.State()
 	if hasItem(st, "laptop/garden/gd-1") {
 		t.Fatal("items of a repo that opted out are still shown")
+	}
+}
+
+func TestSnoozeWithoutUntilClears(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	until := time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC)
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindSnooze, Key: "laptop/garden/gd-1", Payload: api.Payload{Until: &until}}, "alex-app")
+	must(t, err)
+	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindSnooze, Key: "laptop/garden/gd-1"}, "alex-app")
+	must(t, err)
+	st, _ := s.State()
+	if it := item(t, st, "laptop/garden/gd-1"); it.DeferUntil != nil {
+		t.Fatalf("snooze not cleared: %v", it.DeferUntil)
 	}
 }
