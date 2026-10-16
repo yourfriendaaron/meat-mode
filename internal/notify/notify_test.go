@@ -247,6 +247,18 @@ func TestNtfyRequest(t *testing.T) {
 	if got.Header.Get("Authorization") != "" {
 		t.Fatal("auth header sent without token")
 	}
+
+	// A bead title with control characters still sends, as one header line.
+	err = n.Notify(context.Background(), Message{Title: "Water\r\nX-Injected: 1\tthe\x00plants\x7f", Body: "b",
+		URL: "https://app.example.com/\n?item=a", Tag: "a\rb"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h = got.Header
+	if h.Get("Title") != "Water  X-Injected: 1 the plants" || h.Get("X-Injected") != "" ||
+		h.Get("Click") != "https://app.example.com/ ?item=a" || h.Get("Tags") != "a b" {
+		t.Fatalf("control characters reached the headers: %q", h)
+	}
 }
 
 type fake struct {
