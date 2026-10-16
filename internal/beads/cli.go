@@ -1,0 +1,236 @@
+package beads
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+)
+
+// CLI implements Beads by running `bd -C <dir> ... --json`.
+type CLI struct {
+	Bin     string        // bd executable; "bd" when empty
+	Timeout time.Duration // per call; one minute when zero
+	Now     func() time.Time
+}
+
+var _ Beads = (*CLI)(nil)
+
+// Error is a failed bd call.
+type Error struct {
+	Args    []string
+	Message string
+}
+
+func (e *Error) Error() string {
+	return "bd " + strings.Join(e.Args, " ") + ": " + e.Message
+}
+
+func (c *CLI) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
+}
+
+// run runs bd in dir and returns stdout. A nonzero exit becomes *Error, with
+// the message from bd's {"error": ...} JSON when it printed one.
+func (c *CLI) run(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	bin := c.Bin
+	if bin == "" {
+		bin = "bd"
+	}
+	timeout := c.Timeout
+	if timeout == 0 {
+		timeout = time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	full := args
+	if dir != "" {
+		full = append([]string{"-C", dir}, args...)
+	}
+	cmd := exec.CommandContext(ctx, bin, full...)
+	cmd.Env = append(os.Environ(), "BD_NON_INTERACTIVE=1", "NO_COLOR=1")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	if err == nil {
+		return stdout.Bytes(), nil
+	}
+	msg := ""
+	var body struct {
+		Error string `json:"error"`
+	}
+	if i := bytes.IndexByte(stdout.Bytes(), '{'); i >= 0 && json.Unmarshal(stdout.Bytes()[i:], &body) == nil {
+		msg = body.Error
+	}
+	if msg == "" {
+		msg = firstLine(stderr.String())
+	}
+	if msg == "" {
+		msg = err.Error()
+	}
+	e := &Error{Args: args, Message: msg}
+	if strings.Contains(msg, "not found") || strings.Contains(msg, "no issues found") {
+		return nil, fmt.Errorf("%w: %w", ErrNotFound, e)
+	}
+	return nil, e
+}
+
+func firstLine(s string) string {
+	for line := range strings.SplitSeq(s, "\n") {
+		if t := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "Error:")); t != "" {
+			return t
+		}
+	}
+	return ""
+}
+
+// decode reads the JSON value in out, skipping any text bd printed first.
+func decode(out []byte, v any) error {
+	i := bytes.IndexAny(out, "[{")
+	if i < 0 {
+		return fmt.Errorf("bd printed no JSON: %q", firstLine(string(out)))
+	}
+	return json.Unmarshal(out[i:], v)
+}
+
+// Version implements Beads.
+func (c *CLI) Version(ctx context.Context) (string, error) {
+	out, err := c.run(ctx, "", "version", "--json")
+	if err != nil {
+		return "", err
+	}
+	var v struct {
+		Version string `json:"version"`
+	}
+	if err := decode(out, &v); err != nil {
+		return "", err
+	}
+	if v.Version == "" {
+		return "", errors.New("bd version printed no version")
+	}
+	return v.Version, nil
+}
+
+// ListHuman implements Beads.
+func (c *CLI) ListHuman(ctx context.Context, dir string, personal bool) ([]Issue, error) {
+	args := []string{"list", "--all", "-n", "0", "--json"}
+	if !personal {
+		args = append(args, "-l", HumanLabel)
+	}
+	out, err := c.run(ctx, dir, args...)
+	if err != nil {
+		return nil, err
+	}
+	var all []Issue
+	if err := decode(out, &all); err != nil {
+		return nil, err
+	}
+	now := c.now()
+	keep := all[:0]
+	for _, i := range all {
+		if KeepHuman(i, personal, now) {
+			keep = append(keep, i)
+		}
+	}
+	return keep, nil
+}
+
+// Show implements Beads.
+func (c *CLI) Show(ctx context.Context, dir, id string) (Issue, error) {
+	out, err := c.run(ctx, dir, "show", id, "--include-comments", "--json")
+	if err != nil {
+		return Issue{}, err
+	}
+	var list []Issue
+	if err := decode(out, &list); err != nil {
+		return Issue{}, err
+	}
+	if len(list) == 0 {
+		return Issue{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	return list[0], nil
+}
+
+// Close implements Beads.
+func (c *CLI) Close(ctx context.Context, dir, id, reason, actor string) error {
+	_, err := c.run(ctx, dir, "close", id, "--reason", reason, "--actor", actor, "--json")
+	return err
+}
+
+// Reopen implements Beads.
+func (c *CLI) Reopen(ctx context.Context, dir, id, actor string) error {
+	_, err := c.run(ctx, dir, "reopen", id, "--actor", actor, "--json")
+	return err
+}
+
+// Defer implements Beads.
+func (c *CLI) Defer(ctx context.Context, dir, id string, until *time.Time, actor string) error {
+	v := ""
+	if until != nil {
+		v = until.UTC().Format(time.RFC3339)
+	}
+	_, err := c.run(ctx, dir, "update", id, "--defer", v, "--actor", actor, "--json")
+	return err
+}
+
+// Dismiss implements Beads. bd prints no JSON for it.
+func (c *CLI) Dismiss(ctx context.Context, dir, id, actor string) error {
+	_, err := c.run(ctx, dir, "human", "dismiss", id, "--actor", actor)
+	return err
+}
+
+// AddComment implements Beads.
+func (c *CLI) AddComment(ctx context.Context, dir, id, author, text string) error {
+	_, err := c.run(ctx, dir, "comments", "add", id, "--author", author, "--actor", author, "--json", "--", text)
+	return err
+}
+
+// Create implements Beads.
+func (c *CLI) Create(ctx context.Context, dir string, in NewIssue) (string, error) {
+	meta, _ := json.Marshal(map[string]string{ActionMetaKey: in.ActionID})
+	args := []string{"create", "--title=" + in.Title, "-l", HumanLabel, "--metadata", string(meta), "--json"}
+	if in.Actor != "" {
+		args = append(args, "--actor", in.Actor)
+	}
+	if in.Due != nil {
+		args = append(args, "--due", in.Due.UTC().Format(time.RFC3339))
+	}
+	out, err := c.run(ctx, dir, args...)
+	if err != nil {
+		return "", err
+	}
+	var created Issue
+	if err := decode(out, &created); err != nil {
+		return "", err
+	}
+	if created.ID == "" {
+		return "", errors.New("bd create printed no id")
+	}
+	return created.ID, nil
+}
+
+// FindByActionID implements Beads.
+func (c *CLI) FindByActionID(ctx context.Context, dir, actionID string) (string, error) {
+	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--metadata-field", ActionMetaKey+"="+actionID, "--json")
+	if err != nil {
+		return "", err
+	}
+	var list []Issue
+	if err := decode(out, &list); err != nil {
+		return "", err
+	}
+	for _, i := range list {
+		if i.ActionID() == actionID {
+			return i.ID, nil
+		}
+	}
+	return "", nil
+}
