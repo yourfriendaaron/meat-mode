@@ -562,3 +562,16 @@ func TestSplitKey(t *testing.T) {
 		}
 	}
 }
+
+func TestReplaceReposDropsItemsWhenOptedOut(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	must(t, s.ReplaceRepos("laptop", []api.Repo{
+		{Name: "garden"},
+		{Name: "personal", Personal: true},
+	}))
+	st, _ := s.State()
+	if hasItem(st, "laptop/garden/gd-1") {
+		t.Fatal("items of a repo that opted out are still shown")
+	}
+}

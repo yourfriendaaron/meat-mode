@@ -40,7 +40,8 @@ func SplitKey(key string) (bridge, repo, id string, ok bool) {
 }
 
 // ReplaceRepos replaces a bridge's repo list. Repos missing from it are
-// dropped along with their items.
+// dropped along with their items, and a repo that is no longer opted in
+// loses its items.
 func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 	seen := map[string]bool{}
 	for _, r := range repos {
@@ -66,6 +67,10 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 	}
 	existing, err := queryStrings(tx, `SELECT name FROM repos WHERE bridge = ?`, bridge)
 	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM items WHERE bridge = ? AND repo IN
+		(SELECT name FROM repos WHERE bridge = ? AND personal = 0 AND opted_in = 0)`, bridge, bridge); err != nil {
 		return err
 	}
 	for _, name := range existing {
