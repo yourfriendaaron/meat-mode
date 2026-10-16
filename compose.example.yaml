@@ -1,0 +1,15 @@
+# Example: run the hub with a local data volume. Copy to compose.yaml and
+# put real values in .env (see .env.example).
+services:
+  meat-mode:
+    image: meat-mode:latest
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - meat-mode-data:/data
+
+volumes:
+  meat-mode-data:
