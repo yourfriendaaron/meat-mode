@@ -329,6 +329,45 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 	})
 }
 
+// TestRefusesUnknownBeads: the hub can only name beads this bridge listed.
+// Anything else, such as a bead without the human label or a flag-shaped id,
+// is refused without running bd.
+func TestRefusesUnknownBeads(t *testing.T) {
+	both(t, func(t *testing.T, w *world) {
+		dir := w.repo("garden", true)
+		water := w.seed(dir, "Water the plants")
+		var chore string
+		if w.real {
+			chore = strings.TrimSpace(beadstest.Run(t, dir, "bd", "create", "Agent chore", "--silent"))
+		} else {
+			chore = "tst-chore"
+			w.bd.(*fakebeads.Fake).Put(dir, beads.Issue{ID: chore, Title: "Agent chore", Status: "open"})
+		}
+		acts := []api.Action{
+			action("u-chore", api.KindDone, "garden", chore, api.Payload{}),
+			action("u-flag", api.KindNote, "garden", "-f/etc/hostname", api.Payload{Text: water}),
+			action("u-prof", api.KindDone, "garden", "--mem-profile=x", api.Payload{}),
+			action("u-water", api.KindNote, "garden", water, api.Payload{Text: "Bought soil"}),
+		}
+		for _, a := range acts {
+			w.hub.Enqueue(us, a)
+		}
+		w.tick(w.start(""))
+		for _, id := range []string{"u-chore", "u-flag", "u-prof"} {
+			if rs := w.hub.Results(id); len(rs) != 1 || rs[0].OK || rs[0].Error != ErrUnknownBead {
+				t.Errorf("%s: results = %+v", id, rs)
+			}
+		}
+		w.oneOK("u-water")
+		if w.show(dir, chore).Status == "closed" {
+			t.Error("closed a bead the bridge never listed")
+		}
+		if n := len(w.show(dir, water).Comments); n != 1 {
+			t.Errorf("water has %d comments, want 1", n)
+		}
+	})
+}
+
 func TestIgnoresActionsForAnotherBridge(t *testing.T) {
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)

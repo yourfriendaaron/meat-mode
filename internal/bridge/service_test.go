@@ -19,7 +19,10 @@ func (r *recorder) run(name string, args ...string) ([]byte, error) {
 
 func TestSystemdUnit(t *testing.T) {
 	home := "/srv/people/alex"
-	unit := SystemdUnit("/srv/people/alex/.local/bin/meat-mode", "/srv/people/alex/.local/bin:/usr/bin:/bin", home)
+	unit, err := SystemdUnit("/srv/people/alex/.local/bin/meat-mode", "/srv/people/alex/.local/bin:/usr/bin:/bin", home)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, want := range []string{
 		"\nExecStart=%h/.local/bin/meat-mode bridge run\n",
 		"\nEnvironment=PATH=%h/.local/bin:/usr/bin:/bin\n",
@@ -34,9 +37,29 @@ func TestSystemdUnit(t *testing.T) {
 	if strings.Contains(unit, home) {
 		t.Errorf("unit names the home directory instead of %%h:\n%s", unit)
 	}
-	odd := SystemdUnit("/opt/Meat Mode/100%/meat-mode", "/usr/bin", home)
+	odd, _ := SystemdUnit("/opt/Meat Mode/100%/meat-mode", "/usr/bin", home)
 	if !strings.Contains(odd, `ExecStart="/opt/Meat Mode/100%%/meat-mode" bridge run`) {
 		t.Errorf("path with a space and %% not quoted and escaped:\n%s", odd)
+	}
+	// systemd expands $VAR in ExecStart; $$ is a literal $.
+	dollar, _ := SystemdUnit("/opt/$HOME/${PATH}/meat-mode", "/opt/$x/bin", home)
+	if !strings.Contains(dollar, "\nExecStart=/opt/$$HOME/$${PATH}/meat-mode bridge run\n") ||
+		!strings.Contains(dollar, "\nEnvironment=PATH=/opt/$x/bin\n") {
+		t.Errorf("$ not escaped in ExecStart only:\n%s", dollar)
+	}
+	for _, bad := range [][2]string{
+		{"/opt/meat-mode\nExecStartPre=/bin/sh", "/usr/bin"},
+		{"/opt/meat-mode", "/usr/bin\r\nExecStartPre=/bin/sh"},
+	} {
+		if u, err := SystemdUnit(bad[0], bad[1], home); err == nil {
+			t.Errorf("unit for %q, %q was written:\n%s", bad[0], bad[1], u)
+		}
+		if p, err := LaunchdPlist(bad[0], bad[1], home); err == nil {
+			t.Errorf("plist for %q, %q was written:\n%s", bad[0], bad[1], p)
+		}
+	}
+	if err := (&Systemd{Dir: t.TempDir(), Home: home, Run: (&recorder{}).run}).Install("/opt/a\nb", "/usr/bin"); err == nil {
+		t.Error("Install accepted a path with a newline")
 	}
 }
 
@@ -85,7 +108,10 @@ func TestSystemdInstall(t *testing.T) {
 }
 
 func TestLaunchdPlist(t *testing.T) {
-	plist := LaunchdPlist("/srv/people/sam/bin/meat & mode", "/opt/homebrew/bin:/usr/bin", "/srv/people/sam")
+	plist, err := LaunchdPlist("/srv/people/sam/bin/meat & mode", "/opt/homebrew/bin:/usr/bin", "/srv/people/sam")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var doc struct {
 		Dict struct {
 			Inner []string `xml:",any"`

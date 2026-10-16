@@ -39,6 +39,7 @@ type Server struct {
 	store     *store.Store
 	push      PushRegistry
 	events    *broker
+	guard     *guard
 	heartbeat time.Duration
 	mux       *http.ServeMux
 	log       *slog.Logger
@@ -63,6 +64,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 		store:     st,
 		push:      push,
 		events:    newBroker(),
+		guard:     newGuard(cfg),
 		heartbeat: 25 * time.Second,
 		mux:       http.NewServeMux(),
 		log:       slog.Default(),
@@ -101,13 +103,17 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	return s
 }
 
-// ServeHTTP adds security headers and dispatches to the routes.
+// ServeHTTP adds security headers, applies the guard and dispatches to the
+// routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Content-Security-Policy", contentSecurityPolicy)
+	if !s.guard.check(w, r) {
+		return
+	}
 	s.mux.ServeHTTP(w, r)
 }
 

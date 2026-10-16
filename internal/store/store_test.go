@@ -555,10 +555,23 @@ func TestSplitKey(t *testing.T) {
 	if !ok || b != "laptop" || r != "garden" || id != "gd-1" {
 		t.Fatal("split failed")
 	}
-	for _, bad := range []string{"", "laptop/garden", "Laptop/garden/gd-1", "laptop//gd-1", "laptop/garden/a/b", "laptop/../gd-1"} {
+	for _, bad := range []string{"", "laptop/garden", "Laptop/garden/gd-1", "laptop//gd-1", "laptop/garden/a/b", "laptop/../gd-1",
+		"laptop/garden/-f/etc", "laptop/garden/--mem-profile=x", "laptop/-C/gd-1"} {
 		if _, _, _, ok := SplitKey(bad); ok {
 			t.Errorf("accepted %q", bad)
 		}
+	}
+}
+
+func TestRejectsFlagShapedNames(t *testing.T) {
+	if ValidRepoName("-garden") {
+		t.Error("accepted a repo name starting with -")
+	}
+	s, _ := open(t)
+	seed(t, s)
+	err := s.ReplaceItems("laptop", "garden", []api.Item{{ID: "--mem-profile=x", Title: "Water the plants", Status: "open"}})
+	if !errors.Is(err, ErrInvalid) {
+		t.Errorf("ReplaceItems with a flag-shaped id: %v", err)
 	}
 }
 

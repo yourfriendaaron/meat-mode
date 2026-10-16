@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -27,6 +28,7 @@ type Env struct {
 	Executable string  // "": this process's executable
 	LookPath   func(string) (string, error)
 	HTTP       *http.Client
+	Stdin      io.Reader // nil: no input
 	Stdout     io.Writer
 	Stderr     io.Writer
 	Version    string
@@ -38,7 +40,7 @@ func DefaultEnv(version string) (Env, error) {
 	if err != nil {
 		return Env{}, err
 	}
-	return Env{Paths: p, LookPath: exec.LookPath, Stdout: os.Stdout, Stderr: os.Stderr, Version: version}, nil
+	return Env{Paths: p, LookPath: exec.LookPath, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Version: version}, nil
 }
 
 func (e Env) service() (Service, error) {
@@ -100,6 +102,21 @@ func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// readToken reads one line of r as the bridge token.
+func readToken(r io.Reader) (string, error) {
+	if r == nil {
+		return "", errors.New("no token on standard input")
+	}
+	line, err := bufio.NewReader(r).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("read the token from standard input: %w", err)
+	}
+	if t := strings.TrimSpace(line); t != "" {
+		return t, nil
+	}
+	return "", errors.New("no token on standard input")
+}
+
 func pair(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -109,16 +126,27 @@ func pair(ctx context.Context, args []string, env Env) error {
 	insecure := fs.Bool("allow-insecure-http", false, "allow plain HTTP to a hub that is not on this machine")
 	noService := fs.Bool("no-service", false, "save the config without installing the user service")
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, "usage: meat-mode bridge pair <hub url> <token> [--root DIR]... [--personal DIR] [--allow-insecure-http] [--no-service]")
+		fmt.Fprintln(env.Stderr, "usage: meat-mode bridge pair <hub url> [<token> | -] [--root DIR]... [--personal DIR] [--allow-insecure-http] [--no-service]")
+		fmt.Fprintln(env.Stderr, "The token is the argument, one line of standard input when it is -, or MEAT_MODE_BRIDGE_TOKEN when it is left out.")
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err
 	}
+	if len(pos) == 1 {
+		if t := strings.TrimSpace(os.Getenv("MEAT_MODE_BRIDGE_TOKEN")); t != "" {
+			pos = append(pos, t)
+		}
+	}
 	if len(pos) != 2 {
 		fs.Usage()
 		return errors.New("pair needs a hub URL and a token")
+	}
+	if pos[1] == "-" {
+		if pos[1], err = readToken(env.Stdin); err != nil {
+			return err
+		}
 	}
 	cfg, err := LoadConfig(env.Paths.Config)
 	if err != nil {

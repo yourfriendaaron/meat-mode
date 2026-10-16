@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -67,7 +68,8 @@ func stateDir(goos, home, xdg string) string {
 
 // LoadConfig reads the config file and applies the MEAT_MODE_HUB_URL and
 // MEAT_MODE_ALLOW_INSECURE_HTTP overrides. A missing file gives an empty
-// config.
+// config. It logs a warning when the file, which holds the token, is
+// readable by anyone but its owner.
 func LoadConfig(path string) (Config, error) {
 	var c Config
 	b, err := os.ReadFile(path)
@@ -76,6 +78,10 @@ func LoadConfig(path string) (Config, error) {
 	case err != nil:
 		return c, err
 	default:
+		if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 {
+			slog.Warn("the bridge config holds the hub token but others can read it; run chmod 600 on it",
+				"file", path, "mode", fmt.Sprintf("%04o", fi.Mode().Perm()))
+		}
 		if err := json.Unmarshal(b, &c); err != nil {
 			return c, fmt.Errorf("read %s: %w", path, err)
 		}

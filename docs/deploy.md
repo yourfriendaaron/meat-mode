@@ -45,7 +45,7 @@ Publish port 8080 only to loopback (as above) and put HTTPS in front of it:
 - **Reverse proxy** (Caddy, nginx, Traefik, or your NAS's built-in proxy): proxy `https://meat-mode.example.com` to `http://127.0.0.1:8080`. The app uses a long-lived request for live updates (`/api/events`, server-sent events), so turn off response buffering for that path if your proxy buffers.
 - **Tailscale Service**: define the Service in the Tailscale admin console, then on the hub host run `tailscale serve --bg --service=svc:<name> --https=443 http://127.0.0.1:8080` and approve the host. The app is then at `https://<name>.<your tailnet>.ts.net` for devices on your tailnet.
 
-Set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub, so links in reminders open the right place.
+Set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub, so links in reminders open the right place. The app refuses requests under any name but `localhost`, `127.0.0.1` and the names you allow, so set `MEAT_MODE_PUBLIC_URL` or `MEAT_MODE_ALLOWED_HOSTS` to the names you open the app at.
 
 The app itself has no login. It relies on the network boundary: keep it on your LAN or VPN, and do not expose it to the internet.
 
@@ -74,7 +74,7 @@ go install github.com/yourfriendaaron/meat-mode/cmd/meat-mode@latest
    meat-mode bridge pair https://meat-mode.example.com mm_xxxxxxxx
    ```
 
-   Options: `--root DIR` (repeatable) for the directories that hold your beads repos (default `~/projects`), `--personal DIR` for your personal to-do beads repo, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended).
+   Options: `--root DIR` (repeatable) for the directories that hold your beads repos (default `~/projects`), `--personal DIR` for your personal to-do beads repo, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
 
 Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/bridge.json` on Linux, `~/Library/Application Support/meat-mode/bridge.json` on macOS) and installs a user service:
 

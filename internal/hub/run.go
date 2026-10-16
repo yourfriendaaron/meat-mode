@@ -25,6 +25,21 @@ type Options struct {
 	OnStart func(ctx context.Context, st *store.Store) error
 }
 
+// newHTTPServer wraps h with the hub's timeouts. ReadTimeout bounds reading
+// a whole request, body included; there is no WriteTimeout, which would cut
+// off the event stream.
+func newHTTPServer(ctx context.Context, h *Server) *http.Server {
+	srv := &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
+	srv.RegisterOnShutdown(h.Close)
+	return srv
+}
+
 // Run opens the store, serves until ctx ends or the process gets SIGINT or
 // SIGTERM, then shuts down gracefully.
 func Run(ctx context.Context, cfg Config, opts Options) error {
@@ -50,13 +65,7 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 	}
 
 	h := NewServer(cfg, st, push)
-	srv := &http.Server{
-		Handler:           h,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       2 * time.Minute,
-		BaseContext:       func(net.Listener) context.Context { return ctx },
-	}
-	srv.RegisterOnShutdown(h.Close)
+	srv := newHTTPServer(ctx, h)
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {

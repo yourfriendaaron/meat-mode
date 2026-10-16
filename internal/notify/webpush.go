@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/SherClockHolmes/webpush-go"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/store"
 )
 
 type vapidKeys struct {
@@ -55,11 +57,31 @@ func loadVAPID(dir string) (vapidKeys, error) {
 	return k, nil
 }
 
+// PushHosts are the push services a subscription endpoint may point at: the
+// host is one of these or a subdomain of one. Any other endpoint could make
+// the hub send requests, and the subscriber's data, wherever it names.
+var PushHosts = []string{
+	"push.services.mozilla.com",
+	"fcm.googleapis.com",
+	"push.apple.com",
+	"web.push.apple.com",
+	"notify.windows.com",
+}
+
+// MaxSubscriptions is how many subscriptions the registry keeps; a new one
+// past it drops the oldest.
+const MaxSubscriptions = 20
+
+// ErrBadEndpoint is returned for an endpoint that is not an https URL of a
+// known push service.
+var ErrBadEndpoint = fmt.Errorf("%w: push endpoint must be an https URL of a known push service", store.ErrInvalid)
+
 // Registry stores Web Push subscriptions and sends to them.
 type Registry struct {
 	db      *sql.DB
 	keys    vapidKeys
 	subject string
+	hosts   []string // PushHosts; tests add their own
 	// Client is the HTTP client used for push services; nil means the default.
 	Client *http.Client
 }
@@ -80,22 +102,54 @@ func NewRegistry(dataDir string, db *sql.DB, subject string) (*Registry, error) 
 		return nil, err
 	}
 	subject = strings.TrimPrefix(subject, "mailto:") // the library adds it
-	return &Registry{db: db, keys: keys, subject: subject}, nil
+	return &Registry{db: db, keys: keys, subject: subject, hosts: PushHosts}, nil
 }
 
 // PublicKey is the VAPID public key the browser subscribes with.
 func (r *Registry) PublicKey() string { return r.keys.PublicKey }
 
-// Subscribe stores a subscription, replacing any with the same endpoint.
+// allowed reports whether endpoint is an https URL of a known push service.
+func (r *Registry) allowed(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Opaque != "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, h := range r.hosts {
+		if host == h || strings.HasSuffix(host, "."+h) {
+			return true
+		}
+	}
+	return false
+}
+
+// Subscribe stores a subscription as the newest, replacing any with the same
+// endpoint, and drops the oldest past MaxSubscriptions.
 func (r *Registry) Subscribe(ctx context.Context, s api.PushSubscription) error {
 	if s.Endpoint == "" || s.Keys.P256dh == "" || s.Keys.Auth == "" {
-		return errors.New("push subscription needs endpoint, p256dh and auth")
+		return fmt.Errorf("%w: push subscription needs endpoint, p256dh and auth", store.ErrInvalid)
 	}
-	_, err := r.db.ExecContext(ctx, `INSERT INTO push_subscriptions (endpoint, p256dh, auth)
-		VALUES (?, ?, ?)
-		ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`,
-		s.Endpoint, s.Keys.P256dh, s.Keys.Auth)
-	return err
+	if !r.allowed(s.Endpoint) {
+		return ErrBadEndpoint
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Delete and insert, so a renewed subscription gets the newest rowid.
+	if _, err := tx.Exec(`DELETE FROM push_subscriptions WHERE endpoint = ?`, s.Endpoint); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (?, ?, ?)`,
+		s.Endpoint, s.Keys.P256dh, s.Keys.Auth); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM push_subscriptions WHERE rowid NOT IN
+		(SELECT rowid FROM push_subscriptions ORDER BY rowid DESC LIMIT ?)`, MaxSubscriptions); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Unsubscribe removes a subscription; an unknown endpoint is not an error.
@@ -144,6 +198,13 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 	}
 	var errs []error
 	for i := range subs {
+		if !r.allowed(subs[i].Endpoint) {
+			// Stored before endpoints were checked; never send to it.
+			if err := r.Unsubscribe(ctx, subs[i].Endpoint); err != nil {
+				errs = append(errs, err)
+			}
+			continue
+		}
 		resp, err := webpush.SendNotificationWithContext(ctx, payload, &subs[i], opts)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("web push: %w", err))

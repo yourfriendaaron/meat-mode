@@ -46,6 +46,7 @@ func TestDiscover(t *testing.T) {
 	writeRepo(t, filepath.Join(root, "kitchen"), "meat-mode.sync: false\n")
 	writeRepo(t, filepath.Join(root, "attic"), "nested:\n  meat-mode.sync: true\n")
 	writeRepo(t, filepath.Join(root, "quoted"), "\"meat-mode.sync\": 'true'\n")
+	writeRepo(t, filepath.Join(root, "-shed"), "meat-mode.sync: true\n") // the hub refuses the name
 	writeRepo(t, filepath.Join(root, "garden-wt"), "meat-mode.sync: true\n")
 	if err := os.WriteFile(filepath.Join(root, "garden-wt", ".git"), []byte("gitdir: ../garden/.git/worktrees/wt\n"), 0o644); err != nil {
 		t.Fatal(err)

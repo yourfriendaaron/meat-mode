@@ -34,12 +34,20 @@ func (b *broker) publish() {
 	}
 }
 
-func (b *broker) subscribe() (chan int64, int64) {
+// maxEventStreams caps open event streams; one person needs a handful.
+const maxEventStreams = 32
+
+// subscribe adds a subscriber, or reports false when maxEventStreams are
+// already open.
+func (b *broker) subscribe() (chan int64, int64, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if len(b.subs) >= maxEventStreams {
+		return nil, 0, false
+	}
 	ch := make(chan int64, 1)
 	b.subs[ch] = struct{}{}
-	return ch, b.rev
+	return ch, b.rev, true
 }
 
 func (b *broker) unsubscribe(ch chan int64) {
@@ -66,17 +74,26 @@ func (b *broker) close() {
 }
 
 // handleEvents streams `event: change` with the current revision on connect
-// and on every change, plus a comment heartbeat.
+// and on every change, plus a comment heartbeat. Past maxEventStreams it
+// answers 503.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	ch, rev, ok := s.events.subscribe()
+	if !ok {
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, "too many open event streams")
+		return
+	}
+	defer s.events.unsubscribe(ch)
 	rc := http.NewResponseController(w)
+	// The stream has no body to read; the server's ReadTimeout is for
+	// requests that do, so lift it here.
+	_ = rc.SetReadDeadline(time.Time{})
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-cache")
 	h.Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
-	ch, rev := s.events.subscribe()
-	defer s.events.unsubscribe(ch)
 	send := func(rev int64) bool {
 		if _, err := fmt.Fprintf(w, "event: change\ndata: {\"rev\": %d}\n\n", rev); err != nil {
 			return false

@@ -87,6 +87,10 @@ func (h *harness) do(method, path string, body any, token string) *httptest.Resp
 		r = strings.NewReader(string(buf))
 	}
 	req := httptest.NewRequest(method, path, r)
+	req.Host = "localhost:8080" // as the app is opened on the hub's own machine
+	if method != "GET" && method != "HEAD" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}

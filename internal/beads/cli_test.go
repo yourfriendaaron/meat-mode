@@ -3,7 +3,10 @@ package beads_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,5 +160,84 @@ func TestCLI(t *testing.T) {
 
 	if _, err := c.Show(ctx, dir, "tst-nope"); !errors.Is(err, beads.ErrNotFound) {
 		t.Fatalf("Show unknown id: %v", err)
+	}
+}
+
+func TestCheckID(t *testing.T) {
+	for id, ok := range map[string]bool{
+		"tst-1": true, "tst-abc.1": true, "Water_2": true, "a": true,
+		"": false, "-f/etc/hostname": false, "--mem-profile=x": false, ".hidden": false,
+		"a b": false, "a/b": false, "a\nb": false, strings.Repeat("a", 129): false,
+	} {
+		if err := beads.CheckID(id); (err == nil) != ok {
+			t.Errorf("CheckID(%q) = %v, want ok=%v", id, err, ok)
+		}
+	}
+}
+
+// TestCLIRefusesFlagIDs passes bead ids that bd would read as flags. None may
+// reach bd as one: no file is read into a comment and none is written.
+func TestCLIRefusesFlagIDs(t *testing.T) {
+	dir := beadstest.NewRepo(t, "", "plants")
+	ctx := context.Background()
+	c := &beads.CLI{}
+	id, err := c.Create(ctx, dir, beads.NewIssue{Title: "Water the plants", ActionID: "act-1", Actor: "alex-app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	secret := filepath.Join(tmp, "secret")
+	if err := os.WriteFile(secret, []byte("not for comments\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	profile := filepath.Join(tmp, "profile")
+	bad := []string{"-f" + secret, "--mem-profile=" + profile, "-C" + tmp, "--db=" + profile}
+
+	for _, b := range bad {
+		// The note text is the real id, as a hostile hub could send.
+		if err := c.AddComment(ctx, dir, b, "alex-app", id); err == nil {
+			t.Errorf("AddComment(%q) succeeded", b)
+		}
+		if _, err := c.Show(ctx, dir, b); err == nil {
+			t.Errorf("Show(%q) succeeded", b)
+		}
+		if err := c.Close(ctx, dir, b, "Done", "alex-app"); err == nil {
+			t.Errorf("Close(%q) succeeded", b)
+		}
+		if err := c.Reopen(ctx, dir, b, "alex-app"); err == nil {
+			t.Errorf("Reopen(%q) succeeded", b)
+		}
+		if err := c.Defer(ctx, dir, b, nil, "alex-app"); err == nil {
+			t.Errorf("Defer(%q) succeeded", b)
+		}
+		if err := c.Dismiss(ctx, dir, b, "alex-app"); err == nil {
+			t.Errorf("Dismiss(%q) succeeded", b)
+		}
+	}
+	got, err := c.Show(ctx, dir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Comments) != 0 || got.Status != "open" {
+		t.Errorf("bead changed through a flag id: status %s, comments %+v", got.Status, got.Comments)
+	}
+	if _, err := os.Stat(profile); err == nil {
+		t.Error("bd wrote a file named by a flag id")
+	}
+
+	// Flag-shaped text and values stay text.
+	if err := c.AddComment(ctx, dir, id, "-falex", "--mem-profile="+profile); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Close(ctx, dir, id, "--db="+profile, "--actor"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = c.Show(ctx, dir, id)
+	if len(got.Comments) != 1 || got.Comments[0].Text != "--mem-profile="+profile || got.Comments[0].Author != "-falex" ||
+		got.CloseReason == nil || *got.CloseReason != "--db="+profile {
+		t.Errorf("flag-shaped values: %+v", got)
+	}
+	if _, err := os.Stat(profile); err == nil {
+		t.Error("bd wrote a file named in a value")
 	}
 }

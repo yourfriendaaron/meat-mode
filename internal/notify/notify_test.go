@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/store"
 )
 
 func testDB(t *testing.T) *sql.DB {
@@ -77,11 +79,11 @@ func TestSubscribeUpsertAndUnsubscribe(t *testing.T) {
 	db := testDB(t)
 	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
 	ctx := context.Background()
-	s := newSub(t, "https://push.example.com/a")
+	s := newSub(t, "https://updates.push.services.mozilla.com/wpush/v2/a")
 	if err := r.Subscribe(ctx, s); err != nil {
 		t.Fatal(err)
 	}
-	s2 := newSub(t, "https://push.example.com/a")
+	s2 := newSub(t, "https://updates.push.services.mozilla.com/wpush/v2/a")
 	if err := r.Subscribe(ctx, s2); err != nil {
 		t.Fatal(err)
 	}
@@ -102,15 +104,17 @@ func TestNotifyPrunesGoneAndContinues(t *testing.T) {
 	for _, code := range []int{404, 410} {
 		db := testDB(t)
 		r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+		r.hosts = append(r.hosts, "127.0.0.1") // the test push services
 		var okHits atomic.Int32
 		var ttl, urg, auth string
-		ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+		ok := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 			okHits.Add(1)
 			ttl, urg, auth = q.Header.Get("TTL"), q.Header.Get("Urgency"), q.Header.Get("Authorization")
 			w.WriteHeader(201)
 		}))
-		gone := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { w.WriteHeader(code) }))
-		bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { w.WriteHeader(500) }))
+		gone := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { w.WriteHeader(code) }))
+		bad := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { w.WriteHeader(500) }))
+		r.Client = ok.Client() // every httptest TLS server shares one certificate
 		ctx := context.Background()
 		for _, u := range []string{gone.URL, bad.URL, ok.URL} {
 			if err := r.Subscribe(ctx, newSub(t, u)); err != nil {
@@ -138,6 +142,85 @@ func TestNotifyPrunesGoneAndContinues(t *testing.T) {
 	}
 }
 
+func TestSubscribeOnlyKnownPushServices(t *testing.T) {
+	db := testDB(t)
+	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+	ctx := context.Background()
+	for u, ok := range map[string]bool{
+		"https://updates.push.services.mozilla.com/wpush/v2/a": true,
+		"https://fcm.googleapis.com/fcm/send/a":                true,
+		"https://web.push.apple.com/a":                         true,
+		"https://api.push.apple.com/a":                         true,
+		"https://wns2-by3p.notify.windows.com/w/?token=a":      true,
+		"https://FCM.googleapis.com:443/fcm/send/b":            true,
+		"http://fcm.googleapis.com/fcm/send/a":                 false,
+		"https://attacker.example.net/collect":                 false,
+		"https://fcm.googleapis.com.example.net/a":             false,
+		"https://notfcm.googleapis.com/a":                      false,
+		"https://192.0.2.10/a":                                 false,
+		"https://127.0.0.1:8080/api/actions":                   false,
+		"fcm.googleapis.com/a":                                 false,
+	} {
+		err := r.Subscribe(ctx, newSub(t, u))
+		if ok && err != nil {
+			t.Errorf("Subscribe(%q) = %v", u, err)
+		}
+		if !ok && (err == nil || !errors.Is(err, store.ErrInvalid)) {
+			t.Errorf("Subscribe(%q) = %v, want an invalid-request error", u, err)
+		}
+	}
+
+	// A hostile row already in the table is never sent to.
+	if _, err := db.Exec(`INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES ('https://attacker.example.net/x', 'k', 'a')`); err != nil {
+		t.Fatal(err)
+	}
+	r.Client = &http.Client{Transport: roundTrip(func(q *http.Request) (*http.Response, error) {
+		if q.URL.Host == "attacker.example.net" {
+			t.Errorf("sent to %s", q.URL)
+		}
+		return &http.Response{StatusCode: 201, Body: http.NoBody}, nil
+	})}
+	r.Notify(ctx, Message{Title: "Water the plants"})
+}
+
+func TestSubscribeKeepsTheNewest(t *testing.T) {
+	db := testDB(t)
+	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+	ctx := context.Background()
+	u := func(i int) string { return fmt.Sprintf("https://fcm.googleapis.com/fcm/send/%d", i) }
+	for i := range MaxSubscriptions + 5 {
+		if err := r.Subscribe(ctx, newSub(t, u(i))); err != nil {
+			t.Fatal(err)
+		}
+		if i == 10 {
+			// Renewing the first one makes it new again.
+			if err := r.Subscribe(ctx, newSub(t, u(0))); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if n := count(t, db); n != MaxSubscriptions {
+		t.Fatalf("%d subscriptions, want %d", n, MaxSubscriptions)
+	}
+	var n int
+	db.QueryRow(`SELECT count(*) FROM push_subscriptions WHERE endpoint IN (?, ?)`, u(1), u(5)).Scan(&n)
+	if n != 0 {
+		t.Errorf("the oldest subscriptions were kept")
+	}
+	db.QueryRow(`SELECT count(*) FROM push_subscriptions WHERE endpoint = ?`, u(0)).Scan(&n)
+	if n != 1 {
+		t.Errorf("a renewed subscription was dropped")
+	}
+	db.QueryRow(`SELECT count(*) FROM push_subscriptions WHERE endpoint = ?`, u(MaxSubscriptions+4)).Scan(&n)
+	if n != 1 {
+		t.Errorf("the newest subscription was dropped")
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(q *http.Request) (*http.Response, error) { return f(q) }
+
 func TestNtfyRequest(t *testing.T) {
 	var got *http.Request
 	var body []byte
@@ -163,6 +246,18 @@ func TestNtfyRequest(t *testing.T) {
 	}
 	if got.Header.Get("Authorization") != "" {
 		t.Fatal("auth header sent without token")
+	}
+
+	// A bead title with control characters still sends, as one header line.
+	err = n.Notify(context.Background(), Message{Title: "Water\r\nX-Injected: 1\tthe\x00plants\x7f", Body: "b",
+		URL: "https://app.example.com/\n?item=a", Tag: "a\rb"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h = got.Header
+	if h.Get("Title") != "Water  X-Injected: 1 the plants" || h.Get("X-Injected") != "" ||
+		h.Get("Click") != "https://app.example.com/ ?item=a" || h.Get("Tags") != "a b" {
+		t.Fatalf("control characters reached the headers: %q", h)
 	}
 }
 

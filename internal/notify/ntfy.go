@@ -6,7 +6,20 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode"
 )
+
+// headerSafe replaces control characters with spaces. Titles come from bead
+// titles, which anyone with write access to a repo can set, and a line
+// break in a header value would fail the whole request.
+func headerSafe(v string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, v)
+}
 
 // Ntfy posts messages to an ntfy topic.
 type Ntfy struct {
@@ -23,16 +36,17 @@ func (n *Ntfy) Notify(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Title", m.Title)
+	set := func(k, v string) { req.Header.Set(k, headerSafe(v)) }
+	set("Title", m.Title)
 	if m.URL != "" {
-		req.Header.Set("Click", m.URL)
+		set("Click", m.URL)
 	}
-	req.Header.Set("Priority", "4")
+	set("Priority", "4")
 	if m.Tag != "" {
-		req.Header.Set("Tags", m.Tag)
+		set("Tags", m.Tag)
 	}
 	if n.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+n.Token)
+		set("Authorization", "Bearer "+n.Token)
 	}
 	c := n.Client
 	if c == nil {

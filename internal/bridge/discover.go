@@ -59,6 +59,10 @@ func Discover(roots []string, personal string, log *slog.Logger) []Repo {
 			if abs, _ := filepath.Abs(dir); abs == personalAbs {
 				continue
 			}
+			if strings.HasPrefix(e.Name(), "-") {
+				log.Warn("skipping repo whose name starts with -; the hub refuses it", "dir", dir)
+				continue
+			}
 			if seen[e.Name()] {
 				log.Warn("skipping repo with a duplicate name", "dir", dir)
 				continue
