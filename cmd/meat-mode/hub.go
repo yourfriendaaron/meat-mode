@@ -1,6 +1,16 @@
 package main
 
-import "errors"
+import (
+	"context"
+	"errors"
 
-// runHub is wired to internal/hub by meat-d0i.2.
-func runHub(args []string) error { return errors.New("hub: not built yet") }
+	"github.com/yourfriendaaron/meat-mode/internal/hub"
+)
+
+// runHub runs the hub with settings from MEAT_MODE_* environment variables.
+func runHub(args []string) error {
+	if len(args) > 0 {
+		return errors.New("hub takes no arguments; it reads MEAT_MODE_* environment variables")
+	}
+	return hub.Run(context.Background(), hub.ConfigFromEnv(), hub.Options{})
+}
