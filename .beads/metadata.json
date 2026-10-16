@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "meat",
+  "project_id": "53140c25-4803-4c58-b86d-d023a0ed9597"
+}

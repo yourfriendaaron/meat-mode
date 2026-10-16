@@ -1,0 +1,36 @@
+# Local configuration and secrets: never tracked
+.env
+.env.*
+!.env.example
+mise.local.toml
+*.local
+*.local.*
+.public-safety.local
+
+# Data: never tracked
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+data/
+backups/
+*.log
+
+# Keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Beads / Dolt runtime files
+.dolt/
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
+/.beads/issues.jsonl
+
+# Tooling
+node_modules/
+dist/
+coverage/
+.DS_Store
