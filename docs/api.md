@@ -1,0 +1,64 @@
+# Wire contract
+
+The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges (`/bridge/v1/…`). The Go types are in `internal/api`; this page is the prose version. All bodies are JSON. Times are RFC 3339 strings in UTC. Errors are `{"error": "<plain message>"}` with a 4xx or 5xx status.
+
+## Identity
+
+- A **bridge** has a unique name chosen when it is added (`[a-z0-9-]{1,32}`).
+- A **repo** is named by the bridge (its directory name, or `personal` for the personal database). Repo names are unique per bridge.
+- An **item key** is `<bridge>/<repo>/<bead id>`. In URL paths it is percent-encoded as one segment.
+- An **action id** is a UUID the client generates. Posting the same id twice returns the stored action and changes nothing.
+
+## App API
+
+The app relies on the deployment's network boundary (LAN or VPN). No login in v1.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/state` | | `State`: every item, repo and bridge, the count of unapplied actions, server time |
+| `GET /api/events` | | Server-sent events: `event: change` with `data: {"rev": n}` whenever state changes; the app then re-fetches `/api/state` |
+| `POST /api/actions` | `NewAction` | `201` with `Action` (or `200` with the stored one for a duplicate id) |
+| `POST /api/actions/{id}/cancel` | | `200` with `Action` (status `cancelled`) when it was not yet applied; `409` when it already was |
+| `GET /api/actions?limit=n` | | Recent actions, newest first, for the sync popover |
+| `POST /api/items/{key}/seen` | | `204`; marks replies on the item read |
+| `GET /api/push/key` | | `{"publicKey": "<VAPID public key>"}` |
+| `POST /api/push/subscriptions` | `PushSubscription` (the browser's JSON) | `204` (upsert by endpoint) |
+| `DELETE /api/push/subscriptions` | `{"endpoint": "…"}` | `204` |
+| `GET /api/bridges` | | `[]Bridge` |
+| `POST /api/bridges` | `{"name": "…"}` | `201` with `{"name", "token"}`; the token is shown once |
+| `DELETE /api/bridges/{name}` | | `204`; revokes the token |
+
+### Actions
+
+`NewAction` is `{id, kind, key?, bridge?, repo?, payload}`.
+
+| kind | target | payload | effect on the hub's copy (shown at once, `pending: true` until applied) |
+|---|---|---|---|
+| `done` | `key` | `{}` | status `closed`, close reason `Done in Meat Mode` |
+| `reopen` | `key` | `{}` | status `open` |
+| `snooze` | `key` | `{"until": time, "previous": time or null}` | `deferUntil = until` |
+| `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
+| `note` | `key` | `{"text": "…"}` | appends a comment by `<MEAT_MODE_USER>-app` |
+| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null}` | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |
+
+Undo is the client's job: it cancels the closing action when it is still unapplied, or else posts the inverse (`reopen`, or `snooze` back to `previous`).
+
+An action's `status` is `pending`, `applied`, `failed` or `cancelled`. `failed` carries `error`; the app shows it on the item.
+
+## Bridge API
+
+Every request carries `Authorization: Bearer <token>`. The token names the bridge; a bridge never names itself in a body.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
+| `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`) | `204`; replaces this bridge's repo list |
+| `PUT /bridge/v1/repos/{repo}/items` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. |
+| `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
+| `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
+
+The bridge sends the full set per repo whenever any fingerprint in it changed. The set holds every open, in-progress, blocked and deferred item labelled `human` (every item in the personal repo), plus items closed in the last 7 days so the Done section and Undo work.
+
+## Configuration
+
+Hub, from environment variables (see `.env.example`): `MEAT_MODE_LISTEN`, `MEAT_MODE_DATA_DIR`, `MEAT_MODE_PUBLIC_URL`, `MEAT_MODE_USER`, `MEAT_MODE_VAPID_SUBJECT`, `MEAT_MODE_NTFY_URL`, `MEAT_MODE_NTFY_TOPIC`, `MEAT_MODE_NTFY_TOKEN`.

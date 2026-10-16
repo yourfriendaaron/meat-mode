@@ -34,3 +34,9 @@ node_modules/
 dist/
 coverage/
 .DS_Store
+
+# Built frontend (embedded by web/embed.go)
+web/static/*
+!web/static/.gitkeep
+/meat-mode
+/bin/
