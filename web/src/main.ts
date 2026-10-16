@@ -1033,11 +1033,12 @@ async function copyCommand() {
 
 // ---------- events ----------
 
-let suppressClick = false;
+/** When a swipe ended: the click a mouse drag fires on the list right after is not a tap. */
+let swipeEnded = 0;
 
 function onClick(e: MouseEvent) {
-  if (suppressClick) {
-    suppressClick = false;
+  if (Date.now() - swipeEnded < 400 && (e.target as HTMLElement).closest("#list")) {
+    swipeEnded = 0;
     e.preventDefault();
     e.stopPropagation();
     return;
@@ -1281,8 +1282,7 @@ function setupSwipe(list: HTMLElement) {
     start.li.classList.remove("armed");
     reset();
     if (!wasSwiping) return;
-    suppressClick = true;
-    setTimeout(() => (suppressClick = false), 400);
+    swipeEnded = Date.now();
     if (dist >= SWIPE_THRESHOLD) doDone(key);
     else if (dist <= -SWIPE_THRESHOLD) {
       S.selected = key;

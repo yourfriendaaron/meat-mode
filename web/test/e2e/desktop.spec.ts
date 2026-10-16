@@ -48,7 +48,7 @@ test("opens detail, marks it seen, and saves a note", async ({ page, hub }) => {
   await detail.getByLabel("Add a note").fill("Approved, ship it.");
   await detail.getByRole("button", { name: "Save note" }).click();
   await expect(detail.locator(".note-own")).toHaveCount(2);
-  expect(hub.posted.at(-1)).toMatchObject({ kind: "note", key: "home/website/we-1", payload: { text: "Approved, ship it." } });
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "note", key: "home/website/we-1", payload: { text: "Approved, ship it." } });
   await expect(row(page, "Approve the new footer text")).toContainText("Waiting for sync");
 });
 
@@ -75,7 +75,7 @@ test("keyboard: j/k, Enter, x, s, n, Escape", async ({ page, hub }) => {
 
   await page.keyboard.press("x");
   await expect(page.locator("#toast")).toContainText("Done: Water the plants");
-  expect(hub.posted.at(-1)).toMatchObject({ kind: "done", key: "home/personal/pe-1" });
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "home/personal/pe-1" });
   await expect(page.locator(".group-done .row-title")).toContainText(["Water the plants"]);
   // Selection moved on to the next open row.
   await expect(row(page, "Call Sam about the weekend")).toHaveClass(/is-selected/);
@@ -88,7 +88,7 @@ test("keyboard: j/k, Enter, x, s, n, Escape", async ({ page, hub }) => {
   await page.keyboard.press("s");
   await dialog.getByRole("button", { name: /Tomorrow/ }).click();
   await expect(dialog).toBeHidden();
-  expect(hub.posted.at(-1)).toMatchObject({
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "snooze",
     key: "home/personal/pe-3",
     payload: { until: "2026-10-15T09:00:00.000Z", previous: null },
@@ -149,7 +149,7 @@ test("Won't do and Snooze all are undoable; Done today reopens", async ({ page, 
 
   await row(page, "Sweep the porch").getByRole("button", { name: "Reopen", exact: true }).click();
   await expect(page.locator(".group-done")).toHaveCount(0);
-  expect(hub.posted.at(-1)).toMatchObject({ kind: "reopen", key: "home/personal/pe-6" });
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "reopen", key: "home/personal/pe-6" });
 });
 
 test("sync pill and popover", async ({ page, hub }) => {
@@ -202,6 +202,7 @@ test("axe passes on settings and the snooze dialog", async ({ page, hub }) => {
 
   await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#view-title")).toHaveText("Settings");
+  await expect(page.getByRole("heading", { name: "Reminders" })).toBeVisible();
   await page.getByLabel("Machine name").fill("laptop");
   await page.getByRole("button", { name: "Add machine" }).click();
   await expect(page.locator("#pair-cmd")).toHaveText(/^meat-mode bridge pair http:\/\/127\.0\.0\.1:\d+ test-token$/);
@@ -211,4 +212,27 @@ test("axe passes on settings and the snooze dialog", async ({ page, hub }) => {
   await page.locator(".machine", { hasText: "laptop" }).getByRole("button", { name: "Revoke" }).click();
   await expect(page.locator(".machine")).toHaveCount(1);
   expect(hub.requests).toContain("DELETE /api/bridges/laptop");
+});
+
+test("snooze to a picked time; failed actions show their error", async ({ page, hub }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Everything/ }).click();
+  await expect(row(page, "Fix the gate latch").locator(".row-error")).toHaveText("bd: issue is locked");
+  await row(page, "Fix the gate latch").locator(".row-body").click();
+  const detail = page.locator("#detail");
+  await detail.getByLabel("Pick a time").fill("2026-10-20T08:30");
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({
+    kind: "snooze",
+    key: "home/personal/pe-7",
+    payload: { until: "2026-10-20T08:30:00.000Z", previous: null },
+  });
+  await expect(row(page, "Fix the gate latch").locator(".chip-orange")).toHaveText("Tue, Oct 20");
+});
+
+test("live updates: a change event re-fetches state", async ({ page, hub }) => {
+  hub.eventRetryMs = 200;
+  await openApp(page);
+  hub.items.push({ ...hub.items[0], key: "home/personal/pe-9", id: "pe-9", title: "Feed the cat" });
+  await expect(row(page, "Feed the cat")).toBeVisible();
 });

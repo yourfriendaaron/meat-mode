@@ -60,7 +60,7 @@ export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } 
       item("personal", "pe-5", "Plan the garden layout", { dueAt: at(23, 9) }),
       item("garden", "ga-2", "Check the tomato labels", { createdBy: "planner", seenAt: at(13, 9), labels: ["human"] }),
       item("personal", "pe-6", "Sweep the porch", { status: "closed", closedAt: at(14, 8, 30), closeReason: "Done in Meat Mode" }),
-      item("personal", "pe-7", "Fix the gate latch", { dueAt: at(16, 9) }),
+      item("personal", "pe-7", "Fix the gate latch", { dueAt: at(16, 9), error: "bd: issue is locked" }),
     ],
   };
 }
@@ -80,6 +80,8 @@ export class FakeHub {
   /** Every request the page made, as "METHOD /path". */
   requests: string[] = [];
   posted: NewAction[] = [];
+  /** When set, every /api/events connection sends one change event and asks to reconnect after this many ms. */
+  eventRetryMs = 0;
 
   constructor() {
     const f = fixtures();
@@ -138,7 +140,8 @@ export class FakeHub {
 
     if (method === "GET" && path === "/api/state") return this.json(route, 200, this.state());
     if (method === "GET" && path === "/api/events") {
-      return route.fulfill({ status: 200, contentType: "text/event-stream", body: "retry: 3600000\n\n" });
+      const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
     if (method === "GET" && path === "/api/actions") {
       const limit = Number(url.searchParams.get("limit") || 50);
