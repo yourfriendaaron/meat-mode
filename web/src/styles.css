@@ -950,6 +950,10 @@ kbd {
   justify-content: center;
   pointer-events: none;
 }
+.app.qa-open .toast-region {
+  bottom: auto;
+  top: calc(12px + var(--safe-top));
+}
 .toast {
   pointer-events: auto;
   display: flex;

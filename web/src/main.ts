@@ -24,7 +24,7 @@ import {
   appAuthor,
   type ViewId,
 } from "./model.ts";
-import { fmtAgo, fmtWhen, toLocalInput } from "./dates.ts";
+import { fmtAgo, fmtTime, fmtWhen, toLocalInput } from "./dates.ts";
 import { snoozeOptions } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
 import { applyTheme, getTheme, setTheme } from "./theme.ts";
@@ -854,9 +854,9 @@ function quickLists() {
   return visibleRepos(repos()).map((r) => ({ key: repoKey(r), name: r.name }));
 }
 
+/** The personal repo (visibleRepos sorts it first), else the first list. */
 function defaultList(): string {
   const v = visibleRepos(repos());
-  if (S.view.startsWith("list:")) return S.view.slice(5);
   return v.length ? repoKey(v[0]) : "";
 }
 
@@ -885,7 +885,11 @@ function updateQuickAdd() {
   $("#qa-backdrop").scrollLeft = input.scrollLeft;
 
   const chips: string[] = [];
-  if (qa.due) chips.push(`<span class="chip chip-purple">Due ${esc(fmtWhen(qa.due, now()))}</span>`);
+  if (qa.due) {
+    const when = fmtWhen(qa.due, now());
+    const full = when.includes(":") ? when : `${when} ${fmtTime(qa.due)}`;
+    chips.push(`<span class="chip chip-purple">Due ${esc(full)}</span>`);
+  }
   if (qa.list) {
     const r = repos().find((x) => repoKey(x) === qa.list);
     chips.push(`<span class="chip chip-list">${esc(r ? listLabel(r) : qa.list)}</span>`);
@@ -1162,6 +1166,16 @@ function isTyping(el: Element | null): boolean {
 }
 
 function onKey(e: KeyboardEvent) {
+  if (e.key === "Tab" && S.snoozeKeys) {
+    // Keep focus inside the modal snooze dialog.
+    const f = [...document.querySelectorAll<HTMLElement>("#snooze button, #snooze input")];
+    if (!f.length) return;
+    const i = f.indexOf(document.activeElement as HTMLElement);
+    const next = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : i < 0 || i === f.length - 1 ? 0 : i + 1;
+    f[next].focus();
+    e.preventDefault();
+    return;
+  }
   if (e.key === "Escape") {
     if (S.snoozeKeys) closeSnooze();
     else if (S.syncOpen) {
