@@ -76,8 +76,23 @@ type Systemd struct {
 // File implements Service.
 func (s *Systemd) File() string { return filepath.Join(s.Dir, SystemdUnitName) }
 
-// SystemdUnit returns the unit text. Paths under home use the %h specifier.
-func SystemdUnit(exe, pathEnv, home string) string {
+// checkServicePaths refuses a path that would end a line of the service
+// file and start another.
+func checkServicePaths(paths ...string) error {
+	for _, p := range paths {
+		if strings.ContainsAny(p, "\n\r") {
+			return fmt.Errorf("cannot write a service file for %q: the path has a line break", p)
+		}
+	}
+	return nil
+}
+
+// SystemdUnit returns the unit text. Paths under home use the %h specifier;
+// $ in the command line is doubled so systemd does not expand it.
+func SystemdUnit(exe, pathEnv, home string) (string, error) {
+	if err := checkServicePaths(exe, pathEnv, home); err != nil {
+		return "", err
+	}
 	return `[Unit]
 Description=Meat Mode bridge
 Documentation=https://github.com/yourfriendaaron/meat-mode
@@ -86,14 +101,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=` + systemdQuote(homeSpec(exe, home)) + ` bridge run
+ExecStart=` + strings.ReplaceAll(systemdQuote(homeSpec(exe, home)), "$", "$$") + ` bridge run
 Environment=` + systemdQuote("PATH="+homeSpec(pathEnv, home)) + `
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=default.target
-`
+`, nil
 }
 
 // homeSpec escapes % and swaps the home prefix of each path for %h.
@@ -121,10 +136,14 @@ func systemdQuote(s string) string {
 
 // Install implements Service.
 func (s *Systemd) Install(exe, pathEnv string) error {
+	unit, err := SystemdUnit(exe, pathEnv, s.Home)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(s.Dir, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.File(), []byte(SystemdUnit(exe, pathEnv, s.Home)), 0o644); err != nil {
+	if err := os.WriteFile(s.File(), []byte(unit), 0o644); err != nil {
 		return err
 	}
 	if err := s.ctl("daemon-reload"); err != nil {
@@ -175,7 +194,10 @@ func (l *Launchd) File() string { return filepath.Join(l.Dir, LaunchdLabel+".pli
 
 // LaunchdPlist returns the agent's property list. launchd does not expand
 // ~, so paths are absolute.
-func LaunchdPlist(exe, pathEnv, home string) string {
+func LaunchdPlist(exe, pathEnv, home string) (string, error) {
+	if err := checkServicePaths(exe, pathEnv, home); err != nil {
+		return "", err
+	}
 	log := filepath.Join(home, "Library", "Logs", "meat-mode-bridge.log")
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -206,7 +228,7 @@ func LaunchdPlist(exe, pathEnv, home string) string {
 	<string>` + xmlEscape(log) + `</string>
 </dict>
 </plist>
-`
+`, nil
 }
 
 func xmlEscape(s string) string {
@@ -219,13 +241,17 @@ func (l *Launchd) domain() string { return "gui/" + strconv.Itoa(l.UID) }
 
 // Install implements Service.
 func (l *Launchd) Install(exe, pathEnv string) error {
+	plist, err := LaunchdPlist(exe, pathEnv, l.Home)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(l.Dir, 0o755); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(l.Home, "Library", "Logs"), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(l.File(), []byte(LaunchdPlist(exe, pathEnv, l.Home)), 0o644); err != nil {
+	if err := os.WriteFile(l.File(), []byte(plist), 0o644); err != nil {
 		return err
 	}
 	_, _ = l.Run("launchctl", "bootout", l.domain()+"/"+LaunchdLabel) // replace a running copy
