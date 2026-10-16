@@ -365,6 +365,8 @@ function renderMain() {
 
   const list = $("#list");
   const settings = $("#settings");
+  // Quick add belongs to the task views, not Settings.
+  $("#qa-form").hidden = S.view === "settings";
   if (S.view === "settings") {
     list.hidden = true;
     settings.hidden = false;
@@ -873,6 +875,8 @@ function updateQuickAdd() {
     .join("");
   const prev = select.value;
   setHTML(select, opts);
+  // No lists yet (no machine paired): hide the picker rather than show it blank.
+  select.hidden = !opts;
   qa = parseQuickAdd(input.value, now(), quickLists());
   if (qa.list) select.value = qa.list;
   else if (qaListTouched && prev) select.value = prev;

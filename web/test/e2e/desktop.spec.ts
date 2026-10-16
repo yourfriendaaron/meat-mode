@@ -203,6 +203,7 @@ test("axe passes on settings and the snooze dialog", async ({ page, hub }) => {
   await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#view-title")).toHaveText("Settings");
   await expect(page.getByRole("heading", { name: "Reminders" })).toBeVisible();
+  await expect(page.locator("#qa-form")).toBeHidden();
   await page.getByLabel("Machine name").fill("laptop");
   await page.getByRole("button", { name: "Add machine" }).click();
   await expect(page.locator("#pair-cmd")).toHaveText(/^meat-mode bridge pair http:\/\/127\.0\.0\.1:\d+ test-token$/);
