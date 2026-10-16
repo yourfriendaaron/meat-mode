@@ -74,7 +74,7 @@ go install github.com/yourfriendaaron/meat-mode/cmd/meat-mode@latest
    meat-mode bridge pair https://meat-mode.example.com mm_xxxxxxxx
    ```
 
-   Options: `--root DIR` (repeatable) for the directories that hold your beads repos (default `~/projects`), `--personal DIR` for your personal to-do beads repo, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended).
+   Options: `--root DIR` (repeatable) for the directories that hold your beads repos (default `~/projects`), `--personal DIR` for your personal to-do beads repo, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
 
 Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/bridge.json` on Linux, `~/Library/Application Support/meat-mode/bridge.json` on macOS) and installs a user service:
 

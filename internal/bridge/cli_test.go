@@ -3,6 +3,7 @@ package bridge
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,6 +101,73 @@ func TestPair(t *testing.T) {
 	}
 }
 
+// TestPairTokenSources: the token can come from the environment or stdin,
+// so it need not sit in shell history or the process list.
+func TestPairTokenSources(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	cases := []struct {
+		name, env, stdin string
+		args             []string
+	}{
+		{"environment", token, "", []string{hub.URL, "--no-service"}},
+		{"stdin", "", token + "\n", []string{hub.URL, "-", "--no-service"}},
+		{"stdin without newline", "", "  " + token, []string{"--no-service", hub.URL, "-"}},
+		{"argument wins over environment", "wrong", "", []string{hub.URL, token, "--no-service"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("MEAT_MODE_BRIDGE_TOKEN", c.env)
+			env, _, out := testEnv(t, fakeBD(t, "1.3.1"))
+			env.Stdin = strings.NewReader(c.stdin)
+			if err := Main(context.Background(), append([]string{"pair"}, c.args...), env); err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+			cfg, err := LoadConfig(env.Paths.Config)
+			if err != nil || cfg.Token != token {
+				t.Fatalf("config token = %q, %v", cfg.Token, err)
+			}
+		})
+	}
+	t.Run("empty stdin", func(t *testing.T) {
+		t.Setenv("MEAT_MODE_BRIDGE_TOKEN", "")
+		env, _, _ := testEnv(t, fakeBD(t, "1.3.1"))
+		env.Stdin = strings.NewReader("\n")
+		if err := Main(context.Background(), []string{"pair", hub.URL, "-"}, env); err == nil {
+			t.Fatal("paired with an empty token")
+		}
+	})
+}
+
+// TestLoadConfigWarnsOnBroadMode: a config others can read leaks the token.
+func TestLoadConfigWarnsOnBroadMode(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	path := filepath.Join(t.TempDir(), "bridge.json")
+	if err := (Config{HubURL: "https://meat-mode.example.com", Token: token}).Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadConfig(path); err != nil {
+		t.Fatal(err)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("warned about a 0600 config: %s", logs.String())
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil || cfg.Token != token {
+		t.Fatalf("LoadConfig = %+v, %v; want it to load anyway", cfg, err)
+	}
+	if !strings.Contains(logs.String(), "chmod 600") {
+		t.Errorf("no warning for a 0644 config: %q", logs.String())
+	}
+}
+
 func TestPairRefusals(t *testing.T) {
 	hub := fakehub.New(map[string]string{token: us})
 	defer hub.Close()
@@ -113,10 +181,13 @@ func TestPairRefusals(t *testing.T) {
 		{"plain http to another host", []string{"http://192.0.2.10:8080", token}, "1.3.1", "refusing plain HTTP"},
 		{"old bd", []string{hub.URL, token}, "1.2.0", "too old"},
 		{"missing token", []string{hub.URL}, "1.3.1", "needs a hub URL and a token"},
+		{"token from stdin, none given", []string{hub.URL, "-"}, "1.3.1", "no token on standard input"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("MEAT_MODE_BRIDGE_TOKEN", "")
 			env, svc, _ := testEnv(t, fakeBD(t, c.bd))
+			env.Stdin = strings.NewReader("")
 			err := Main(context.Background(), append([]string{"pair"}, c.args...), env)
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("pair = %v, want an error about %q", err, c.want)
