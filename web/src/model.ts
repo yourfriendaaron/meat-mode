@@ -1,0 +1,259 @@
+// View grouping and chip logic. Pure: every function takes the moment `now`.
+
+import type { Bridge, Item, Repo, State } from "./types.ts";
+import { addDays, at, fmtOverdue, fmtWhen, nextMonday, sameDay, startOfDay } from "./dates.ts";
+
+export type ViewId = "today" | "upcoming" | "agents" | "all" | `list:${string}`;
+
+export type GroupId =
+  | "pastdue"
+  | "today"
+  | "evening"
+  | "tomorrow"
+  | "week"
+  | "later"
+  | "nodate"
+  | "done";
+
+export const GROUP_LABELS: Record<GroupId, string> = {
+  pastdue: "Past due",
+  today: "Today",
+  evening: "This evening",
+  tomorrow: "Tomorrow",
+  week: "This week",
+  later: "Later",
+  nodate: "No date",
+  done: "Done today",
+};
+
+const VIEW_GROUPS: Record<"today" | "upcoming" | "all", GroupId[]> = {
+  today: ["pastdue", "today", "evening", "done"],
+  upcoming: ["tomorrow", "week", "later"],
+  all: ["pastdue", "today", "evening", "tomorrow", "week", "later", "nodate", "done"],
+};
+
+export interface Group {
+  id: GroupId;
+  label: string;
+  items: Item[];
+}
+
+/** Hour from which a task counts as "this evening". */
+export const EVENING_HOUR = 17;
+/** Open tasks in a day above which the day-load bar warns. */
+export const DAY_CAPACITY = 8;
+
+export function repoKey(r: { bridge: string; repo?: string; name?: string }): string {
+  return `${r.bridge}/${r.repo ?? r.name}`;
+}
+
+export function isOpen(item: Item): boolean {
+  return item.status !== "closed";
+}
+
+/** Personal repos, by repo key. */
+export function personalRepoKeys(repos: Repo[]): Set<string> {
+  return new Set(repos.filter((r) => r.personal).map((r) => repoKey(r)));
+}
+
+/** An agent item is any item outside a personal repo. */
+export function isAgentItem(item: Item, personal: Set<string>): boolean {
+  return !personal.has(repoKey(item));
+}
+
+function date(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function isSnoozed(item: Item, now: Date): boolean {
+  const d = date(item.deferUntil);
+  return d !== null && d > now;
+}
+
+/**
+ * The moment that places an item on the agenda: a future snooze wins,
+ * then the due date, then an expired snooze (the item has resurfaced).
+ */
+export function whenOf(item: Item, now: Date): { at: Date | null; kind: "snoozed" | "due" | "resurfaced" | "none" } {
+  const defer = date(item.deferUntil);
+  if (defer && defer > now) return { at: defer, kind: "snoozed" };
+  const due = date(item.dueAt);
+  if (due) return { at: due, kind: "due" };
+  if (defer) return { at: defer, kind: "resurfaced" };
+  return { at: null, kind: "none" };
+}
+
+export function groupOf(item: Item, now: Date): GroupId | null {
+  if (!isOpen(item)) {
+    const closed = date(item.closedAt);
+    return closed && sameDay(closed, now) ? "done" : null;
+  }
+  const w = whenOf(item, now);
+  if (!w.at) return "nodate";
+  const d = w.at;
+  if (w.kind === "resurfaced") return d.getHours() >= EVENING_HOUR && sameDay(d, now) ? "evening" : "today";
+  if (d < now) return "pastdue";
+  if (sameDay(d, now)) return d.getHours() >= EVENING_HOUR ? "evening" : "today";
+  if (sameDay(d, addDays(now, 1))) return "tomorrow";
+  if (d < nextMonday(now)) return "week";
+  return "later";
+}
+
+function sortKey(item: Item, now: Date): number {
+  const w = whenOf(item, now);
+  return w.at ? w.at.getTime() : Number.MAX_SAFE_INTEGER;
+}
+
+function compare(now: Date) {
+  return (a: Item, b: Item) =>
+    sortKey(a, now) - sortKey(b, now) || a.priority - b.priority || a.title.localeCompare(b.title);
+}
+
+/** Groups for a view, in display order, empty groups dropped. */
+export function buildView(view: ViewId, items: Item[], repos: Repo[], now: Date): Group[] {
+  const personal = personalRepoKeys(repos);
+  let pool = items;
+  let order: GroupId[];
+  if (view === "today" || view === "upcoming" || view === "all") {
+    order = VIEW_GROUPS[view];
+  } else if (view === "agents") {
+    order = VIEW_GROUPS.all;
+    pool = items.filter((i) => isAgentItem(i, personal));
+  } else {
+    const key = view.slice("list:".length);
+    order = VIEW_GROUPS.all;
+    pool = items.filter((i) => repoKey(i) === key);
+  }
+  const buckets = new Map<GroupId, Item[]>();
+  for (const item of pool) {
+    const g = groupOf(item, now);
+    if (!g || !order.includes(g)) continue;
+    const list = buckets.get(g) ?? [];
+    list.push(item);
+    buckets.set(g, list);
+  }
+  const groups: Group[] = [];
+  for (const id of order) {
+    const list = buckets.get(id);
+    if (!list?.length) continue;
+    list.sort(id === "done" ? (a, b) => (date(b.closedAt)?.getTime() ?? 0) - (date(a.closedAt)?.getTime() ?? 0) : compare(now));
+    groups.push({ id, label: GROUP_LABELS[id], items: list });
+  }
+  return groups;
+}
+
+/** Open tasks on today's agenda: past due, today and this evening. */
+export function openToday(items: Item[], now: Date): number {
+  return items.filter((i) => {
+    const g = groupOf(i, now);
+    return g === "pastdue" || g === "today" || g === "evening";
+  }).length;
+}
+
+export interface DateChip {
+  text: string;
+  tone: "red" | "green" | "purple" | "orange";
+  snoozed: boolean;
+}
+
+export function dateChip(item: Item, now: Date): DateChip | null {
+  if (!isOpen(item)) return null;
+  const w = whenOf(item, now);
+  if (!w.at) return null;
+  if (w.kind === "snoozed") return { text: fmtWhen(w.at, now), tone: "orange", snoozed: true };
+  if (w.kind === "due" && w.at < now) return { text: fmtOverdue(w.at, now), tone: "red", snoozed: false };
+  if (w.kind === "resurfaced") return null;
+  if (sameDay(w.at, now)) return { text: fmtWhen(w.at, now), tone: "green", snoozed: false };
+  return { text: fmtWhen(w.at, now), tone: "purple", snoozed: false };
+}
+
+/** The author name the hub writes for the app's own comments. */
+export function appAuthor(user: string): string {
+  return `${user}-app`;
+}
+
+/** "New": an agent item the user has never opened. */
+export function isNew(item: Item, personal: Set<string>): boolean {
+  return isOpen(item) && isAgentItem(item, personal) && !item.seenAt;
+}
+
+/** "New reply": a comment by someone else, newer than the last time the item was opened. */
+export function hasNewReply(item: Item, user: string): boolean {
+  const seen = date(item.seenAt);
+  const own = appAuthor(user);
+  return (item.comments ?? []).some((c) => {
+    if (c.author === own) return false;
+    if (!seen) return true;
+    const t = date(c.createdAt);
+    return t !== null && t > seen;
+  });
+}
+
+export function isUnreadComment(createdAt: string, author: string, seenAt: string | null | undefined, user: string): boolean {
+  if (author === appAuthor(user)) return false;
+  const seen = date(seenAt);
+  const t = date(createdAt);
+  return !seen || (t !== null && t > seen);
+}
+
+export type Attention = "new" | "reply" | null;
+
+export function attention(item: Item, personal: Set<string>, user: string): Attention {
+  if (!isOpen(item)) return null;
+  if (isNew(item, personal)) return "new";
+  if (hasNewReply(item, user)) return "reply";
+  return null;
+}
+
+/** Count for the pink "N new" badge on From agents. */
+export function agentNewCount(items: Item[], repos: Repo[], user: string): number {
+  const personal = personalRepoKeys(repos);
+  return items.filter((i) => isAgentItem(i, personal) && attention(i, personal, user) !== null).length;
+}
+
+/** A bridge is online when it was seen within this window. */
+export const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+
+export interface SyncStatus {
+  tone: "green" | "orange";
+  text: string;
+}
+
+export function bridgeOnline(b: Bridge, now: Date): boolean {
+  const seen = date(b.lastSeen);
+  return seen !== null && now.getTime() - seen.getTime() <= ONLINE_WINDOW_MS;
+}
+
+export function syncStatus(state: Pick<State, "unapplied" | "bridges">, now: Date): SyncStatus {
+  const online = (state.bridges ?? []).some((b) => bridgeOnline(b, now));
+  if (!online) return { tone: "orange", text: "Agent machine offline" };
+  if (state.unapplied > 0) return { tone: "orange", text: `${state.unapplied} waiting` };
+  return { tone: "green", text: "Synced" };
+}
+
+/** Repos shown as lists: personal and opted-in ones, personal first, then by name. */
+export function visibleRepos(repos: Repo[]): Repo[] {
+  return repos
+    .filter((r) => r.personal || r.optedIn)
+    .sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name) || a.bridge.localeCompare(b.bridge));
+}
+
+export const LIST_COLOURS = 6;
+
+/** Colour index for each visible repo, stable by display order. */
+export function repoColours(repos: Repo[]): Map<string, number> {
+  const m = new Map<string, number>();
+  visibleRepos(repos).forEach((r, i) => m.set(repoKey(r), i % LIST_COLOURS));
+  return m;
+}
+
+/** Past-due items, which "Snooze all to tomorrow" moves. */
+export function pastDue(items: Item[], now: Date): Item[] {
+  return items.filter((i) => groupOf(i, now) === "pastdue");
+}
+
+export function tomorrowMorning(now: Date): Date {
+  return at(startOfDay(addDays(now, 1)), 9);
+}

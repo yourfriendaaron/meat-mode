@@ -1,0 +1,22 @@
+{
+  "name": "meat-mode-web",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test \"test/unit/*.test.ts\"",
+    "test:e2e": "node scripts/build.mjs && playwright test"
+  },
+  "dependencies": {
+    "chrono-node": "2.10.3"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
