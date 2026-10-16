@@ -53,6 +53,7 @@ const S = {
   snoozeKeys: null as string[] | null,
   syncOpen: false,
   syncActions: null as Action[] | null,
+  syncError: false,
   qaOpen: false,
   toast: null as Toast | null,
   newBridge: null as NewBridgeReply | null,
@@ -236,7 +237,8 @@ function renderSync() {
   if (!S.syncOpen) return;
   const list = S.syncActions;
   let body: string;
-  if (!list) body = '<p class="muted">Loading</p>';
+  if (S.syncError) body = '<p class="muted">Could not load actions.</p>';
+  else if (!list) body = '<p class="muted">Loading</p>';
   else if (!list.length) body = '<p class="muted">No actions yet.</p>';
   else
     body =
@@ -247,7 +249,7 @@ function renderSync() {
           const title = a.kind === "add" ? a.payload.title : item?.title ?? a.beadId ?? "";
           const state =
             a.status === "applied" ? "Synced" : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
-          return `<li class="act act-${a.status}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
+          return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
         })
         .join("") +
       "</ul>";
@@ -537,7 +539,7 @@ function renderSettings() {
     }</form>
 ${
   nb
-    ? `<div class="token-box" role="status"><p>Run this on <strong>${esc(nb.name)}</strong>. The token is shown only once.</p><code class="cmd" id="pair-cmd">${esc(cmd)}</code><button class="btn" data-act="copy">${S.copied ? "Copied" : "Copy"}</button></div>`
+    ? `<div class="token-box" role="status"><p>Run this on <strong>${esc(nb.name)}</strong>. The token is shown only once.</p><code class="cmd" id="pair-cmd">${esc(cmd)}</code><button class="btn" data-act="copy">${S.copied ? "Copied" : "Copy"}</button><button class="btn" data-act="token-done">Done</button></div>`
     : ""
 }</section>`,
   );
@@ -598,8 +600,10 @@ async function refresh(): Promise<void> {
 async function loadSyncActions() {
   try {
     S.syncActions = await api.actions(30);
+    S.syncError = false;
   } catch {
-    S.syncActions = [];
+    S.syncActions = null;
+    S.syncError = true;
   }
   renderSync();
 }
@@ -784,7 +788,8 @@ function setView(v: View) {
   S.view = v;
   S.selected = null;
   if (isPhone()) closeDetail();
-  if (v === "settings") S.newBridge = S.newBridge ?? null;
+  // The pairing token is shown once; leaving Settings ends that showing.
+  if (v !== "settings") S.newBridge = null;
   render();
   $("#list").scrollTop = 0;
 }
@@ -872,6 +877,9 @@ function updateQuickAdd() {
   if (qa.list) select.value = qa.list;
   else if (qaListTouched && prev) select.value = prev;
   else select.value = defaultList();
+  // A stale pick (a list that disappeared) leaves nothing selected; fall
+  // back to the default so the picker is never blank.
+  if (select.selectedIndex < 0) select.value = defaultList();
 
   // Highlight recognised spans behind the input.
   let html = "";
@@ -1096,12 +1104,15 @@ function onClick(e: MouseEvent) {
     }
     case "snooze-pick": {
       const input = btn.closest(".snooze-pick")!.querySelector<HTMLInputElement>("input[data-pick]")!;
-      if (!input.value) {
+      const until = new Date(input.value);
+      if (!input.value || isNaN(until.getTime()) || until.getTime() <= now().getTime()) {
+        input.setAttribute("aria-invalid", "true");
         input.focus();
         return;
       }
+      input.removeAttribute("aria-invalid");
       const keys = btn.closest("#snooze") ? S.snoozeKeys ?? [] : S.open ? [S.open] : [];
-      doSnooze(keys, new Date(input.value));
+      doSnooze(keys, until);
       break;
     }
     case "snooze-close":
@@ -1125,6 +1136,7 @@ function onClick(e: MouseEvent) {
     case "sync":
       S.syncOpen = !S.syncOpen;
       S.syncActions = null;
+      S.syncError = false;
       renderSync();
       if (S.syncOpen) {
         void loadSyncActions();
@@ -1155,6 +1167,11 @@ function onClick(e: MouseEvent) {
       break;
     case "copy":
       void copyCommand();
+      break;
+    case "token-done":
+      S.newBridge = null;
+      S.copied = false;
+      render();
       break;
   }
 }
@@ -1363,7 +1380,7 @@ function boot() {
   void refresh().then(() => {
     if (want && byKey(want)) {
       const it = byKey(want)!;
-      if (!isOpen(it) || it.status === "closed") S.view = "all";
+      if (!isOpen(it)) S.view = "all";
       openItem(want);
     }
   });

@@ -27,7 +27,10 @@ beads_export=""
 if command -v bd >/dev/null 2>&1 && [ -d .beads ]; then
   beads_export=$(mktemp)
   trap 'rm -f "$beads_export"' EXIT
-  bd export > "$beads_export" 2>/dev/null || : > "$beads_export"
+  if ! bd export > "$beads_export" 2>/dev/null; then
+    echo "public-safety: bd export failed; beads issues were not scanned" >&2
+    : > "$beads_export"
+  fi
 fi
 
 search() { # [-i] regex: matches in the index, then in the beads export
@@ -48,19 +51,23 @@ scan() { # label, extended regex, [filter regex to drop allowed matches]
   report "$1" "$out"
 }
 
-scan "Absolute home paths:" '(/home/|/var/home/|/Users/|[Cc]:\\Users\\)[A-Za-z0-9._-]+'
+scan "Absolute home paths:" '(/home/|/var/home/|/Users/|/root/|[Cc]:\\Users\\)[A-Za-z0-9._-]+'
 scan "Private, Tailscale or link-local IPv4 addresses:" \
   '(^|[^0-9.])(10\.[0-9]{1,3}|192\.168|172\.(1[6-9]|2[0-9]|3[01])|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])|169\.254)\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
 scan "Tailnet hostnames:" '[A-Za-z0-9-]+\.ts\.net'
-scan "Tailscale IPv6 addresses:" 'fd7a:115c:a1e0:'
-scan "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([:/"'"'"' ]|$)' '\.env\.local|mise\.local|\.public-safety\.local|\*\.local'
+# Unique-local (fd00::/8, which includes Tailscale's fd7a:) and link-local
+# (fe80:) IPv6 addresses. The anchor keeps the two hex digits from matching
+# inside a longer hex word, as in 2001:db8::fd12:.
+scan "Private IPv6 addresses (unique-local fd00::/8 and link-local fe80::):" \
+  '(^|[^0-9a-fA-F:])([fF][dD][0-9a-fA-F]{2}|[fF][eE]80):'
+scan "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([^A-Za-z0-9._-]|$)' '\.env\.local|mise\.local|\.public-safety\.local|\*\.local'
 scan "MAC addresses:" '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}'
 scan "Email addresses outside example and noreply domains:" \
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
   '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com|anthropic\.com)'
 
 # Files that must never be tracked, whatever they contain.
-bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|mise\.local\.toml|\.public-safety\.local)$|\.(db|sqlite3?|pem|key|p12|pfx)$' | grep -v -E '(^|/)\.env\.example$' || true)
+bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|mise\.local\.toml|\.public-safety\.local|id_rsa|id_ecdsa|id_ed25519|\.netrc|\.npmrc|\.htpasswd|credentials\.json)$|\.(db|sqlite3?|pem|key|p12|pfx|jks|keystore)$|\.(db|sqlite3?)-(wal|shm|journal)$' | grep -v -E '(^|/)\.env\.example$' || true)
 report "Files that must never be tracked:" "$bad_files"
 
 # The operator's own names, hosts and identifiers.

@@ -13,3 +13,6 @@ services:
 
 volumes:
   meat-mode-data:
+    # The name Compose creates without this would carry the project prefix,
+    # and the documented `docker volume rm meat-mode-data` would miss it.
+    name: meat-mode-data

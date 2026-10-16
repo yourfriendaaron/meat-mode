@@ -58,15 +58,18 @@ sw.addEventListener("push", (e) => {
 
 sw.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const target = new URL(e.notification.data?.url || "/", sw.location.origin).href;
+  let target = new URL(e.notification.data?.url || "/", sw.location.origin);
+  // Never open an origin other than the app's own, whatever the payload said.
+  if (target.origin !== sw.location.origin) target = new URL("/", sw.location.origin);
+  const href = target.href;
   e.waitUntil(
     (async () => {
       const wins = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const w of wins) {
         if (new URL(w.url).origin !== sw.location.origin) continue;
-        if (w.url !== target && w.navigate) {
+        if (w.url !== href && w.navigate) {
           try {
-            await w.navigate(target);
+            await w.navigate(href);
           } catch {
             // uncontrolled client: focus it anyway
           }
@@ -74,7 +77,7 @@ sw.addEventListener("notificationclick", (e) => {
         await w.focus();
         return;
       }
-      await sw.clients.openWindow(target);
+      await sw.clients.openWindow(href);
     })(),
   );
 });

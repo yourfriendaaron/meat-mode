@@ -244,6 +244,8 @@ func TestActionValidationOverHTTP(t *testing.T) {
 		{api.NewAction{ID: aid1, Kind: api.KindNote, Key: "laptop/garden/gd-1", Payload: api.Payload{Text: strings.Repeat("x", 10001)}}, http.StatusBadRequest},
 		{api.NewAction{ID: aid1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden"}, http.StatusBadRequest},
 		{api.NewAction{ID: aid1, Kind: api.KindAdd, Bridge: "laptop", Repo: "chores", Payload: api.Payload{Title: "Mop"}}, http.StatusBadRequest},
+		{`{"id":"` + aid1 + `","kind":"done","key":"laptop/garden/gd-1"} {}`, http.StatusBadRequest},
+		{`{"id":"` + aid1 + `","kind":"done","key":"laptop/garden/gd-1"} trailing`, http.StatusBadRequest},
 		{`{"id":"` + aid1 + `","kind":"note","key":"laptop/garden/gd-1","payload":{"text":"` + strings.Repeat("x", 1<<20) + `"}}`, http.StatusRequestEntityTooLarge},
 	}
 	for i, tc := range cases {

@@ -2,6 +2,8 @@ package bridge
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
@@ -97,9 +99,12 @@ func (w *world) seed(dir, title string) string {
 }
 
 // start builds a bridge over the world's state directory, as a fresh process
-// would.
+// would. The bridge before it is gone, so its journal lock is released.
 func (w *world) start(personal string) *Bridge {
 	w.t.Helper()
+	if w.bridge != nil {
+		w.bridge.Journal.Close()
+	}
 	j, err := OpenJournal(w.state)
 	if err != nil {
 		w.t.Fatal(err)
@@ -137,8 +142,16 @@ func (w *world) oneOK(id string) api.ActionResult {
 	return rs[0]
 }
 
-func action(id, kind, repo, bead string, p api.Payload) api.Action {
-	return api.Action{ID: id, Kind: kind, Bridge: us, Repo: repo, BeadID: bead, Payload: p, Author: author}
+// aid turns a readable test name into the UUID-shaped action id the hub
+// would send.
+func aid(name string) string {
+	h := sha256.Sum256([]byte(name))
+	x := hex.EncodeToString(h[:16])
+	return x[:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:32]
+}
+
+func action(name, kind, repo, bead string, p api.Payload) api.Action {
+	return api.Action{ID: aid(name), Kind: kind, Bridge: us, Repo: repo, BeadID: bead, Payload: p, Author: author}
 }
 
 func TestReplaysEveryKindOnce(t *testing.T) {
@@ -176,9 +189,9 @@ func TestReplaysEveryKindOnce(t *testing.T) {
 		if fi.Status != "closed" || fi.CloseReason == nil || *fi.CloseReason != "Dismissed" {
 			t.Errorf("feed after done, reopen, dismiss: %s %v", fi.Status, fi.CloseReason)
 		}
-		added := w.oneOK("a-add").BeadID
+		added := w.oneOK(aid("a-add")).BeadID
 		ai := w.show(dir, added)
-		if ai.Title != "Repot the fern" || ai.ActionID() != "a-add" || ai.DueAt == nil || !ai.DueAt.Equal(due) ||
+		if ai.Title != "Repot the fern" || ai.ActionID() != aid("a-add") || ai.DueAt == nil || !ai.DueAt.Equal(due) ||
 			!slices.Contains(ai.Labels, "human") || ai.CreatedBy != author {
 			t.Errorf("added bead = %+v", ai)
 		}
@@ -253,7 +266,7 @@ func TestSurvivesCrashMidReplay(t *testing.T) {
 		if n != 1 {
 			t.Errorf("add applied %d times", n)
 		}
-		if got := w.oneOK("c-add").BeadID; got == "" {
+		if got := w.oneOK(aid("c-add")).BeadID; got == "" {
 			t.Error("add result has no bead id after the restart")
 		}
 	})
@@ -275,7 +288,7 @@ func TestResendsResultAfterLostReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.tick(w.start(""))
-	w.oneOK("r-note")
+	w.oneOK(aid("r-note"))
 	if n := len(w.show(dir, water).Comments); n != 1 {
 		t.Errorf("comments = %d", n)
 	}
@@ -319,7 +332,7 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 		if items, _ := w.hub.Items(us, "personal"); len(items) != 1 || items[0].Title != "Call Sam" {
 			t.Errorf("personal items (no human label needed) = %+v", items)
 		}
-		rs := w.hub.Results("n-1")
+		rs := w.hub.Results(aid("n-1"))
 		if len(rs) != 1 || rs[0].OK || rs[0].Error != ErrNotSynced {
 			t.Errorf("action on an unsynced repo: %+v", rs)
 		}
@@ -353,12 +366,12 @@ func TestRefusesUnknownBeads(t *testing.T) {
 			w.hub.Enqueue(us, a)
 		}
 		w.tick(w.start(""))
-		for _, id := range []string{"u-chore", "u-flag", "u-prof"} {
+		for _, id := range []string{aid("u-chore"), aid("u-flag"), aid("u-prof")} {
 			if rs := w.hub.Results(id); len(rs) != 1 || rs[0].OK || rs[0].Error != ErrUnknownBead {
 				t.Errorf("%s: results = %+v", id, rs)
 			}
 		}
-		w.oneOK("u-water")
+		w.oneOK(aid("u-water"))
 		if w.show(dir, chore).Status == "closed" {
 			t.Error("closed a bead the bridge never listed")
 		}
@@ -376,7 +389,7 @@ func TestIgnoresActionsForAnotherBridge(t *testing.T) {
 	a.Bridge = "other"
 	w.hub.Enqueue(us, a) // the hub misroutes it to us
 	w.tick(w.start(""))
-	if rs := w.hub.Results("o-1"); len(rs) != 0 {
+	if rs := w.hub.Results(aid("o-1")); len(rs) != 0 {
 		t.Errorf("results = %+v", rs)
 	}
 	if w.show(dir, water).Status == "closed" {
@@ -478,4 +491,25 @@ func TestRunStopsWithContext(t *testing.T) {
 	if len(w.hub.Repos(us)) != 1 {
 		t.Error("Run did not report repos")
 	}
+}
+
+func TestIgnoresActionsWithoutAUUID(t *testing.T) {
+	both(t, func(t *testing.T, w *world) {
+		dir := w.repo("garden", true)
+		water := w.seed(dir, "Water the plants")
+		b := w.start("")
+		w.tick(b)
+		for _, id := range []string{"", "not-a-uuid", strings.Repeat("a", 5<<20)} {
+			a := action("x", api.KindNote, "garden", water, api.Payload{Text: "Hello"})
+			a.ID = id
+			w.hub.Enqueue(us, a)
+		}
+		w.tick(b)
+		if got := w.show(dir, water).Comments; len(got) != 0 {
+			t.Fatalf("applied an action without a valid id: %+v", got)
+		}
+		if _, ok := b.Journal.Get(""); ok {
+			t.Fatal("journaled an empty action id")
+		}
+	})
 }

@@ -46,6 +46,8 @@ await build({
   format: "iife",
 });
 
+// Keyed by each source file's basename (so `main`, from src/main.ts), not by
+// the esbuild entry names above (`app`); index.html references these keys.
 const assets = {};
 for (const [file, meta] of Object.entries(app.metafile.outputs)) {
   if (!meta.entryPoint) continue;

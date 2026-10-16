@@ -7,10 +7,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/notify"
@@ -54,6 +55,12 @@ type Scheduler struct {
 	// Every, when set, replaces Interval. The hub sets it from the
 	// undocumented MEAT_MODE_REMINDER_INTERVAL variable for end-to-end tests.
 	Every time.Duration
+
+	// KeyOf, when set, names the item a reminder is recorded under, so two
+	// copies of one task share a reminder: the hub maps a bead created by an
+	// add to the provisional item the app showed before. Nil means the
+	// item's key.
+	KeyOf func(context.Context, api.Item) (string, error)
 }
 
 // New creates the scheduler and its reminder_fired table in db.
@@ -92,7 +99,7 @@ func fireTime(it api.Item) (time.Time, bool, bool) {
 func (s *Scheduler) Run(ctx context.Context) {
 	for {
 		if err := s.Tick(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("reminders: %v", err)
+			slog.Error("reminder check failed", "err", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -128,7 +135,15 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		if key == "" {
 			key = it.ID
 		}
-		ms := at.UnixMilli()
+		if s.KeyOf != nil {
+			if key, err = s.KeyOf(ctx, it); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+		// Whole seconds: bd stores times to the second, so a time the app
+		// sent with milliseconds comes back from the bridge without them.
+		ms := at.Truncate(time.Second).UnixMilli()
 		res, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO reminder_fired (item_key, fire_at) VALUES (?, ?)`, key, ms)
 		if err != nil {
 			errs = append(errs, err)
@@ -145,7 +160,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 			body = "Snoozed until now"
 		}
 		err = s.notifier.Notify(ctx, notify.Message{
-			Title: it.Title,
+			Title: truncTitle(it.Title),
 			Body:  body,
 			URL:   fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(key)),
 			Tag:   key,
@@ -155,4 +170,15 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// truncTitle caps a notification title at maxTitleRunes runes: a huge bead
+// title would overflow Web Push's 4 KiB payload and fail the whole send.
+const maxTitleRunes = 200
+
+func truncTitle(s string) string {
+	if utf8.RuneCountInString(s) <= maxTitleRunes {
+		return s
+	}
+	return string([]rune(s)[:maxTitleRunes]) + "…"
 }

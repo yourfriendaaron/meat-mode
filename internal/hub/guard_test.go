@@ -23,7 +23,7 @@ func guardServer(t *testing.T, cfg Config) *Server {
 }
 
 type guardReq struct {
-	method, path, host, ctype, origin, proto string
+	method, path, host, ctype, origin, proto, site string
 }
 
 func (g guardReq) send(s *Server) *httptest.ResponseRecorder {
@@ -41,6 +41,9 @@ func (g guardReq) send(s *Server) *httptest.ResponseRecorder {
 	}
 	if g.proto != "" {
 		req.Header.Set("X-Forwarded-Proto", g.proto)
+	}
+	if g.site != "" {
+		req.Header.Set("Sec-Fetch-Site", g.site)
 	}
 	w := httptest.NewRecorder()
 	s.ServeHTTP(w, req)
@@ -137,8 +140,34 @@ func TestGuardOrigin(t *testing.T) {
 			t.Errorf("case %d: Origin %q on Host %q = %d, want 403", i, c.origin, c.host, w.Code)
 		}
 	}
-	// A GET with a foreign Origin is not a state change.
-	if w := (guardReq{method: "GET", path: "/api/state", host: "localhost", origin: "http://attacker.example.net"}).send(s); w.Code != http.StatusOK {
-		t.Errorf("GET with a foreign Origin = %d", w.Code)
+	// An API GET with a foreign Origin is refused too: it could hold an
+	// event stream slot.
+	if w := (guardReq{method: "GET", path: "/api/events", host: "localhost", origin: "http://attacker.example.net"}).send(s); w.Code != http.StatusForbidden {
+		t.Errorf("GET /api/events with a foreign Origin = %d, want 403", w.Code)
+	}
+	if w := (guardReq{method: "GET", path: "/api/state", host: "localhost", origin: "http://localhost"}).send(s); w.Code != http.StatusOK {
+		t.Errorf("GET with its own Origin = %d", w.Code)
+	}
+}
+
+func TestGuardSecFetchSite(t *testing.T) {
+	s := guardServer(t, Config{})
+	for site, ok := range map[string]bool{"": true, "same-origin": true, "none": true, "same-site": false, "cross-site": false} {
+		// A no-cors fetch sends no Origin, only Sec-Fetch-Site.
+		w := guardReq{method: "GET", path: "/api/state", host: "localhost", site: site}.send(s)
+		if ok != (w.Code == http.StatusOK) {
+			t.Errorf("GET /api/state with Sec-Fetch-Site %q = %d", site, w.Code)
+		}
+	}
+	// A page may be opened from a link on another site.
+	if w := (guardReq{method: "GET", path: "/", host: "localhost", site: "cross-site"}).send(s); w.Code != http.StatusOK {
+		t.Errorf("GET / from another site = %d", w.Code)
+	}
+}
+
+func TestGuardBareBridgePathIsAPage(t *testing.T) {
+	s := guardServer(t, Config{})
+	if w := (guardReq{method: "GET", path: "/bridge", host: "attacker.example.net"}).send(s); w.Code != http.StatusMisdirectedRequest {
+		t.Errorf("GET /bridge under a foreign Host = %d, want 421", w.Code)
 	}
 }

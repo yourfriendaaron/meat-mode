@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -133,7 +134,8 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// readJSON decodes a JSON body of at most limit bytes into v.
+// readJSON decodes a JSON body of at most limit bytes into v. Anything but
+// whitespace after the first JSON value is refused.
 func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	dec := json.NewDecoder(r.Body)
@@ -144,6 +146,10 @@ func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
 		} else {
 			writeError(w, http.StatusBadRequest, "request body is not valid JSON: "+err.Error())
 		}
+		return false
+	}
+	if err := dec.Decode(&json.RawMessage{}); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "request body must hold exactly one JSON value")
 		return false
 	}
 	return true

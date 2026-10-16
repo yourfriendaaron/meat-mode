@@ -44,6 +44,7 @@ func runHub(args []string) error {
 				}
 				s.Every = d
 			}
+			s.KeyOf = st.ReminderKey
 			go s.Run(ctx)
 			return nil
 		},

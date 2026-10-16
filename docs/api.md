@@ -14,7 +14,7 @@ The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges (
 The app relies on the deployment's network boundary (LAN or VPN). No login in v1. Because it has no credentials, the hub refuses requests another site could make from the user's browser:
 
 - A `Host` other than `localhost`, `127.0.0.1`, `[::1]`, the host of `MEAT_MODE_PUBLIC_URL` or one listed in `MEAT_MODE_ALLOWED_HOSTS` gets `421` (on `/api/` and the app's pages).
-- A non-GET request whose `Origin` is neither the request's own origin nor that of `MEAT_MODE_PUBLIC_URL` gets `403`.
+- An `/api/` request (any method) or a non-GET page request whose `Origin` is neither the request's own origin nor that of `MEAT_MODE_PUBLIC_URL` gets `403`, and so does an `/api/` request whose `Sec-Fetch-Site` is `same-site` or `cross-site`.
 - A non-GET `/api/` request without `Content-Type: application/json` gets `415`, bodiless ones included.
 
 | Method and path | Body | Response |

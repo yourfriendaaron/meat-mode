@@ -121,7 +121,7 @@ func (s *Store) Touch(name string) error {
 // Hello records the bridge's versions and last-seen time.
 func (s *Store) Hello(name string, h api.Hello) error {
 	_, err := s.db.Exec(`UPDATE bridges SET last_seen = ?, version = ?, bd_version = ? WHERE name = ?`,
-		fmtTime(s.now()), h.Version, h.BdVersion, name)
+		fmtTime(s.now()), truncRunes(h.Version, maxVersionLen), truncRunes(h.BdVersion, maxVersionLen), name)
 	if err != nil {
 		return err
 	}
@@ -150,15 +150,4 @@ func (s *Store) Bridges() ([]api.Bridge, error) {
 		out = append(out, b)
 	}
 	return out, rows.Err()
-}
-
-// bridgeActive reports whether an unrevoked bridge has this name.
-func bridgeActive(q querier, name string) (bool, error) {
-	var n int
-	err := q.QueryRow(`SELECT COUNT(*) FROM bridges WHERE name = ? AND revoked_at IS NULL`, name).Scan(&n)
-	return n > 0, err
-}
-
-type querier interface {
-	QueryRow(query string, args ...any) *sql.Row
 }

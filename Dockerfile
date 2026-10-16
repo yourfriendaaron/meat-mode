@@ -1,6 +1,7 @@
 # Hub image: builds the frontend and the binary inside the image, so the
 # embedded frontend always matches the source.
-FROM docker.io/library/node:24-alpine AS web
+# node stays on the same patch version as mise.toml.
+FROM docker.io/library/node:24.22.0-alpine AS web
 WORKDIR /src
 RUN corepack enable
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml web/
