@@ -34,11 +34,16 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("hub replied %d: %s", e.Status, e.Message)
 }
 
+// client never follows redirects: one would carry the bearer token to
+// wherever the Location points.
 func (h *Hub) client() *http.Client {
+	c := &http.Client{Timeout: 30 * time.Second}
 	if h.HTTP != nil {
-		return h.HTTP
+		cp := *h.HTTP
+		c = &cp
 	}
-	return &http.Client{Timeout: 30 * time.Second}
+	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return c
 }
 
 func (h *Hub) do(ctx context.Context, method, path string, in, out any) error {
@@ -66,6 +71,10 @@ func (h *Hub) do(ctx context.Context, method, path string, in, out any) error {
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode/100 == 3 {
+		return fmt.Errorf("the hub replied %d with a redirect to %q; the bridge does not follow redirects, so set the hub URL to the final address",
+			resp.StatusCode, resp.Header.Get("Location"))
 	}
 	if resp.StatusCode/100 != 2 {
 		var e struct {
