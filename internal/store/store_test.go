@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -599,5 +600,143 @@ func TestSnoozeWithoutUntilClears(t *testing.T) {
 	st, _ := s.State()
 	if it := item(t, st, "laptop/garden/gd-1"); it.DeferUntil != nil {
 		t.Fatalf("snooze not cleared: %v", it.DeferUntil)
+	}
+}
+
+func TestReplaceItemsTruncatesLongText(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	rep := strings.Repeat
+	must(t, s.ReplaceItems("laptop", "garden", []api.Item{{
+		ID:          "gd-9",
+		Title:       rep("t", maxTitleLen+50),
+		Description: rep("d", maxDescriptionLen+50),
+		Status:      "open",
+		Comments: []api.Comment{{
+			ID:     "c9",
+			Author: rep("a", maxCommentAuthorLen+50),
+			Text:   rep("c", maxCommentLen+50),
+		}},
+	}}))
+	st, err := s.State()
+	must(t, err)
+	it := item(t, st, "laptop/garden/gd-9")
+	runeLen := func(v string) int { return len([]rune(v)) }
+	if got := runeLen(it.Title); got != maxTitleLen+1 || !strings.HasSuffix(it.Title, "…") {
+		t.Fatalf("title %d runes, want %d plus an ellipsis", got, maxTitleLen)
+	}
+	if got := runeLen(it.Description); got != maxDescriptionLen+1 || !strings.HasSuffix(it.Description, "…") {
+		t.Fatalf("description %d runes", got)
+	}
+	c := it.Comments[0]
+	if got := runeLen(c.Text); got != maxCommentLen+1 || !strings.HasSuffix(c.Text, "…") {
+		t.Fatalf("comment text %d runes", got)
+	}
+	if got := runeLen(c.Author); got != maxCommentAuthorLen+1 || !strings.HasSuffix(c.Author, "…") {
+		t.Fatalf("comment author %d runes", got)
+	}
+	// Truncation happens on rune boundaries, even when the cut lands inside
+	// a multi-byte character.
+	must(t, s.ReplaceItems("laptop", "garden", []api.Item{{ID: "gd-9", Title: rep("é", maxTitleLen+2), Status: "open"}}))
+	st, _ = s.State()
+	if got := runeLen(item(t, st, "laptop/garden/gd-9").Title); got != maxTitleLen+1 {
+		t.Fatalf("multi-byte title %d runes", got)
+	}
+}
+
+func TestHelloAndResultTruncateLongText(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	must(t, s.Hello("laptop", api.Hello{
+		Version:   strings.Repeat("v", maxVersionLen+50),
+		BdVersion: strings.Repeat("b", maxVersionLen+50),
+	}))
+	bs, err := s.Bridges()
+	must(t, err)
+	for _, b := range bs {
+		if b.Name != "laptop" {
+			continue
+		}
+		if got := len([]rune(b.Version)); got != maxVersionLen+1 || !strings.HasSuffix(b.Version, "…") {
+			t.Fatalf("version %d runes", got)
+		}
+		if got := len([]rune(b.BdVersion)); got != maxVersionLen+1 || !strings.HasSuffix(b.BdVersion, "…") {
+			t.Fatalf("bd version %d runes", got)
+		}
+	}
+	_, _, err = s.AppendAction(api.NewAction{ID: id1, Kind: api.KindDone, Key: "laptop/garden/gd-1"}, "alex-app")
+	must(t, err)
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: false, Error: strings.Repeat("e", maxResultErrorLen+50)}))
+	got, err := s.Action(id1)
+	must(t, err)
+	if n := len([]rune(got.Error)); n != maxResultErrorLen+1 || !strings.HasSuffix(got.Error, "…") {
+		t.Fatalf("result error %d runes", n)
+	}
+}
+
+func TestSuccessAfterCancelRecordsApplied(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindDone, Key: "laptop/garden/gd-1"}, "alex-app")
+	must(t, err)
+	_, err = s.CancelAction(id1)
+	must(t, err)
+	// The bridge had already applied it when the cancel landed.
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true}))
+	got, err := s.Action(id1)
+	must(t, err)
+	if got.Status != api.StatusApplied || got.BeadID != "gd-1" || got.AppliedAt == nil {
+		t.Fatalf("action after late success: %+v", got)
+	}
+}
+
+func TestNewPendingActionClearsShownError(t *testing.T) {
+	s, c := open(t)
+	seed(t, s)
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindDone, Key: "laptop/garden/gd-1"}, "alex-app")
+	must(t, err)
+	c.tick()
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: false, Error: "bd exited 1"}))
+	st, err := s.State()
+	must(t, err)
+	if e := item(t, st, "laptop/garden/gd-1").Error; e != "bd exited 1" {
+		t.Fatalf("item error %q", e)
+	}
+	c.tick()
+	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindNote, Key: "laptop/garden/gd-1",
+		Payload: api.Payload{Text: "Once more"}}, "alex-app")
+	must(t, err)
+	st, err = s.State()
+	must(t, err)
+	it := item(t, st, "laptop/garden/gd-1")
+	if it.Error != "" {
+		t.Fatalf("error still shown after a new pending action: %q", it.Error)
+	}
+	if !it.Pending {
+		t.Fatal("new action not folded in as pending")
+	}
+}
+
+func TestReminderKeyOfAnAddedBead(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	ctx := context.Background()
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+		Payload: api.Payload{Title: "Buy seeds"}}, "alex-app")
+	must(t, err)
+	provisional := "laptop/garden/" + provisionalPrefix + id1
+	st, err := s.State()
+	must(t, err)
+	if k, err := s.ReminderKey(ctx, item(t, st, provisional)); err != nil || k != provisional {
+		t.Fatalf("provisional key = %q, %v", k, err)
+	}
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true, BeadID: "gd-8"}))
+	real := api.Item{Key: "laptop/garden/gd-8", Bridge: "laptop", Repo: "garden", ID: "gd-8"}
+	if k, err := s.ReminderKey(ctx, real); err != nil || k != provisional {
+		t.Fatalf("added bead key = %q, %v; want the provisional item's", k, err)
+	}
+	other := api.Item{Key: "laptop/garden/gd-1", Bridge: "laptop", Repo: "garden", ID: "gd-1"}
+	if k, err := s.ReminderKey(ctx, other); err != nil || k != other.Key {
+		t.Fatalf("plain bead key = %q, %v", k, err)
 	}
 }

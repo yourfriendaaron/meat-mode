@@ -77,3 +77,19 @@ func TestDiscover(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverSkipsPersonalThroughSymlink(t *testing.T) {
+	root := t.TempDir()
+	personal := filepath.Join(root, "me")
+	writeRepo(t, personal, "")
+	// The root is reached through a symlink, so the personal repo's absolute
+	// path under the link differs from the one given as --personal.
+	link := filepath.Join(t.TempDir(), "projects-link")
+	if err := os.Symlink(root, link); err != nil {
+		t.Skipf("cannot symlink: %v", err)
+	}
+	got := Discover([]string{link}, personal, quiet)
+	if len(got) != 1 || got[0].Name != PersonalRepo || !got[0].Personal {
+		t.Fatalf("Discover = %+v, want the personal repo once", got)
+	}
+}

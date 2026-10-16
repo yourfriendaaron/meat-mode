@@ -77,7 +77,7 @@ func TestPair(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.HubURL != hub.URL || cfg.Token != token || cfg.BD != bd || cfg.Personal != personal ||
-		len(cfg.Roots) != 1 || cfg.Roots[0] != "~/code" {
+		len(cfg.Roots) != 1 || cfg.Roots[0] != filepath.Join(env.Paths.Home, "code") {
 		t.Errorf("config = %+v", cfg)
 	}
 	if !svc.installed || svc.exe != "/opt/meat-mode/meat-mode" || !strings.HasPrefix(svc.path, filepath.Dir(bd)+":") {
@@ -98,6 +98,41 @@ func TestPair(t *testing.T) {
 	}
 	if svc.installed {
 		t.Error("uninstall kept the service")
+	}
+}
+
+func TestPairMakesRootsAbsolute(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	bd := fakeBD(t, "1.3.1")
+	env, _, out := testEnv(t, bd)
+	proj := filepath.Join(env.Paths.Home, "projects")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A relative root and a bare ~ are stored as absolute paths, like --personal.
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	absRoot := filepath.Join(env.Paths.Home, "code")
+	err = Main(context.Background(), []string{"pair", hub.URL, token, "--no-service",
+		"--root", "rel/code", "--root", "~", "--root", absRoot}, env)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	cfg, err := LoadConfig(env.Paths.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{filepath.Join(wd, "rel", "code"), env.Paths.Home, absRoot}
+	if len(cfg.Roots) != len(want) {
+		t.Fatalf("roots = %v, want %v", cfg.Roots, want)
+	}
+	for i := range want {
+		if cfg.Roots[i] != want[i] {
+			t.Errorf("root %d = %q, want %q", i, cfg.Roots[i], want[i])
+		}
 	}
 }
 

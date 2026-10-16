@@ -13,7 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           fetch-depth: 0
+      - name: Shellcheck
+        run: shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit
       - name: Guard tests
         run: bash tests/public-safety.test.sh
       - name: Scan tracked files

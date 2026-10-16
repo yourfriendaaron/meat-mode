@@ -16,6 +16,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     // The hub refuses a state change without this type, even with no body.
     headers: method === "GET" ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;

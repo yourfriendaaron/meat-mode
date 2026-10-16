@@ -220,6 +220,11 @@ test("snooze to a picked time; failed actions show their error", async ({ page, 
   await expect(row(page, "Fix the gate latch").locator(".row-error")).toHaveText("bd: issue is locked");
   await row(page, "Fix the gate latch").locator(".row-body").click();
   const detail = page.locator("#detail");
+  // A time in the past is refused, marked invalid, and posts nothing.
+  await detail.getByLabel("Pick a time").fill("2026-10-13T08:30");
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
+  await expect(detail.getByLabel("Pick a time")).toHaveAttribute("aria-invalid", "true");
+  expect(hub.posted).toHaveLength(0);
   await detail.getByLabel("Pick a time").fill("2026-10-20T08:30");
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({
@@ -228,6 +233,45 @@ test("snooze to a picked time; failed actions show their error", async ({ page, 
     payload: { until: "2026-10-20T08:30:00.000Z", previous: null },
   });
   await expect(row(page, "Fix the gate latch").locator(".chip-orange")).toHaveText("Tue, Oct 20");
+});
+
+test("pairing token is shown once and leaves the screen with Settings", async ({ page, hub }) => {
+  hub.eventRetryMs = 200; // live refreshes while Settings is open
+  await openApp(page);
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Machine name").fill("laptop");
+  await page.getByRole("button", { name: "Add machine" }).click();
+  const box = page.locator(".token-box");
+  await expect(box).toBeVisible();
+  // A live refresh while Settings stays open keeps the token on screen.
+  const states = () => hub.requests.filter((r) => r === "GET /api/state").length;
+  const before = states();
+  await expect.poll(states).toBeGreaterThan(before);
+  await expect(box).toBeVisible();
+  // Leaving Settings and coming back does not.
+  await page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Today/ }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  await expect(page.locator("#view-title")).toHaveText("Settings");
+  await expect(page.locator(".token-box")).toHaveCount(0);
+  // A second token appears, and Done closes it.
+  await page.getByLabel("Machine name").fill("desk");
+  await page.getByRole("button", { name: "Add machine" }).click();
+  await expect(page.locator(".token-box")).toBeVisible();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.locator(".token-box")).toHaveCount(0);
+});
+
+test("sync popover says when actions could not be loaded", async ({ page, hub }) => {
+  await openApp(page);
+  hub.failActions = true;
+  await page.locator(".sidebar .sync-pill").click();
+  const pop = page.getByRole("dialog", { name: "Recent actions" });
+  await expect(pop).toContainText("Could not load actions.");
+  await expect(pop.locator(".act")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  hub.failActions = false;
+  await page.locator(".sidebar .sync-pill").click();
+  await expect(pop).toContainText("No actions yet.");
 });
 
 test("live updates: a change event re-fetches state", async ({ page, hub }) => {

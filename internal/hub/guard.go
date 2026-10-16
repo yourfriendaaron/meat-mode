@@ -44,7 +44,7 @@ func hostOnly(h string) string {
 // check reports whether the request may go on, writing the refusal when not.
 func (g *guard) check(w http.ResponseWriter, r *http.Request) bool {
 	p := r.URL.Path
-	if p == "/healthz" || p == "/bridge" || strings.HasPrefix(p, "/bridge/") {
+	if p == "/healthz" || strings.HasPrefix(p, "/bridge/") {
 		return true
 	}
 	isAPI := strings.HasPrefix(p, "/api/")
@@ -61,10 +61,23 @@ func (g *guard) check(w http.ResponseWriter, r *http.Request) bool {
 		}
 		return false
 	}
+	if isAPI && crossSite(r.Header.Get("Sec-Fetch-Site")) {
+		// Even a GET from another site costs something: an event stream
+		// holds one of a few slots for as long as the page stays open.
+		writeError(w, http.StatusForbidden, "cross-site request refused")
+		return false
+	}
+	o := r.Header.Get("Origin")
+	if isAPI && o != "" && !g.originOK(o, r) {
+		// Browsers without Sec-Fetch-Site still send Origin on a
+		// cross-origin fetch or EventSource.
+		writeError(w, http.StatusForbidden, "cross-origin request refused")
+		return false
+	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		return true
 	}
-	if o := r.Header.Get("Origin"); o != "" && !g.originOK(o, r) {
+	if o != "" && !g.originOK(o, r) {
 		writeError(w, http.StatusForbidden, "cross-origin request refused")
 		return false
 	}
@@ -91,6 +104,13 @@ func (g *guard) originOK(origin string, r *http.Request) bool {
 		scheme = strings.ToLower(strings.TrimSpace(p))
 	}
 	return origin == scheme+"://"+strings.ToLower(r.Host)
+}
+
+// crossSite reports whether a Sec-Fetch-Site value names another origin.
+// "none" is the user's own navigation, such as a notification click; an
+// absent header is an older browser or a non-browser client.
+func crossSite(v string) bool {
+	return v != "" && v != "same-origin" && v != "none"
 }
 
 // isJSON accepts application/json with at most a charset parameter.

@@ -157,7 +157,15 @@ func pair(ctx context.Context, args []string, env Env) error {
 		cfg.AllowInsecureHTTP = true
 	}
 	if len(roots) > 0 {
-		cfg.Roots = roots
+		abs := make([]string, 0, len(roots))
+		for _, r := range roots {
+			a, err := filepath.Abs(expandHome(r, env.Paths.Home))
+			if err != nil {
+				return err
+			}
+			abs = append(abs, a)
+		}
+		cfg.Roots = abs
 	}
 	if *personal != "" {
 		abs, err := filepath.Abs(expandHome(*personal, env.Paths.Home))

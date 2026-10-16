@@ -3,6 +3,8 @@ package bridge
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,6 +20,7 @@ const journalKeep = 30 * 24 * time.Hour
 type Journal struct {
 	path    string
 	f       *os.File
+	lock    *os.File // held while open, so only one bridge replays from this state
 	entries map[string]*JournalEntry
 }
 
@@ -36,13 +39,33 @@ type JournalEntry struct {
 // Done reports whether the bd step finished.
 func (e JournalEntry) Done() bool { return e.Phase == "done" }
 
+// errLocked means another bridge process holds the journal.
+var errLocked = errors.New("another bridge is already running with this state directory; stop it first (it may be the user service)")
+
 // OpenJournal opens (or creates) dir/replay.jsonl, dropping finished entries
-// older than 30 days.
+// older than 30 days. It holds a lock on dir until Close, so a second bridge
+// on the same machine cannot replay the same actions.
 func OpenJournal(dir string) (*Journal, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	j := &Journal{path: filepath.Join(dir, "replay.jsonl"), entries: map[string]*JournalEntry{}}
+	lock, err := os.OpenFile(filepath.Join(dir, "bridge.lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := lockFile(lock); err != nil {
+		lock.Close()
+		return nil, err
+	}
+	j := &Journal{path: filepath.Join(dir, "replay.jsonl"), entries: map[string]*JournalEntry{}, lock: lock}
+	if err := j.open(); err != nil {
+		lock.Close()
+		return nil, err
+	}
+	return j, nil
+}
+
+func (j *Journal) open() error {
 	if f, err := os.Open(j.path); err == nil {
 		sc := bufio.NewScanner(f)
 		sc.Buffer(make([]byte, 0, 64<<10), 4<<20)
@@ -54,18 +77,22 @@ func OpenJournal(dir string) (*Journal, error) {
 			j.apply(e)
 		}
 		f.Close()
+		if err := sc.Err(); err != nil {
+			// Compacting now would drop every entry after the failure.
+			return fmt.Errorf("read %s: %w", j.path, err)
+		}
 	} else if !os.IsNotExist(err) {
-		return nil, err
+		return err
 	}
 	if err := j.compact(); err != nil {
-		return nil, err
+		return err
 	}
 	f, err := os.OpenFile(j.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	j.f = f
-	return j, nil
+	return nil
 }
 
 func (j *Journal) apply(e JournalEntry) {
@@ -170,5 +197,9 @@ func (j *Journal) Done(id string, r api.ActionResult, at time.Time) error {
 	return j.write(JournalEntry{ID: id, Phase: "done", At: at.UTC(), Result: r})
 }
 
-// Close closes the file.
-func (j *Journal) Close() error { return j.f.Close() }
+// Close closes the file and releases the lock.
+func (j *Journal) Close() error {
+	err := j.f.Close()
+	j.lock.Close()
+	return err
+}

@@ -4,6 +4,10 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 "$root/scripts/public-safety.sh"
 if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks git --help >/dev/null 2>&1; then
+    echo "pre-commit: gitleaks 8.19 or later is needed (the git subcommand is missing)." >&2
+    exit 1
+  fi
   gitleaks git --staged --redact --no-banner "$root"
 else
   echo "pre-commit: gitleaks not installed; CI will run it." >&2

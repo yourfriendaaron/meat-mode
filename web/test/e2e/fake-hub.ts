@@ -79,6 +79,8 @@ export class FakeHub {
   seq = 0;
   /** Every request the page made, as "METHOD /path". */
   requests: string[] = [];
+  /** When set, GET /api/actions answers 500, as an unreachable hub route would. */
+  failActions = false;
   posted: NewAction[] = [];
   /** When set, every /api/events connection sends one change event and asks to reconnect after this many ms. */
   eventRetryMs = 0;
@@ -150,6 +152,7 @@ export class FakeHub {
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
     if (method === "GET" && path === "/api/actions") {
+      if (this.failActions) return this.json(route, 500, { error: "actions unavailable" });
       const limit = Number(url.searchParams.get("limit") || 50);
       return this.json(
         route,

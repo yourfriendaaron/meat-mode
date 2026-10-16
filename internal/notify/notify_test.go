@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -73,6 +74,39 @@ func TestVAPIDKeysPersist(t *testing.T) {
 	if err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("vapid.json: %v %v", fi, err)
 	}
+	// Generation left no temp file behind, and a read-only-open existing file
+	// is tightened rather than rewritten.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "vapid.json" {
+		t.Fatalf("data dir holds %v", entries)
+	}
+	if err := os.Chmod(filepath.Join(dir, "vapid.json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRegistry(dir, testDB(t), "mailto:alex@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	fi, err = os.Stat(filepath.Join(dir, "vapid.json"))
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("vapid.json after reopen: %v %v", fi, err)
+	}
+}
+
+func TestNewRegistrySubject(t *testing.T) {
+	for _, s := range []string{"mailto:alex@example.com", "https://example.com/contact"} {
+		if _, err := NewRegistry(t.TempDir(), testDB(t), s); err != nil {
+			t.Errorf("NewRegistry(%q) = %v", s, err)
+		}
+	}
+	for _, s := range []string{"", "mailto:", "mailto:no-at-sign", "alex@example.com", "https://", "ftp://example.com/"} {
+		_, err := NewRegistry(t.TempDir(), testDB(t), s)
+		if err == nil || !strings.Contains(err.Error(), "MEAT_MODE_VAPID_SUBJECT") {
+			t.Errorf("NewRegistry(%q) = %v, want an error naming MEAT_MODE_VAPID_SUBJECT", s, err)
+		}
+	}
 }
 
 func TestSubscribeUpsertAndUnsubscribe(t *testing.T) {
@@ -104,7 +138,6 @@ func TestNotifyPrunesGoneAndContinues(t *testing.T) {
 	for _, code := range []int{404, 410} {
 		db := testDB(t)
 		r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
-		r.hosts = append(r.hosts, "127.0.0.1") // the test push services
 		var okHits atomic.Int32
 		var ttl, urg, auth string
 		ok := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
@@ -114,6 +147,9 @@ func TestNotifyPrunesGoneAndContinues(t *testing.T) {
 		}))
 		gone := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { w.WriteHeader(code) }))
 		bad := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { w.WriteHeader(500) }))
+		for _, srv := range []*httptest.Server{ok, gone, bad} {
+			r.hosts = append(r.hosts, srv.Listener.Addr().String())
+		}
 		r.Client = ok.Client() // every httptest TLS server shares one certificate
 		ctx := context.Background()
 		for _, u := range []string{gone.URL, bad.URL, ok.URL} {
@@ -153,6 +189,7 @@ func TestSubscribeOnlyKnownPushServices(t *testing.T) {
 		"https://api.push.apple.com/a":                         true,
 		"https://wns2-by3p.notify.windows.com/w/?token=a":      true,
 		"https://FCM.googleapis.com:443/fcm/send/b":            true,
+		"https://fcm.googleapis.com:8443/fcm/send/a":           false,
 		"http://fcm.googleapis.com/fcm/send/a":                 false,
 		"https://attacker.example.net/collect":                 false,
 		"https://fcm.googleapis.com.example.net/a":             false,
@@ -277,14 +314,28 @@ func TestMultiTriesAll(t *testing.T) {
 }
 
 func TestFromEnv(t *testing.T) {
+	t.Setenv("MEAT_MODE_VAPID_SUBJECT", "mailto:alex@example.com")
 	t.Setenv("MEAT_MODE_NTFY_URL", "")
+	t.Setenv("MEAT_MODE_NTFY_TOPIC", "")
 	reg, n, err := FromEnv(t.TempDir(), testDB(t))
 	if err != nil || reg == nil || len(n.(Multi)) != 1 {
 		t.Fatal(err)
 	}
+	if reg.Client == nil || reg.Client.Timeout <= 0 {
+		t.Fatal("the registry client has no timeout")
+	}
 	t.Setenv("MEAT_MODE_NTFY_URL", "https://ntfy.example.com")
-	_, n, _ = FromEnv(t.TempDir(), testDB(t))
-	if len(n.(Multi)) != 2 {
-		t.Fatal("ntfy not enabled")
+	_, _, err = FromEnv(t.TempDir(), testDB(t))
+	if err == nil || !strings.Contains(err.Error(), "MEAT_MODE_NTFY_TOPIC") {
+		t.Fatalf("err = %v, want an error naming MEAT_MODE_NTFY_TOPIC", err)
+	}
+	t.Setenv("MEAT_MODE_NTFY_TOPIC", "plants")
+	reg, n, err = FromEnv(t.TempDir(), testDB(t))
+	if err != nil || len(n.(Multi)) != 2 {
+		t.Fatal(err)
+	}
+	nt := n.(Multi)[1].(*Ntfy)
+	if nt.Topic != "plants" || nt.Client == nil || nt.Client.Timeout <= 0 {
+		t.Fatalf("ntfy = %+v; its client has no timeout", nt)
 	}
 }

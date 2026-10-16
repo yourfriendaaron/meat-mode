@@ -127,6 +127,19 @@ func TestCLI(t *testing.T) {
 		t.Fatalf("comments = %+v", it.Comments)
 	}
 
+	// Deferring again with no time clears it: bd 1.3.1 reads an empty
+	// --defer= as "no defer".
+	if err := c.Defer(ctx, dir, id, nil, "alex-app"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = c.Show(ctx, dir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it := got.Item(); it.DeferUntil != nil {
+		t.Fatalf("defer not cleared: %v", it.DeferUntil)
+	}
+
 	if err := c.Close(ctx, dir, id, "Done in Meat Mode", "alex-app"); err != nil {
 		t.Fatal(err)
 	}

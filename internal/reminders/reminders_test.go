@@ -3,7 +3,9 @@ package reminders
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,11 +24,14 @@ type fakeSource struct{ items []api.Item }
 
 func (f *fakeSource) Items(context.Context) ([]api.Item, error) { return f.items, nil }
 
-type fakeNotifier struct{ got []notify.Message }
+type fakeNotifier struct {
+	err error
+	got []notify.Message
+}
 
 func (f *fakeNotifier) Notify(_ context.Context, m notify.Message) error {
 	f.got = append(f.got, m)
-	return nil
+	return f.err
 }
 
 var t0 = time.Date(2030, 1, 1, 9, 0, 0, 0, time.UTC)
@@ -173,5 +178,59 @@ func TestEveryOverridesInterval(t *testing.T) {
 	}
 	if got := (&Scheduler{Every: time.Second}).every(); got != time.Second {
 		t.Errorf("override: got %v, want 1s", got)
+	}
+}
+
+func TestFailingNotifierRecordsAndReturnsError(t *testing.T) {
+	db, c, src, n := setup(t)
+	n.err = errors.New("push service down")
+	due := t0.Add(-time.Minute)
+	src.items = []api.Item{item(&due)}
+	s := sched(t, db, c, src, n)
+	if err := s.Tick(context.Background()); err == nil {
+		t.Fatal("Tick did not return the delivery error")
+	}
+	var rows int
+	db.QueryRow(`SELECT count(*) FROM reminder_fired`).Scan(&rows)
+	if rows != 1 {
+		t.Fatalf("reminder row %d, want 1", rows)
+	}
+	if err := s.Tick(context.Background()); err != nil {
+		t.Fatalf("second Tick: %v", err)
+	}
+	if len(n.got) != 1 {
+		t.Fatalf("sent %d times; the failure must not repeat", len(n.got))
+	}
+}
+
+func TestLongTitleIsTruncated(t *testing.T) {
+	db, c, src, n := setup(t)
+	due := t0.Add(-time.Minute)
+	it := item(&due)
+	it.Title = strings.Repeat("é", 250)
+	src.items = []api.Item{it}
+	sched(t, db, c, src, n).Tick(context.Background())
+	if len(n.got) != 1 {
+		t.Fatal("did not fire")
+	}
+	title := []rune(n.got[0].Title)
+	if len(title) != 201 || title[len(title)-1] != '…' {
+		t.Fatalf("title is %d runes and ends %q", len(title), title[len(title)-1])
+	}
+}
+
+func TestKeyOfSharesOneReminder(t *testing.T) {
+	db, c, src, n := setup(t)
+	s := sched(t, db, c, src, n)
+	s.KeyOf = func(context.Context, api.Item) (string, error) { return "home/chores/pending-1", nil }
+	// The app's copy carries milliseconds; the bead bd stored does not.
+	early := item(tp(t0.Add(-time.Minute + 250*time.Millisecond)))
+	early.Key, early.ID = "home/chores/pending-1", "pending-1"
+	src.items = []api.Item{early}
+	s.Tick(context.Background())
+	src.items = []api.Item{item(tp(t0.Add(-time.Minute)))}
+	s.Tick(context.Background())
+	if len(n.got) != 1 {
+		t.Fatalf("sent %d reminders for one added task", len(n.got))
 	}
 }

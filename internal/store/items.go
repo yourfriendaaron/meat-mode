@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -127,6 +126,12 @@ func (s *Store) ReplaceItems(bridge, repo string, items []api.Item) error {
 		// Hub-only fields never come from a bridge.
 		it.Key, it.Bridge, it.Repo = "", "", ""
 		it.Pending, it.SeenAt, it.Error, it.FirstSeen = false, nil, "", time.Time{}
+		it.Title = truncRunes(it.Title, maxTitleLen)
+		it.Description = truncRunes(it.Description, maxDescriptionLen)
+		for j := range it.Comments {
+			it.Comments[j].Text = truncRunes(it.Comments[j].Text, maxCommentLen)
+			it.Comments[j].Author = truncRunes(it.Comments[j].Author, maxCommentAuthorLen)
+		}
 		if it.Comments == nil {
 			it.Comments = []api.Comment{}
 		}
@@ -182,27 +187,7 @@ func (s *Store) ReplaceItems(bridge, repo string, items []api.Item) error {
 	return nil
 }
 
-// Item returns one stored item as the bridge last reported it, with its
-// hub-local times and without pending actions folded in.
-func (s *Store) Item(key string) (api.Item, error) {
-	b, r, id, ok := SplitKey(key)
-	if !ok {
-		return api.Item{}, invalidf("item key %q is not valid", key)
-	}
-	var data, first string
-	var seenAt sql.NullString
-	err := s.db.QueryRow(`SELECT i.data, i.first_seen, i.seen_at FROM items i
-		JOIN bridges b ON b.name = i.bridge AND b.revoked_at IS NULL
-		WHERE i.bridge = ? AND i.repo = ? AND i.id = ?`, b, r, id).Scan(&data, &first, &seenAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return api.Item{}, notFoundf("no item %q", key)
-	}
-	if err != nil {
-		return api.Item{}, err
-	}
-	return decodeItem(b, r, data, first, seenAt)
-}
-
+// decodeItem rebuilds one stored item with its hub-local times.
 func decodeItem(bridge, repo, data, first string, seenAt sql.NullString) (api.Item, error) {
 	var it api.Item
 	if err := json.Unmarshal([]byte(data), &it); err != nil {

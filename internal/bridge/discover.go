@@ -32,9 +32,9 @@ func (r Repo) Synced() bool { return r.Personal || r.OptedIn }
 func Discover(roots []string, personal string, log *slog.Logger) []Repo {
 	var out []Repo
 	seen := map[string]bool{}
-	personalAbs := ""
+	personalPath := ""
 	if personal != "" {
-		personalAbs, _ = filepath.Abs(personal)
+		personalPath = resolvePath(personal)
 		if isDir(filepath.Join(personal, ".beads")) {
 			out = append(out, Repo{Name: PersonalRepo, Dir: personal, Personal: true, OptedIn: true})
 			seen[PersonalRepo] = true
@@ -56,7 +56,7 @@ func Discover(roots []string, personal string, log *slog.Logger) []Repo {
 			if fi, err := os.Stat(filepath.Join(dir, ".git")); err == nil && !fi.IsDir() {
 				continue // a Git worktree shares its main checkout's beads
 			}
-			if abs, _ := filepath.Abs(dir); abs == personalAbs {
+			if resolvePath(dir) == personalPath {
 				continue
 			}
 			if strings.HasPrefix(e.Name(), "-") {
@@ -78,6 +78,17 @@ func Discover(roots []string, personal string, log *slog.Logger) []Repo {
 func isDir(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
+}
+
+// resolvePath is dir with symlinks resolved, so the same directory reached
+// through different names compares equal. Unresolvable paths fall back to
+// the absolute path.
+func resolvePath(dir string) string {
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		return resolved
+	}
+	abs, _ := filepath.Abs(dir)
+	return abs
 }
 
 // OptedIn reports whether dir/.beads/config.yaml has the top-level line

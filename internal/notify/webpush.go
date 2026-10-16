@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/SherClockHolmes/webpush-go"
@@ -30,6 +31,10 @@ func loadVAPID(dir string) (vapidKeys, error) {
 	path := filepath.Join(dir, "vapid.json")
 	b, err := os.ReadFile(path)
 	if err == nil {
+		// A file left world-readable (by a copy or a restore) is tightened.
+		if fi, statErr := os.Stat(path); statErr == nil && fi.Mode().Perm()&0o077 != 0 {
+			_ = os.Chmod(path, 0o600)
+		}
 		var k vapidKeys
 		if err := json.Unmarshal(b, &k); err != nil {
 			return k, fmt.Errorf("read %s: %w", path, err)
@@ -51,10 +56,42 @@ func loadVAPID(dir string) (vapidKeys, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return k, err
 	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
+	if err := writeVAPID(path, b); err != nil {
 		return k, err
 	}
 	return k, nil
+}
+
+// writeVAPID writes b to path through a temp file in the same directory
+// (fsync, then rename), so a crash cannot leave a partial or readable key
+// file behind.
+func writeVAPID(path string, b []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".vapid-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	write := func() error {
+		if _, err := tmp.Write(b); err != nil {
+			return err
+		}
+		if err := tmp.Chmod(0o600); err != nil {
+			return err
+		}
+		return tmp.Sync()
+	}
+	err = write()
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(name, path)
+	}
+	if err != nil {
+		os.Remove(name)
+		return err
+	}
+	return nil
 }
 
 // PushHosts are the push services a subscription endpoint may point at: the
@@ -89,6 +126,9 @@ type Registry struct {
 // NewRegistry loads or creates the VAPID keys in dataDir and the
 // subscription table in db. subject is a mailto: or https: contact.
 func NewRegistry(dataDir string, db *sql.DB, subject string) (*Registry, error) {
+	if !validSubject(subject) {
+		return nil, fmt.Errorf("MEAT_MODE_VAPID_SUBJECT must be a mailto: address containing @ or an https:// URL, not %q", subject)
+	}
 	keys, err := loadVAPID(dataDir)
 	if err != nil {
 		return nil, err
@@ -101,8 +141,18 @@ func NewRegistry(dataDir string, db *sql.DB, subject string) (*Registry, error) 
 	if err != nil {
 		return nil, err
 	}
-	subject = strings.TrimPrefix(subject, "mailto:") // the library adds it
+	subject, _ = strings.CutPrefix(subject, "mailto:") // the library adds mailto: back unless the value starts with https:
 	return &Registry{db: db, keys: keys, subject: subject, hosts: PushHosts}, nil
+}
+
+// validSubject reports whether the VAPID subject is a mailto: address with
+// an @ in it, or an https:// URL; anything else fails every push later.
+func validSubject(s string) bool {
+	if rest, ok := strings.CutPrefix(s, "mailto:"); ok {
+		return strings.Contains(rest, "@")
+	}
+	u, err := url.Parse(s)
+	return err == nil && u.Scheme == "https" && u.Host != ""
 }
 
 // PublicKey is the VAPID public key the browser subscribes with.
@@ -115,6 +165,11 @@ func (r *Registry) allowed(endpoint string) bool {
 		return false
 	}
 	host := strings.ToLower(u.Hostname())
+	if port := u.Port(); port != "" && port != "443" {
+		// Push services listen on 443. A host:port entry (only tests add
+		// one) allows exactly that address.
+		return slices.Contains(r.hosts, host+":"+port)
+	}
 	for _, h := range r.hosts {
 		if host == h || strings.HasSuffix(host, "."+h) {
 			return true

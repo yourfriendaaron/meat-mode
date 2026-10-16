@@ -242,6 +242,7 @@ func (s *Store) ReportResult(bridge, id string, r api.ActionResult) error {
 		if msg == "" {
 			msg = "the bridge could not apply this action"
 		}
+		msg = truncRunes(msg, maxResultErrorLen)
 		_, err = tx.Exec(`UPDATE actions SET status = ?, error = ? WHERE seq = ?`,
 			api.StatusFailed, msg, a.Seq)
 	}
