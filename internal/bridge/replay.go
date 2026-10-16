@@ -23,6 +23,7 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 		return nil, err
 	}
 	touched := map[string]bool{}
+	listed := map[string]map[string]bool{} // repo -> ids listed during this replay
 	for _, a := range actions {
 		if a.Bridge != b.name {
 			// The hub should never send these; applying one would write to the
@@ -34,12 +35,20 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 		var res api.ActionResult
 		if st == nil || !st.Synced() {
 			res = api.ActionResult{Error: ErrNotSynced}
+		} else if ok, lerr := b.known(ctx, st, a, listed); lerr != nil || !ok {
+			res = api.ActionResult{Error: ErrUnknownBead}
+			if lerr != nil {
+				res = fail(lerr)
+			}
 		} else {
 			res, err = b.apply(ctx, a, st.Repo)
 			if err != nil {
 				return touched, err
 			}
 			touched[a.Repo] = true
+			if ids := listed[a.Repo]; ids != nil && res.BeadID != "" {
+				ids[res.BeadID] = true
+			}
 		}
 		if err := b.Hub.Result(ctx, a.ID, res); err != nil {
 			return touched, err
@@ -51,6 +60,36 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 		}
 	}
 	return touched, nil
+}
+
+// ErrUnknownBead is the result for an action on a bead this bridge never
+// listed in that repo.
+const ErrUnknownBead = "unknown bead"
+
+// known reports whether the action's bead is one this bridge lists for the
+// repo. Only listed beads are ever sent to the hub, so anything else did not
+// come from the app. An id missing from the last sync (after a restart, or
+// created since) is checked against a fresh list, once per replay.
+func (b *Bridge) known(ctx context.Context, st *repoState, a api.Action, listed map[string]map[string]bool) (bool, error) {
+	if a.Kind == api.KindAdd {
+		return true, nil
+	}
+	if _, ok := st.fps[a.BeadID]; ok {
+		return true, nil
+	}
+	ids, ok := listed[st.Name]
+	if !ok {
+		list, err := b.Beads.ListHuman(ctx, st.Dir, st.Personal)
+		if err != nil {
+			return false, err
+		}
+		ids = make(map[string]bool, len(list))
+		for _, i := range list {
+			ids[i.ID] = true
+		}
+		listed[st.Name] = ids
+	}
+	return ids[a.BeadID], nil
 }
 
 // apply runs one action through the replay journal. An error means the

@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
 
-// CLI implements Beads by running `bd -C <dir> ... --json`.
+// CLI implements Beads by running `bd -C <dir> ... --json`. Every call puts
+// its flags first, then `--`, then bead ids and text, because bd reads flags
+// anywhere on the line.
 type CLI struct {
 	Bin     string        // bd executable; "bd" when empty
 	Timeout time.Duration // per call; one minute when zero
@@ -29,6 +32,21 @@ type Error struct {
 
 func (e *Error) Error() string {
 	return "bd " + strings.Join(e.Args, " ") + ": " + e.Message
+}
+
+// idPattern is the shape of a bead id the bridge will pass to bd.
+var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+// ErrBadID is returned for a bead id that does not look like one.
+var ErrBadID = errors.New("not a valid bead id")
+
+// CheckID rejects anything that is not a plain bead id, such as a value that
+// starts with "-" and would reach bd as a flag.
+func CheckID(id string) error {
+	if !idPattern.MatchString(id) {
+		return fmt.Errorf("%w: %q", ErrBadID, id)
+	}
+	return nil
 }
 
 func (c *CLI) now() time.Time {
@@ -53,7 +71,7 @@ func (c *CLI) run(ctx context.Context, dir string, args ...string) ([]byte, erro
 	defer cancel()
 	full := args
 	if dir != "" {
-		full = append([]string{"-C", dir}, args...)
+		full = append([]string{"-C=" + dir}, args...)
 	}
 	cmd := exec.CommandContext(ctx, bin, full...)
 	cmd.Env = append(os.Environ(), "BD_NON_INTERACTIVE=1", "NO_COLOR=1")
@@ -145,7 +163,10 @@ func (c *CLI) ListHuman(ctx context.Context, dir string, personal bool) ([]Issue
 
 // Show implements Beads.
 func (c *CLI) Show(ctx context.Context, dir, id string) (Issue, error) {
-	out, err := c.run(ctx, dir, "show", id, "--include-comments", "--json")
+	if err := CheckID(id); err != nil {
+		return Issue{}, err
+	}
+	out, err := c.run(ctx, dir, "show", "--include-comments", "--json", "--", id)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -161,47 +182,63 @@ func (c *CLI) Show(ctx context.Context, dir, id string) (Issue, error) {
 
 // Close implements Beads.
 func (c *CLI) Close(ctx context.Context, dir, id, reason, actor string) error {
-	_, err := c.run(ctx, dir, "close", id, "--reason", reason, "--actor", actor, "--json")
+	if err := CheckID(id); err != nil {
+		return err
+	}
+	_, err := c.run(ctx, dir, "close", "--reason="+reason, "--actor="+actor, "--json", "--", id)
 	return err
 }
 
 // Reopen implements Beads.
 func (c *CLI) Reopen(ctx context.Context, dir, id, actor string) error {
-	_, err := c.run(ctx, dir, "reopen", id, "--actor", actor, "--json")
+	if err := CheckID(id); err != nil {
+		return err
+	}
+	_, err := c.run(ctx, dir, "reopen", "--actor="+actor, "--json", "--", id)
 	return err
 }
 
 // Defer implements Beads.
 func (c *CLI) Defer(ctx context.Context, dir, id string, until *time.Time, actor string) error {
+	if err := CheckID(id); err != nil {
+		return err
+	}
 	v := ""
 	if until != nil {
 		v = until.UTC().Format(time.RFC3339)
 	}
-	_, err := c.run(ctx, dir, "update", id, "--defer", v, "--actor", actor, "--json")
+	_, err := c.run(ctx, dir, "update", "--defer="+v, "--actor="+actor, "--json", "--", id)
 	return err
 }
 
 // Dismiss implements Beads. bd prints no JSON for it.
 func (c *CLI) Dismiss(ctx context.Context, dir, id, actor string) error {
-	_, err := c.run(ctx, dir, "human", "dismiss", id, "--actor", actor)
+	if err := CheckID(id); err != nil {
+		return err
+	}
+	_, err := c.run(ctx, dir, "human", "dismiss", "--actor="+actor, "--", id)
 	return err
 }
 
 // AddComment implements Beads.
 func (c *CLI) AddComment(ctx context.Context, dir, id, author, text string) error {
-	_, err := c.run(ctx, dir, "comments", "add", id, "--author", author, "--actor", author, "--json", "--", text)
+	if err := CheckID(id); err != nil {
+		return err
+	}
+	_, err := c.run(ctx, dir, "comments", "add", "--author="+author, "--actor="+author, "--json", "--", id, text)
 	return err
 }
 
-// Create implements Beads.
+// Create implements Beads. Every value rides in a --flag=value argument, so
+// none can be read as a flag of its own.
 func (c *CLI) Create(ctx context.Context, dir string, in NewIssue) (string, error) {
 	meta, _ := json.Marshal(map[string]string{ActionMetaKey: in.ActionID})
-	args := []string{"create", "--title=" + in.Title, "-l", HumanLabel, "--metadata", string(meta), "--json"}
+	args := []string{"create", "--title=" + in.Title, "-l", HumanLabel, "--metadata=" + string(meta), "--json"}
 	if in.Actor != "" {
-		args = append(args, "--actor", in.Actor)
+		args = append(args, "--actor="+in.Actor)
 	}
 	if in.Due != nil {
-		args = append(args, "--due", in.Due.UTC().Format(time.RFC3339))
+		args = append(args, "--due="+in.Due.UTC().Format(time.RFC3339))
 	}
 	out, err := c.run(ctx, dir, args...)
 	if err != nil {
@@ -219,7 +256,7 @@ func (c *CLI) Create(ctx context.Context, dir string, in NewIssue) (string, erro
 
 // FindByActionID implements Beads.
 func (c *CLI) FindByActionID(ctx context.Context, dir, actionID string) (string, error) {
-	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--metadata-field", ActionMetaKey+"="+actionID, "--json")
+	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--metadata-field="+ActionMetaKey+"="+actionID, "--json")
 	if err != nil {
 		return "", err
 	}

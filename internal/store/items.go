@@ -12,11 +12,12 @@ import (
 )
 
 // ValidRepoName reports whether name can be a repo name: 1 to 128
-// characters, no slash or control character, not "." or "..".
+// characters, no slash or control character, not "." or "..", and no
+// leading "-" (which a command line would read as a flag).
 func ValidRepoName(name string) bool { return validSegment(name) }
 
 func validSegment(s string) bool {
-	if s == "" || len(s) > 128 || s == "." || s == ".." || !utf8.ValidString(s) {
+	if s == "" || len(s) > 128 || s == "." || s == ".." || s[0] == '-' || !utf8.ValidString(s) {
 		return false
 	}
 	for _, r := range s {
