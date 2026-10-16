@@ -1,6 +1,6 @@
 # Meat Mode
 
-Meat Mode is a self-hosted to-do app for one person. It shows their personal to-dos and the tasks AI agents raise for them in [beads](https://github.com/gastownhall/beads), on desktop and phone, and sends their actions (done, snooze, note, dismiss, add) back to beads. It runs as a container on an always-on home server, so it keeps working when the machine the agents run on is off.
+Meat Mode is a self-hosted to-do app for one person. It shows their personal to-dos and the tasks AI agents raise for them in [beads](https://github.com/gastownhall/beads), on desktop and phone, and sends their actions (done, snooze, note, dismiss, add) back to beads. The hub runs as a container on any always-on host, so it keeps working when the machine the agents run on is off. A small bridge on the agent machine dials out to the hub, on the same machine or across the LAN, and syncs with beads.
 
 ## This repo is public from the first commit
 

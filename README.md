@@ -1,6 +1,6 @@
 # Meat Mode
 
-A self-hosted to-do app for one person: your own to-dos and the tasks your AI agents raise for you in [beads](https://github.com/gastownhall/beads), on desktop and phone. Tick, snooze, dismiss or leave a note, and the change flows back to beads. It runs as a container on an always-on home server, so reminders and your actions keep working when the machine your agents run on is off.
+A self-hosted to-do app for one person: your own to-dos and the tasks your AI agents raise for you in [beads](https://github.com/gastownhall/beads), on desktop and phone. Tick, snooze, dismiss or leave a note, and the change flows back to beads. It runs as a container on any always-on host, so reminders and your actions keep working when the machine your agents run on is off. A small bridge on that machine syncs with it, on the same box or across your LAN.
 
 Status: designed, not built yet.
 
