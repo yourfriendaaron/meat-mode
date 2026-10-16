@@ -5,14 +5,14 @@ Meat Mode has two parts:
 - **The hub** is a container on any always-on host (a home server, a NAS, a Raspberry Pi, a VPS). It keeps a copy of your items, the log of what you tapped, and sends reminders. It never connects to your agent machine.
 - **The bridge** is the same `meat-mode` program, run as a user service on the machine where your beads repos live. It dials out to the hub, sends your items up and replays your taps into beads with `bd`.
 
-Both setups below follow the same steps and differ only in the hub address.
+You reach the app through [Tailscale](https://tailscale.com), and only through Tailscale. The app has no login, so who can reach the hub is the whole of its access control: on a tailnet that is your own signed-in devices, not everyone on your Wi-Fi. Tailscale also gives the hub a publicly trusted HTTPS certificate, which browsers require before they allow reminders (Web Push) or installing the app to the home screen.
 
 | Setup | Hub address the bridge uses |
 |---|---|
 | Hub and bridge on one machine | `http://127.0.0.1:8080` (plain HTTP is accepted on loopback only) |
-| Hub on another always-on host on your LAN | `https://meat-mode.example.com`, through a reverse proxy or a Tailscale Service |
+| Hub on another always-on host | its Tailscale address, `https://meat-mode.<your tailnet>.ts.net` |
 
-For reminders on your phone, open the app over **HTTPS with a publicly trusted certificate**. Browsers allow Web Push only in a secure context. A reverse proxy with a Let's Encrypt certificate or a Tailscale Service qualifies; a bare IP address does not.
+Either way, your phone and other devices open the app at its Tailscale address.
 
 ## 1. Run the hub
 
@@ -38,21 +38,30 @@ Check it: `curl -fsS http://127.0.0.1:8080/healthz` prints `ok`.
 
 The data volume holds the database and the Web Push keys. Keep it on local storage: SQLite's write-ahead log does not work over NFS or SMB. If you bind-mount a host directory instead of a named volume, make it writable by user id 65532 (`chown 65532:65532 <dir>`); the hub says so and exits if it cannot write.
 
-### Expose it over HTTPS
+### Expose it on your tailnet
 
-Publish port 8080 only to loopback (as above) and put HTTPS in front of it:
+Publish port 8080 only to loopback (as above), so nothing on your LAN reaches the hub directly, and let Tailscale serve it over HTTPS. Install Tailscale on the hub host first, and turn on HTTPS certificates for your tailnet once in the admin console (**DNS**, **HTTPS Certificates**).
 
-- **Reverse proxy** (Caddy, nginx, Traefik, or your NAS's built-in proxy): proxy `https://meat-mode.example.com` to `http://127.0.0.1:8080`. The app uses a long-lived request for live updates (`/api/events`, server-sent events), so turn off response buffering for that path if your proxy buffers.
-- **Tailscale Service**: define the Service in the Tailscale admin console, then on the hub host run `tailscale serve --bg --service=svc:<name> --https=443 http://127.0.0.1:8080` and approve the host. The app is then at `https://<name>.<your tailnet>.ts.net` for devices on your tailnet.
+**Tailscale Service (recommended).** The address belongs to the Service, not to the host, so you can move the hub to another host later without changing it.
 
-Set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub, so links in reminders open the right place. The app refuses requests under any name but `localhost`, `127.0.0.1` and the names you allow, so set `MEAT_MODE_PUBLIC_URL` or `MEAT_MODE_ALLOWED_HOSTS` to the names you open the app at.
+1. In the admin console, under **Services**, add a Service named `meat-mode` with the endpoint `tcp:443`.
+2. On the hub host run `tailscale serve --bg --service=svc:meat-mode --https=443 http://127.0.0.1:8080`.
+3. In the admin console, approve the hub host for the Service.
 
-The app itself has no login. It relies on the network boundary: keep it on your LAN or VPN, and do not expose it to the internet.
+The app is then at `https://meat-mode.<your tailnet>.ts.net`.
+
+**`tailscale serve` on the host (fallback).** For trying it out, or a host that will never move, run `tailscale serve --bg --https=443 http://127.0.0.1:8080` instead. The app is then at `https://<host name>.<your tailnet>.ts.net`. That address belongs to the host: if you move the hub, each bridge must pair again and each device must turn reminders on again, because browsers tie push subscriptions and installed apps to the address.
+
+Then set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub. The hub refuses to start without an `https://` public address (plain `http://` is accepted for localhost only), and it answers only to `localhost`, `127.0.0.1`, the public address's name and any names in `MEAT_MODE_ALLOWED_HOSTS`.
+
+Certificates are recorded in public Certificate Transparency logs, so the `ts.net` name is publicly visible, though only your tailnet can reach it. Keep anything private out of the Service and host names.
+
+Do not expose the hub to the internet, or to your LAN without Tailscale in front: the app has no login.
 
 ### Host notes
 
 - **Unraid**: add a container from the image you built (or a registry you push it to), map `/data` to an appdata share on a cache or array disk (not a remote share), and set the variables from `.env.example` in the template.
-- **Synology and other NAS**: use Container Manager with Compose, and the NAS's reverse proxy for HTTPS.
+- **Synology and other NAS**: use Container Manager with Compose, and install Tailscale on the NAS for HTTPS.
 - **Raspberry Pi**: the image builds for arm64 as is.
 
 ## 2. Install the bridge on the agent machine
