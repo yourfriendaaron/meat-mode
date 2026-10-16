@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/beads"
@@ -17,6 +18,11 @@ var actionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-f
 
 // defaultActor is used when an action carries no author.
 const defaultActor = "meat-mode-app"
+
+// maxErrorLen caps a failed action's error text (bd output can be long), so
+// a result always fits in one replay journal line. The hub keeps the same
+// length.
+const maxErrorLen = 2000
 
 // replay applies the hub's pending actions in order and reports each result.
 // It returns the names of the repos it changed, and stops at the first hub
@@ -233,7 +239,13 @@ func firstErr(e error, then func() error) error {
 	return then()
 }
 
-func fail(err error) api.ActionResult { return api.ActionResult{Error: err.Error()} }
+func fail(err error) api.ActionResult {
+	msg := err.Error()
+	if utf8.RuneCountInString(msg) > maxErrorLen {
+		msg = string([]rune(msg)[:maxErrorLen]) + "…"
+	}
+	return api.ActionResult{Error: msg}
+}
 
 func newIssue(a api.Action, title, actor string) beads.NewIssue {
 	return beads.NewIssue{Title: title, Due: a.Payload.Due, ActionID: a.ID, Actor: actor}

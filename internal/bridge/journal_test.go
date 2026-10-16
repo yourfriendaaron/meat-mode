@@ -1,11 +1,13 @@
 package bridge
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
@@ -54,5 +56,12 @@ func TestJournalKeepsFileWhenReadFails(t *testing.T) {
 	after, _ := os.ReadFile(path)
 	if string(before) != string(after) {
 		t.Fatal("the journal was rewritten after a read error")
+	}
+}
+
+func TestFailCapsErrorText(t *testing.T) {
+	res := fail(errors.New(strings.Repeat("é", 5*1024*1024)))
+	if n := utf8.RuneCountInString(res.Error); n != maxErrorLen+1 || !strings.HasSuffix(res.Error, "…") {
+		t.Fatalf("error text is %d runes, want %d ending in an ellipsis", n, maxErrorLen+1)
 	}
 }

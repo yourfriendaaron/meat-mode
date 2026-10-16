@@ -58,7 +58,12 @@ sw.addEventListener("push", (e) => {
 
 sw.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  let target = new URL(e.notification.data?.url || "/", sw.location.origin);
+  let target: URL;
+  try {
+    target = new URL(e.notification.data?.url || "/", sw.location.origin);
+  } catch {
+    target = new URL("/", sw.location.origin);
+  }
   // Never open an origin other than the app's own, whatever the payload said.
   if (target.origin !== sw.location.origin) target = new URL("/", sw.location.origin);
   const href = target.href;
