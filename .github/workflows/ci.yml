@@ -45,6 +45,53 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      BD_VERSION: "1.3.1"
+      BD_SHA256: 3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c # beads_1.3.1_linux_amd64.tar.gz
+      E2E_REQUIRE_BD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: e2e/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.0" # keep in step with mise.toml
+          cache: pnpm
+          cache-dependency-path: |
+            web/pnpm-lock.yaml
+            e2e/pnpm-lock.yaml
+      - name: Install bd from the beads release
+        run: |
+          tarball="beads_${BD_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/gastownhall/beads/releases/download/v${BD_VERSION}/${tarball}"
+          echo "${BD_SHA256}  ${tarball}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bd"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/bd" bd
+          echo "$RUNNER_TEMP/bd" >> "$GITHUB_PATH"
+      - run: bd version
+      - run: pnpm --dir web install --frozen-lockfile
+      - run: pnpm --dir e2e install --frozen-lockfile
+      - run: pnpm --dir e2e typecheck
+      - run: pnpm --dir e2e exec playwright install --with-deps chromium
+      - name: End-to-end against the binary
+        run: pnpm --dir e2e test
+      - name: End-to-end against the image
+        run: |
+          docker build -t meat-mode:e2e .
+          E2E_IMAGE=meat-mode:e2e pnpm --dir e2e test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results
+          path: e2e/test-results
+          retention-days: 7
+
   image:
     runs-on: ubuntu-latest
     steps:

@@ -39,6 +39,10 @@ type Bridge struct {
 	Version  string
 	Log      *slog.Logger
 	Now      func() time.Time
+	// Poll, when set, replaces both ActionEvery and SyncEvery. New sets it
+	// from the undocumented MEAT_MODE_BRIDGE_POLL variable (a Go duration),
+	// which the end-to-end tests use to avoid waiting 30 seconds per round.
+	Poll time.Duration
 
 	// afterBD runs after a bd write and before the journal's done record.
 	// Tests use it to simulate a crash.
@@ -69,6 +73,20 @@ func (b *Bridge) now() time.Time {
 		return b.Now()
 	}
 	return time.Now()
+}
+
+func (b *Bridge) actionEvery() time.Duration {
+	if b.Poll > 0 {
+		return b.Poll
+	}
+	return ActionEvery
+}
+
+func (b *Bridge) syncEvery() time.Duration {
+	if b.Poll > 0 {
+		return b.Poll
+	}
+	return SyncEvery
 }
 
 func (b *Bridge) log() *slog.Logger {
@@ -104,7 +122,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 	backoff := time.Duration(0)
 	for {
 		err := b.Tick(ctx, false)
-		wait := ActionEvery
+		wait := b.actionEvery()
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
@@ -147,7 +165,7 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if err := b.hubErr(err); err != nil {
 		return err
 	}
-	if b.now().Sub(b.lastFullAt) >= SyncEvery {
+	if b.now().Sub(b.lastFullAt) >= b.syncEvery() {
 		full = true
 	}
 	for _, name := range b.syncedNames() {

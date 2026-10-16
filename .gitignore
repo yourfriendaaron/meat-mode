@@ -33,6 +33,8 @@ backups/
 node_modules/
 dist/
 coverage/
+test-results/
+playwright-report/
 .DS_Store
 
 # Built frontend (embedded by web/embed.go)

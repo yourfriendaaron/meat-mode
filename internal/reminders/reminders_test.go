@@ -166,3 +166,12 @@ func TestRunStopsOnCancel(t *testing.T) {
 		t.Fatal("Run did not stop")
 	}
 }
+
+func TestEveryOverridesInterval(t *testing.T) {
+	if got := (&Scheduler{}).every(); got != Interval {
+		t.Errorf("default: got %v, want %v", got, Interval)
+	}
+	if got := (&Scheduler{Every: time.Second}).every(); got != time.Second {
+		t.Errorf("override: got %v, want 1s", got)
+	}
+}

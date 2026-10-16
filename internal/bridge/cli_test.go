@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/bridge/fakehub"
 )
@@ -168,5 +169,27 @@ func TestStatus(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestPollOverride(t *testing.T) {
+	if d, err := pollOverride(""); err != nil || d != 0 {
+		t.Fatalf("empty: got %v, %v", d, err)
+	}
+	if d, err := pollOverride("200ms"); err != nil || d != 200*time.Millisecond {
+		t.Fatalf("200ms: got %v, %v", d, err)
+	}
+	for _, bad := range []string{"fast", "0s", "-1s"} {
+		if _, err := pollOverride(bad); err == nil {
+			t.Errorf("%q: want an error", bad)
+		}
+	}
+	b := &Bridge{}
+	if b.actionEvery() != ActionEvery || b.syncEvery() != SyncEvery {
+		t.Error("zero Poll should keep the defaults")
+	}
+	b.Poll = time.Second
+	if b.actionEvery() != time.Second || b.syncEvery() != time.Second {
+		t.Error("Poll should replace both intervals")
 	}
 }

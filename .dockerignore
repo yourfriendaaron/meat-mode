@@ -11,3 +11,5 @@ web/static/*
 web/test-results
 web/playwright-report
 data
+e2e/node_modules
+e2e/test-results
