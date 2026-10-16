@@ -50,6 +50,10 @@ type Scheduler struct {
 	notifier  notify.Notifier
 	clock     Clock
 	publicURL string
+
+	// Every, when set, replaces Interval. The hub sets it from the
+	// undocumented MEAT_MODE_REMINDER_INTERVAL variable for end-to-end tests.
+	Every time.Duration
 }
 
 // New creates the scheduler and its reminder_fired table in db.
@@ -93,9 +97,16 @@ func (s *Scheduler) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-s.clock.After(Interval):
+		case <-s.clock.After(s.every()):
 		}
 	}
+}
+
+func (s *Scheduler) every() time.Duration {
+	if s.Every > 0 {
+		return s.Every
+	}
+	return Interval
 }
 
 // Tick runs one check. A reminder is recorded as fired even when delivery

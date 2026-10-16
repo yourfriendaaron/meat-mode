@@ -206,6 +206,10 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 	if cfg.Token == "" {
 		return nil, errors.New("no token is set; run `meat-mode bridge pair <url> <token>`")
 	}
+	poll, err := pollOverride(os.Getenv("MEAT_MODE_BRIDGE_POLL"))
+	if err != nil {
+		return nil, err
+	}
 	j, err := OpenJournal(env.Paths.State)
 	if err != nil {
 		return nil, fmt.Errorf("open replay journal: %w", err)
@@ -218,7 +222,21 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		Personal: cfg.ResolvePersonal(env.Paths.Home),
 		Version:  env.Version,
 		Log:      log,
+		Poll:     poll,
 	}, nil
+}
+
+// pollOverride parses MEAT_MODE_BRIDGE_POLL, a test-only override of the
+// poll intervals. Empty means the defaults.
+func pollOverride(v string) (time.Duration, error) {
+	if v == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("MEAT_MODE_BRIDGE_POLL must be a positive duration such as 200ms, not %q", v)
+	}
+	return d, nil
 }
 
 func run(ctx context.Context, env Env) error {
