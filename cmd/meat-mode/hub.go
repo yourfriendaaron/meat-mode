@@ -27,6 +27,7 @@ func runHub(args []string) error {
 			if err != nil {
 				return nil, err
 			}
+			reg.RequireSession = cfg.PasswordHash != ""
 			notifier = n
 			return reg, nil
 		},

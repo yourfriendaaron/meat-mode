@@ -7,14 +7,19 @@ Meat Mode has two parts:
 
 Your personal list needs only the hub. You can stop at step 1 and use it on its own, then add a bridge when you want your agents' tasks too.
 
-You reach the app through [Tailscale](https://tailscale.com), and only through Tailscale. The app has no login, so who can reach the hub is the whole of its access control: on a tailnet that is your own signed-in devices, not everyone on your Wi-Fi. Tailscale also gives the hub a publicly trusted HTTPS certificate, which browsers require before they allow reminders (Web Push) or installing the app to the home screen.
+There are two supported ways to reach the hub, and both need a publicly trusted HTTPS certificate, which browsers require before they allow reminders (Web Push) or installing the app to the home screen:
+
+- **[Tailscale](https://tailscale.com)**, with no login. Who can reach the hub is the whole of its access control: on a tailnet that is your own signed-in devices, not everyone on your Wi-Fi. Tailscale also supplies the certificate. See [Expose it on your tailnet](#expose-it-on-your-tailnet).
+- **A reverse proxy** you already run (Caddy, nginx, Traefik, a NAS's built-in proxy), with a password. The hub asks for it before it shows or accepts anything. See [Behind a reverse proxy](#behind-a-reverse-proxy).
+
+A hub with no password hash runs with no login and logs a warning saying so. That is safe only when nothing but you can reach it. Never publish a hub without a password to your LAN or the internet.
 
 | Setup | Hub address the bridge uses |
 |---|---|
 | Hub and bridge on one machine | `http://127.0.0.1:8080` (plain HTTP is accepted on loopback only) |
-| Hub on another always-on host | its Tailscale address, `https://meat-mode.<your tailnet>.ts.net` |
+| Hub on another always-on host | its public address: `https://meat-mode.<your tailnet>.ts.net`, or the reverse proxy's `https://` address |
 
-Either way, your phone and other devices open the app at its Tailscale address.
+Either way, your phone and other devices open the app at that same address.
 
 ## 1. Run the hub
 
@@ -58,12 +63,110 @@ Then set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub. The hub ref
 
 Certificates are recorded in public Certificate Transparency logs, so the `ts.net` name is publicly visible, though only your tailnet can reach it. Keep anything private out of the Service and host names.
 
-Do not expose the hub to the internet, or to your LAN without Tailscale in front: the app has no login.
+This path has no login, so do not also publish the port to your LAN or the internet. To use a reverse proxy instead, or as well, set a password first (next section).
+
+### Behind a reverse proxy
+
+Use this when you already run a reverse proxy with a certificate, or want the app at your own domain. The hub then has a login: one password, one user.
+
+**1. Set a password.** Make the hash with the image you built:
+
+```sh
+docker run --rm -it --entrypoint /meat-mode meat-mode hash-password
+```
+
+(or `meat-mode hash-password` with the binary). It asks for the password twice and prints an Argon2id string such as `$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`. With input piped in, it reads one line.
+
+**2. Give the hash to the hub**, one of two ways. Setting both stops the hub at start.
+
+- `MEAT_MODE_PASSWORD_HASH=<the hash>`.
+- `MEAT_MODE_PASSWORD_HASH_FILE=<path>`, a file inside the container that holds the hash. This suits Docker and Compose secrets (see `compose.example.yaml`) and avoids the quoting below.
+
+The hash holds `$` signs, which Docker tools can read as variables:
+
+- In a `.env` file that Compose reads through `env_file:`, wrap the value in single quotes: `MEAT_MODE_PASSWORD_HASH='$argon2id$v=19$…'`. Compose uses single-quoted values literally; unquoted and double-quoted values have `$` expanded.
+- Written directly in `compose.yaml` under `environment:`, double every `$` as `$$`.
+- With `docker run --env-file`, the line is taken literally, quotes included, so write it with no quotes. The single-quoted form above would put the quotes into the hash and the hub would refuse it. A `.env` shared between `docker run` and Compose therefore cannot hold the hash; use the `_FILE` variant.
+
+Start the hub and check the log: the "login is off" warning is gone.
+
+**3. Publish the port to loopback only** (`127.0.0.1:8080:8080`, as above) and have the proxy forward to it. If the proxy runs in another container, put both on a shared network and forward to the hub container's port 8080 instead of publishing it.
+
+**4. Set `MEAT_MODE_PUBLIC_URL`** to the proxy's address, `https://meat-mode.example.com`. The proxy must:
+
+- Pass the original `Host` header through. If it rewrites it, add the name the hub receives to `MEAT_MODE_ALLOWED_HOSTS`.
+- Send `X-Forwarded-Proto`.
+- Not buffer responses from `/api/events`, the server-sent event stream that keeps the app current. The hub marks it unbuffered, which nginx honors; the nginx snippet turns buffering off for it as well.
+- Present a certificate that browsers trust, such as Let's Encrypt. Web Push and installing to the home screen do not work with a self-signed one.
+
+**Caddy**
+
+```
+meat-mode.example.com {
+	reverse_proxy 127.0.0.1:8080
+}
+```
+
+Caddy passes `Host` unchanged, sets `X-Forwarded-Proto`, flushes event streams at once, and gets the certificate itself.
+
+**nginx** (certificate lines are your own, or managed by certbot)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name meat-mode.example.com;
+    # ssl_certificate and ssl_certificate_key here
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /api/events {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}
+```
+
+nginx rewrites `Host` to the upstream's name unless you set it, which is why `proxy_set_header Host $host` is there. A location with its own `proxy_set_header` lines does not inherit the outer ones, so the event stream block repeats them.
+
+**Traefik** (Docker provider; the entry point and certificate resolver names are the ones in your Traefik setup)
+
+```yaml
+services:
+  meat-mode:
+    # ...
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.meat-mode.rule=Host(`meat-mode.example.com`)
+      - traefik.http.routers.meat-mode.entrypoints=websecure
+      - traefik.http.routers.meat-mode.tls.certresolver=letsencrypt
+      - traefik.http.services.meat-mode.loadbalancer.server.port=8080
+```
+
+Traefik passes `Host` by default and does not buffer responses unless you add a buffering middleware. Traefik reaches the container over a shared Docker network, so drop the `ports:` mapping when you use it.
+
+**NAS and other built-in proxies** (Synology reverse proxy, Unraid with Nginx Proxy Manager or SWAG, and similar). Create a host for `meat-mode.example.com` that forwards to the hub's address and port 8080, with a certificate for that name. Then look for: a switch to pass the `Host` header or "preserve host" (on); a "WebSocket" or custom-header section where you can add `X-Forwarded-Proto: https` if the proxy does not send it; and any option named buffering, caching or compression, which must be off for `/api/events`. Nginx Proxy Manager has an Advanced tab that takes the nginx lines above.
+
+**Pairing and devices.** The bridge pairs with the proxy's address exactly as before: `meat-mode bridge pair https://meat-mode.example.com mm_xxxxxxxx`. Its `/bridge/` routes use their own bearer tokens, not the password. On iOS, the home-screen app keeps its own cookies, separate from Safari: log in once in each.
+
+**Changing the password.** Make a new hash, put it in place, and restart the hub. Every device is logged out and asks for the new password. **Settings** has **Log out** for one device, which also stops that device's reminders. Five wrong passwords within a minute lock logins for the whole hub for a short time.
+
+**A login at the proxy as well.** Authelia, basic auth or similar can sit in front of the hub for a second layer. Let `/bridge/` pass through it untouched, because bridges and `meat-mode add` send a bearer token, not a proxy login. `/healthz` is public.
 
 ### Host notes
 
 - **Unraid**: add a container from the image you built (or a registry you push it to), map `/data` to an appdata share on a cache or array disk (not a remote share), and set the variables from `.env.example` in the template.
-- **Synology and other NAS**: use Container Manager with Compose, and install Tailscale on the NAS for HTTPS.
+- **Synology and other NAS**: use Container Manager with Compose, and either install Tailscale on the NAS for HTTPS or use the NAS's reverse proxy (see above).
 - **Raspberry Pi**: the image builds for arm64 as is.
 
 ## 2. Install the bridge on the agent machine

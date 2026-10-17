@@ -85,6 +85,8 @@ jobs:
       - run: pnpm --dir e2e install --frozen-lockfile
       - run: pnpm --dir e2e typecheck
       - run: pnpm --dir e2e exec playwright install --with-deps chromium
+      # The proxy tests run Caddy in front of the hub; pull it before the clock starts.
+      - run: docker pull caddy:2.10.2-alpine
       - name: End-to-end against the binary
         run: pnpm --dir e2e test
       - name: End-to-end against the image

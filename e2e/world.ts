@@ -5,7 +5,7 @@
 // run leaves behind.
 
 import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { appendFile, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -37,6 +37,15 @@ process.on("exit", () => {
   for (const name of liveContainers) spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" });
   for (const name of liveVolumes) spawnSync("docker", ["volume", "rm", "-f", name], { stdio: "ignore" });
 });
+
+/** Whether a docker command (Docker, or Podman behind it) answers. */
+export function hasDocker(): boolean {
+  const r = spawnSync("docker", ["version"], { stdio: "ignore" });
+  return r.status === 0;
+}
+
+/** The Caddy image the proxy tests run, pinned. */
+export const CADDY_IMAGE = "caddy:2.10.2-alpine";
 
 /** Whether bd is on PATH. */
 export function hasBd(): boolean {
@@ -188,11 +197,30 @@ export interface RepoSpec {
   other?: string[];
 }
 
+/** How World.create sets up the hub. The default is no login and no proxy. */
+export interface WorldOptions {
+  /** Turns the hub's login on with this password. */
+  password?: string;
+  /**
+   * Puts a Caddy container in front of the hub and serves the app at
+   * http://<proxyHost>:<port>, a name the hub only knows from
+   * MEAT_MODE_ALLOWED_HOSTS. Use a *.localhost name: Chromium sends it to
+   * loopback and treats it as a secure context.
+   */
+  proxyHost?: string;
+}
+
 export class World {
   tmp = "";
   bin = "";
+  /** The hub itself, on loopback. */
   hubURL = "";
+  /** Where the browser opens the app: the proxy when there is one, else the hub. */
+  appURL = "";
+  /** The proxy's port on loopback, or 0. */
+  proxyPort = 0;
   hub!: Proc;
+  proxy?: Proc;
   ntfy = new Capture();
   machines = new Map<string, Machine>();
   /** Bead title to id, for every seeded or added bead. */
@@ -200,17 +228,25 @@ export class World {
   private bdHome = "";
   private hubPort = 0;
   private hubVolume = "";
+  private hubContainer = "";
+  private opts: WorldOptions = {};
+  private passwordHash = "";
 
-  /** Builds the binary, starts the capture server and the hub. */
-  static async create(): Promise<World> {
+  /** Builds the binary, starts the capture server, the hub and any proxy. */
+  static async create(opts: WorldOptions = {}): Promise<World> {
     const w = new World();
+    w.opts = opts;
     w.tmp = await mkdtemp(join(tmpdir(), "meat-mode-e2e-"));
     w.bdHome = join(w.tmp, "bd-home");
     await mkdir(w.bdHome, { recursive: true });
     try {
       await w.build();
       await w.ntfy.start();
+      if (opts.password !== undefined) w.passwordHash = w.hashPassword(opts.password);
+      if (opts.proxyHost) w.proxyPort = await freePort();
       await w.startHub();
+      if (opts.proxyHost) await w.startProxy(opts.proxyHost);
+      else w.appURL = w.hubURL;
     } catch (e) {
       await w.dispose();
       throw e;
@@ -232,6 +268,61 @@ export class World {
     await execFileP("go", ["build", "-o", this.bin, "./cmd/meat-mode"], { cwd: repoRoot, env: { ...process.env, CGO_ENABLED: "0" } });
   }
 
+  /** Runs `meat-mode hash-password` with the password on stdin, as an operator would. */
+  private hashPassword(password: string): string {
+    const r = spawnSync(this.bin, ["hash-password"], { input: password + "\n", encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`hash-password failed: ${r.stderr}`);
+    return r.stdout.trim();
+  }
+
+  /**
+   * Starts Caddy in a container in front of the hub. Host networking lets it
+   * listen on the free port and reach the hub on loopback, with Docker and
+   * rootless Podman alike. The site matches any Host, so the hub's own Host
+   * check is what refuses a wrong name.
+   */
+  private async startProxy(host: string): Promise<void> {
+    const port = this.proxyPort;
+    const caddyfile = join(this.tmp, "Caddyfile");
+    await writeFile(caddyfile, `{\n\tadmin off\n}\n\nhttp://:${port} {\n\treverse_proxy 127.0.0.1:${this.hubPort}\n}\n`);
+    const name = `meat-mode-e2e-caddy-${port}`;
+    liveContainers.add(name);
+    this.proxy = new Proc(
+      "caddy",
+      "docker",
+      ["run", "--rm", "--name", name, "--network", "host", "-v", `${caddyfile}:/etc/caddy/Caddyfile:ro`, CADDY_IMAGE],
+      process.env,
+      () => {
+        spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" });
+        liveContainers.delete(name);
+      },
+    );
+    this.appURL = `http://${host}:${port}`;
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+      try {
+        const r = await fetch(`http://127.0.0.1:${port}/healthz`);
+        if (r.ok) return;
+      } catch {
+        /* not up yet */
+      }
+      if (!this.proxy.running || Date.now() > deadline) throw new Error(`caddy did not start:\n${this.proxy.output}`);
+      await sleep(200);
+    }
+  }
+
+  /**
+   * A local path to the hub's database, readable while the hub runs. For a
+   * hub in a container it is a fresh copy of the data directory.
+   */
+  async hubDB(): Promise<string> {
+    if (!this.hubContainer) return join(this.tmp, "hub-data", "meat-mode.db");
+    const dest = join(this.tmp, `hub-data-copy-${Date.now()}`);
+    const r = spawnSync("docker", ["cp", `${this.hubContainer}:/data`, dest], { encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`docker cp failed: ${r.stderr}`);
+    return join(dest, "meat-mode.db");
+  }
+
   /** Stops the hub and starts it again on the same address and data. */
   async restartHub(): Promise<void> {
     await this.hub.stop();
@@ -250,11 +341,18 @@ export class World {
       MEAT_MODE_NTFY_TOPIC: NTFY_TOPIC,
       MEAT_MODE_REMINDER_INTERVAL: "1s",
     };
+    if (this.passwordHash) env.MEAT_MODE_PASSWORD_HASH = this.passwordHash;
+    if (this.opts.proxyHost) {
+      // The address the user opens is the proxy's; the hub hears its name in Host.
+      env.MEAT_MODE_PUBLIC_URL = `http://localhost:${this.proxyPort}`;
+      env.MEAT_MODE_ALLOWED_HOSTS = this.opts.proxyHost;
+    }
     const image = process.env.E2E_IMAGE;
     if (image) {
       // Host networking lets the container listen on the free port and reach
       // the capture server on loopback, with Docker and rootless Podman alike.
       const name = `meat-mode-e2e-${port}`;
+      this.hubContainer = name;
       // A named volume keeps the data across restartHub, as a deployment does.
       this.hubVolume = `${name}-data`;
       liveContainers.add(name);
@@ -399,12 +497,13 @@ export class World {
 
   /** The tail of every process's output, for a failure report. */
   logs(): string {
-    const procs = [this.hub, ...[...this.machines.values()].map((m) => m.proc)].filter((p): p is Proc => !!p);
+    const procs = [this.hub, this.proxy, ...[...this.machines.values()].map((m) => m.proc)].filter((p): p is Proc => !!p);
     return procs.map((p) => `----- ${p.name} -----\n${p.output.slice(-8000)}`).join("\n");
   }
 
   async dispose(): Promise<void> {
     for (const m of this.machines.values()) await m.proc?.stop();
+    await this.proxy?.stop();
     await this.hub?.stop();
     if (this.hubVolume) {
       spawnSync("docker", ["volume", "rm", "-f", this.hubVolume], { stdio: "ignore" });

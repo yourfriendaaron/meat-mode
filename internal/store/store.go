@@ -145,7 +145,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 var migrations = []string{
 	// 1: initial schema.
@@ -210,6 +210,19 @@ CREATE TABLE personal_origins (
 	item_id TEXT NOT NULL,
 	PRIMARY KEY (bridge, bead_id)
 );
+`,
+	// 3: login sessions. id is the SHA-256 of the cookie's token; tag
+	// names the password hash the session was made under. Times are Unix
+	// seconds, so expiry compares in SQL.
+	`
+CREATE TABLE sessions (
+	id         BLOB PRIMARY KEY,
+	tag        TEXT NOT NULL,
+	created_at INTEGER NOT NULL,
+	renewed_at INTEGER NOT NULL,
+	expires_at INTEGER NOT NULL
+);
+CREATE INDEX sessions_expires ON sessions(expires_at);
 `,
 }
 

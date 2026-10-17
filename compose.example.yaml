@@ -10,9 +10,20 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - meat-mode-data:/data
+    # To keep the login hash out of .env, put it alone in a file (the output of
+    # `meat-mode hash-password`, no quotes) and uncomment these lines. Compose
+    # mounts the secret at /run/secrets/<name>.
+    # environment:
+    #   MEAT_MODE_PASSWORD_HASH_FILE: /run/secrets/meat_mode_password_hash
+    # secrets:
+    #   - meat_mode_password_hash
 
 volumes:
   meat-mode-data:
     # The name Compose creates without this would carry the project prefix,
     # and the documented `docker volume rm meat-mode-data` would miss it.
     name: meat-mode-data
+
+# secrets:
+#   meat_mode_password_hash:
+#     file: ./password-hash.txt
