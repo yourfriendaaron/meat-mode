@@ -101,9 +101,9 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
     await expect(heading).toHaveText("Connection check");
     const checks = wiz.getByRole("list", { name: "Connection checks" });
     for (const title of ["Address", "Secure connection", "Live updates", "Clocks", "Reminder keys", "ntfy"]) {
-      await expect(checks.locator(".check-pass", { hasText: title })).toBeVisible();
+      await expect(checks.locator(".conn-pass", { hasText: title })).toBeVisible();
     }
-    await expect(checks.locator(".check-fail")).toHaveCount(0);
+    await expect(checks.locator(".conn-fail")).toHaveCount(0);
     await go("Connection check");
   });
 
