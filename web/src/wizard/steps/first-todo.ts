@@ -14,6 +14,8 @@ let text = "";
 /** The to-do this step added, once it has. */
 let created: { title: string; when: string; list: string } | null = null;
 let error = "";
+/** A to-do is being sent; a second submit or Continue waits for it. */
+let adding = false;
 /** The context of the last render, for the input listener at the end. */
 let liveCtx: AppContext | null = null;
 
@@ -76,6 +78,7 @@ function preview(
 
 /** Adds the typed to-do to the personal list, or to the list the text names. */
 async function add(ctx: AppContext): Promise<boolean> {
+  if (adding) return false;
   const qa = parse(ctx, text);
   if (!qa.title) {
     error = "Type a to-do first.";
@@ -89,6 +92,7 @@ async function add(ctx: AppContext): Promise<boolean> {
     error = "There is no list to add to yet.";
     return false;
   }
+  adding = true;
   try {
     await api.postAction({
       id: newId(),
@@ -100,6 +104,8 @@ async function add(ctx: AppContext): Promise<boolean> {
   } catch (e) {
     error = `Could not save: ${(e as Error).message}`;
     return false;
+  } finally {
+    adding = false;
   }
   created = {
     title: qa.title,
@@ -119,6 +125,11 @@ registerStep({
   order: ORDER.firstTodo,
   applies: (ctx) => Boolean(personal(ctx)),
   done: () => created !== null,
+  start() {
+    text = "";
+    created = null;
+    error = "";
+  },
   render(ctx) {
     liveCtx = ctx;
     const example = `Water the plants tomorrow 6pm #${repoLabel(personal(ctx)!)}`;
