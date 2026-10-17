@@ -132,16 +132,16 @@ func (s *Server) handleClaim(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "the setup code is wrong, expired or used; restart the hub for a new one")
 		return
 	}
+	// The hub is claimed and the code spent, so nothing below fails the
+	// request. Without a session cookie the app shows its login screen.
 	if err := removeSetupCode(filepath.Join(s.cfg.DataDir, setupCodeFile)); err != nil {
 		s.log.Warn("claimed the hub", "err", err)
 	}
 	if err := s.store.SetTailscaleOnly(false); err != nil {
-		s.storeError(w, r, err)
-		return
+		s.log.Warn("claimed the hub; tailscale-only choice not cleared", "err", err)
 	}
 	if err := s.startSession(w, l); err != nil {
-		s.storeError(w, r, err)
-		return
+		s.log.Warn("claimed the hub; log in to continue", "err", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
