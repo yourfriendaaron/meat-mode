@@ -52,16 +52,26 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	if cfg.PasswordHash != "" {
-		slog.Info("login is on")
-	} else {
-		slog.Warn("login is off: keep the hub behind Tailscale or another private network")
-	}
 	st, err := store.Open(cfg.DataDir)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
+	settings, err := st.Settings()
+	if err != nil {
+		return err
+	}
+	switch {
+	case cfg.PasswordHash != "":
+		slog.Info("login is on, with the password from the environment")
+	case settings.PasswordHash != "":
+		slog.Info("login is on, with the password set in the app")
+	default:
+		slog.Warn("login is off: keep the hub behind Tailscale or another private network")
+	}
+	if err := mintSetupCode(cfg, st); err != nil {
+		return err
+	}
 
 	var push PushRegistry
 	if opts.Push != nil {

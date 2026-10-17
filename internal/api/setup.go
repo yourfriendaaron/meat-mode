@@ -23,3 +23,21 @@ type Setup struct {
 type SetupRecord struct {
 	Status string `json:"status"` // "done" or "dismissed"
 }
+
+// SetupClaim is POST /api/setup/claim: the setup code from the hub's log
+// or its setup-code file, and the password to set.
+type SetupClaim struct {
+	Code     string `json:"code"`
+	Password string `json:"password"`
+}
+
+// PasswordChange is PUT /api/password.
+type PasswordChange struct {
+	Current  string `json:"current"`
+	Password string `json:"password"`
+}
+
+// TailscaleOnly is PUT /api/setup/tailscale-only.
+type TailscaleOnly struct {
+	On bool `json:"on"`
+}

@@ -24,32 +24,48 @@ const (
 	maxLoginBody  = 4 << 10
 )
 
-// login holds the password and the failed-login count. A nil *login means
-// the hub has no login.
+// login is the hub's password. A nil *login means the hub has no login.
 type login struct {
 	hash *auth.Hash
 	tag  string // names the hash, so a new password ends the old sessions
-
-	verify sync.Mutex // one Argon2 run at a time bounds memory
-
-	mu    sync.Mutex
-	fails []time.Time // within the last loginWindow
+	env  bool   // set by MEAT_MODE_PASSWORD_HASH or _FILE, not in the app
 }
 
-func newLogin(phc string) *login {
+func newLogin(phc string, env bool) *login {
 	if phc == "" {
 		return nil
 	}
 	h, err := auth.ParseHash(phc)
 	if err != nil {
-		panic(err) // Config.Validate refuses it before the hub starts
+		panic(err) // Config.Validate and the store refuse it before it gets here
 	}
 	sum := sha256.Sum256([]byte(phc))
-	return &login{hash: h, tag: hex.EncodeToString(sum[:16])}
+	return &login{hash: h, tag: hex.EncodeToString(sum[:16]), env: env}
 }
 
-// retryAfter is how long until another login may be tried, or 0.
-func (l *login) retryAfter(now time.Time) time.Duration {
+// currentLogin is the hub's password now, or nil. Claiming the hub and
+// changing the password replace it while the hub runs.
+func (s *Server) currentLogin() *login {
+	s.loginMu.RLock()
+	defer s.loginMu.RUnlock()
+	return s.login
+}
+
+func (s *Server) setLogin(l *login) {
+	s.loginMu.Lock()
+	s.login = l
+	s.loginMu.Unlock()
+}
+
+// limiter counts failed tries within the last loginWindow, for the whole
+// hub.
+type limiter struct {
+	mu    sync.Mutex
+	fails []time.Time
+}
+
+// retryAfter is how long until another try may be made, or 0.
+func (l *limiter) retryAfter(now time.Time) time.Duration {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for len(l.fails) > 0 && now.Sub(l.fails[0]) >= loginWindow {
@@ -61,26 +77,34 @@ func (l *login) retryAfter(now time.Time) time.Duration {
 	return l.fails[0].Add(loginWindow).Sub(now)
 }
 
-func (l *login) failed(now time.Time) {
+func (l *limiter) failed(now time.Time) {
 	l.mu.Lock()
 	l.fails = append(l.fails, now)
 	l.mu.Unlock()
 }
 
-// attempt checks password unless too many recent tries failed, and returns
-// how long to wait when they did. Tries run one at a time, so requests sent
-// together cannot all slip past the limit.
-func (l *login) attempt(password string, now func() time.Time) (ok bool, wait time.Duration) {
-	l.verify.Lock()
-	defer l.verify.Unlock()
-	if wait := l.retryAfter(now()); wait > 0 {
-		return false, wait
+// attempt runs check unless too many recent tries failed under lim, and
+// returns how long to wait when they did. check reports a wrong secret as
+// false, which counts as a failure. Tries run one at a time, so requests
+// sent together cannot all slip past the limit, and only one Argon2 run at
+// a time bounds memory.
+func (s *Server) attempt(lim *limiter, check func() (bool, error)) (ok bool, wait time.Duration, err error) {
+	s.verify.Lock()
+	defer s.verify.Unlock()
+	if wait := lim.retryAfter(s.now()); wait > 0 {
+		return false, wait, nil
 	}
-	if l.hash.Verify(password) {
-		return true, 0
+	ok, err = check()
+	if err == nil && !ok {
+		lim.failed(s.now())
 	}
-	l.failed(now())
-	return false, 0
+	return ok, 0, err
+}
+
+// tooMany answers 429 with Retry-After.
+func tooMany(w http.ResponseWriter, wait time.Duration, msg string) {
+	w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
+	writeError(w, http.StatusTooManyRequests, msg)
 }
 
 type sessionKey struct{}
@@ -96,14 +120,15 @@ func sessionOf(r *http.Request) *store.Session {
 // API and /healthz are not gated.
 func (s *Server) gate(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
 	p := r.URL.Path
-	if s.login == nil || !strings.HasPrefix(p, "/api/") {
+	l := s.currentLogin()
+	if l == nil || !strings.HasPrefix(p, "/api/") {
 		return r, true
 	}
 	switch p {
-	case "/api/session", "/api/login", "/api/logout":
+	case "/api/session", "/api/login", "/api/logout", "/api/setup/claim":
 		return r, true
 	}
-	sess, err := s.session(w, r)
+	sess, err := s.session(w, r, l)
 	if err != nil {
 		s.storeError(w, r, err)
 		return r, false
@@ -115,15 +140,15 @@ func (s *Server) gate(w http.ResponseWriter, r *http.Request) (*http.Request, bo
 	return r.WithContext(context.WithValue(r.Context(), sessionKey{}, sess)), true
 }
 
-// session returns r's valid session, or nil, sending the cookie again when
-// its expiry moved.
-func (s *Server) session(w http.ResponseWriter, r *http.Request) (*store.Session, error) {
+// session returns r's valid session under l, or nil, sending the cookie
+// again when its expiry moved.
+func (s *Server) session(w http.ResponseWriter, r *http.Request, l *login) (*store.Session, error) {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
 		return nil, nil
 	}
 	now := s.now()
-	sess, err := s.store.CheckSession(c.Value, s.login.tag, now, sessionTTL)
+	sess, err := s.store.CheckSession(c.Value, l.tag, now, sessionTTL)
 	if err != nil || sess == nil {
 		return nil, err
 	}
@@ -151,19 +176,21 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, token string, ttl time.
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	authed := true
-	if s.login != nil {
-		sess, err := s.session(w, r)
+	l := s.currentLogin()
+	if l != nil {
+		sess, err := s.session(w, r, l)
 		if err != nil {
 			s.storeError(w, r, err)
 			return
 		}
 		authed = sess != nil
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"login": s.login != nil, "authenticated": authed})
+	writeJSON(w, http.StatusOK, map[string]bool{"login": l != nil, "authenticated": authed})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	if s.login == nil {
+	l := s.currentLogin()
+	if l == nil {
 		writeError(w, http.StatusNotFound, "this hub has no login")
 		return
 	}
@@ -173,23 +200,30 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, maxLoginBody, &body) {
 		return
 	}
-	ok, wait := s.login.attempt(body.Password, s.now)
+	ok, wait, _ := s.attempt(&s.loginFails, func() (bool, error) { return l.hash.Verify(body.Password), nil })
 	if wait > 0 {
-		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
-		writeError(w, http.StatusTooManyRequests, "too many wrong passwords; try again in a minute")
+		tooMany(w, wait, "too many wrong passwords; try again in a minute")
 		return
 	}
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "wrong password")
 		return
 	}
-	token, sess, err := s.store.CreateSession(s.login.tag, s.now(), sessionTTL)
-	if err != nil {
+	if err := s.startSession(w, l); err != nil {
 		s.storeError(w, r, err)
 		return
 	}
-	s.setSessionCookie(w, token, sess.ExpiresAt.Sub(s.now()))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// startSession logs this browser in under l: a new session and its cookie.
+func (s *Server) startSession(w http.ResponseWriter, l *login) error {
+	token, sess, err := s.store.CreateSession(l.tag, s.now(), sessionTTL)
+	if err != nil {
+		return err
+	}
+	s.setSessionCookie(w, token, sess.ExpiresAt.Sub(s.now()))
+	return nil
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

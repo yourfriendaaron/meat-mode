@@ -454,7 +454,7 @@ func TestSubscriptionsFollowTheirSession(t *testing.T) {
 	if err := r.Subscribe(ctx, "", newSub(t, srv.URL+"/before")); err != nil {
 		t.Fatal(err)
 	}
-	r.RequireSession = true
+	r.RequireSession = func() bool { return true }
 	if err := r.Subscribe(ctx, "", newSub(t, srv.URL+"/anon")); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("subscribe without a session: %v, want ErrUnauthorized", err)
 	}
