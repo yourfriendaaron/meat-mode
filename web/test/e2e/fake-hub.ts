@@ -139,6 +139,16 @@ export class FakeHub {
     this.setup.status = "";
   }
 
+  /** What a newly paired bridge does on its first hello: it is seen, and reports the repos it found, all switched off. */
+  hello(name: string, repos: string[]): void {
+    const b = this.bridges.find((x) => x.name === name);
+    if (!b) throw new Error(`no machine ${name}`);
+    b.lastSeen = this.now();
+    b.version = "0.1.0";
+    b.bdVersion = "1.3.0";
+    for (const r of repos) this.repos.push({ bridge: name, name: r, personal: false, optedIn: false });
+  }
+
   setupInfo(): SetupInfo {
     const inUse = this.items.length > 0 || this.bridges.length > 0;
     return {

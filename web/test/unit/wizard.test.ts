@@ -56,14 +56,13 @@ test("a run sorts steps by order, keeps its parts and leaves out steps that do n
   registerStep({ id: "test-device", title: "Device thing", part: "device", order: 55, render: () => "" });
   registerStep({ id: "test-hub", title: "Hub thing", part: "hub", order: 25, render: () => "" });
   registerStep({ id: "test-never", title: "Never", part: "hub", order: 26, applies: () => false, render: () => "" });
-  assert.deepEqual(
-    stepsFor("first", ctx).map((s) => s.id),
-    ["welcome", "test-hub", "test-device", "finish"],
-  );
-  assert.deepEqual(
-    stepsFor("device", ctx).map((s) => s.id),
-    ["welcome", "test-device", "finish"],
-  );
+  // Only the frame's own steps and these, so steps other modules register do not matter here.
+  const ids = (mode: Progress["mode"]) =>
+    stepsFor(mode, ctx)
+      .map((s) => s.id)
+      .filter((id) => id === "welcome" || id === "finish" || id.startsWith("test-"));
+  assert.deepEqual(ids("first"), ["welcome", "test-hub", "test-device", "finish"]);
+  assert.deepEqual(ids("device"), ["welcome", "test-device", "finish"]);
   assert.throws(() => registerStep({ id: "welcome", title: "Again", part: null, order: 1, render: () => "" }));
 });
 
