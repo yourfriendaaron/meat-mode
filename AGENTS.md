@@ -27,6 +27,12 @@ How to work within that:
 - `tests/public-safety.test.sh` proves the guard catches each class and passes clean code. CI runs the test, the guard and gitleaks on every push and pull request.
 - Never commit with `--no-verify`. When a guard fires, remove the data. Widen a pattern's allowlist only when the operator agrees in that conversation.
 
+## Checks
+
+- While building, run targeted tests: one Go package, one Playwright spec.
+- Before a merge to main or a deploy, run `scripts/check.sh` once. It runs what CI runs, the `e2e/` suite included, and must pass.
+- Parallel worktrees set their own `E2E_PORT` for the web suite.
+
 ## Work tracking
 
 Work is tracked in beads in this repo: `bd ready`, `bd show <id>`, `bd update <id> --claim`, `bd close <id>`. The build epic holds the decisions and the order of work; start there. Issues follow the public rule above.
