@@ -106,6 +106,11 @@ export class FakeHub {
     password: "none",
     tailscaleOnly: false,
   };
+  /** Push subscriptions the app registered, and the test reminders it asked for. */
+  pushSubscriptions = 0;
+  reminderTests = 0;
+  /** Whether the fake hub reports ntfy as set up in the test reminder. */
+  ntfy = false;
   /** When set, GET /api/setup answers after this many ms. */
   setupDelayMs = 0;
 
@@ -251,7 +256,14 @@ export class FakeHub {
       return this.json(route, 204);
     }
     if (method === "GET" && path === "/api/push/key") return this.json(route, 200, { publicKey: "BExampleKeyOnlyForTests" });
-    if (path === "/api/push/subscriptions") return this.json(route, 204);
+    if (path === "/api/push/subscriptions") {
+      if (method === "POST") this.pushSubscriptions++;
+      return this.json(route, 204);
+    }
+    if (method === "POST" && path === "/api/reminders/test") {
+      this.reminderTests++;
+      return this.json(route, 200, { push: this.pushSubscriptions > 0 ? "sent" : "none", ntfy: this.ntfy ? "sent" : "off" });
+    }
     if (method === "GET" && path === "/api/bridges") return this.json(route, 200, this.bridges);
     if (method === "POST" && path === "/api/bridges") {
       const { name } = req.postDataJSON() as { name: string };

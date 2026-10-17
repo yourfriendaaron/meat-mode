@@ -499,3 +499,46 @@ func TestSubscriptionsFollowTheirSession(t *testing.T) {
 		t.Errorf("left %v, want [live]", got)
 	}
 }
+
+func TestTestReminderReachesOnlyTheSessionAndNtfy(t *testing.T) {
+	db := testDB(t)
+	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+	_, hits := pushServer(t, r)
+	ctx := context.Background()
+	mine := newSub(t, "https://"+r.hosts[len(r.hosts)-1]+"/mine")
+	other := newSub(t, "https://"+r.hosts[len(r.hosts)-1]+"/other")
+	if err := r.Subscribe(ctx, "", mine); err != nil {
+		t.Fatal(err)
+	}
+	r.RequireSession = false
+	if got := r.TestReminder(ctx, "", "https://meat.example.com"); got.Push != "sent" || got.Ntfy != "off" {
+		t.Fatalf("got %+v", got)
+	}
+	if hits("/mine") != 1 {
+		t.Fatalf("own subscription got %d, want 1", hits("/mine"))
+	}
+
+	// A subscription of another session is left alone.
+	if _, err := db.Exec(`UPDATE push_subscriptions SET session_id = 'aa'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Subscribe(ctx, "", other); err != nil {
+		t.Fatal(err)
+	}
+	ntfy := &fake{}
+	r.Ntfy = ntfy
+	if got := r.TestReminder(ctx, "", ""); got.Push != "sent" || got.Ntfy != "sent" {
+		t.Fatalf("got %+v", got)
+	}
+	if hits("/mine") != 1 || hits("/other") != 1 || ntfy.n != 1 {
+		t.Fatalf("mine %d other %d ntfy %d, want 1 1 1", hits("/mine"), hits("/other"), ntfy.n)
+	}
+	if got := r.TestReminder(ctx, "bb", ""); got.Push != "none" {
+		t.Fatalf("session with no subscription: %+v", got)
+	}
+
+	ntfy.err = errors.New("down")
+	if got := r.TestReminder(ctx, "", ""); got.Ntfy != "failed" {
+		t.Fatalf("got %+v", got)
+	}
+}

@@ -30,6 +30,7 @@ The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `ht
 | `GET /api/push/key` | | `{"publicKey": "<VAPID public key>"}` |
 | `POST /api/push/subscriptions` | `PushSubscription` (the browser's JSON) | `204` (upsert by endpoint); `400` unless the endpoint is an https URL on a known push service (Mozilla, FCM, Apple, Windows). The hub keeps the 20 newest. |
 | `DELETE /api/push/subscriptions` | `{"endpoint": "…"}` | `204` |
+| `POST /api/reminders/test` | | `{"push", "ntfy"}`: sends a test reminder to the push subscription this session registered, and to ntfy when set up. `push` is `sent`, `none` (this device has no subscription) or `failed`; `ntfy` is `sent`, `failed` or `off`. `404` when push is not set up. |
 | `GET /api/bridges` | | `[]Bridge` |
 | `POST /api/bridges` | `{"name": "…"}` | `201` with `{"name", "token"}`; the token is shown once |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |

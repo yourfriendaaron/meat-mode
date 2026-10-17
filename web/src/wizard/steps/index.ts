@@ -2,4 +2,5 @@
 // Add a step by adding its module and one line here.
 
 import "./finish.ts";
+import "./reminders.ts";
 import "./welcome.ts";

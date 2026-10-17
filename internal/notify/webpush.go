@@ -131,6 +131,8 @@ type Registry struct {
 	// then belongs to a session (the store's sessions table, in the same
 	// database) and stops receiving when that session ends.
 	RequireSession bool
+	// Ntfy also receives test reminders; nil when ntfy is not set up.
+	Ntfy Notifier
 }
 
 // NewRegistry loads or creates the VAPID keys in dataDir and the
@@ -297,10 +299,15 @@ func (r *Registry) prune(ctx context.Context) error {
 }
 
 func (r *Registry) list(ctx context.Context) ([]webpush.Subscription, error) {
+	return r.query(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY endpoint`)
+}
+
+// query prunes, then reads the subscriptions the statement selects.
+func (r *Registry) query(ctx context.Context, stmt string, args ...any) ([]webpush.Subscription, error) {
 	if err := r.prune(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY endpoint`)
+	rows, err := r.db.QueryContext(ctx, stmt, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -324,6 +331,24 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
+	return r.send(ctx, subs, m)
+}
+
+// NotifySession sends m to the subscriptions the session sessionID
+// registered ("" for a hub without a login) and reports how many there were.
+func (r *Registry) NotifySession(ctx context.Context, sessionID string, m Message) (int, error) {
+	var session any
+	if sessionID != "" {
+		session = sessionID
+	}
+	subs, err := r.query(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE session_id IS ? ORDER BY endpoint`, session)
+	if err != nil {
+		return 0, err
+	}
+	return len(subs), r.send(ctx, subs, m)
+}
+
+func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Message) error {
 	payload, _ := json.Marshal(map[string]string{
 		"title": m.Title, "body": m.Body, "url": m.URL, "tag": m.Tag,
 	})
@@ -363,4 +388,24 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// TestReminder sends a test reminder to the session's own subscriptions and
+// to ntfy when it is set up. A failure is reported in the result, not
+// returned, so the caller can say which way did not work.
+func (r *Registry) TestReminder(ctx context.Context, sessionID, url string) api.ReminderTest {
+	m := Message{Title: "Test reminder", Body: "Reminders from Meat Mode are working.", URL: url, Tag: "test"}
+	out := api.ReminderTest{Push: "sent", Ntfy: "off"}
+	if n, err := r.NotifySession(ctx, sessionID, m); err != nil {
+		out.Push = "failed"
+	} else if n == 0 {
+		out.Push = "none"
+	}
+	if r.Ntfy != nil {
+		out.Ntfy = "sent"
+		if err := r.Ntfy.Notify(ctx, m); err != nil {
+			out.Ntfy = "failed"
+		}
+	}
+	return out
 }

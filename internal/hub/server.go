@@ -27,6 +27,12 @@ type PushRegistry interface {
 	DropSession(ctx context.Context, sessionID string) error
 }
 
+// ReminderTester sends a test reminder to the session's own device and to
+// ntfy. The PushRegistry from internal/notify provides it.
+type ReminderTester interface {
+	TestReminder(ctx context.Context, sessionID, url string) api.ReminderTest
+}
+
 // Body size limits.
 const (
 	maxBody      = 1 << 20  // every JSON body except an item set
@@ -97,6 +103,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.HandleFunc("DELETE /api/bridges/{name}", s.handleRevokeBridge)
 	// Features in their own files register their routes here, one call each.
 	s.setupRoutes(m)
+	s.remindersRoutes(m)
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))
