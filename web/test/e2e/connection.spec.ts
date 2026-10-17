@@ -93,6 +93,19 @@ test("a hub that cannot be reached shows the error and offers another try", asyn
   await expect(page.locator("#wizard .check-error")).toHaveText("Could not reach the hub: the hub hit an internal error");
 });
 
+test("a first check that fails settles on the error instead of retrying", async ({ page, hub }) => {
+  let calls = 0;
+  await page.route("**/api/setup/status", (r) => {
+    calls++;
+    return r.fulfill({ status: 500, contentType: "application/json", body: '{"error":"the hub hit an internal error"}' });
+  });
+  await openWizardAt(page, hub, "connection");
+  await expect(page.locator("#wizard .check-error")).toBeVisible();
+  await page.waitForTimeout(1000);
+  await expect(page.locator("#wizard .check-error")).toBeVisible();
+  expect(calls).toBe(1);
+});
+
 test.describe("phone, light theme", () => {
   test.use({ viewport: { width: 390, height: 780 } });
 

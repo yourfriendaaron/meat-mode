@@ -190,21 +190,25 @@ export async function runChecks(ctx: AppContext): Promise<void> {
   ctx.render();
   try {
     const sent = Date.now();
-    const [status, live] = await Promise.all([call<SetupStatus>("GET", "/api/setup/status"), probeLive()]);
-    // The status came back some time after it was asked for; the hub's time is from in between.
-    const deviceMs = (sent + Date.now()) / 2;
+    const liveProbe = probeLive();
+    const status = await call<SetupStatus>("GET", "/api/setup/status");
+    const received = Date.now();
+    const live = await liveProbe;
+    // The hub stamped its time somewhere in the status request, so use the middle of it.
+    const deviceMs = (sent + received) / 2;
     result = evaluate({
       status,
       origin: location.origin,
       host: location.host,
       secure: window.isSecureContext,
       live,
-      deviceMs: Math.min(deviceMs, Date.now()),
+      deviceMs,
     });
-    checkedAt = Date.now();
   } catch (e) {
     failure = `Could not reach the hub: ${(e as Error).message}`;
   } finally {
+    // A failed run counts as recent too, so the error stays up until the user asks again.
+    checkedAt = Date.now();
     running = false;
     ctx.render();
   }
