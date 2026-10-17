@@ -83,7 +83,7 @@ go install github.com/yourfriendaaron/meat-mode/cmd/meat-mode@latest
    meat-mode bridge pair https://meat-mode.example.com mm_xxxxxxxx
    ```
 
-   Options: `--root DIR` (repeatable) for the directories that hold your beads repos (default `~/projects`), `--personal DIR` for your personal to-do beads repo, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
+   Options: `--personal DIR` for your personal to-do beads repo, `--root DIR` (repeatable) to look for beads repos only in those folders instead of your whole home folder, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
 
 Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/bridge.json` on Linux, `~/Library/Application Support/meat-mode/bridge.json` on macOS) and installs a user service:
 
@@ -94,13 +94,17 @@ Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/br
 
 ## 4. Choose which repos sync
 
-The bridge finds every top-level directory under its roots that has a `.beads/` folder (Git worktrees are skipped). A repo syncs only once you opt it in, with this line in its `.beads/config.yaml`:
+The bridge looks through your home folder for beads repos, on start and every 5 minutes, at any depth. It skips dependency, cache and app-data folders, Git worktrees and symlinks, and a `.beads` folder without a database (such as bd's own `~/.beads`).
+
+Every repo it finds appears in the app under **Settings**, below its machine, with a switch. Switches start off. Turn one on and that repo's items arrive within a few seconds; turn it off and they leave the app. If the machine is off, the switch shows "Waiting for" the machine until it is back. The machine keeps your choices in its own config file, and it only accepts a switch for a repo it found itself.
+
+You can also opt a repo in from the repo itself, with this line in its `.beads/config.yaml`. A switch set in the app wins over it.
 
 ```yaml
 meat-mode.sync: true
 ```
 
-New repos appear in the app's settings as found but off. Your personal repo always syncs, and every item in it is yours; in other repos only beads labelled `human` appear.
+Your personal repo always syncs, and every item in it is yours; in other repos only beads labelled `human` appear. Repos are told apart by their path, so `projects/garden` and `work/garden` both sync; the app shows the folder name, and the path where two names match.
 
 ## Updating
 
