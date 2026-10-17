@@ -1,5 +1,7 @@
 package api
 
+import "time"
+
 // Setup is GET /api/setup: what the app needs to decide whether to offer
 // the setup wizard, and what the wizard shows as already set.
 type Setup struct {
@@ -40,4 +42,24 @@ type PasswordChange struct {
 // TailscaleOnly is PUT /api/setup/tailscale-only.
 type TailscaleOnly struct {
 	On bool `json:"on"`
+}
+
+// SetupStatus is GET /api/setup/status: what the connection check cannot
+// learn from the browser alone.
+type SetupStatus struct {
+	// Login is "environment" when MEAT_MODE_PASSWORD_HASH or _FILE sets
+	// the password, "app" when it was set in the app, "none" otherwise.
+	Login string `json:"login"`
+	// HostMatches is whether this request came in under the host of
+	// MEAT_MODE_PUBLIC_URL.
+	HostMatches bool `json:"hostMatches"`
+	// PublicURL is MEAT_MODE_PUBLIC_URL, the address the hub tells people
+	// to open.
+	PublicURL string `json:"publicUrl"`
+	// PushKeys is whether the hub has Web Push keys to hand out.
+	PushKeys bool `json:"pushKeys"`
+	// Ntfy is whether MEAT_MODE_NTFY_URL is set.
+	Ntfy bool `json:"ntfy"`
+	// Time is the hub's clock.
+	Time time.Time `json:"time"`
 }

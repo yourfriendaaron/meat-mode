@@ -120,3 +120,16 @@ export interface SettingsUpdate {
   name?: string;
   timeZone?: string;
 }
+
+/** GET /api/setup/status: what the connection check learns from the hub (docs/api.md, Setup). */
+export interface SetupStatus {
+  /** Where the login password comes from. */
+  login: "none" | "app" | "environment";
+  /** Whether this request came in under the host of MEAT_MODE_PUBLIC_URL. */
+  hostMatches: boolean;
+  publicUrl: string;
+  pushKeys: boolean;
+  ntfy: boolean;
+  /** The hub's clock, as an ISO time. */
+  time: string;
+}

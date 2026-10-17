@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Item, NewAction, Repo, SetupInfo, State } from "../../src/types.ts";
+import type { Action, Bridge, Item, NewAction, Repo, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -115,6 +115,25 @@ export class FakeHub {
   setupCodeUsed = false;
   /** When set, POST /api/setup/claim answers this status instead of checking the code. */
   claimStatus = 0;
+  /**
+   * What GET /api/setup/status says. `publicUrl` "" means the address the
+   * page was opened at. `time` "" means the hub's clock, which is also the
+   * browser's fixed clock; a test sets a time to skew it.
+   */
+  check: { login: SetupStatus["login"]; hostMatches: boolean; publicUrl: string; pushKeys: boolean; ntfy: boolean; time: string } = {
+    login: "none",
+    hostMatches: true,
+    publicUrl: "",
+    pushKeys: true,
+    ntfy: false,
+    time: "",
+  };
+  /**
+   * When set, /api/events carries two change events, the second one a
+   * revision later, as the real hub's stream does around a test event.
+   * Off, the stream stays silent, as a buffering proxy would leave it.
+   */
+  liveEvents = false;
 
   constructor() {
     const f = fixtures();
@@ -257,6 +276,14 @@ export class FakeHub {
       if (on && this.setupInfo().password !== "none") return this.json(route, 409, { error: "this hub has a password" });
       this.setup.tailscaleOnly = on;
       return this.json(route, 204);
+    }
+    if (method === "GET" && path === "/api/setup/status") {
+      return this.json(route, 200, { ...this.check, publicUrl: this.check.publicUrl || url.origin, time: this.check.time || this.now() });
+    }
+    if (method === "POST" && path === "/api/setup/test-event") return this.json(route, 204);
+    if (method === "GET" && path === "/api/events" && this.liveEvents) {
+      const body = `retry: 3600000\n\nevent: change\ndata: {"rev": ${this.seq}}\n\nevent: change\ndata: {"rev": ${this.seq + 1}}\n\n`;
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
