@@ -1402,40 +1402,40 @@ kbd {
 
 /* ---------- connection check ---------- */
 
-.check-list {
+.conn-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.check {
+.conn {
   display: flex;
   gap: 4px 12px;
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
-.check > div {
+.conn > div {
   min-width: 0;
 }
-.check p {
+.conn p {
   margin: 2px 0 0;
 }
-.check-state {
+.conn-state {
   flex: none;
   min-width: 64px;
   font-size: 13px;
   font-weight: 600;
 }
-.check-pass .check-state {
+.conn-pass .conn-state {
   color: var(--green);
 }
-.check-fail .check-state,
-.check-error {
+.conn-fail .conn-state,
+.conn-error {
   color: var(--red);
 }
-.check-info .check-state {
+.conn-info .conn-state {
   color: var(--soft);
 }
-.check-fix {
+.conn-fix {
   color: var(--soft);
 }
 
