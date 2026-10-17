@@ -110,15 +110,19 @@ Only beads labelled `human` appear. Repos are told apart by their path, so `proj
 
 ## Let agents add to your personal list
 
-An agent can put a to-do on your personal list from any machine, with no bridge running. In **Settings**, choose **Add machine** and name it `agents`; use the token it shows (skip the pair command). The agent then posts:
+An agent on a paired machine puts a to-do on your personal list with one command. It uses the hub address and token in the bridge's config, so it needs no token of its own and works whether or not the bridge service is running:
 
 ```sh
-curl -fsS https://meat-mode.example.com/bridge/v1/personal \
-  -H "Authorization: Bearer $MEAT_MODE_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"title": "Renew the library card", "due": "2026-03-02T09:00:00Z", "note": "It expires on Friday.", "author": "planner"}'
+meat-mode add "Renew the library card" --due 2026-03-02 --note "It expires on Friday." --author planner
 ```
 
-The to-do appears in the app at once, with the note as its first comment. The fields are in [api.md](api.md#agents-adding-to-the-personal-list). Revoke the `agents` machine in Settings to take the token back.
+It prints the new item's key (`hub/personal/<id>`), and the to-do appears in the app at once, with the note as its first comment.
+
+- `--due` takes an RFC 3339 time (`2026-03-02T09:00:00Z`), a local date and time (`2026-03-02 18:30`), or a local date alone, due at 9:00.
+- `--author` is the agent's name, shown as the creator. It defaults to the machine's name.
+- `--id` takes a UUID the agent generates. Running the command again with the same id changes nothing, so an agent can retry safely.
+
+The fields and the HTTP call behind it are in [api.md](api.md#agents-adding-to-the-personal-list). Revoking the machine in Settings takes its agents' access back too.
 
 ## Moving from a personal beads repo
 

@@ -302,6 +302,15 @@ func TestPersonalListOverHTTP(t *testing.T) {
 func TestAgentAddsPersonalTodo(t *testing.T) {
 	h := newHarness(t, nil, false)
 	h.pair()
+	lastSeen := func() time.Time {
+		bs := decode[[]api.Bridge](t, h.do("GET", "/api/bridges", nil, ""))
+		if len(bs) != 1 || bs[0].LastSeen == nil {
+			t.Fatalf("bridges %+v", bs)
+		}
+		return *bs[0].LastSeen
+	}
+	seen := lastSeen()
+	time.Sleep(2 * time.Millisecond)
 	due := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 	todo := api.PersonalTodo{ID: aid1, Title: "Renew the library card", Due: &due, Note: "It expires on Friday.", Author: "planner"}
 	w := h.do("POST", "/bridge/v1/personal", todo, h.token)
@@ -336,6 +345,10 @@ func TestAgentAddsPersonalTodo(t *testing.T) {
 	h.expect(w, http.StatusCreated)
 	h.expect(h.do("POST", "/bridge/v1/personal", api.PersonalTodo{}, h.token), http.StatusBadRequest)
 	h.expect(h.do("POST", "/bridge/v1/personal", api.PersonalTodo{Title: "x", Author: "a\nb"}, h.token), http.StatusBadRequest)
+	// An agent's add says nothing about whether the bridge runs.
+	if got := lastSeen(); !got.Equal(seen) {
+		t.Errorf("last-seen moved from %v to %v", seen, got)
+	}
 	st = decode[api.State](t, h.do("GET", "/api/state", nil, ""))
 	for _, it := range st.Items {
 		if it.Title == "Buy stamps" && it.CreatedBy != "laptop" {

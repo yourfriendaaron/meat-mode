@@ -120,3 +120,10 @@ func (h *Hub) Actions(ctx context.Context) ([]api.Action, error) {
 func (h *Hub) Result(ctx context.Context, id string, r api.ActionResult) error {
 	return h.do(ctx, http.MethodPost, "/bridge/v1/actions/"+url.PathEscape(id)+"/result", r, nil)
 }
+
+// AddPersonal adds a to-do to the hub's personal list.
+func (h *Hub) AddPersonal(ctx context.Context, t api.PersonalTodo) (api.PersonalTodoReply, error) {
+	var r api.PersonalTodoReply
+	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal", t, &r)
+	return r, err
+}
