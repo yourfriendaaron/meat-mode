@@ -488,6 +488,13 @@ export class World {
     return stdout;
   }
 
+  /** Runs a meat-mode command on a paired machine, as its agents do. extra adds to its environment. */
+  async run(name: string, args: string[], extra: NodeJS.ProcessEnv = {}): Promise<string> {
+    const env = { ...this.bridgeEnv(this.machine(name)), ...extra };
+    const { stdout } = await execFileP(this.bin, args, { env });
+    return stdout;
+  }
+
   machine(name: string): Machine {
     const m = this.machines.get(name);
     if (!m) throw new Error(`no machine ${name}`);

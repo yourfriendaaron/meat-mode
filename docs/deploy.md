@@ -5,14 +5,16 @@ Meat Mode has two parts:
 - **The hub** is a container on any always-on host (a home server, a NAS, a Raspberry Pi, a VPS). It keeps your personal to-do list, a copy of your agents' items and the log of what you tapped, and sends reminders. It never connects to your agent machine.
 - **The bridge** is the same `meat-mode` program, run as a user service on the machine where your beads repos live. It dials out to the hub, sends your agents' items up and replays your taps on them into beads with `bd`.
 
-Your personal list needs only the hub. You can stop at step 1 and use it on its own, then add a bridge when you want your agents' tasks too.
+Your personal list needs only the hub. You can stop after step 2 and use it on its own, then add a bridge when you want your agents' tasks too.
+
+You run the hub (step 1), then do the rest in the browser: the setup wizard sets the password, your name and time zone, reminders on each device, and pairs your agent machines (step 2).
 
 There are two supported ways to reach the hub, and both need a publicly trusted HTTPS certificate, which browsers require before they allow reminders (Web Push) or installing the app to the home screen:
 
 - **[Tailscale](https://tailscale.com)**, with no login. Who can reach the hub is the whole of its access control: on a tailnet that is your own signed-in devices, not everyone on your Wi-Fi. Tailscale also supplies the certificate. See [Expose it on your tailnet](#expose-it-on-your-tailnet).
 - **A reverse proxy** you already run (Caddy, nginx, Traefik, a NAS's built-in proxy), with a password. The hub asks for it before it shows or accepts anything. See [Behind a reverse proxy](#behind-a-reverse-proxy).
 
-A hub with no password hash runs with no login and logs a warning saying so. That is safe only when nothing but you can reach it. Never publish a hub without a password to your LAN or the internet.
+A hub with no password has no login and logs a warning saying so. That is safe only when nothing but you can reach it. Never publish a hub without a password to your LAN or the internet.
 
 | Setup | Hub address the bridge uses |
 |---|---|
@@ -27,7 +29,7 @@ You need Docker or Podman on the hub host.
 
 ```sh
 git clone <this repo> meat-mode && cd meat-mode
-cp .env.example .env            # then edit: MEAT_MODE_PUBLIC_URL, MEAT_MODE_USER, MEAT_MODE_VAPID_SUBJECT
+cp .env.example .env            # then edit: MEAT_MODE_PUBLIC_URL, MEAT_MODE_VAPID_SUBJECT
 cp compose.example.yaml compose.yaml
 docker compose up -d --build    # or: podman compose up -d --build
 ```
@@ -42,6 +44,14 @@ docker run -d --name meat-mode --restart unless-stopped \
 ```
 
 Check it: `curl -fsS http://127.0.0.1:8080/healthz` prints `ok`.
+
+On its first start the hub has no password, so it prints a one-time setup code in its log. You need it in step 2:
+
+```sh
+docker logs meat-mode          # or: docker compose logs meat-mode
+```
+
+Look for the line `this hub has no password: open the app and set one with this setup code` and its `code=XXXX-XXXX-XXXX`. The same code is in the file `setup-code` in the data volume (`/data` in the container), for hosts such as a NAS where the log is easier to miss. The code works once and lasts an hour. Restart the hub for a new one.
 
 The data volume holds the database and the Web Push keys. Keep it on local storage: SQLite's write-ahead log does not work over NFS or SMB. If you bind-mount a host directory instead of a named volume, make it writable by user id 65532 (`chown 65532:65532 <dir>`); the hub says so and exits if it cannot write.
 
@@ -63,13 +73,23 @@ Then set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub. The hub ref
 
 Certificates are recorded in public Certificate Transparency logs, so the `ts.net` name is publicly visible, though only your tailnet can reach it. Keep anything private out of the Service and host names.
 
-This path has no login, so do not also publish the port to your LAN or the internet. To use a reverse proxy instead, or as well, set a password first (next section).
+Without a password, this path has no login, so do not also publish the port to your LAN or the internet. You can still set a password in step 2, and setup offers **No password, Tailscale only** to record that you keep the hub on your tailnet without one. To use a reverse proxy instead, or as well, set a password first (next section).
 
 ### Behind a reverse proxy
 
 Use this when you already run a reverse proxy with a certificate, or want the app at your own domain. The hub then has a login: one password, one user.
 
-**1. Set a password.** Make the hash with the image you built:
+**1. Set a password** before the proxy forwards to the hub. Until then, anyone who reaches it can read and change your list.
+
+Open the app on the hub's loopback address, `http://127.0.0.1:8080`, in a browser on the hub host, or from your own computer through an SSH tunnel:
+
+```sh
+ssh -L 8080:127.0.0.1:8080 <hub host>      # then open http://127.0.0.1:8080
+```
+
+The setup wizard opens. Its **Secure the hub** step asks for the setup code from the hub's log (see step 1) and the new password, and logs this browser in. The rest of setup can wait until the proxy is up; run it again from **Settings**. **Settings**, **Password** changes the password later. It needs the current one, and every other device is logged out.
+
+**2. Or give the hub a password hash**, for scripted installs where nobody opens a browser first. A hash in the environment wins over a password set in the app, and the app then says the password is set by the environment and offers no way to change it. Make the hash with the image you built:
 
 ```sh
 docker run --rm -it --entrypoint /meat-mode meat-mode hash-password
@@ -77,7 +97,7 @@ docker run --rm -it --entrypoint /meat-mode meat-mode hash-password
 
 (or `meat-mode hash-password` with the binary). It asks for the password twice and prints an Argon2id string such as `$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`. With input piped in, it reads one line.
 
-**2. Give the hash to the hub**, one of two ways. Setting both stops the hub at start.
+Give the hash to the hub one of two ways. Setting both stops the hub at start.
 
 - `MEAT_MODE_PASSWORD_HASH=<the hash>`.
 - `MEAT_MODE_PASSWORD_HASH_FILE=<path>`, a file inside the container that holds the hash. This suits Docker and Compose secrets (see `compose.example.yaml`) and avoids the quoting below.
@@ -88,16 +108,18 @@ The hash holds `$` signs, which Docker tools can read as variables:
 - Written directly in `compose.yaml` under `environment:`, double every `$` as `$$`.
 - With `docker run --env-file`, the line is taken literally, quotes included, so write it with no quotes. The single-quoted form above would put the quotes into the hash and the hub would refuse it. A `.env` shared between `docker run` and Compose therefore cannot hold the hash; use the `_FILE` variant.
 
-Start the hub and check the log: the "login is off" warning is gone.
+Start the hub and check the log: it says `login is on, with the password from the environment`, and it prints no setup code.
 
 **3. Publish the port to loopback only** (`127.0.0.1:8080:8080`, as above) and have the proxy forward to it. If the proxy runs in another container, put both on a shared network and forward to the hub container's port 8080 instead of publishing it.
 
-**4. Set `MEAT_MODE_PUBLIC_URL`** to the proxy's address, `https://meat-mode.example.com`. The proxy must:
+**4. Set `MEAT_MODE_PUBLIC_URL`** to the proxy's address, `https://meat-mode.example.com`: the address people open, exactly. The proxy must:
 
 - Pass the original `Host` header through. If it rewrites it, add the name the hub receives to `MEAT_MODE_ALLOWED_HOSTS`.
 - Send `X-Forwarded-Proto`.
 - Not buffer responses from `/api/events`, the server-sent event stream that keeps the app current. The hub marks it unbuffered, which nginx honors; the nginx snippet turns buffering off for it as well.
 - Present a certificate that browsers trust, such as Let's Encrypt. Web Push and installing to the home screen do not work with a self-signed one.
+
+**Settings**, **Connection** checks all of this from the browser: that the address matches `MEAT_MODE_PUBLIC_URL` and the hub accepts it, that the page is a secure context, that live updates arrive at once (a buffering proxy holds them back), that the device and hub clocks agree, and that the hub has its reminder keys. Each problem comes with what to change.
 
 **Caddy**
 
@@ -159,7 +181,7 @@ Traefik passes `Host` by default and does not buffer responses unless you add a 
 
 **Pairing and devices.** The bridge pairs with the proxy's address exactly as before: `meat-mode bridge pair https://meat-mode.example.com mm_xxxxxxxx`. Its `/bridge/` routes use their own bearer tokens, not the password. On iOS, the home-screen app keeps its own cookies, separate from Safari: log in once in each.
 
-**Changing the password.** Make a new hash, put it in place, and restart the hub. Every device is logged out and asks for the new password. **Settings** has **Log out** for one device, which also stops that device's reminders. Five wrong passwords within a minute lock logins for the whole hub for a short time.
+**Changing the password.** A password set in the app changes in **Settings**, **Password**; every other device is logged out. A password from the environment changes there: make a new hash, put it in place, and restart the hub. Every device is logged out and asks for the new password. **Settings** has **Log out** for one device, which also stops that device's reminders. Five wrong passwords within a minute lock logins for the whole hub for a short time.
 
 **A login at the proxy as well.** Authelia, basic auth or similar can sit in front of the hub for a second layer. Let `/bridge/` pass through it untouched, because bridges and `meat-mode add` send a bearer token, not a proxy login. `/healthz` is public.
 
@@ -169,7 +191,26 @@ Traefik passes `Host` by default and does not buffer responses unless you add a 
 - **Synology and other NAS**: use Container Manager with Compose, and either install Tailscale on the NAS for HTTPS or use the NAS's reverse proxy (see above).
 - **Raspberry Pi**: the image builds for arm64 as is.
 
-## 2. Install the bridge on the agent machine
+## 2. Set up in the app
+
+Open the app at its address. On a new hub the setup wizard opens by itself and walks through the rest. Skip any step you like: each one is also in **Settings**, and **Settings**, **Setup** has **Run setup again**.
+
+| Step | What it does |
+|---|---|
+| Connection check | Checks the address, the secure connection, live updates, the clocks and the reminder keys, and says what to fix (also **Settings**, **Connection**). |
+| Secure the hub | Sets the password with the setup code from the hub's log (see step 1), and logs this browser in. With a password hash in the environment, it says so and asks for nothing. On a hub kept on Tailscale, **No password, Tailscale only** stops it asking. |
+| Name and time zone | Your name and time zone, kept on the hub (also **Settings**, **Name and time zone**). The name starts as `MEAT_MODE_USER` and the time zone as this device's. Agents' dates are read in this zone; see [Let agents add to your personal list](#let-agents-add-to-your-personal-list). |
+| Install the app | Puts Meat Mode on the home screen or dock: an **Install** button when a Chromium browser offers it, and the steps for Safari on an iPhone, iPad or Mac. On an iPhone or iPad, reminders work only in the Home Screen app, so install it there first. |
+| Reminders | Asks this device for permission to notify, then sends a test reminder to this device, and to ntfy when `MEAT_MODE_NTFY_URL` is set. If you block it, the step says how to allow it again. |
+| Appearance | Dark, light, or following the device's setting. |
+| First to-do | Teaches quick add: it reads a date and a `#list` out of what you type, as you type. A reminder fires at the due time, or at 9:00 when only a date is given. |
+| Agent machines | Optional. Names a machine, shows the commands to install the bridge and pair it, and says "Connected" when the bridge first reports in. Then **Choose repos** and **Tell your agents**, below. |
+
+On each other device you open the app on, a banner offers **Set up this device**, which runs only the device steps: install, reminders and appearance. **Settings**, **Setup** has it too.
+
+## 3. Install the bridge on the agent machine
+
+The setup wizard's **Agent machines** step, or **Settings**, **Agent machines**, shows the install command for the platform you pick. By hand:
 
 The bridge needs `bd` 1.3.0 or later on that machine.
 
@@ -179,9 +220,9 @@ Install the program, either from a release binary for your platform (linux or da
 go install github.com/yourfriendaaron/meat-mode/cmd/meat-mode@latest
 ```
 
-## 3. Pair
+## 4. Pair
 
-1. Open the app, go to **Settings**, choose **Add machine** and give it a name such as `laptop`. The app shows a token once, and the exact command.
+1. In the setup wizard's **Agent machines** step, or under **Settings**, **Agent machines**, add a machine with a name such as `laptop`. The app shows a token once, and the exact command.
 2. On the agent machine run that command:
 
    ```sh
@@ -195,13 +236,13 @@ Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/br
 - **Linux**: a systemd user unit, `meat-mode-bridge.service`. Logs: `journalctl --user -u meat-mode-bridge`. To keep it running while you are logged out, enable lingering once: `loginctl enable-linger $USER`.
 - **macOS**: a launchd agent, `com.github.yourfriendaaron.meat-mode.bridge`. Logs: `~/Library/Logs/meat-mode-bridge.log`.
 
-`meat-mode bridge status` shows the config, the repos found and whether the hub answers.
+`meat-mode bridge status` shows the config, the repos found and whether the hub answers. The app shows the machine as connected once the bridge first reports in.
 
-## 4. Choose which repos sync
+## 5. Choose which repos sync
 
 The bridge looks through your home folder for beads repos, on start and every 5 minutes, at any depth. It skips dependency, cache and app-data folders, Git worktrees and symlinks, and a `.beads` folder without a database (such as bd's own `~/.beads`).
 
-Every repo it finds appears in the app under **Settings**, below its machine, with a switch. Switches start off. Turn one on and that repo's items arrive within a few seconds; turn it off and they leave the app. If the machine is off, the switch shows "Waiting for" the machine until it is back. The machine keeps your choices in its own config file, and it only accepts a switch for a repo it found itself.
+Every repo it finds appears in the app under **Settings**, below its machine, with a switch. The setup wizard's **Choose repos** step shows the same switches. Switches start off. Turn one on and that repo's items arrive within a few seconds; turn it off and they leave the app. If the machine is off, the switch shows "Waiting for" the machine until it is back. The machine keeps your choices in its own config file, and it only accepts a switch for a repo it found itself.
 
 You can also opt a repo in from the repo itself, with this line in its `.beads/config.yaml`. A switch set in the app wins over it.
 
@@ -221,9 +262,13 @@ meat-mode add "Renew the library card" --due 2026-03-02 --note "It expires on Fr
 
 It prints the new item's key (`hub/personal/<id>`), and the to-do appears in the app at once, with the note as its first comment.
 
-- `--due` takes an RFC 3339 time (`2026-03-02T09:00:00Z`), a local date and time (`2026-03-02 18:30`), or a local date alone, due at 9:00.
+- `--due` takes a date and time (`2026-03-02 18:30`) or a date alone (`2026-03-02`, due at 9:00), read in the hub's time zone, not the machine's: the one set in the wizard's **Name and time zone** step or in **Settings**. The command asks the hub for it, so an agent on a server running in UTC still gets your 9:00. A time with an offset (`2026-03-02T09:00:00Z`) is used as written. While the hub has no time zone, the machine's own is used.
 - `--author` is the agent's name, shown as the creator. It defaults to the machine's name.
 - `--id` takes a UUID the agent generates. Running the command again with the same id changes nothing, so an agent can retry safely.
+
+The name set in the app (or `MEAT_MODE_USER` until you set one) is the name your notes are signed with, as `<name>-app`, so agents can tell your replies from their own.
+
+To tell your agents about all this, copy the text from the setup wizard's **Tell your agents** step, or from **Settings**, **Instructions for agents**, into the instruction file they read on that machine, such as `AGENTS.md` or `CLAUDE.md`. It covers raising a task for you with `bd create … -l human` and adding to your list with `meat-mode add`, names the machine, and holds no token or address.
 
 The fields and the HTTP call behind it are in [api.md](api.md#agents-adding-to-the-personal-list). Revoking the machine in Settings takes its agents' access back too.
 
