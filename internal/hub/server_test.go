@@ -42,16 +42,15 @@ func (f *fakePush) Subscribe(_ context.Context, sessionID string, s api.PushSubs
 	return nil
 }
 
-// TestReminder reports "sent" when the session registered a subscription.
-func (f *fakePush) TestReminder(_ context.Context, sessionID, url string) api.ReminderTest {
+// TestReminder reports "sent" when the session registered the subscription
+// at endpoint.
+func (f *fakePush) TestReminder(_ context.Context, sessionID, endpoint, url string) api.ReminderTest {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.testedURL = url
 	out := api.ReminderTest{Push: "none", Ntfy: "off"}
-	for _, id := range f.sessions {
-		if id == sessionID {
-			out.Push = "sent"
-		}
+	if id, ok := f.sessions[endpoint]; ok && id == sessionID {
+		out.Push = "sent"
 	}
 	return out
 }

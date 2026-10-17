@@ -500,46 +500,104 @@ func TestSubscriptionsFollowTheirSession(t *testing.T) {
 	}
 }
 
-func TestTestReminderReachesOnlyTheSessionAndNtfy(t *testing.T) {
+func TestTestReminderReachesOnlyThisDeviceAndNtfy(t *testing.T) {
 	db := testDB(t)
 	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
 	_, hits := pushServer(t, r)
 	ctx := context.Background()
 	mine := newSub(t, "https://"+r.hosts[len(r.hosts)-1]+"/mine")
 	other := newSub(t, "https://"+r.hosts[len(r.hosts)-1]+"/other")
-	if err := r.Subscribe(ctx, "", mine); err != nil {
-		t.Fatal(err)
+	// Without a login, both devices' subscriptions belong to no session.
+	for _, s := range []api.PushSubscription{mine, other} {
+		if err := r.Subscribe(ctx, "", s); err != nil {
+			t.Fatal(err)
+		}
 	}
-	r.RequireSession = nil
-	if got := r.TestReminder(ctx, "", "https://meat.example.com"); got.Push != "sent" || got.Ntfy != "off" {
+	if got := r.TestReminder(ctx, "", mine.Endpoint, "https://meat.example.com"); got.Push != "sent" || got.Ntfy != "off" {
 		t.Fatalf("got %+v", got)
 	}
-	if hits("/mine") != 1 {
-		t.Fatalf("own subscription got %d, want 1", hits("/mine"))
+	if hits("/mine") != 1 || hits("/other") != 0 {
+		t.Fatalf("mine %d other %d, want 1 0", hits("/mine"), hits("/other"))
 	}
 
-	// A subscription of another session is left alone.
-	if _, err := db.Exec(`UPDATE push_subscriptions SET session_id = 'aa'`); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Subscribe(ctx, "", other); err != nil {
-		t.Fatal(err)
-	}
 	ntfy := &fake{}
 	r.Ntfy = ntfy
-	if got := r.TestReminder(ctx, "", ""); got.Push != "sent" || got.Ntfy != "sent" {
+	if got := r.TestReminder(ctx, "", other.Endpoint, ""); got.Push != "sent" || got.Ntfy != "sent" {
 		t.Fatalf("got %+v", got)
 	}
 	if hits("/mine") != 1 || hits("/other") != 1 || ntfy.n != 1 {
 		t.Fatalf("mine %d other %d ntfy %d, want 1 1 1", hits("/mine"), hits("/other"), ntfy.n)
 	}
-	if got := r.TestReminder(ctx, "bb", ""); got.Push != "none" {
-		t.Fatalf("session with no subscription: %+v", got)
+	if got := r.TestReminder(ctx, "", "", ""); got.Push != "none" {
+		t.Fatalf("device with no subscription: %+v", got)
 	}
 
 	ntfy.err = errors.New("down")
-	if got := r.TestReminder(ctx, "", ""); got.Ntfy != "failed" {
+	if got := r.TestReminder(ctx, "", mine.Endpoint, ""); got.Ntfy != "failed" {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestTestReminderWithALoginNeedsTheSessionsOwnSubscription(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	r, _ := NewRegistry(t.TempDir(), st.DB(), "mailto:alex@example.com")
+	srv, hits := pushServer(t, r)
+	r.RequireSession = func() bool { return true }
+	ctx := context.Background()
+	var ids []string
+	for range 2 {
+		_, s, err := st.CreateSession("tag", time.Now(), time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, s.ID)
+	}
+	mine := newSub(t, srv.URL+"/mine")
+	if err := r.Subscribe(ctx, ids[0], mine); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.TestReminder(ctx, ids[1], mine.Endpoint, ""); got.Push != "none" || hits("/mine") != 0 {
+		t.Fatalf("another session: %+v, %d pushes; want none, 0", got, hits("/mine"))
+	}
+	if got := r.TestReminder(ctx, ids[0], mine.Endpoint, ""); got.Push != "sent" || hits("/mine") != 1 {
+		t.Fatalf("own session: %+v, %d pushes; want sent, 1", got, hits("/mine"))
+	}
+}
+
+func TestTestReminderToThisDeviceGoneWhileAnotherIsLive(t *testing.T) {
+	db := testDB(t)
+	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+	var live, stale atomic.Int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+		if q.URL.Path == "/stale" {
+			stale.Add(1)
+			w.WriteHeader(http.StatusGone)
+			return
+		}
+		live.Add(1)
+		w.WriteHeader(201)
+	}))
+	t.Cleanup(srv.Close)
+	r.hosts = append(r.hosts, srv.Listener.Addr().String())
+	r.Client = srv.Client()
+	ctx := context.Background()
+	for _, p := range []string{"/live", "/stale"} {
+		if err := r.Subscribe(ctx, "", newSub(t, srv.URL+p)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := r.TestReminder(ctx, "", srv.URL+"/stale", ""); got.Push != "expired" {
+		t.Fatalf("got %+v, want push expired", got)
+	}
+	if live.Load() != 0 || stale.Load() != 1 {
+		t.Fatalf("live %d stale %d, want 0 1", live.Load(), stale.Load())
+	}
+	if got := endpoints(t, db); len(got) != 1 || got[0] != "live" {
+		t.Fatalf("left %v, want only the live one", got)
 	}
 }
 
@@ -558,7 +616,7 @@ func TestTestReminderToAGoneSubscription(t *testing.T) {
 		if err := r.Subscribe(ctx, "", newSub(t, gone.URL+"/stale")); err != nil {
 			t.Fatal(err)
 		}
-		if got := r.TestReminder(ctx, "", ""); got.Push != "expired" {
+		if got := r.TestReminder(ctx, "", gone.URL+"/stale", ""); got.Push != "expired" {
 			t.Fatalf("code %d: got %+v, want push expired", code, got)
 		}
 		if hits.Load() != 1 || count(t, db) != 0 {
@@ -577,7 +635,7 @@ func TestTestReminderToADisallowedEndpoint(t *testing.T) {
 		old.Endpoint, old.Keys.P256dh, old.Keys.Auth, time.Now().Unix()); err != nil {
 		t.Fatal(err)
 	}
-	if got := r.TestReminder(context.Background(), "", ""); got.Push != "expired" {
+	if got := r.TestReminder(context.Background(), "", old.Endpoint, ""); got.Push != "expired" {
 		t.Fatalf("got %+v, want push expired", got)
 	}
 	if n := count(t, db); n != 0 {

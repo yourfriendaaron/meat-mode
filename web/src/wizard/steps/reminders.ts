@@ -1,7 +1,7 @@
 import { call } from "../../api.ts";
 import { isIOS, pushSupport } from "../../device.ts";
 import { esc } from "../../html.ts";
-import { remindersOn, subscribePush, turnOnReminders } from "../../push.ts";
+import { pushEndpoint, remindersOn, subscribePush, turnOnReminders } from "../../push.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
 interface ReminderTest {
@@ -27,11 +27,12 @@ function testMessage(r: ReminderTest): string {
 
 async function sendTest(): Promise<string> {
   try {
-    let r = await call<ReminderTest>("POST", "/api/reminders/test");
+    // The hub sends the test to this device's own subscription only.
+    let r = await call<ReminderTest>("POST", "/api/reminders/test", { endpoint: await pushEndpoint() });
     if (r.push === "expired") {
       // The hub dropped the stale subscription; make a new one and try once more.
-      await subscribePush(true);
-      r = await call<ReminderTest>("POST", "/api/reminders/test");
+      const endpoint = await subscribePush(true);
+      r = await call<ReminderTest>("POST", "/api/reminders/test", { endpoint });
     }
     return testMessage(r);
   } catch (e) {

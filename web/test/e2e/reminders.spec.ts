@@ -23,14 +23,14 @@ async function fakeBrowserPush(page: Page, permission: string, answer = "granted
       let made = 0;
       let current: object | null = null;
       const newSub = () => {
+        const endpoint = `https://push.example.com/send/${made++}`;
         const sub = {
-          toJSON: () => ({ endpoint: `https://push.example.com/send/${made}`, keys: { p256dh: "BP", auth: "AU" } }),
+          toJSON: () => ({ endpoint, keys: { p256dh: "BP", auth: "AU" } }),
           unsubscribe: async () => {
             if (current === sub) current = null;
             return true;
           },
         };
-        made++;
         return sub;
       };
       const reg = {
@@ -80,6 +80,7 @@ test.describe("desktop", () => {
     await expect(w.region.getByRole("status")).toContainText("also sent to ntfy");
     expect(hub.pushSubscriptions).toBe(1);
     expect(hub.reminderTests).toBe(1);
+    expect(hub.testedEndpoint).toBe("https://push.example.com/send/0");
     await expect(w.region.getByRole("button", { name: "Send a test reminder" })).toBeVisible();
     await axe(page);
 
@@ -130,6 +131,7 @@ test.describe("desktop", () => {
     await expect.poll(() => hub.reminderTests).toBe(3);
     await expect(w.region.getByRole("status")).toContainText("A test reminder is on its way");
     expect(hub.pushSubscriptions).toBe(1);
+    expect(hub.testedEndpoint).toBe("https://push.example.com/send/1");
 
     // When the new one is turned away too, the app says so instead of claiming it was sent.
     hub.pushGone = 2;

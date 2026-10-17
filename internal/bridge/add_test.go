@@ -144,3 +144,27 @@ func TestAddReadsDatesInTheHubsTimeZone(t *testing.T) {
 		t.Errorf("without a hub zone: %v, want %v", got, want)
 	}
 }
+
+// A hub older than the bridge has no settings route; this machine's zone
+// stands in, as it does while the hub has none.
+func TestAddWithDueOnAHubWithoutSettings(t *testing.T) {
+	saved := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = saved })
+
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	hub.SetTimeZone("America/New_York")
+	hub.SetNoSettings(true)
+	env, _, _ := testEnv(t, "")
+	if err := (Config{HubURL: hub.URL, Token: token}).Save(env.Paths.Config); err != nil {
+		t.Fatal(err)
+	}
+	if err := Add(context.Background(), []string{"Water the plants", "--due", "2026-03-02"}, env); err != nil {
+		t.Fatal(err)
+	}
+	ps := hub.Personals()
+	if want := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC); len(ps) != 1 || ps[0].Due == nil || !ps[0].Due.Equal(want) {
+		t.Fatalf("got %+v, want one due %v", ps, want)
+	}
+}

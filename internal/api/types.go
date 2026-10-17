@@ -130,9 +130,6 @@ type Hello struct {
 type HelloReply struct {
 	Bridge     string    `json:"bridge"`
 	ServerTime time.Time `json:"serverTime"`
-	// TimeZone is the hub's IANA time zone, omitted until the user chose
-	// one. The bridge reads local dates and times in it.
-	TimeZone string `json:"timeZone,omitempty"`
 }
 
 // State is everything the app shows.

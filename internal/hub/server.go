@@ -28,10 +28,10 @@ type PushRegistry interface {
 	DropSession(ctx context.Context, sessionID string) error
 }
 
-// ReminderTester sends a test reminder to the session's own device and to
-// ntfy. The PushRegistry from internal/notify provides it.
+// ReminderTester sends a test reminder to the calling device's subscription
+// and to ntfy. The PushRegistry from internal/notify provides it.
 type ReminderTester interface {
-	TestReminder(ctx context.Context, sessionID, url string) api.ReminderTest
+	TestReminder(ctx context.Context, sessionID, endpoint, url string) api.ReminderTest
 }
 
 // Body size limits.
@@ -430,12 +430,7 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request, bridge stri
 		s.storeError(w, r, err)
 		return
 	}
-	settings, err := s.store.Settings()
-	if err != nil {
-		s.storeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, api.HelloReply{Bridge: bridge, ServerTime: time.Now().UTC(), TimeZone: settings.TimeZone})
+	writeJSON(w, http.StatusOK, api.HelloReply{Bridge: bridge, ServerTime: time.Now().UTC()})
 }
 
 func (s *Server) handlePutRepos(w http.ResponseWriter, r *http.Request, bridge string) {

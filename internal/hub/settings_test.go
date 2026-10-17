@@ -79,19 +79,13 @@ func TestNameSignsNewNotes(t *testing.T) {
 func TestBridgeLearnsTheTimeZone(t *testing.T) {
 	h := newHarness(t, nil, false)
 	h.pair()
-	hello := func() api.HelloReply {
-		w := h.do("POST", "/bridge/v1/hello", api.Hello{Version: "1.0.0"}, h.token)
-		h.expect(w, http.StatusOK)
-		return decode[api.HelloReply](t, w)
-	}
-	if tz := hello().TimeZone; tz != "" {
-		t.Fatalf("before one is chosen: %q", tz)
+	w := h.do("GET", "/bridge/v1/settings", nil, h.token)
+	h.expect(w, http.StatusOK)
+	if got := decode[api.Settings](t, w); got.TimeZone != "" {
+		t.Fatalf("before one is chosen: %+v", got)
 	}
 	h.expect(h.do("PUT", "/api/settings", api.SettingsUpdate{TimeZone: str("Europe/Paris")}, ""), http.StatusOK)
-	if tz := hello().TimeZone; tz != "Europe/Paris" {
-		t.Fatalf("hello time zone %q", tz)
-	}
-	w := h.do("GET", "/bridge/v1/settings", nil, h.token)
+	w = h.do("GET", "/bridge/v1/settings", nil, h.token)
 	h.expect(w, http.StatusOK)
 	if got := decode[api.Settings](t, w); got.TimeZone != "Europe/Paris" {
 		t.Fatalf("bridge settings %+v", got)

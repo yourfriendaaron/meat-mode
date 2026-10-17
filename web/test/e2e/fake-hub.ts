@@ -111,6 +111,10 @@ export class FakeHub {
   /** Push subscriptions the app registered, and the test reminders it asked for. */
   pushSubscriptions = 0;
   reminderTests = 0;
+  /** Endpoints of the push subscriptions the app registered. */
+  pushEndpoints = new Set<string>();
+  /** The endpoint the last test reminder was asked for. */
+  testedEndpoint = "";
   /**
    * Test reminders the push service turns away as gone. Each one removes the
    * subscription, as the hub does, and reports "expired".
@@ -340,18 +344,25 @@ export class FakeHub {
     }
     if (method === "GET" && path === "/api/push/key") return this.json(route, 200, { publicKey: "BExampleKeyOnlyForTests" });
     if (path === "/api/push/subscriptions") {
-      if (method === "POST") this.pushSubscriptions++;
+      if (method === "POST") {
+        this.pushSubscriptions++;
+        this.pushEndpoints.add((req.postDataJSON() as { endpoint: string }).endpoint);
+      }
       return this.json(route, 204);
     }
     if (method === "POST" && path === "/api/reminders/test") {
       this.reminderTests++;
+      const { endpoint } = req.postDataJSON() as { endpoint: string };
+      this.testedEndpoint = endpoint;
       const ntfy = this.ntfy ? "sent" : "off";
-      if (this.pushSubscriptions > 0 && this.pushGone > 0) {
+      const known = this.pushSubscriptions > 0 && this.pushEndpoints.has(endpoint);
+      if (known && this.pushGone > 0) {
         this.pushGone--;
         this.pushSubscriptions--;
+        this.pushEndpoints.delete(endpoint);
         return this.json(route, 200, { push: "expired", ntfy });
       }
-      return this.json(route, 200, { push: this.pushSubscriptions > 0 ? "sent" : "none", ntfy });
+      return this.json(route, 200, { push: known ? "sent" : "none", ntfy });
     }
     if (method === "GET" && path === "/api/bridges") return this.json(route, 200, this.bridges);
     if (method === "POST" && path === "/api/bridges") {

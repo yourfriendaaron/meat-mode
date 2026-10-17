@@ -30,7 +30,7 @@ The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `ht
 | `GET /api/push/key` | | `{"publicKey": "<VAPID public key>"}` |
 | `POST /api/push/subscriptions` | `PushSubscription` (the browser's JSON) | `204` (upsert by endpoint); `400` unless the endpoint is an https URL on a known push service (Mozilla, FCM, Apple, Windows). The hub keeps the 20 newest. |
 | `DELETE /api/push/subscriptions` | `{"endpoint": "…"}` | `204` |
-| `POST /api/reminders/test` | | `{"push", "ntfy"}`: sends a test reminder to the push subscription this session registered, and to ntfy when set up. `push` is `sent` (the push service accepted it), `none` (this device has no subscription), `expired` (the push service answered that the subscription is gone, or its endpoint is not a known push service, so the hub removed it and the app should subscribe again) or `failed`; `ntfy` is `sent`, `failed` or `off`. `404` when push is not set up. |
+| `POST /api/reminders/test` | `{"endpoint": "…"}`, this device's push subscription (`""` when it has none) | `{"push", "ntfy"}`: sends a test reminder to that subscription only, and to ntfy when set up. With a login the subscription must belong to the calling session. `push` is `sent` (the push service accepted it), `none` (this device has no subscription), `expired` (the push service answered that the subscription is gone, or its endpoint is not a known push service, so the hub removed it and the app should subscribe again) or `failed`; `ntfy` is `sent`, `failed` or `off`. `404` when push is not set up. |
 | `GET /api/bridges` | | `[]Bridge` |
 | `POST /api/bridges` | `{"name": "…"}` | `201` with `{"name", "token"}`; the token is shown once |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |
@@ -115,7 +115,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 
 | Method and path | Body | Response |
 |---|---|---|
-| `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime", "timeZone"?}`; updates last-seen. `timeZone` is the hub's IANA time zone, left out until one is chosen |
+| `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
 | `GET /bridge/v1/settings` | | `{"name", "timeZone"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
 | `PUT /bridge/v1/repos` | `[]Repo` (without `bridge` and `pending`): every repo the bridge found, `optedIn` true for those it syncs | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |

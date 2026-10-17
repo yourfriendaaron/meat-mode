@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -78,9 +79,13 @@ func Add(ctx context.Context, args []string, env Env) error {
 // hubZone is the hub's time zone, which reads a date or time without one:
 // the person who wrote it means their own, which the hub keeps rather than
 // this machine, often a server in UTC. It is this machine's zone while the
-// hub has none yet.
+// hub has none yet, or is too old to say.
 func hubZone(ctx context.Context, hub *Hub) (*time.Location, error) {
 	settings, err := hub.Settings(ctx)
+	var herr *HTTPError
+	if errors.As(err, &herr) && herr.Status == http.StatusNotFound {
+		return time.Local, nil
+	}
 	if err != nil {
 		return nil, err
 	}

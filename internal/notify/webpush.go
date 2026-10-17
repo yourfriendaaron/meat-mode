@@ -340,20 +340,23 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 	return err
 }
 
-// NotifySession sends m to the subscriptions the session sessionID
-// registered ("" for a hub without a login). It reports how many there were
-// and how many the push service accepted.
-func (r *Registry) NotifySession(ctx context.Context, sessionID string, m Message) (found, delivered int, err error) {
-	var session any
-	if sessionID != "" {
-		session = sessionID
+// notifyDevice sends m to the subscription at endpoint and reports whether
+// the hub had it and whether the push service accepted it. With a login it
+// must belong to the session sessionID, so one session cannot test another's
+// device.
+func (r *Registry) notifyDevice(ctx context.Context, sessionID, endpoint string, m Message) (found, delivered bool, err error) {
+	stmt := `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE endpoint = ?`
+	args := []any{endpoint}
+	if r.requireSession() {
+		stmt += ` AND session_id = ?`
+		args = append(args, sessionID)
 	}
-	subs, err := r.query(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE session_id IS ? ORDER BY endpoint`, session)
+	subs, err := r.query(ctx, stmt, args...)
 	if err != nil {
-		return 0, 0, err
+		return false, false, err
 	}
-	delivered, err = r.send(ctx, subs, m)
-	return len(subs), delivered, err
+	n, err := r.send(ctx, subs, m)
+	return len(subs) > 0, n > 0, err
 }
 
 // send pushes m to subs and reports how many the push service accepted. A
@@ -404,18 +407,18 @@ func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Mess
 	return delivered, errors.Join(errs...)
 }
 
-// TestReminder sends a test reminder to the session's own subscriptions and
-// to ntfy when it is set up. A failure is reported in the result, not
-// returned, so the caller can say which way did not work.
-func (r *Registry) TestReminder(ctx context.Context, sessionID, url string) api.ReminderTest {
+// TestReminder sends a test reminder to the calling device's subscription,
+// the one at endpoint, and to ntfy when it is set up. A failure is reported
+// in the result, not returned, so the caller can say which way did not work.
+func (r *Registry) TestReminder(ctx context.Context, sessionID, endpoint, url string) api.ReminderTest {
 	m := Message{Title: "Test reminder", Body: "Reminders from Meat Mode are working.", URL: url, Tag: "test"}
 	out := api.ReminderTest{Push: "sent", Ntfy: "off"}
-	found, delivered, err := r.NotifySession(ctx, sessionID, m)
+	found, delivered, err := r.notifyDevice(ctx, sessionID, endpoint, m)
 	switch {
-	case delivered > 0:
+	case delivered:
 	case err != nil:
 		out.Push = "failed"
-	case found == 0:
+	case !found:
 		out.Push = "none"
 	default:
 		// The push service no longer knows the subscription, so it was removed.

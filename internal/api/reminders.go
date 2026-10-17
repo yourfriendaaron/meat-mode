@@ -1,5 +1,12 @@
 package api
 
+// ReminderTestRequest is the body of POST /api/reminders/test.
+type ReminderTestRequest struct {
+	// Endpoint is the push subscription of the device asking, "" when it
+	// has none.
+	Endpoint string `json:"endpoint"`
+}
+
 // ReminderTest is the reply to POST /api/reminders/test: how the test
 // reminder went on each way the hub sends reminders.
 type ReminderTest struct {
