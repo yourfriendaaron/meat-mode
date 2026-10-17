@@ -8,6 +8,15 @@ async function lightTheme(page: Page) {
   });
 }
 
+/** Continues through the steps of a first run until Finish. */
+async function toFinish(page: Page) {
+  const w = wizard(page);
+  for (let i = 0; i < 30; i++) {
+    if ((await w.heading.textContent()) === "All set") return;
+    await w.next.click();
+  }
+}
+
 async function noHorizontalScroll(page: Page) {
   const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
   expect(scroll).toBeLessThanOrEqual(inner);
@@ -28,10 +37,10 @@ test.describe("desktop", () => {
     await lightTheme(page);
     await axe(page);
 
-    await w.next.click();
+    await toFinish(page);
     await expect(w.heading).toHaveText("All set");
     await expect(w.heading).toBeFocused();
-    await expect(page.getByText("Step 2 of 2")).toBeVisible();
+    await expect(page.getByText(/Step (\d+) of \1/)).toBeVisible();
     await expect(w.close).toHaveCount(0);
     await expect(w.next).toHaveText("Done");
     await axe(page);
@@ -70,7 +79,7 @@ test.describe("desktop", () => {
     hub.fresh();
     await page.goto("/");
     const w = wizard(page);
-    await w.next.click();
+    await toFinish(page);
     await expect(w.heading).toHaveText("All set");
 
     await page.locator(".sidebar").getByRole("button", { name: "Today" }).click();
@@ -82,11 +91,12 @@ test.describe("desktop", () => {
     await page.reload();
     await expect(w.heading).toHaveText("All set");
     await w.back.click();
-    await expect(w.heading).toHaveText("Welcome");
+    await expect(w.heading).not.toHaveText("All set");
+    const step = (await w.heading.textContent()) ?? "";
 
     await page.locator(".sidebar").getByRole("button", { name: "Today" }).click();
     await banner.getByRole("button", { name: "Continue setup" }).click();
-    await expect(w.heading).toHaveText("Welcome");
+    await expect(w.heading).toHaveText(step);
     await expect(w.heading).toBeFocused();
 
     await page.locator(".sidebar").getByRole("button", { name: "Today" }).click();
@@ -172,7 +182,7 @@ test.describe("phone", () => {
     await expect(w.heading).toHaveText("Welcome");
     await expect(page.locator("#tabs")).toBeVisible();
     await expect(page.locator(".wiz-steps")).toBeHidden();
-    await expect(page.getByText("Step 1 of 2")).toBeVisible();
+    await expect(page.getByText(/Step 1 of \d+/)).toBeVisible();
     await noHorizontalScroll(page);
     await axe(page);
     await lightTheme(page);
@@ -182,7 +192,7 @@ test.describe("phone", () => {
     await expect(page.locator("#setup-banner")).toBeVisible();
     await noHorizontalScroll(page);
     await page.locator("#setup-banner").getByRole("button", { name: "Continue setup" }).click();
-    await w.next.click();
+    await toFinish(page);
     await w.next.click();
     await expect(page.locator("#view-title")).toHaveText("Today");
     expect(hub.setup.status).toBe("done");

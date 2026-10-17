@@ -58,10 +58,19 @@ The app offers a setup wizard in two parts: the hub part runs once per hub, and 
 |---|---|---|
 | `GET /api/setup` | | `{"status", "user", "timeZone", "password", "tailscaleOnly"}`, below |
 | `POST /api/setup` | `{"status": "done"}` or `{"status": "dismissed"}` | `204`; records the hub part as finished or closed. `400` for any other status. |
+| `GET /api/setup/status` | | `{"login", "hostMatches", "publicUrl", "pushKeys", "ntfy", "time"}`, below |
+| `POST /api/setup/test-event` | | `204`; sends a change event down every open event stream |
 
 - `status` is `done` or `dismissed` once recorded. With no record it is `new` when the hub has no items and no machines (revoked ones count), and `in-use` otherwise. The app opens the wizard on its own only for `new`, so a hub upgraded with data never sees it; Settings starts it again on any hub.
 - `user` is the name kept in the app, or `MEAT_MODE_USER`. `timeZone` is the IANA time zone kept in the app, `""` until chosen.
 - `password` is `env` when `MEAT_MODE_PASSWORD_HASH` or `MEAT_MODE_PASSWORD_HASH_FILE` sets it, `app` when it was set in the app, and `none` otherwise. `tailscaleOnly` is `true` when the user chose to run with no password on a private network.
+
+The connection check (a wizard step, also in Settings) combines what the browser sees with `GET /api/setup/status`:
+
+- `login` is `environment`, `app` or `none`, by the same rule as `password` above.
+- `hostMatches` is `true` when this request's Host is the host of `MEAT_MODE_PUBLIC_URL` (a default port counts as no port). `publicUrl` is that setting, so the app can say where to open it.
+- `pushKeys` is `true` when the hub has Web Push keys to hand out; `ntfy` is `true` when `MEAT_MODE_NTFY_URL` is set. `time` is the hub's clock, which the app compares with the device's; more than a minute apart is reported.
+- The live-updates check opens its own `GET /api/events` stream, notes the revision the stream opens with, calls `POST /api/setup/test-event`, and expects a higher revision within 5 seconds. A proxy that buffers the stream holds the events back. The test event is an ordinary change event, so every open app refreshes its state once.
 
 ### Actions
 

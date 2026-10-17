@@ -28,6 +28,9 @@ type Config struct {
 	// PasswordHashFile is MEAT_MODE_PASSWORD_HASH_FILE, a file holding the
 	// hash instead. LoadPasswordHash reads it into PasswordHash.
 	PasswordHashFile string
+	// NtfyURL is MEAT_MODE_NTFY_URL. The hub only reports whether it is
+	// set, in the connection check; internal/notify does the sending.
+	NtfyURL string
 }
 
 // ConfigFromEnv reads Config from the environment.
@@ -41,6 +44,7 @@ func ConfigFromEnv() Config {
 		AllowedHosts:     os.Getenv("MEAT_MODE_ALLOWED_HOSTS"),
 		PasswordHash:     strings.TrimSpace(os.Getenv("MEAT_MODE_PASSWORD_HASH")),
 		PasswordHashFile: os.Getenv("MEAT_MODE_PASSWORD_HASH_FILE"),
+		NtfyURL:          strings.TrimSpace(os.Getenv("MEAT_MODE_NTFY_URL")),
 	}
 }
 
