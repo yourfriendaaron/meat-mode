@@ -48,6 +48,8 @@ export interface Step extends Handlers {
   continueLabel?: string;
   /** Runs on Continue. Resolve false to stay on the step, such as when a form it holds is not valid yet. */
   next?(ctx: AppContext): boolean | Promise<boolean>;
+  /** Runs when a new run starts, so a step that keeps state in its module can forget the last run. */
+  start?(): void;
   /** The id of the heading of its section in Settings, such as "s-push"; Finish links to it. */
   settings?: string;
 }

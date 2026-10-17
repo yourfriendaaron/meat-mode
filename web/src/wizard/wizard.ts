@@ -73,6 +73,7 @@ export async function initSetup(ctx: AppContext): Promise<void> {
 /** Starts a run from its first step, and shows it unless show is false. */
 export function startWizard(mode: Mode, ctx: AppContext, show = true): void {
   const steps = stepsFor(mode, ctx);
+  for (const s of steps) s.start?.();
   progress = { mode, step: steps[0]?.id ?? "", done: [], skipped: [] };
   saveProgress(progress);
   offerDevice = false;

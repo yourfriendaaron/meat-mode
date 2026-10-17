@@ -1773,3 +1773,23 @@ kbd {
   font-size: 13px;
   color: var(--red);
 }
+
+/* ---------- first to-do step ---------- */
+
+.ft-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ft-form .chips {
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+.ft-form .chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wiz-added {
+  font-weight: 600;
+}

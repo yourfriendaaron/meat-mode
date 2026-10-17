@@ -4,6 +4,7 @@
 import "./appearance.ts";
 import "./connection.ts";
 import "./finish.ts";
+import "./first-todo.ts";
 import "./install.ts";
 import "./profile.ts";
 import "./reminders.ts";
