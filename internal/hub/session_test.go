@@ -120,6 +120,7 @@ var appRoutes = []struct{ method, path, body string }{
 	{"GET", "/api/bridges", ""},
 	{"POST", "/api/bridges", `{"name":"laptop"}`},
 	{"DELETE", "/api/bridges/laptop", ""},
+	{"POST", "/api/reminders/test", ""},
 	{"GET", "/api/setup", ""},
 	{"POST", "/api/setup", `{"status":"done"}`},
 	{"GET", "/api/settings", ""},

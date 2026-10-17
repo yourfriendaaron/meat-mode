@@ -57,6 +57,9 @@ const ownIds = (mode: Progress["mode"]) =>
     .map((s) => s.id)
     .filter((id) => id === "welcome" || id === "finish" || id.startsWith("test-"));
 
+// Steps ask the browser what this device can do; here it is a tab that is not installed.
+globalThis.matchMedia ??= ((media: string) => ({ media, matches: false })) as unknown as typeof matchMedia;
+
 test("a run sorts steps by order, keeps its parts and leaves out steps that do not apply", () => {
   registerStep({ id: "test-device", title: "Device thing", part: "device", order: 55, render: () => "" });
   registerStep({ id: "test-hub", title: "Hub thing", part: "hub", order: 25, render: () => "" });

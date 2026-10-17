@@ -131,6 +131,8 @@ test.describe("desktop", () => {
     await expect(w.heading).toHaveText("Welcome");
     await expect(w.region).toContainText("This sets up Meat Mode on this device.");
     await w.next.click();
+    await expect(w.heading).not.toHaveText("Welcome");
+    await skipToEnd(page);
     await w.next.click();
     await expect(page.locator("#view-title")).toHaveText("Today");
     expect(await page.evaluate(() => localStorage.getItem("meat-mode.setup-device"))).toBe("done");

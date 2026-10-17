@@ -15,11 +15,19 @@ export function remindersOn(): boolean {
   return typeof Notification !== "undefined" && Notification.permission === "granted";
 }
 
-/** Registers the service worker and sends this device's push subscription to the hub. */
-export async function subscribePush(): Promise<void> {
+/**
+ * Registers the service worker and sends this device's push subscription to
+ * the hub. With renew, a subscription the push service no longer accepts is
+ * replaced by a new one.
+ */
+export async function subscribePush(renew = false): Promise<void> {
   const reg = await navigator.serviceWorker.register("/sw.js");
   await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
+  if (sub && renew) {
+    await sub.unsubscribe();
+    sub = null;
+  }
   if (!sub) {
     const { publicKey } = await api.pushKey();
     sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
