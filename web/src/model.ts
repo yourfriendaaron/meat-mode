@@ -47,6 +47,26 @@ export function repoKey(r: { bridge: string; repo?: string; name?: string }): st
   return `${r.bridge}/${r.repo ?? r.name}`;
 }
 
+/** A repo's display name: its folder name, the last segment of its path. */
+export function repoLabel(r: { name: string }): string {
+  return r.name.slice(r.name.lastIndexOf("/") + 1);
+}
+
+/**
+ * The secondary line for a repo whose label repeats among `all`: its path
+ * when that tells it apart, and its machine when the same path is on several.
+ * Empty when the label is unique.
+ */
+export function repoDetail(r: Repo, all: Repo[]): string {
+  const label = repoLabel(r);
+  const same = all.filter((x) => repoLabel(x) === label);
+  if (same.length < 2) return "";
+  const parts: string[] = [];
+  if (r.name !== label) parts.push(r.name);
+  if (same.some((x) => x.name === r.name && x.bridge !== r.bridge)) parts.push(`on ${r.bridge}`);
+  return parts.join(" ");
+}
+
 export function isOpen(item: Item): boolean {
   return item.status !== "closed";
 }
@@ -237,7 +257,13 @@ export function syncStatus(state: Pick<State, "unapplied" | "bridges">, now: Dat
 export function visibleRepos(repos: Repo[]): Repo[] {
   return repos
     .filter((r) => r.personal || r.optedIn)
-    .sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name) || a.bridge.localeCompare(b.bridge));
+    .sort(
+      (a, b) =>
+        Number(b.personal) - Number(a.personal) ||
+        repoLabel(a).localeCompare(repoLabel(b)) ||
+        a.name.localeCompare(b.name) ||
+        a.bridge.localeCompare(b.bridge),
+    );
 }
 
 export const LIST_COLOURS = 6;

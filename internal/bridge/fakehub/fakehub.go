@@ -44,7 +44,7 @@ func New(tokens map[string]string) *Hub {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bridge/v1/hello", h.auth(h.hello))
 	mux.HandleFunc("PUT /bridge/v1/repos", h.auth(h.putRepos))
-	mux.HandleFunc("PUT /bridge/v1/repos/{repo}/items", h.auth(h.putItems))
+	mux.HandleFunc("PUT /bridge/v1/items", h.auth(h.putItems))
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
 	mux.HandleFunc("POST /bridge/v1/actions/{id}/result", h.auth(h.result))
 	h.Server = httptest.NewServer(mux)
@@ -122,7 +122,7 @@ func (h *Hub) putItems(w http.ResponseWriter, r *http.Request, bridge string) {
 			return
 		}
 	}
-	k := bridge + "/" + r.PathValue("repo")
+	k := bridge + "/" + r.URL.Query().Get("repo")
 	h.mu.Lock()
 	h.items[k] = items
 	h.itemPuts[k]++

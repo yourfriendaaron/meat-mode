@@ -38,7 +38,7 @@ base.beforeAll(async () => {
   await world.addMachine("laptop", [
     { name: "personal", prefix: "lp", optedIn: false, human: ["Water the plants", "Renew the library card", "Buy stamps", "Fix the gate latch"] },
     { name: "garden", prefix: "ga", optedIn: true, human: ["Order compost for the beds", "Prune the roses"], other: ["Refactor the watering script"] },
-    { name: "website", prefix: "we", optedIn: false, human: ["Approve the footer text"] },
+    { name: "clients/website", prefix: "we", optedIn: false, human: ["Approve the footer text"] },
   ]);
   await world.addMachine("desk", [
     { name: "personal", prefix: "dp", optedIn: false, human: ["Call Sam about the weekend"] },
@@ -133,7 +133,7 @@ test("pairs two bridges through Settings and shows both machines' items", async 
   for (const t of ["Refactor the watering script", "Approve the footer text", "Sort the toolbox"]) {
     await expect(row(page, t)).toHaveCount(0);
   }
-  await expect(page.getByRole("navigation", { name: "Lists" })).toContainText("personal (desk)");
+  await expect(page.getByRole("navigation", { name: "Lists" })).toContainText("personalon desk");
   await expect(page.locator(".sidebar .sync-pill")).toHaveText("Synced");
   deskBefore = await deskSnapshot(w);
 });
@@ -143,7 +143,7 @@ test("quick add with a date and #list creates a bead in that repo", async ({ pag
   const input = page.getByRole("textbox", { name: "New task" });
   await input.click();
   await input.pressSequentially("Buy compost tomorrow #garden");
-  await expect(page.locator("#qa-list")).toHaveValue("laptop/garden");
+  await expect(page.locator("#qa-list")).toHaveValue("laptop/projects/garden");
   await input.press("Enter");
   await expect(input).toHaveValue("");
 
@@ -158,7 +158,7 @@ test("quick add with a date and #list creates a bead in that repo", async ({ pag
   w.ids.set("Buy compost", bead!.id);
   const full = await w.show(garden, bead!.id);
   expect(full.labels).toContain("human");
-  const add = (await actions(w)).find((a) => a.kind === "add" && a.repo === "garden");
+  const add = (await actions(w)).find((a) => a.kind === "add" && a.repo === "projects/garden");
   expect(add).toMatchObject({ bridge: "laptop", status: "applied", beadId: bead!.id });
   expect(Date.parse(full.due_at!)).toBe(Date.parse(add!.payload.due!));
   const tomorrow9 = new Date();

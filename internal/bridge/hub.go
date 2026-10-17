@@ -106,7 +106,7 @@ func (h *Hub) PutRepos(ctx context.Context, repos []api.Repo) error {
 
 // PutItems replaces the human items of one repo.
 func (h *Hub) PutItems(ctx context.Context, repo string, items []api.Item) error {
-	return h.do(ctx, http.MethodPut, "/bridge/v1/repos/"+url.PathEscape(repo)+"/items", items, nil)
+	return h.do(ctx, http.MethodPut, "/bridge/v1/items?repo="+url.QueryEscape(repo), items, nil)
 }
 
 // Actions returns this bridge's pending actions, oldest first.

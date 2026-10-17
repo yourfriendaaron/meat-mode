@@ -5,8 +5,9 @@ The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges (
 ## Identity
 
 - A **bridge** has a unique name chosen when it is added (`[a-z0-9-]{1,32}`).
-- A **repo** is named by the bridge (its directory name, or `personal` for the personal database). Repo names are unique per bridge.
-- An **item key** is `<bridge>/<repo>/<bead id>`. In URL paths it is percent-encoded as one segment. Repo names and bead ids may not start with `-`; the bridge passes bead ids to `bd` only when they match `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`.
+- A **repo** is named by the bridge with its folder's path relative to the home folder, such as `projects/garden` (for a `--root` outside the home folder, relative to that root's parent), or `personal` for the personal database. Repo names are unique per bridge, so two folders called `garden` stay apart. A name is up to 512 bytes of `/`-separated segments; each segment is 1 to 128 characters with no control character, is not `.` or `..`, and does not start with `-`. The app shows the last segment, and the path where two repos share it.
+- An **item key** is `<bridge>/<repo>/<bead id>`, for example `laptop/projects/garden/gd-1`. Bridge names and bead ids hold no `/`, so the repo is everything between the first and the last `/`. In URL paths the key is percent-encoded as one segment. Bead ids may not start with `-`; the bridge passes bead ids to `bd` only when they match `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`.
+- A hub that stored repos under an older bridge's folder names (`garden`) moves each one, with its items, actions and reminders, to the one new name that ends in it (`projects/garden`) when the bridge first sends its new list. A folder name that two new names end in is dropped instead.
 - An **action id** is a UUID the client generates. Posting the same id twice returns the stored action and changes nothing.
 
 ## App API
@@ -57,7 +58,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 |---|---|---|
 | `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
 | `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`) | `204`; replaces this bridge's repo list |
-| `PUT /bridge/v1/repos/{repo}/items` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. |
+| `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
 

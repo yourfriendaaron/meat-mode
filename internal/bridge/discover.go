@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
 // PersonalRepo is the repo name of the personal database.
@@ -19,6 +21,8 @@ const optInKey = "meat-mode.sync"
 
 // Repo is one beads database the bridge found.
 type Repo struct {
+	// Name is the repo's key: its path relative to the home folder, such as
+	// projects/garden, or PersonalRepo for the personal database.
 	Name     string
 	Dir      string
 	Personal bool
@@ -32,8 +36,8 @@ func (r Repo) Synced() bool { return r.Personal || r.OptedIn }
 // The walk skips the folders in pruneNames and pruneHomePaths, symlinks,
 // Git worktrees and anything it cannot read, and finds repos nested at any
 // depth. A .beads folder counts only when it holds a database (see
-// hasDatabase). Names are directory names; the first one found wins on a
-// clash.
+// hasDatabase). Names are paths relative to home (see repoName); the first
+// one found wins on a clash.
 func Discover(roots []string, home, personal string, log *slog.Logger) []Repo {
 	var out []Repo
 	seen := map[string]bool{}    // names
@@ -55,13 +59,14 @@ func Discover(roots []string, home, personal string, log *slog.Logger) []Repo {
 	for _, root := range roots {
 		start := time.Now()
 		dirs := 0
-		for _, dir := range scan(resolvePath(root), homePath, &dirs, log) {
-			name := filepath.Base(dir)
+		rootPath := resolvePath(root)
+		for _, dir := range scan(rootPath, homePath, &dirs, log) {
+			name := repoName(homePath, rootPath, dir)
 			switch {
 			case dir == personalPath || seenDir[dir]:
 				continue
-			case strings.HasPrefix(name, "-"):
-				log.Warn("skipping repo whose name starts with -; the hub refuses it", "dir", dir)
+			case !api.ValidRepoName(name):
+				log.Warn("skipping repo whose path the hub refuses (a folder name starting with -, or a control character)", "dir", dir)
 				continue
 			case seen[name]:
 				log.Warn("skipping repo with a duplicate name", "dir", dir)
@@ -159,6 +164,16 @@ func scan(root, home string, dirs *int, log *slog.Logger) []string {
 	}
 	walk(root, entries)
 	return found
+}
+
+// repoName is dir relative to home, or for a root outside home, relative to
+// the root's parent so the name starts with the root's folder name.
+func repoName(home, root, dir string) string {
+	if rel, ok := relTo(home, dir); ok && rel != "." {
+		return rel
+	}
+	rel, _ := relTo(filepath.Dir(root), dir)
+	return rel
 }
 
 // relTo returns path relative to base, slash-separated, when path is inside

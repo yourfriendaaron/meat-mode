@@ -17,7 +17,9 @@ import {
   pastDue,
   personalRepoKeys,
   repoColours,
+  repoDetail,
   repoKey,
+  repoLabel,
   syncStatus,
   tomorrowMorning,
   visibleRepos,
@@ -156,14 +158,21 @@ function viewTitle(v: View): string {
       return "Settings";
     default: {
       const r = repos().find((x) => `list:${repoKey(x)}` === v);
-      return r ? r.name : "List";
+      return r ? listLabel(r) : "List";
     }
   }
 }
 
+/** The repo's name for chips and pickers, with its path where names repeat. */
 function listLabel(r: Repo): string {
-  const dup = visibleRepos(repos()).filter((x) => x.name === r.name).length > 1;
-  return dup ? `${r.name} (${r.bridge})` : r.name;
+  const detail = repoDetail(r, visibleRepos(repos()));
+  return detail ? `${repoLabel(r)} · ${detail}` : repoLabel(r);
+}
+
+/** The repo's name for the sidebar: the path goes on a second line. */
+function listLabelHTML(r: Repo): string {
+  const detail = repoDetail(r, visibleRepos(repos()));
+  return esc(repoLabel(r)) + (detail ? `<small class="nav-sub">${esc(detail)}</small>` : "");
 }
 
 function currentGroups() {
@@ -202,7 +211,7 @@ function renderNav() {
       .map((r) => {
         const key = repoKey(r);
         const count = all.filter((i) => isOpen(i) && repoKey(i) === key).length;
-        return entry(`list:${key}`, esc(listLabel(r)), `<span class="dot c${colours.get(key) ?? 0}" aria-hidden="true"></span>`, plain(count));
+        return entry(`list:${key}`, listLabelHTML(r), `<span class="dot c${colours.get(key) ?? 0}" aria-hidden="true"></span>`, plain(count));
       })
       .join("") || '<p class="muted small">No lists yet.</p>',
   );
@@ -858,7 +867,7 @@ let qa: QuickAdd = { title: "", due: null, list: null, tokens: [] };
 let qaListTouched = false;
 
 function quickLists() {
-  return visibleRepos(repos()).map((r) => ({ key: repoKey(r), name: r.name }));
+  return visibleRepos(repos()).map((r) => ({ key: repoKey(r), name: repoLabel(r) }));
 }
 
 /** The personal repo (visibleRepos sorts it first), else the first list. */

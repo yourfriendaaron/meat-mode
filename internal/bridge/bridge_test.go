@@ -115,7 +115,7 @@ func (w *world) start(personal string) *Bridge {
 	w.t.Cleanup(func() { j.Close() })
 	w.bridge = &Bridge{
 		Hub: &Hub{URL: w.hub.URL, Token: token}, Beads: w.bd, Journal: j,
-		Roots: []string{w.root}, Personal: personal, Version: "test", Log: quiet,
+		Roots: []string{w.root}, Home: w.root, Personal: personal, Version: "test", Log: quiet,
 	}
 	return w.bridge
 }
@@ -539,4 +539,31 @@ func TestScanCadence(t *testing.T) {
 	if got := w.hub.Repos(us); len(got) != 2 {
 		t.Fatalf("repos after the next scan = %+v", got)
 	}
+}
+
+func TestSameNamedReposSyncSideBySide(t *testing.T) {
+	both(t, func(t *testing.T, w *world) {
+		home := w.repo("projects/garden", true)
+		work := w.repo("work/garden", true)
+		w.seed(home, "Water the plants")
+		hedge := w.seed(work, "Trim the hedge")
+		w.hub.Enqueue(us, action("s-done", api.KindDone, "work/garden", hedge, api.Payload{}))
+		b := w.start("")
+		w.tick(b)
+
+		want := []api.Repo{{Name: "projects/garden", OptedIn: true}, {Name: "work/garden", OptedIn: true}}
+		if got := w.hub.Repos(us); !slices.Equal(got, want) {
+			t.Errorf("repos = %+v, want %+v", got, want)
+		}
+		if items, _ := w.hub.Items(us, "projects/garden"); len(items) != 1 || items[0].Title != "Water the plants" {
+			t.Errorf("projects/garden items = %+v", items)
+		}
+		if items, _ := w.hub.Items(us, "work/garden"); len(items) != 1 || items[0].Title != "Trim the hedge" {
+			t.Errorf("work/garden items = %+v", items)
+		}
+		w.oneOK(aid("s-done"))
+		if w.show(work, hedge).Status != "closed" {
+			t.Error("the action went to the wrong repo")
+		}
+	})
 }

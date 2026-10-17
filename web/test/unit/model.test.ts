@@ -10,6 +10,8 @@ import {
   hasNewReply,
   openToday,
   personalRepoKeys,
+  repoDetail,
+  repoLabel,
   syncStatus,
   visibleRepos,
 } from "../../src/model.ts";
@@ -164,4 +166,24 @@ test("snooze presets", () => {
   const late = snoozeOptions(new Date(2026, 9, 17, 19, 0));
   assert.equal(late.find((o) => o.id === "evening"), undefined);
   assert.equal(late.find((o) => o.id === "weekend")!.until.getDate(), 24);
+});
+
+test("repo labels are folder names, with the path where they repeat", () => {
+  const repos: Repo[] = [
+    { bridge: "laptop", name: "projects/garden", personal: false, optedIn: true },
+    { bridge: "laptop", name: "work/garden", personal: false, optedIn: true },
+    { bridge: "desk", name: "projects/garden", personal: false, optedIn: true },
+    { bridge: "laptop", name: "projects/kitchen", personal: false, optedIn: true },
+    { bridge: "laptop", name: "personal", personal: true, optedIn: true },
+  ];
+  assert.equal(repoLabel(repos[0]), "garden");
+  assert.equal(repoLabel(repos[4]), "personal");
+  assert.equal(repoDetail(repos[3], repos), "");
+  assert.equal(repoDetail(repos[1], repos), "work/garden");
+  assert.equal(repoDetail(repos[0], repos), "projects/garden on laptop");
+  assert.equal(repoDetail(repos[2], repos), "projects/garden on desk");
+  assert.deepEqual(
+    visibleRepos(repos).map((r) => `${r.bridge}:${r.name}`),
+    ["laptop:personal", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],
+  );
 });

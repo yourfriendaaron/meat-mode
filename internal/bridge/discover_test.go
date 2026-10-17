@@ -68,8 +68,8 @@ func TestDiscoverWalksTheHomeFolder(t *testing.T) {
 	in := func(rel string) string { return filepath.Join(home, filepath.FromSlash(rel)) }
 	writeRepo(t, in("projects/garden"), "")
 	writeRepo(t, in("projects/garden/tools/sprinkler"), "") // nested in a repo
-	writeRepo(t, in("notes/deep/down/journal"), "")          // outside ~/projects
-	writeRepo(t, in(".notes/house/todo"), "")                // a dot folder that is not a cache
+	writeRepo(t, in("notes/deep/down/journal"), "")         // outside ~/projects
+	writeRepo(t, in(".notes/house/todo"), "")               // a dot folder that is not a cache
 	// bd's global folder holds no database.
 	writeFile(t, in(".beads/machine-id"), "0123\n")
 	writeFile(t, in(".beads/eventsData/log"), "")
@@ -162,7 +162,7 @@ func TestDiscover(t *testing.T) {
 	personal := filepath.Join(t.TempDir(), "me")
 	writeRepo(t, personal, "")
 
-	got := Discover([]string{root, filepath.Join(root, "missing")}, "", personal, quiet)
+	got := Discover([]string{root, filepath.Join(root, "missing")}, root, personal, quiet)
 	want := []Repo{
 		{Name: "attic", Dir: filepath.Join(root, "attic")},
 		{Name: "garden", Dir: filepath.Join(root, "garden"), OptedIn: true},
@@ -193,5 +193,27 @@ func TestDiscoverSkipsPersonalThroughSymlink(t *testing.T) {
 	got := Discover([]string{link}, "", personal, quiet)
 	if len(got) != 1 || got[0].Name != PersonalRepo || !got[0].Personal {
 		t.Fatalf("Discover = %+v, want the personal repo once", got)
+	}
+}
+
+func TestRepoNamesArePaths(t *testing.T) {
+	home := t.TempDir()
+	writeRepo(t, filepath.Join(home, "projects", "garden"), "")
+	writeRepo(t, filepath.Join(home, "work", "garden"), "")
+	writeRepo(t, filepath.Join(home, "personal"), "") // clashes with the personal repo's name
+	outside := t.TempDir()
+	writeRepo(t, filepath.Join(outside, "repos", "shed"), "")
+	writeRepo(t, filepath.Join(outside, "solo"), "")
+	me := filepath.Join(t.TempDir(), "me")
+	writeRepo(t, me, "")
+
+	roots := []string{home, filepath.Join(outside, "repos"), filepath.Join(outside, "solo")}
+	var got []string
+	for _, r := range Discover(roots, home, me, quiet) {
+		got = append(got, r.Name)
+	}
+	want := []string{"personal", "projects/garden", "repos/shed", "solo", "work/garden"}
+	if !slices.Equal(got, want) {
+		t.Errorf("names %v, want %v", got, want)
 	}
 }
