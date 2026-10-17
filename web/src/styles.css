@@ -1325,6 +1325,47 @@ kbd {
   }
 }
 
+/* ---------- setup wizard: device steps ---------- */
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choices legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raise);
+  cursor: pointer;
+}
+.choice:has(input:checked) {
+  border-color: var(--purple);
+}
+.choice input {
+  margin: 3px 0 0;
+  accent-color: var(--purple);
+}
+.choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.choice-label {
+  font-weight: 600;
+}
+
 /* ---------- desktop: sidebar, list, detail pane ---------- */
 
 @container app (min-width: 880px) {

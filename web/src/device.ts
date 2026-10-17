@@ -22,3 +22,16 @@ export function pushSupport(): "ready" | "needs-install" | "unsupported" {
   if (isIOS() && !isInstalled()) return "needs-install";
   return "unsupported";
 }
+
+/**
+ * Whose install instructions fit this browser: "ios" for an iPhone or iPad,
+ * "mac-safari" for Safari on a Mac (File, Add to Dock), otherwise null.
+ */
+export function installPlatform(): "ios" | "mac-safari" | null {
+  if (isIOS()) return "ios";
+  const ua = navigator.userAgent;
+  if (/Macintosh/.test(ua) && /Version\/[\d.]+.*Safari\//.test(ua) && !/Chrome|Chromium|Edg|Firefox|OPR/.test(ua)) {
+    return "mac-safari";
+  }
+  return null;
+}

@@ -51,6 +51,8 @@ test("each mode holds its parts", () => {
 });
 
 const ctx = { state: null, session: null, setup: null, view: "setup" } as unknown as AppContext;
+// Steps ask the browser what this device can do; here it is a tab that is not installed.
+globalThis.matchMedia ??= ((media: string) => ({ media, matches: false })) as unknown as typeof matchMedia;
 
 test("a run sorts steps by order, keeps its parts and leaves out steps that do not apply", () => {
   registerStep({ id: "test-device", title: "Device thing", part: "device", order: 55, render: () => "" });

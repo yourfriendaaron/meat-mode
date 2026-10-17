@@ -93,11 +93,11 @@ test.describe("desktop", () => {
     await page.reload();
     await expect(w.heading).toHaveText("All set");
     await w.back.click();
-    await expect(w.heading).toHaveText("Reminders");
+    await expect(w.heading).toHaveText("Appearance");
 
     await page.locator(".sidebar").getByRole("button", { name: "Today" }).click();
     await banner.getByRole("button", { name: "Continue setup" }).click();
-    await expect(w.heading).toHaveText("Reminders");
+    await expect(w.heading).toHaveText("Appearance");
     await expect(w.heading).toBeFocused();
 
     await page.locator(".sidebar").getByRole("button", { name: "Today" }).click();
