@@ -3,6 +3,8 @@
 // builds on the state the previous one left.
 
 import { test as base, expect, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { hasBd, NTFY_TOPIC, USER, World, type Issue } from "./world.ts";
 
 interface Action {
@@ -38,7 +40,7 @@ base.beforeAll(async () => {
   await world.addMachine("laptop", [
     { name: "personal", prefix: "lp", optedIn: false, human: ["Water the plants", "Renew the library card", "Buy stamps", "Fix the gate latch"] },
     { name: "garden", prefix: "ga", optedIn: true, human: ["Order compost for the beds", "Prune the roses"], other: ["Refactor the watering script"] },
-    { name: "website", prefix: "we", optedIn: false, human: ["Approve the footer text"] },
+    { name: "clients/website", prefix: "we", optedIn: false, human: ["Approve the footer text"] },
   ]);
   await world.addMachine("desk", [
     { name: "personal", prefix: "dp", optedIn: false, human: ["Call Sam about the weekend"] },
@@ -133,7 +135,7 @@ test("pairs two bridges through Settings and shows both machines' items", async 
   for (const t of ["Refactor the watering script", "Approve the footer text", "Sort the toolbox"]) {
     await expect(row(page, t)).toHaveCount(0);
   }
-  await expect(page.getByRole("navigation", { name: "Lists" })).toContainText("personal (desk)");
+  await expect(page.getByRole("navigation", { name: "Lists" })).toContainText("personalon desk");
   await expect(page.locator(".sidebar .sync-pill")).toHaveText("Synced");
   deskBefore = await deskSnapshot(w);
 });
@@ -143,7 +145,7 @@ test("quick add with a date and #list creates a bead in that repo", async ({ pag
   const input = page.getByRole("textbox", { name: "New task" });
   await input.click();
   await input.pressSequentially("Buy compost tomorrow #garden");
-  await expect(page.locator("#qa-list")).toHaveValue("laptop/garden");
+  await expect(page.locator("#qa-list")).toHaveValue("laptop/projects/garden");
   await input.press("Enter");
   await expect(input).toHaveValue("");
 
@@ -158,7 +160,7 @@ test("quick add with a date and #list creates a bead in that repo", async ({ pag
   w.ids.set("Buy compost", bead!.id);
   const full = await w.show(garden, bead!.id);
   expect(full.labels).toContain("human");
-  const add = (await actions(w)).find((a) => a.kind === "add" && a.repo === "garden");
+  const add = (await actions(w)).find((a) => a.kind === "add" && a.repo === "projects/garden");
   expect(add).toMatchObject({ bridge: "laptop", status: "applied", beadId: bead!.id });
   expect(Date.parse(full.due_at!)).toBe(Date.parse(add!.payload.due!));
   const tomorrow9 = new Date();
@@ -312,4 +314,31 @@ test("a reminder reaches ntfy with the title and a link to the item", async ({ w
   expect(click.searchParams.get("item")).toBe(key);
   // It fired at the due time, not before.
   expect(req.at).toBeGreaterThanOrEqual(Date.parse(due));
+});
+
+test("a repo switched on in Settings syncs, and switched off leaves the app", async ({ page, w }) => {
+  await page.goto(w.hubURL + "/");
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  const repos = page.getByRole("list", { name: "Repos on laptop" });
+  // Every repo the bridge found is listed, nested ones by their path.
+  await expect(repos).toContainText("projects/clients/website");
+  await expect(repos).toContainText("Always synced");
+  const sw = repos.getByRole("switch", { name: "Sync website (projects/clients/website)" });
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await expect(repos).not.toContainText("Waiting for laptop");
+  await everything(page);
+  await expect(row(page, "Approve the footer text")).toBeVisible();
+  // The bridge keeps the choice in its own config.
+  const cfg = JSON.parse(await readFile(join(w.machine("laptop").home, ".config", "meat-mode", "bridge.json"), "utf8"));
+  expect(cfg.sync).toEqual({ "projects/clients/website": true });
+
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await expect(repos).not.toContainText("Waiting for laptop");
+  await everything(page);
+  await expect(row(page, "Approve the footer text")).toHaveCount(0);
 });

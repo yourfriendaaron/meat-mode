@@ -123,7 +123,7 @@ func (h *harness) pair() {
 	h.token = decode[api.NewBridgeReply](h.t, w).Token
 	h.expect(h.do("POST", "/bridge/v1/hello", api.Hello{Version: "1.0.0", BdVersion: "1.3.0"}, h.token), http.StatusOK)
 	h.expect(h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "garden", OptedIn: true}, {Name: "chores"}}, h.token), http.StatusNoContent)
-	h.expect(h.do("PUT", "/bridge/v1/repos/garden/items", []api.Item{
+	h.expect(h.do("PUT", "/bridge/v1/items?repo=garden", []api.Item{
 		{ID: "gd-1", Title: "Water the plants", Status: "open", Priority: 2},
 	}, h.token), http.StatusNoContent)
 }
@@ -157,7 +157,7 @@ func TestBridgeAuth(t *testing.T) {
 		}
 	}
 	routes := [][2]string{
-		{"POST", "/bridge/v1/hello"}, {"PUT", "/bridge/v1/repos"}, {"PUT", "/bridge/v1/repos/garden/items"},
+		{"POST", "/bridge/v1/hello"}, {"PUT", "/bridge/v1/repos"}, {"PUT", "/bridge/v1/items?repo=garden"},
 		{"GET", "/bridge/v1/actions"}, {"POST", "/bridge/v1/actions/" + aid1 + "/result"},
 	}
 	for _, rt := range routes {
@@ -269,7 +269,7 @@ func TestAddOverHTTP(t *testing.T) {
 		t.Fatalf("state %+v", st.Items)
 	}
 	h.expect(h.do("POST", "/bridge/v1/actions/"+aid1+"/result", api.ActionResult{OK: true, BeadID: "gd-2"}, h.token), http.StatusNoContent)
-	h.expect(h.do("PUT", "/bridge/v1/repos/garden/items", []api.Item{
+	h.expect(h.do("PUT", "/bridge/v1/items?repo=garden", []api.Item{
 		{ID: "gd-1", Title: "Water the plants", Status: "open"}, {ID: "gd-2", Title: "Buy seeds", Status: "open"},
 	}, h.token), http.StatusNoContent)
 	st = decode[api.State](t, h.do("GET", "/api/state", nil, ""))
@@ -281,12 +281,12 @@ func TestAddOverHTTP(t *testing.T) {
 func TestItemsAndReposRoutes(t *testing.T) {
 	h := newHarness(t, nil, false)
 	h.pair()
-	h.expect(h.do("PUT", "/bridge/v1/repos/attic/items", []api.Item{}, h.token), http.StatusNotFound)
-	h.expect(h.do("PUT", "/bridge/v1/repos/garden/items", []api.Item{{ID: ""}}, h.token), http.StatusBadRequest)
-	h.expect(h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "a/b"}}, h.token), http.StatusBadRequest)
+	h.expect(h.do("PUT", "/bridge/v1/items?repo=attic", []api.Item{}, h.token), http.StatusNotFound)
+	h.expect(h.do("PUT", "/bridge/v1/items?repo=garden", []api.Item{{ID: ""}}, h.token), http.StatusBadRequest)
+	h.expect(h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "a//b"}}, h.token), http.StatusBadRequest)
 
 	// Hub-only fields from a bridge are ignored.
-	h.expect(h.do("PUT", "/bridge/v1/repos/garden/items", []api.Item{
+	h.expect(h.do("PUT", "/bridge/v1/items?repo=garden", []api.Item{
 		{ID: "gd-1", Title: "Water the plants", Status: "open", Pending: true, Error: "x", Key: "other/x/y"},
 	}, h.token), http.StatusNoContent)
 	st := decode[api.State](t, h.do("GET", "/api/state", nil, ""))

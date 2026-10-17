@@ -265,13 +265,15 @@ func TestStatus(t *testing.T) {
 	root := filepath.Join(env.Paths.Home, "projects")
 	writeRepo(t, filepath.Join(root, "garden"), "meat-mode.sync: true\n")
 	writeRepo(t, filepath.Join(root, "kitchen"), "")
+	journal := filepath.Join(env.Paths.Home, "notes", "journal")
+	writeRepo(t, journal, "")
 	if err := (Config{HubURL: hub.URL, Token: token}).Save(env.Paths.Config); err != nil {
 		t.Fatal(err)
 	}
 	if err := Main(context.Background(), []string{"status"}, env); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Hub:      " + hub.URL, "bd:       1.3.1", "garden", "synced", "kitchen", "not opted in", `reachable, this bridge is "desk"`} {
+	for _, want := range []string{"Hub:      " + hub.URL, "bd:       1.3.1", "garden", "synced", "kitchen", "not synced (switch it on in Settings)", journal, `reachable, this bridge is "desk"`} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out)
 		}
@@ -291,11 +293,11 @@ func TestPollOverride(t *testing.T) {
 		}
 	}
 	b := &Bridge{}
-	if b.actionEvery() != ActionEvery || b.syncEvery() != SyncEvery {
+	if b.actionEvery() != ActionEvery || b.syncEvery() != SyncEvery || b.scanEvery() != ScanEvery {
 		t.Error("zero Poll should keep the defaults")
 	}
 	b.Poll = time.Second
-	if b.actionEvery() != time.Second || b.syncEvery() != time.Second {
-		t.Error("Poll should replace both intervals")
+	if b.actionEvery() != time.Second || b.syncEvery() != time.Second || b.scanEvery() != time.Second {
+		t.Error("Poll should replace every interval")
 	}
 }

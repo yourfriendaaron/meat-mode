@@ -21,13 +21,16 @@ type Config struct {
 	HubURL string `json:"hubURL"`
 	Token  string `json:"token"`
 	// Roots are the directories scanned for beads repos. Absent (null) means
-	// ~/projects when it exists; an empty list means none.
+	// the home folder; an empty list means none.
 	Roots []string `json:"roots"`
 	// Personal is the personal beads repo directory; optional.
 	Personal          string `json:"personal,omitempty"`
 	AllowInsecureHTTP bool   `json:"allowInsecureHTTP,omitempty"`
 	// BD is the bd executable; found on PATH when empty.
 	BD string `json:"bd,omitempty"`
+	// Sync holds the sync switches set in the app, by repo name. A switch
+	// overrides the repo's own meat-mode.sync line.
+	Sync map[string]bool `json:"sync,omitempty"`
 }
 
 // Paths are where the bridge keeps its files.
@@ -71,6 +74,26 @@ func stateDir(goos, home, xdg string) string {
 // config. It logs a warning when the file, which holds the token, is
 // readable by anyone but its owner.
 func LoadConfig(path string) (Config, error) {
+	c, err := readConfigFile(path)
+	if err != nil {
+		return c, err
+	}
+	if v := os.Getenv("MEAT_MODE_HUB_URL"); v != "" {
+		c.HubURL = v
+	}
+	if v := os.Getenv("MEAT_MODE_ALLOW_INSECURE_HTTP"); v != "" {
+		on, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, fmt.Errorf("MEAT_MODE_ALLOW_INSECURE_HTTP must be true or false, not %q", v)
+		}
+		c.AllowInsecureHTTP = on
+	}
+	return c, nil
+}
+
+// readConfigFile reads the config file as saved, without the environment
+// overrides. A missing file gives an empty config.
+func readConfigFile(path string) (Config, error) {
 	var c Config
 	b, err := os.ReadFile(path)
 	switch {
@@ -86,17 +109,21 @@ func LoadConfig(path string) (Config, error) {
 			return c, fmt.Errorf("read %s: %w", path, err)
 		}
 	}
-	if v := os.Getenv("MEAT_MODE_HUB_URL"); v != "" {
-		c.HubURL = v
-	}
-	if v := os.Getenv("MEAT_MODE_ALLOW_INSECURE_HTTP"); v != "" {
-		on, err := strconv.ParseBool(v)
-		if err != nil {
-			return c, fmt.Errorf("MEAT_MODE_ALLOW_INSECURE_HTTP must be true or false, not %q", v)
-		}
-		c.AllowInsecureHTTP = on
-	}
 	return c, nil
+}
+
+// SaveSwitch records one repo's sync switch in the config file at path. It
+// rereads the file so environment overrides are never written back.
+func SaveSwitch(path, repo string, on bool) error {
+	c, err := readConfigFile(path)
+	if err != nil {
+		return err
+	}
+	if c.Sync == nil {
+		c.Sync = map[string]bool{}
+	}
+	c.Sync[repo] = on
+	return c.Save(path)
 }
 
 // Save writes the config with mode 0600, creating its directory.
@@ -119,14 +146,10 @@ func (c Config) Save(path string) error {
 }
 
 // ResolveRoots returns the scan roots with ~ expanded. With no roots set it
-// returns home/projects when that directory exists.
+// returns the home folder.
 func (c Config) ResolveRoots(home string) []string {
 	if c.Roots == nil {
-		def := filepath.Join(home, "projects")
-		if fi, err := os.Stat(def); err == nil && fi.IsDir() {
-			return []string{def}
-		}
-		return nil
+		return []string{home}
 	}
 	out := make([]string, 0, len(c.Roots))
 	for _, r := range c.Roots {

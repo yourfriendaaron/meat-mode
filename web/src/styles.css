@@ -1087,6 +1087,51 @@ kbd {
 .m-name {
   font-weight: 600;
 }
+.m-repos {
+  flex-basis: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+}
+.m-repo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.m-repo-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.switch {
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+}
+.switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--soft);
+  transition: transform 0.15s;
+}
+.switch[aria-checked="true"] {
+  background: var(--green);
+  border-color: var(--green);
+}
+.switch[aria-checked="true"] .switch-knob {
+  transform: translateX(18px);
+  background: var(--bg);
+}
 .m-actions {
   display: flex;
   align-items: center;
@@ -1188,6 +1233,14 @@ kbd {
   }
   .nav-item .dot {
     margin: 0 5px;
+  }
+  .nav-sub {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .count {
     font-size: 12px;

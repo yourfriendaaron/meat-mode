@@ -36,6 +36,8 @@ export interface Repo {
   name: string;
   personal: boolean;
   optedIn: boolean;
+  /** A sync switch the machine has not applied yet; optedIn shows where it was switched to. */
+  pending?: boolean;
 }
 
 export interface Bridge {
@@ -52,9 +54,10 @@ export interface Payload {
   text?: string;
   title?: string;
   due?: string | null;
+  on?: boolean;
 }
 
-export type ActionKind = "done" | "reopen" | "snooze" | "dismiss" | "note" | "add";
+export type ActionKind = "done" | "reopen" | "snooze" | "dismiss" | "note" | "add" | "sync";
 
 export interface NewAction {
   id: string;

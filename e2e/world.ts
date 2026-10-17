@@ -328,7 +328,8 @@ export class World {
   /** Makes a machine's home, its project root and its scratch repos. */
   async addMachine(name: string, specs: RepoSpec[]): Promise<Machine> {
     const base = join(this.tmp, name);
-    const m: Machine = { name, home: join(base, "home"), root: join(base, "projects"), personal: join(base, "personal"), repos: {} };
+    const home = join(base, "home");
+    const m: Machine = { name, home, root: join(home, "projects"), personal: join(home, "personal"), repos: {} };
     await mkdir(m.home, { recursive: true });
     await mkdir(m.root, { recursive: true });
     for (const s of specs) {
@@ -354,7 +355,7 @@ export class World {
     const m = this.machine(name);
     const { stdout } = await execFileP(
       this.bin,
-      ["bridge", "pair", url, token, "--root", m.root, "--personal", m.personal, "--no-service"],
+      ["bridge", "pair", url, token, "--personal", m.personal, "--no-service"],
       { env: this.bridgeEnv(m) },
     );
     return stdout;

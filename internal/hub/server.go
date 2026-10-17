@@ -27,7 +27,7 @@ type PushRegistry interface {
 // Body size limits.
 const (
 	maxBody      = 1 << 20  // every JSON body except an item set
-	maxItemsBody = 16 << 20 // PUT /bridge/v1/repos/{repo}/items: a full repo with comments
+	maxItemsBody = 16 << 20 // PUT /bridge/v1/items: a full repo with comments
 )
 
 const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
@@ -88,7 +88,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))
-	m.Handle("PUT /bridge/v1/repos/{repo}/items", s.bridgeAuth(s.handlePutItems))
+	m.Handle("PUT /bridge/v1/items", s.bridgeAuth(s.handlePutItems))
 	m.Handle("GET /bridge/v1/actions", s.bridgeAuth(s.handlePullActions))
 	m.Handle("POST /bridge/v1/actions/{id}/result", s.bridgeAuth(s.handleResult))
 
@@ -380,7 +380,9 @@ func (s *Server) handlePutRepos(w http.ResponseWriter, r *http.Request, bridge s
 }
 
 func (s *Server) handlePutItems(w http.ResponseWriter, r *http.Request, bridge string) {
-	repo := r.PathValue("repo")
+	// The repo is a query parameter because it is a path (projects/garden),
+	// and proxies may decode a %2F in the URL path.
+	repo := r.URL.Query().Get("repo")
 	if !store.ValidRepoName(repo) {
 		writeError(w, http.StatusBadRequest, "repo name is not valid")
 		return

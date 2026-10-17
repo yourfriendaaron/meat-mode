@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -556,7 +557,15 @@ func TestSplitKey(t *testing.T) {
 	if !ok || b != "laptop" || r != "garden" || id != "gd-1" {
 		t.Fatal("split failed")
 	}
-	for _, bad := range []string{"", "laptop/garden", "Laptop/garden/gd-1", "laptop//gd-1", "laptop/garden/a/b", "laptop/../gd-1",
+	b, r, id, ok = SplitKey("laptop/projects/garden/gd-1")
+	if !ok || b != "laptop" || r != "projects/garden" || id != "gd-1" {
+		t.Fatalf("split of a path repo = %q %q %q %v", b, r, id, ok)
+	}
+	if ItemKey("laptop", "projects/garden", "gd-1") != "laptop/projects/garden/gd-1" {
+		t.Error("ItemKey with a path repo")
+	}
+	for _, bad := range []string{"", "laptop/garden", "Laptop/garden/gd-1", "laptop//gd-1", "laptop/garden//gd-1", "laptop/../gd-1",
+		"laptop/projects/../gd-1", "laptop/projects/-x/gd-1",
 		"laptop/garden/-f/etc", "laptop/garden/--mem-profile=x", "laptop/-C/gd-1"} {
 		if _, _, _, ok := SplitKey(bad); ok {
 			t.Errorf("accepted %q", bad)
@@ -738,5 +747,128 @@ func TestReminderKeyOfAnAddedBead(t *testing.T) {
 	other := api.Item{Key: "laptop/garden/gd-1", Bridge: "laptop", Repo: "garden", ID: "gd-1"}
 	if k, err := s.ReminderKey(ctx, other); err != nil || k != other.Key {
 		t.Fatalf("plain bead key = %q, %v", k, err)
+	}
+}
+
+func TestFolderNameReposMoveToPathKeys(t *testing.T) {
+	s, c := open(t)
+	seed(t, s)
+	must(t, s.MarkSeen("laptop/garden/gd-1"))
+	a, _, err := s.AppendAction(api.NewAction{ID: "6b1c1a47-6d5e-4b0e-9a3b-6f3f0c6f9a01", Kind: api.KindDone, Key: "laptop/garden/gd-2"}, "alex-app")
+	must(t, err)
+	_, err = s.DB().Exec(`CREATE TABLE reminder_fired (item_key TEXT NOT NULL, fire_at INTEGER NOT NULL, PRIMARY KEY (item_key, fire_at))`)
+	must(t, err)
+	_, err = s.DB().Exec(`INSERT INTO reminder_fired VALUES ('laptop/garden/gd-1', 1), ('laptop/gardenia/gd-9', 2)`)
+	must(t, err)
+	before := item(t, mustState(t, s), "laptop/garden/gd-1")
+
+	var changes []Change
+	s.Watch(func(ch Change) { changes = append(changes, ch) })
+	c.t = c.t.Add(time.Hour)
+	// The new bridge sends path keys. chores ends two of them, so it is
+	// ambiguous and dropped.
+	must(t, s.ReplaceRepos("laptop", []api.Repo{
+		{Name: "projects/garden", OptedIn: true},
+		{Name: "personal", Personal: true},
+		{Name: "projects/chores"}, {Name: "work/chores"},
+	}))
+	st := mustState(t, s)
+	got := item(t, st, "laptop/projects/garden/gd-1")
+	if got.SeenAt == nil || !got.FirstSeen.Equal(before.FirstSeen) {
+		t.Errorf("moved item lost its times: %+v", got)
+	}
+	if moved := item(t, st, "laptop/projects/garden/gd-2"); !moved.Pending || moved.Status != "closed" {
+		t.Errorf("the pending action did not follow the repo: %+v", moved)
+	}
+	pa, err := s.PendingActions("laptop")
+	must(t, err)
+	if len(pa) != 1 || pa[0].ID != a.ID || pa[0].Repo != "projects/garden" {
+		t.Errorf("pending actions %+v", pa)
+	}
+	keys, err := queryStrings(s.DB(), `SELECT item_key FROM reminder_fired ORDER BY item_key`)
+	must(t, err)
+	if !slices.Equal(keys, []string{"laptop/gardenia/gd-9", "laptop/projects/garden/gd-1"}) {
+		t.Errorf("reminder keys %v", keys)
+	}
+	var names []string
+	for _, r := range st.Repos {
+		names = append(names, r.Name)
+	}
+	if !slices.Equal(names, []string{"personal", "projects/chores", "projects/garden", "work/chores"}) {
+		t.Errorf("repos %v", names)
+	}
+
+	// The next full set is not news.
+	changes = nil
+	must(t, s.ReplaceItems("laptop", "projects/garden", []api.Item{
+		{ID: "gd-1", Title: "Water the plants", Status: "open", Priority: 2},
+		{ID: "gd-2", Title: "Repot the fern", Status: "open", Priority: 1},
+	}))
+	if len(changes) != 1 || len(changes[0].NewItems) != 0 {
+		t.Errorf("moved items reported as new: %+v", changes)
+	}
+}
+
+func mustState(t *testing.T, s *Store) api.State {
+	t.Helper()
+	st, err := s.State()
+	must(t, err)
+	return st
+}
+
+func TestSyncSwitchAction(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	on, off := true, false
+	repo := func(st api.State, name string) api.Repo {
+		t.Helper()
+		for _, r := range st.Repos {
+			if r.Name == name {
+				return r
+			}
+		}
+		t.Fatalf("no repo %s", name)
+		return api.Repo{}
+	}
+	// A repo that is not synced can be switched on; nothing else can target it.
+	a, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindSync, Bridge: "laptop", Repo: "chores", Payload: api.Payload{On: &on}}, "alex-app")
+	must(t, err)
+	if a.Repo != "chores" || a.Payload.On == nil || !*a.Payload.On {
+		t.Fatalf("action %+v", a)
+	}
+	if r := repo(mustState(t, s), "chores"); !r.OptedIn || !r.Pending {
+		t.Errorf("chores while the switch is pending: %+v", r)
+	}
+	if r := repo(mustState(t, s), "garden"); r.Pending {
+		t.Errorf("garden marked pending: %+v", r)
+	}
+	// Applied, the bridge's own list decides.
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true}))
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden", OptedIn: true}, {Name: "personal", Personal: true}, {Name: "chores", OptedIn: true}}))
+	if r := repo(mustState(t, s), "chores"); !r.OptedIn || r.Pending {
+		t.Errorf("chores after the bridge applied it: %+v", r)
+	}
+	// Switching garden off drops its items once the bridge reports it.
+	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindSync, Bridge: "laptop", Repo: "garden", Payload: api.Payload{On: &off}}, "alex-app")
+	must(t, err)
+	if r := repo(mustState(t, s), "garden"); r.OptedIn || !r.Pending {
+		t.Errorf("garden while switching off: %+v", r)
+	}
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden"}, {Name: "personal", Personal: true}, {Name: "chores", OptedIn: true}}))
+	for _, it := range mustState(t, s).Items {
+		if it.Repo == "garden" {
+			t.Errorf("garden item left after switching off: %s", it.Key)
+		}
+	}
+
+	for _, bad := range []api.NewAction{
+		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "personal", Payload: api.Payload{On: &off}},
+		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "chores"},
+		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "shed", Payload: api.Payload{On: &on}},
+		{ID: id3, Kind: api.KindSync, Key: ItemKey("laptop", "chores", "x"), Payload: api.Payload{On: &on}},
+	} {
+		if _, _, err := s.AppendAction(bad, "alex-app"); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
 	}
 }

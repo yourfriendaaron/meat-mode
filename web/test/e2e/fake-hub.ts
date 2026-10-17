@@ -205,7 +205,12 @@ export class FakeHub {
     let repo = a.repo ?? "";
     let beadId = "";
     let before: Item | null = null;
-    if (a.kind === "add") {
+    if (a.kind === "sync") {
+      const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
+      if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
+      r.optedIn = Boolean(a.payload.on);
+      r.pending = true;
+    } else if (a.kind === "add") {
       beadId = `pending-${a.id}`;
       this.items.push({
         key: `${bridge}/${repo}/${beadId}`,

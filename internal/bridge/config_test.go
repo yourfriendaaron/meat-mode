@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -70,14 +71,8 @@ func TestConfigSaveLoadAndEnv(t *testing.T) {
 
 func TestResolveRoots(t *testing.T) {
 	home := t.TempDir()
-	if r := (Config{}).ResolveRoots(home); r != nil {
-		t.Errorf("no ~/projects: roots %v", r)
-	}
-	if err := os.Mkdir(filepath.Join(home, "projects"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if r := (Config{}).ResolveRoots(home); !slices.Equal(r, []string{filepath.Join(home, "projects")}) {
-		t.Errorf("default roots %v", r)
+	if r := (Config{}).ResolveRoots(home); !slices.Equal(r, []string{home}) {
+		t.Errorf("default roots %v, want the home folder", r)
 	}
 	r := Config{Roots: []string{"~/code", "/srv/repos"}}.ResolveRoots(home)
 	if !slices.Equal(r, []string{filepath.Join(home, "code"), "/srv/repos"}) {
@@ -97,5 +92,32 @@ func TestStateDir(t *testing.T) {
 		if got != want {
 			t.Errorf("stateDir = %q, want %q", got, want)
 		}
+	}
+}
+
+func TestSaveSwitchKeepsOverridesOut(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bridge.json")
+	if err := (Config{HubURL: "https://hub.example.com", Token: "secret"}).Save(path); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MEAT_MODE_HUB_URL", "https://other.example.com")
+	if err := SaveSwitch(path, "projects/garden", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveSwitch(path, "projects/kitchen", false); err != nil {
+		t.Fatal(err)
+	}
+	c, err := readConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.HubURL != "https://hub.example.com" || c.Token != "secret" {
+		t.Errorf("config after saving switches %+v", c)
+	}
+	if !maps.Equal(c.Sync, map[string]bool{"projects/garden": true, "projects/kitchen": false}) {
+		t.Errorf("switches %v", c.Sync)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode after saving: %v %v", fi.Mode(), err)
 	}
 }

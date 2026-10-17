@@ -3,45 +3,44 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"path"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// ValidRepoName reports whether name can be a repo name: 1 to 128
-// characters, no slash or control character, not "." or "..", and no
-// leading "-" (which a command line would read as a flag).
-func ValidRepoName(name string) bool { return validSegment(name) }
+// ValidRepoName reports whether name can be a repo name; see
+// api.ValidRepoName.
+func ValidRepoName(name string) bool { return api.ValidRepoName(name) }
 
-func validSegment(s string) bool {
-	if s == "" || len(s) > 128 || s == "." || s == ".." || s[0] == '-' || !utf8.ValidString(s) {
-		return false
-	}
-	for _, r := range s {
-		if r == '/' || r < 0x20 || r == 0x7f {
-			return false
-		}
-	}
-	return true
-}
+func validSegment(s string) bool { return api.ValidSegment(s) }
 
 // ItemKey joins bridge, repo and bead id into an item key.
 func ItemKey(bridge, repo, id string) string { return bridge + "/" + repo + "/" + id }
 
-// SplitKey splits an item key into bridge, repo and bead id.
+// SplitKey splits an item key into bridge, repo and bead id. The bridge name
+// and bead id hold no slash, so the repo is everything between the first
+// and the last.
 func SplitKey(key string) (bridge, repo, id string, ok bool) {
-	parts := strings.SplitN(key, "/", 3)
-	if len(parts) != 3 || !ValidBridgeName(parts[0]) || !validSegment(parts[1]) || !validSegment(parts[2]) {
+	first, last := strings.IndexByte(key, '/'), strings.LastIndexByte(key, '/')
+	if first < 0 || last == first {
 		return "", "", "", false
 	}
-	return parts[0], parts[1], parts[2], true
+	bridge, repo, id = key[:first], key[first+1:last], key[last+1:]
+	if !ValidBridgeName(bridge) || !ValidRepoName(repo) || !validSegment(id) {
+		return "", "", "", false
+	}
+	return bridge, repo, id, true
 }
 
 // ReplaceRepos replaces a bridge's repo list. Repos missing from it are
 // dropped along with their items, and a repo that is no longer opted in
-// loses its items.
+// loses its items. A repo stored under an older bridge's folder-name key
+// (garden) moves to the one new path key ending in that name
+// (projects/garden), with its items, actions and reminders; see
+// renameRepo.
 func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 	seen := map[string]bool{}
 	for _, r := range repos {
@@ -58,6 +57,13 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		return err
 	}
 	defer tx.Rollback()
+	existing, err := queryStrings(tx, `SELECT name FROM repos WHERE bridge = ?`, bridge)
+	if err != nil {
+		return err
+	}
+	if err := migrateFolderNames(tx, bridge, existing, repos); err != nil {
+		return err
+	}
 	for _, r := range repos {
 		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in) VALUES (?, ?, ?, ?)
 			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in`,
@@ -65,7 +71,7 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 			return err
 		}
 	}
-	existing, err := queryStrings(tx, `SELECT name FROM repos WHERE bridge = ?`, bridge)
+	existing, err = queryStrings(tx, `SELECT name FROM repos WHERE bridge = ?`, bridge)
 	if err != nil {
 		return err
 	}
@@ -84,6 +90,75 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		return err
 	}
 	s.emit(Change{Kind: "repos", Bridge: bridge})
+	return nil
+}
+
+// migrateFolderNames renames each stored single-segment repo that the new
+// list lacks to the one new path key whose last segment it is. A name that
+// two new keys end in is ambiguous and is left to be dropped.
+func migrateFolderNames(tx *sql.Tx, bridge string, existing []string, repos []api.Repo) error {
+	stored := map[string]bool{}
+	for _, n := range existing {
+		stored[n] = true
+	}
+	byBase := map[string][]string{}
+	for _, r := range repos {
+		if strings.Contains(r.Name, "/") && !stored[r.Name] {
+			base := path.Base(r.Name)
+			byBase[base] = append(byBase[base], r.Name)
+		}
+	}
+	listed := map[string]bool{}
+	for _, r := range repos {
+		listed[r.Name] = true
+	}
+	for _, old := range existing {
+		if strings.Contains(old, "/") || listed[old] || len(byBase[old]) != 1 {
+			continue
+		}
+		if err := renameRepo(tx, bridge, old, byBase[old][0]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// renameRepo moves a repo and everything keyed by it to a new name.
+func renameRepo(tx *sql.Tx, bridge, from, to string) error {
+	oldPrefix, newPrefix := bridge+"/"+from+"/", bridge+"/"+to+"/"
+	var reminders int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'reminder_fired'`).Scan(&reminders); err != nil {
+		return err
+	}
+	stmts := []struct {
+		q    string
+		args []any
+	}{
+		{`INSERT INTO repos (bridge, name, personal, opted_in, synced_at)
+			SELECT bridge, ?, personal, opted_in, synced_at FROM repos WHERE bridge = ? AND name = ?`, []any{to, bridge, from}},
+		{`UPDATE items SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
+		{`UPDATE actions SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
+		{`DELETE FROM repos WHERE bridge = ? AND name = ?`, []any{bridge, from}},
+	}
+	if reminders > 0 {
+		keys, err := queryStrings(tx, `SELECT DISTINCT item_key FROM reminder_fired`)
+		if err != nil {
+			return err
+		}
+		for _, k := range keys {
+			if rest, ok := strings.CutPrefix(k, oldPrefix); ok {
+				stmts = append(stmts, struct {
+					q    string
+					args []any
+				}{`UPDATE reminder_fired SET item_key = ? WHERE item_key = ?`, []any{newPrefix + rest, k}})
+			}
+		}
+	}
+	for _, st := range stmts {
+		if _, err := tx.Exec(st.q, st.args...); err != nil {
+			return fmt.Errorf("rename repo %q to %q: %w", from, to, err)
+		}
+	}
 	return nil
 }
 
