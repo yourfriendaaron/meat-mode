@@ -51,7 +51,6 @@ test("each mode holds its parts", () => {
 });
 
 const ctx = { state: null, session: null, setup: null, view: "setup" } as unknown as AppContext;
-
 // The steps this test registers and the two every run has; the real steps come in with the import above.
 const ownIds = (mode: Progress["mode"]) =>
   stepsFor(mode, ctx)

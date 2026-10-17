@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -44,11 +45,16 @@ type Server struct {
 	push      PushRegistry
 	events    *broker
 	guard     *guard
-	login     *login // nil: the hub has no login
 	now       func() time.Time
 	heartbeat time.Duration
 	mux       *http.ServeMux
 	log       *slog.Logger
+
+	loginMu    sync.RWMutex
+	login      *login     // nil: the hub has no login; read it with currentLogin
+	verify     sync.Mutex // one password or setup code check at a time
+	loginFails limiter    // wrong passwords
+	codeFails  limiter    // wrong setup codes
 }
 
 // NewServer builds the handler. push may be nil, which turns the push
@@ -71,11 +77,18 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 		push:      push,
 		events:    newBroker(),
 		guard:     newGuard(cfg),
-		login:     newLogin(cfg.PasswordHash),
 		now:       time.Now,
 		heartbeat: 25 * time.Second,
 		mux:       http.NewServeMux(),
 		log:       slog.Default(),
+	}
+	s.login = newLogin(cfg.PasswordHash, true)
+	if s.login == nil {
+		h, err := st.Settings()
+		if err != nil {
+			panic(err) // Run reads the settings before it builds the server
+		}
+		s.login = newLogin(h.PasswordHash, false)
 	}
 	st.Watch(func(store.Change) { s.events.publish() })
 
@@ -98,6 +111,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	// Features in their own files register their routes here, one call each.
 	s.setupRoutes(m)
 	s.settingsRoutes(m)
+	s.passwordRoutes(m)
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))

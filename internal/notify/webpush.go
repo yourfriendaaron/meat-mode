@@ -127,10 +127,11 @@ type Registry struct {
 	now     func() time.Time
 	// Client is the HTTP client used for push services; nil means the default.
 	Client *http.Client
-	// RequireSession is set when the hub has a login: every subscription
-	// then belongs to a session (the store's sessions table, in the same
-	// database) and stops receiving when that session ends.
-	RequireSession bool
+	// RequireSession reports whether the hub has a login: every
+	// subscription then belongs to a session (the store's sessions table,
+	// in the same database) and stops receiving when that session ends.
+	// Nil means no login.
+	RequireSession func() bool
 }
 
 // NewRegistry loads or creates the VAPID keys in dataDir and the
@@ -229,6 +230,10 @@ func (r *Registry) allowed(endpoint string) bool {
 	return false
 }
 
+func (r *Registry) requireSession() bool {
+	return r.RequireSession != nil && r.RequireSession()
+}
+
 // Subscribe stores a subscription as the newest, registered now by the
 // session sessionID ("" for a hub without a login), replacing any with the
 // same endpoint, and drops the oldest past MaxSubscriptions.
@@ -236,7 +241,7 @@ func (r *Registry) Subscribe(ctx context.Context, sessionID string, s api.PushSu
 	if s.Endpoint == "" || s.Keys.P256dh == "" || s.Keys.Auth == "" {
 		return fmt.Errorf("%w: push subscription needs endpoint, p256dh and auth", store.ErrInvalid)
 	}
-	if r.RequireSession && sessionID == "" {
+	if r.requireSession() && sessionID == "" {
 		return fmt.Errorf("%w: log in before turning on reminders", store.ErrUnauthorized)
 	}
 	var session any
@@ -287,7 +292,7 @@ func (r *Registry) prune(ctx context.Context) error {
 		now.Add(-SubscriptionTTL).Unix()); err != nil {
 		return err
 	}
-	if !r.RequireSession {
+	if !r.requireSession() {
 		return nil
 	}
 	_, err := r.db.ExecContext(ctx, `DELETE FROM push_subscriptions WHERE session_id IS NULL OR NOT EXISTS

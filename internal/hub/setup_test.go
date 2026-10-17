@@ -53,7 +53,8 @@ func TestSetupReportsWhereThePasswordComesFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.srv = h.server(Config{})
-	got := decode[api.Setup](t, h.do("GET", "/api/setup", "", ""))
+	cookie = h.login("other")
+	got := decode[api.Setup](t, h.do("GET", "/api/setup", "", cookie.Value))
 	if got.Password != "app" || got.User != "Sam" || got.TimeZone != "America/New_York" {
 		t.Fatalf("set in the app: %+v", got)
 	}

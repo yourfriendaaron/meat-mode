@@ -16,7 +16,7 @@ export interface AppContext {
   now(): Date;
   /** Draws the app again from the current state. */
   render(): void;
-  /** Loads /api/state and /api/setup again, then draws the app. */
+  /** Loads /api/state, /api/setup and /api/session again, then draws the app. */
   refresh(): Promise<void>;
   /** Shows a short message at the bottom of the screen. */
   toast(text: string): void;

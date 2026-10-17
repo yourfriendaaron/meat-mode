@@ -644,7 +644,12 @@ const ctx: AppContext = {
   now,
   render,
   refresh: async () => {
-    await Promise.all([refresh(), reloadSetup()]);
+    // The session too: claiming the hub turns its login on and logs this browser in.
+    const sess = api.session().then(
+      (s) => void (S.auth = s),
+      () => {},
+    );
+    await Promise.all([refresh(), reloadSetup(), sess]);
     render();
   },
   toast: (text) => showToast(text),

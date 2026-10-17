@@ -110,6 +110,11 @@ export class FakeHub {
   settingsPuts: { name?: string; timeZone?: string }[] = [];
   /** When set, GET /api/setup answers after this many ms. */
   setupDelayMs = 0;
+  /** The setup code the hub wrote to its log; claiming with it sets the password once. */
+  setupCode = "ABCD-EFGH-JKLM";
+  setupCodeUsed = false;
+  /** When set, POST /api/setup/claim answers this status instead of checking the code. */
+  claimStatus = 0;
 
   constructor() {
     const f = fixtures();
@@ -147,7 +152,8 @@ export class FakeHub {
       status: this.setup.status || (inUse ? "in-use" : "new"),
       user: this.setup.userName || this.user,
       timeZone: this.setup.timeZone,
-      password: this.setup.password,
+      // A hub with a login has a password; one the tests did not set in the app came from the environment.
+      password: this.login && this.setup.password === "none" ? "env" : this.setup.password,
       tailscaleOnly: this.setup.tailscaleOnly,
     };
   }
@@ -206,6 +212,7 @@ export class FakeHub {
       this.authenticated = false;
       return this.json(route, 204);
     }
+    if (method === "POST" && path === "/api/setup/claim") return this.claim(route, req.postDataJSON() as { code: string; password: string });
     if (this.login && !this.authenticated) return this.json(route, 401, { error: "log in first" });
 
     if (method === "GET" && path === "/api/state") return this.json(route, 200, this.state());
@@ -236,6 +243,20 @@ export class FakeHub {
       if (body.name !== undefined) this.setup.userName = body.name.trim();
       if (body.timeZone !== undefined) this.setup.timeZone = body.timeZone;
       return this.json(route, 200, { name: this.setup.userName || this.user, timeZone: this.setup.timeZone });
+    }
+    if (method === "PUT" && path === "/api/password") {
+      const { current, password } = req.postDataJSON() as { current: string; password: string };
+      if (this.setup.password !== "app") return this.json(route, 409, { error: "this hub has no password set in the app" });
+      if (password.length < 8) return this.json(route, 400, { error: "the password must be at least 8 characters" });
+      if (current !== this.password) return this.json(route, 403, { error: "wrong password" });
+      this.password = password;
+      return this.json(route, 204);
+    }
+    if (method === "PUT" && path === "/api/setup/tailscale-only") {
+      const { on } = req.postDataJSON() as { on: boolean };
+      if (on && this.setupInfo().password !== "none") return this.json(route, 409, { error: "this hub has a password" });
+      this.setup.tailscaleOnly = on;
+      return this.json(route, 204);
     }
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
@@ -285,6 +306,26 @@ export class FakeHub {
       return this.json(route, 204);
     }
     return this.json(route, 404, { error: "not found" });
+  }
+
+  /** POST /api/setup/claim: sets the password with the setup code and logs this browser in. */
+  private claim(route: Route, body: { code: string; password: string }) {
+    if (this.claimStatus) return this.json(route, this.claimStatus, { error: "refused" });
+    const has = this.setupInfo().password;
+    if (has === "env") return this.json(route, 409, { error: "the password is set by the hub's environment" });
+    if (has === "app") return this.json(route, 409, { error: "this hub already has a password" });
+    if (body.password.length < 8) return this.json(route, 400, { error: "the password must be at least 8 characters" });
+    const norm = (c: string) => c.replace(/[-\s]/g, "").toUpperCase();
+    if (this.setupCodeUsed || norm(body.code) !== norm(this.setupCode)) {
+      return this.json(route, 403, { error: "the setup code is wrong, expired or used" });
+    }
+    this.setupCodeUsed = true;
+    this.setup.password = "app";
+    this.setup.tailscaleOnly = false;
+    this.password = body.password;
+    this.login = true;
+    this.authenticated = true;
+    return this.json(route, 204);
   }
 
   private postAction(route: Route, a: NewAction) {

@@ -3,4 +3,5 @@
 
 import "./finish.ts";
 import "./profile.ts";
+import "./secure.ts";
 import "./welcome.ts";
