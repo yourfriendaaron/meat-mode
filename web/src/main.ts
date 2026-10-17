@@ -33,6 +33,7 @@ import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
 import { applyTheme, getTheme, setTheme } from "./theme.ts";
 import { loginErrorText, needsLogin } from "./login.ts";
 import { esc } from "./html.ts";
+import { machineReposHTML } from "./agents.ts";
 import { remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
@@ -605,17 +606,7 @@ ${
 
 /** The repos a machine found, each with its sync switch. */
 function machineRepos(bridge: string): string {
-  const list = repos()
-    .filter((r) => r.bridge === bridge)
-    .sort((a, b) => a.name.localeCompare(b.name));
-  if (!list.length) return '<p class="muted small m-repos">No beads repos found on this machine yet.</p>';
-  return `<ul class="m-repos" aria-label="Repos on ${esc(bridge)}">${list
-    .map((r) => {
-      const control = `<button class="switch" role="switch" id="${esc(`sync-${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
-      const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      return `<li class="m-repo"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</li>`;
-    })
-    .join("")}</ul>`;
+  return machineReposHTML(repos(), bridge);
 }
 
 async function switchSync(bridge: string, repo: string) {

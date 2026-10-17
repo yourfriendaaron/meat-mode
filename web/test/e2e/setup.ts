@@ -73,3 +73,16 @@ export async function openWizardAt(page: Page, hub: FakeHub, at: string, mode: P
   await page.goto("/");
   await expect(wizard(page).region.locator(`[data-step="${at}"]`)).toBeVisible();
 }
+
+/** Skips every step after the one on screen until Finish ("All set"), so a test about the frame does not depend on which steps are registered. */
+export async function skipToFinish(page: Page) {
+  const w = wizard(page);
+  for (let i = 0; i < 30; i++) {
+    await expect(w.heading).not.toHaveText("");
+    if ((await w.heading.textContent()) === "All set") return;
+    const id = await w.region.locator("[data-step]").getAttribute("data-step");
+    await w.skip.click();
+    await expect(w.region.locator(`[data-step="${id}"]`)).toHaveCount(0);
+  }
+  throw new Error("setup did not reach Finish");
+}

@@ -1793,3 +1793,48 @@ kbd {
 .wiz-added {
   font-weight: 600;
 }
+
+/* ---------- setup wizard: agents ---------- */
+
+.wiz-step h3 {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.agents-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.agents-pick label {
+  font-size: 13px;
+  color: var(--soft);
+}
+.agents-pick select {
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+}
+.agents-copy {
+  align-self: flex-start;
+}
+.agents-pair:focus {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+.agents-status {
+  font-weight: 600;
+}
+.agents-on {
+  color: var(--green);
+}
+.agents-text {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  user-select: text;
+}
