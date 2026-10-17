@@ -226,12 +226,12 @@ const STATE = { pass: "Passed", fail: "Problem", info: "Optional" } as const;
 /** The results, or what is going on in their place. */
 export function checksHTML(): string {
   if (running) return '<p class="muted" role="status">Checking&hellip;</p>';
-  if (failure) return `<p class="check-error" role="alert">${esc(failure)}</p>`;
+  if (failure) return `<p class="conn-error" role="alert">${esc(failure)}</p>`;
   if (!result) return '<p class="muted">Not checked yet.</p>';
-  return `<ul class="check-list" aria-label="Connection checks">${result
+  return `<ul class="conn-list" aria-label="Connection checks">${result
     .map(
-      (c) => `<li class="check check-${c.state}"><span class="check-state">${STATE[c.state]}</span><div><strong>${esc(c.title)}</strong>
-<p>${esc(c.detail)}</p>${c.fix ? `<p class="check-fix">${esc(c.fix)}</p>` : ""}</div></li>`,
+      (c) => `<li class="conn conn-${c.state}"><span class="conn-state">${STATE[c.state]}</span><div><strong>${esc(c.title)}</strong>
+<p>${esc(c.detail)}</p>${c.fix ? `<p class="conn-fix">${esc(c.fix)}</p>` : ""}</div></li>`,
     )
     .join("")}</ul>`;
 }
