@@ -121,7 +121,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
 	var roots multiFlag
-	fs.Var(&roots, "root", "a directory to scan for beads repos (repeatable; default ~/projects)")
+	fs.Var(&roots, "root", "a directory to scan for beads repos instead of the home folder (repeatable)")
 	personal := fs.String("personal", "", "the personal beads repo directory")
 	insecure := fs.Bool("allow-insecure-http", false, "allow plain HTTP to a hub that is not on this machine")
 	noService := fs.Bool("no-service", false, "save the config without installing the user service")
@@ -255,6 +255,7 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		Beads:    &beads.CLI{Bin: cfg.BD},
 		Journal:  j,
 		Roots:    cfg.ResolveRoots(env.Paths.Home),
+		Home:     env.Paths.Home,
 		Personal: cfg.ResolvePersonal(env.Paths.Home),
 		Version:  env.Version,
 		Log:      log,
@@ -314,14 +315,14 @@ func status(ctx context.Context, env Env) error {
 	roots := cfg.ResolveRoots(env.Paths.Home)
 	fmt.Fprintf(out, "Roots:    %s\n", orNone(strings.Join(roots, ", ")))
 	fmt.Fprintf(out, "Personal: %s\n", orNone(cfg.ResolvePersonal(env.Paths.Home)))
-	repos := Discover(roots, cfg.ResolvePersonal(env.Paths.Home), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	repos := Discover(roots, env.Paths.Home, cfg.ResolvePersonal(env.Paths.Home), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	fmt.Fprintf(out, "Repos:    %d found\n", len(repos))
 	for _, r := range repos {
 		state := "synced"
 		if !r.Synced() {
 			state = "not opted in (add `meat-mode.sync: true` to .beads/config.yaml)"
 		}
-		fmt.Fprintf(out, "  %-24s %s\n", r.Name, state)
+		fmt.Fprintf(out, "  %-24s %s\n  %-24s %s\n", r.Name, state, "", r.Dir)
 	}
 	if cfg.HubURL == "" {
 		return nil

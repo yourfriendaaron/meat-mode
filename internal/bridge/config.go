@@ -21,7 +21,7 @@ type Config struct {
 	HubURL string `json:"hubURL"`
 	Token  string `json:"token"`
 	// Roots are the directories scanned for beads repos. Absent (null) means
-	// ~/projects when it exists; an empty list means none.
+	// the home folder; an empty list means none.
 	Roots []string `json:"roots"`
 	// Personal is the personal beads repo directory; optional.
 	Personal          string `json:"personal,omitempty"`
@@ -119,14 +119,10 @@ func (c Config) Save(path string) error {
 }
 
 // ResolveRoots returns the scan roots with ~ expanded. With no roots set it
-// returns home/projects when that directory exists.
+// returns the home folder.
 func (c Config) ResolveRoots(home string) []string {
 	if c.Roots == nil {
-		def := filepath.Join(home, "projects")
-		if fi, err := os.Stat(def); err == nil && fi.IsDir() {
-			return []string{def}
-		}
-		return nil
+		return []string{home}
 	}
 	out := make([]string, 0, len(c.Roots))
 	for _, r := range c.Roots {

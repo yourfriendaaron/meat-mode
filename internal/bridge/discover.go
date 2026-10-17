@@ -2,11 +2,13 @@ package bridge
 
 import (
 	"bufio"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 // PersonalRepo is the repo name of the personal database.
@@ -26,53 +28,174 @@ type Repo struct {
 // Synced reports whether the bridge sends this repo's items.
 func (r Repo) Synced() bool { return r.Personal || r.OptedIn }
 
-// Discover finds the beads repos: each top-level directory under a root that
-// holds .beads/ (Git worktrees skipped), plus the personal repo. Names are
-// directory names; the first root wins on a clash.
-func Discover(roots []string, personal string, log *slog.Logger) []Repo {
+// Discover walks each root for beads repos and adds the personal repo.
+// The walk skips the folders in pruneNames and pruneHomePaths, symlinks,
+// Git worktrees and anything it cannot read, and finds repos nested at any
+// depth. A .beads folder counts only when it holds a database (see
+// hasDatabase). Names are directory names; the first one found wins on a
+// clash.
+func Discover(roots []string, home, personal string, log *slog.Logger) []Repo {
 	var out []Repo
-	seen := map[string]bool{}
+	seen := map[string]bool{}    // names
+	seenDir := map[string]bool{} // directories, when roots overlap
 	personalPath := ""
 	if personal != "" {
 		personalPath = resolvePath(personal)
-		if isDir(filepath.Join(personal, ".beads")) {
+		if hasDatabase(personal) {
 			out = append(out, Repo{Name: PersonalRepo, Dir: personal, Personal: true, OptedIn: true})
 			seen[PersonalRepo] = true
 		} else {
-			log.Warn("personal repo has no .beads directory", "dir", personal)
+			log.Warn("personal repo has no beads database", "dir", personal)
 		}
 	}
+	homePath := ""
+	if home != "" {
+		homePath = resolvePath(home)
+	}
 	for _, root := range roots {
-		entries, err := os.ReadDir(root)
-		if err != nil {
-			log.Warn("cannot read root", "root", root, "err", err)
-			continue
-		}
-		for _, e := range entries {
-			dir := filepath.Join(root, e.Name())
-			if !isDir(dir) || !isDir(filepath.Join(dir, ".beads")) {
+		start := time.Now()
+		dirs := 0
+		for _, dir := range scan(resolvePath(root), homePath, &dirs, log) {
+			name := filepath.Base(dir)
+			switch {
+			case dir == personalPath || seenDir[dir]:
 				continue
-			}
-			if fi, err := os.Stat(filepath.Join(dir, ".git")); err == nil && !fi.IsDir() {
-				continue // a Git worktree shares its main checkout's beads
-			}
-			if resolvePath(dir) == personalPath {
-				continue
-			}
-			if strings.HasPrefix(e.Name(), "-") {
+			case strings.HasPrefix(name, "-"):
 				log.Warn("skipping repo whose name starts with -; the hub refuses it", "dir", dir)
 				continue
-			}
-			if seen[e.Name()] {
+			case seen[name]:
 				log.Warn("skipping repo with a duplicate name", "dir", dir)
 				continue
 			}
-			seen[e.Name()] = true
-			out = append(out, Repo{Name: e.Name(), Dir: dir, OptedIn: OptedIn(dir)})
+			seen[name], seenDir[dir] = true, true
+			out = append(out, Repo{Name: name, Dir: dir, OptedIn: OptedIn(dir)})
 		}
+		log.Debug("scanned for beads repos", "root", root, "dirs", dirs, "took", time.Since(start))
 	}
 	slices.SortFunc(out, func(a, b Repo) int { return strings.Compare(a.Name, b.Name) })
 	return out
+}
+
+// pruneNames are folders never searched, wherever they are: version control,
+// dependency trees, package caches and virtual environments.
+var pruneNames = map[string]bool{
+	".git": true, ".hg": true, ".svn": true, ".jj": true,
+	".beads": true, ".worktrees": true,
+	"node_modules": true, ".pnpm-store": true, ".yarn": true, ".npm": true, ".bun": true, ".deno": true,
+	".cache": true, "__pycache__": true, ".venv": true, ".tox": true, ".mypy_cache": true, ".pytest_cache": true,
+	".cargo": true, ".rustup": true, ".gradle": true, ".m2": true, ".nuget": true, ".cpan": true,
+	".tmp": true, ".Trash": true, ".Trashes": true,
+	".vscode": true, ".vscode-server": true, ".cursor": true,
+}
+
+// pruneHomePaths are folders under the home folder that hold caches, system
+// or application data rather than the user's repos.
+var pruneHomePaths = map[string]bool{
+	"go/pkg":                      true,
+	".local/share/containers":     true,
+	".local/share/Trash":          true,
+	".local/share/Steam":          true,
+	".local/share/flatpak":        true,
+	".local/share/mise":           true,
+	".local/share/pnpm":           true,
+	".local/share/docker":         true,
+	".local/state":                true,
+	".var":                        true,
+	".steam":                      true,
+	".mozilla":                    true,
+	".docker":                     true,
+	".nvm":                        true,
+	".pyenv":                      true,
+	".rbenv":                      true,
+	".sdkman":                     true,
+	"snap":                        true,
+	"Library/Caches":              true,
+	"Library/Containers":          true,
+	"Library/Group Containers":    true,
+	"Library/Developer":           true,
+	"Library/Application Support": true,
+	"Library/Logs":                true,
+	"Library/Mail":                true,
+	"Library/Photos":              true,
+}
+
+// scan returns the directories under root that hold a beads database. It
+// reads each directory once and counts them in *dirs.
+func scan(root, home string, dirs *int, log *slog.Logger) []string {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		log.Warn("cannot read root", "root", root, "err", err)
+		return nil
+	}
+	var found []string
+	var walk func(dir string, entries []fs.DirEntry)
+	walk = func(dir string, entries []fs.DirEntry) {
+		*dirs++
+		for _, e := range entries {
+			if e.Name() == ".git" && e.Type().IsRegular() && isWorktree(dir) {
+				return // a worktree shares its main checkout's beads
+			}
+		}
+		var sub []string
+		for _, e := range entries {
+			name := e.Name()
+			switch {
+			case name == ".beads" && e.IsDir():
+				if hasDatabase(dir) {
+					found = append(found, dir)
+				}
+			case e.IsDir() && !pruneNames[name]: // symlinks are not dirs here
+				sub = append(sub, filepath.Join(dir, name))
+			}
+		}
+		for _, d := range sub {
+			if rel, ok := relTo(home, d); ok && pruneHomePaths[rel] {
+				continue
+			}
+			if es, err := os.ReadDir(d); err == nil {
+				walk(d, es)
+			}
+		}
+	}
+	walk(root, entries)
+	return found
+}
+
+// relTo returns path relative to base, slash-separated, when path is inside
+// base.
+func relTo(base, path string) (string, bool) {
+	if base == "" {
+		return "", false
+	}
+	rel, err := filepath.Rel(base, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
+}
+
+// isWorktree reports whether dir is a linked Git worktree: its .git is a file
+// pointing into another checkout's .git/worktrees. A submodule's .git file
+// points into .git/modules instead and is searched.
+func isWorktree(dir string) bool {
+	b, err := os.ReadFile(filepath.Join(dir, ".git"))
+	if err != nil {
+		return false
+	}
+	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir:")
+	return ok && strings.Contains(filepath.ToSlash(gitdir), "/worktrees/")
+}
+
+// hasDatabase reports whether dir/.beads holds a beads database: the
+// metadata.json bd writes on init, or an older SQLite *.db file. bd's own
+// ~/.beads folder holds neither.
+func hasDatabase(dir string) bool {
+	beadsDir := filepath.Join(dir, ".beads")
+	if fi, err := os.Stat(filepath.Join(beadsDir, "metadata.json")); err == nil && fi.Mode().IsRegular() {
+		return true
+	}
+	dbs, _ := filepath.Glob(filepath.Join(beadsDir, "*.db"))
+	return len(dbs) > 0
 }
 
 func isDir(p string) bool {

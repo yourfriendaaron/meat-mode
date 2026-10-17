@@ -17,6 +17,7 @@ import (
 const (
 	ActionEvery  = 5 * time.Second  // how often the bridge asks the hub for actions
 	SyncEvery    = 30 * time.Second // how often it lists every synced repo
+	ScanEvery    = 5 * time.Minute  // how often it walks the roots for repos
 	RefreshEvery = 10 * time.Minute // full push even when nothing changed
 	MaxBackoff   = 60 * time.Second
 )
@@ -35,11 +36,12 @@ type Bridge struct {
 	Beads    beads.Beads
 	Journal  *Journal
 	Roots    []string
+	Home     string // repo keys are relative to it; empty in tests that need no keys
 	Personal string
 	Version  string
 	Log      *slog.Logger
 	Now      func() time.Time
-	// Poll, when set, replaces both ActionEvery and SyncEvery. New sets it
+	// Poll, when set, replaces ActionEvery, SyncEvery and ScanEvery. New sets it
 	// from the undocumented MEAT_MODE_BRIDGE_POLL variable (a Go duration),
 	// which the end-to-end tests use to avoid waiting 30 seconds per round.
 	Poll time.Duration
@@ -51,6 +53,8 @@ type Bridge struct {
 	name       string // from hello; empty until the hub greeted us
 	bdVersion  string
 	repos      map[string]*repoState
+	found      []Repo // the last scan
+	scannedAt  time.Time
 	reposSent  []api.Repo
 	reposAt    time.Time
 	lastFullAt time.Time
@@ -87,6 +91,13 @@ func (b *Bridge) syncEvery() time.Duration {
 		return b.Poll
 	}
 	return SyncEvery
+}
+
+func (b *Bridge) scanEvery() time.Duration {
+	if b.Poll > 0 {
+		return b.Poll
+	}
+	return ScanEvery
 }
 
 func (b *Bridge) log() *slog.Logger {
@@ -143,7 +154,8 @@ func (b *Bridge) Run(ctx context.Context) error {
 
 // Tick runs one round: hello if needed, report repos, replay actions, then
 // sync the repos that had actions, or all of them when full is set or
-// SyncEvery has passed since the last full round. It returns hub errors; bd errors are logged per repo.
+// SyncEvery has passed since the last full round. full also rescans the
+// roots, which otherwise happens every ScanEvery. It returns hub errors; bd errors are logged per repo.
 func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if b.name == "" {
 		if b.bdVersion == "" {
@@ -158,7 +170,7 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 		b.name = r.Bridge
 		b.log().Info("connected to hub", "bridge", b.name)
 	}
-	if err := b.hubErr(b.discover(ctx)); err != nil {
+	if err := b.hubErr(b.discover(ctx, full)); err != nil {
 		return err
 	}
 	touched, err := b.replay(ctx)
@@ -214,17 +226,26 @@ func (b *Bridge) syncedNames() []string {
 	return out
 }
 
-// discover rescans the roots and reports the repo list when it changed.
-func (b *Bridge) discover(ctx context.Context) error {
-	found := Discover(b.Roots, b.Personal, b.log())
+// discover rescans the roots when rescan is set or ScanEvery has passed,
+// rereads each found repo's opt-in line, and reports the repo list when it
+// changed.
+func (b *Bridge) discover(ctx context.Context, rescan bool) error {
+	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.scanEvery() {
+		b.found = Discover(b.Roots, b.Home, b.Personal, b.log())
+		b.scannedAt = b.now()
+	}
 	next := map[string]*repoState{}
-	wire := make([]api.Repo, 0, len(found))
-	for _, r := range found {
+	wire := make([]api.Repo, 0, len(b.found))
+	for i := range b.found {
+		r := &b.found[i]
+		if !r.Personal {
+			r.OptedIn = OptedIn(r.Dir)
+		}
 		st := b.repos[r.Name]
 		if st == nil || st.Dir != r.Dir || st.Synced() != r.Synced() {
 			st = &repoState{fps: map[string]string{}, items: map[string]api.Item{}}
 		}
-		st.Repo = r
+		st.Repo = *r
 		next[r.Name] = st
 		wire = append(wire, api.Repo{Name: r.Name, Personal: r.Personal, OptedIn: r.Synced()})
 	}

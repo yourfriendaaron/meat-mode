@@ -85,6 +85,9 @@ func (w *world) repo(name string, optIn bool) string {
 	if err := os.WriteFile(filepath.Join(dir, ".beads", "config.yaml"), []byte(cfg), 0o644); err != nil {
 		w.t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, ".beads", "metadata.json"), []byte("{}\n"), 0o644); err != nil {
+		w.t.Fatal(err)
+	}
 	return dir
 }
 
@@ -305,9 +308,7 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 			personal = beadstest.NewRepo(t, filepath.Dir(personal), "me")
 			beadstest.Run(t, personal, "bd", "create", "Call Sam", "--json")
 		} else {
-			if err := os.MkdirAll(filepath.Join(personal, ".beads"), 0o755); err != nil {
-				t.Fatal(err)
-			}
+			writeFile(t, filepath.Join(personal, ".beads", "metadata.json"), "{}\n")
 			w.bd.(*fakebeads.Fake).Put(personal, beads.Issue{ID: "me-1", Title: "Call Sam", Status: "open"})
 		}
 		w.hub.Enqueue(us, action("n-1", api.KindDone, "kitchen", cake, api.Payload{}))
@@ -512,4 +513,30 @@ func TestIgnoresActionsWithoutAUUID(t *testing.T) {
 			t.Fatal("journaled an empty action id")
 		}
 	})
+}
+
+func TestScanCadence(t *testing.T) {
+	w := newWorld(t, false)
+	w.repo("garden", true)
+	b := w.start("")
+	now := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	b.Now = func() time.Time { return now }
+	if err := b.Tick(w.ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	w.repo("kitchen", true)
+	now = now.Add(ScanEvery - time.Second)
+	if err := b.Tick(w.ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.hub.Repos(us); len(got) != 1 {
+		t.Fatalf("repos before the next scan = %+v", got)
+	}
+	now = now.Add(time.Second)
+	if err := b.Tick(w.ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.hub.Repos(us); len(got) != 2 {
+		t.Fatalf("repos after the next scan = %+v", got)
+	}
 }

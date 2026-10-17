@@ -70,14 +70,8 @@ func TestConfigSaveLoadAndEnv(t *testing.T) {
 
 func TestResolveRoots(t *testing.T) {
 	home := t.TempDir()
-	if r := (Config{}).ResolveRoots(home); r != nil {
-		t.Errorf("no ~/projects: roots %v", r)
-	}
-	if err := os.Mkdir(filepath.Join(home, "projects"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if r := (Config{}).ResolveRoots(home); !slices.Equal(r, []string{filepath.Join(home, "projects")}) {
-		t.Errorf("default roots %v", r)
+	if r := (Config{}).ResolveRoots(home); !slices.Equal(r, []string{home}) {
+		t.Errorf("default roots %v, want the home folder", r)
 	}
 	r := Config{Roots: []string{"~/code", "/srv/repos"}}.ResolveRoots(home)
 	if !slices.Equal(r, []string{filepath.Join(home, "code"), "/srv/repos"}) {
