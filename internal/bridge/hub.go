@@ -99,6 +99,14 @@ func (h *Hub) Hello(ctx context.Context, hi api.Hello) (api.HelloReply, error) {
 	return r, err
 }
 
+// Settings reads the name and time zone the hub keeps. Unlike Hello it does
+// not count as the bridge being connected.
+func (h *Hub) Settings(ctx context.Context) (api.Settings, error) {
+	var r api.Settings
+	err := h.do(ctx, http.MethodGet, "/bridge/v1/settings", nil, &r)
+	return r, err
+}
+
 // PutRepos replaces this bridge's repo list.
 func (h *Hub) PutRepos(ctx context.Context, repos []api.Repo) error {
 	return h.do(ctx, http.MethodPut, "/bridge/v1/repos", repos, nil)

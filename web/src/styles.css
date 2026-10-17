@@ -1325,6 +1325,30 @@ kbd {
   }
 }
 
+/* ---------- name and time zone ---------- */
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 460px;
+}
+.profile-form label {
+  font-size: 13px;
+  color: var(--soft);
+}
+.profile-form input {
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.profile-form .small {
+  margin: 0 0 8px;
+}
+
 /* ---------- desktop: sidebar, list, detail pane ---------- */
 
 @container app (min-width: 880px) {

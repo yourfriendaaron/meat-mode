@@ -106,6 +106,8 @@ export class FakeHub {
     password: "none",
     tailscaleOnly: false,
   };
+  /** Every body PUT to /api/settings that the hub took in. */
+  settingsPuts: { name?: string; timeZone?: string }[] = [];
   /** When set, GET /api/setup answers after this many ms. */
   setupDelayMs = 0;
 
@@ -126,7 +128,7 @@ export class FakeHub {
       repos: this.repos,
       bridges: this.bridges,
       unapplied: this.log.filter((s) => s.action.status === "pending").length,
-      user: this.user,
+      user: this.setup.userName || this.user,
       serverTime: this.now(),
     };
   }
@@ -216,6 +218,24 @@ export class FakeHub {
       if (status !== "done" && status !== "dismissed") return this.json(route, 400, { error: "setup status must be done or dismissed" });
       this.setup.status = status;
       return this.json(route, 204);
+    }
+    if (method === "GET" && path === "/api/settings") {
+      return this.json(route, 200, { name: this.setup.userName || this.user, timeZone: this.setup.timeZone });
+    }
+    if (method === "PUT" && path === "/api/settings") {
+      const body = req.postDataJSON() as { name?: string; timeZone?: string };
+      this.settingsPuts.push(body);
+      if (body.timeZone !== undefined) {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: body.timeZone });
+        } catch {
+          return this.json(route, 400, { error: `unknown time zone "${body.timeZone}"; use an IANA name such as Europe/Paris` });
+        }
+        if (!body.timeZone) return this.json(route, 400, { error: "time zone must be an IANA name such as Europe/Paris" });
+      }
+      if (body.name !== undefined) this.setup.userName = body.name.trim();
+      if (body.timeZone !== undefined) this.setup.timeZone = body.timeZone;
+      return this.json(route, 200, { name: this.setup.userName || this.user, timeZone: this.setup.timeZone });
     }
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
