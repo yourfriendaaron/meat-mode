@@ -30,7 +30,8 @@ func (s *Store) State() (api.State, error) {
 	}
 	repoSynced := map[string]*time.Time{}
 	if err := s.eachRow(`SELECT r.bridge, r.name, r.synced_at FROM repos r
-		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL`, nil, func(rows *sql.Rows) error {
+		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
+		WHERE r.personal = 0 OR r.bridge = ?`, []any{HubBridge}, func(rows *sql.Rows) error {
 		var b, n string
 		var synced sql.NullString
 		if err := rows.Scan(&b, &n, &synced); err != nil {
@@ -55,6 +56,9 @@ func (s *Store) State() (api.State, error) {
 		it, err := decodeItem(b, r, data, first, seenAt)
 		if err != nil {
 			return err
+		}
+		if b == HubBridge && hiddenClosed(it, st.ServerTime) {
+			return nil
 		}
 		index[it.Key] = len(st.Items)
 		st.Items = append(st.Items, it)
@@ -164,32 +168,7 @@ func provisional(a api.Action) api.Item {
 // fold applies one pending action to the hub's copy of an item.
 func fold(it *api.Item, a api.Action) {
 	it.Pending = true
-	switch a.Kind {
-	case api.KindDone, api.KindDismiss:
-		it.Status = "closed"
-		it.CloseReason = ReasonDone
-		if a.Kind == api.KindDismiss {
-			it.CloseReason = ReasonDismissed
-		}
-		t := a.CreatedAt
-		it.ClosedAt = &t
-	case api.KindReopen:
-		it.Status = "open"
-		it.CloseReason = ""
-		it.ClosedAt = nil
-	case api.KindSnooze:
-		it.DeferUntil = a.Payload.Until
-	case api.KindNote:
-		it.Comments = append(append([]api.Comment{}, it.Comments...), api.Comment{
-			ID:        provisionalPrefix + a.ID,
-			Author:    a.Author,
-			Text:      a.Payload.Text,
-			CreatedAt: a.CreatedAt,
-		})
-	}
-	if a.CreatedAt.After(it.UpdatedAt) {
-		it.UpdatedAt = a.CreatedAt
-	}
+	apply(it, a, provisionalPrefix+a.ID)
 }
 
 func (s *Store) eachRow(query string, args []any, fn func(*sql.Rows) error) error {

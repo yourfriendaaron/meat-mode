@@ -42,8 +42,8 @@ type Comment struct {
 type Repo struct {
 	Bridge   string `json:"bridge,omitempty"`
 	Name     string `json:"name"`
-	Personal bool   `json:"personal"`
-	OptedIn  bool   `json:"optedIn"` // synced: switched on in the app, or by the repo's config file
+	Personal bool   `json:"personal"` // the hub's own personal list; from a bridge, only an older one's personal repo
+	OptedIn  bool   `json:"optedIn"`  // synced: switched on in the app, or by the repo's config file
 	// Hub-only: a sync switch the bridge has not applied yet. OptedIn then
 	// shows the position it was switched to.
 	Pending bool `json:"pending,omitempty"`
@@ -155,4 +155,19 @@ type PushSubscription struct {
 		P256dh string `json:"p256dh"`
 		Auth   string `json:"auth"`
 	} `json:"keys"`
+}
+
+// PersonalTodo is what an agent posts to add to the personal list.
+type PersonalTodo struct {
+	ID     string     `json:"id,omitempty"` // optional UUID; posting it again changes nothing
+	Title  string     `json:"title"`
+	Due    *time.Time `json:"due,omitempty"`
+	Note   string     `json:"note,omitempty"`   // added as the first comment, by Author
+	Author string     `json:"author,omitempty"` // the agent's name; defaults to the token's machine name
+}
+
+// PersonalTodoReply names the personal item an agent added.
+type PersonalTodoReply struct {
+	Key string `json:"key"`
+	ID  string `json:"id"`
 }

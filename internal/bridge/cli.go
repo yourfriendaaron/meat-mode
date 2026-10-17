@@ -122,11 +122,10 @@ func pair(ctx context.Context, args []string, env Env) error {
 	fs.SetOutput(env.Stderr)
 	var roots multiFlag
 	fs.Var(&roots, "root", "a directory to scan for beads repos instead of the home folder (repeatable)")
-	personal := fs.String("personal", "", "the personal beads repo directory")
 	insecure := fs.Bool("allow-insecure-http", false, "allow plain HTTP to a hub that is not on this machine")
 	noService := fs.Bool("no-service", false, "save the config without installing the user service")
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, "usage: meat-mode bridge pair <hub url> [<token> | -] [--root DIR]... [--personal DIR] [--allow-insecure-http] [--no-service]")
+		fmt.Fprintln(env.Stderr, "usage: meat-mode bridge pair <hub url> [<token> | -] [--root DIR]... [--allow-insecure-http] [--no-service]")
 		fmt.Fprintln(env.Stderr, "The token is the argument, one line of standard input when it is -, or MEAT_MODE_BRIDGE_TOKEN when it is left out.")
 		fs.PrintDefaults()
 	}
@@ -166,13 +165,6 @@ func pair(ctx context.Context, args []string, env Env) error {
 			abs = append(abs, a)
 		}
 		cfg.Roots = abs
-	}
-	if *personal != "" {
-		abs, err := filepath.Abs(expandHome(*personal, env.Paths.Home))
-		if err != nil {
-			return err
-		}
-		cfg.Personal = abs
 	}
 	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
 		return err
@@ -256,7 +248,6 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		Journal:  j,
 		Roots:    cfg.ResolveRoots(env.Paths.Home),
 		Home:     env.Paths.Home,
-		Personal: cfg.ResolvePersonal(env.Paths.Home),
 		Switches: cfg.Sync,
 		SaveSwitch: func(repo string, on bool) error {
 			return SaveSwitch(env.Paths.Config, repo, on)
@@ -318,17 +309,14 @@ func status(ctx context.Context, env Env) error {
 	}
 	roots := cfg.ResolveRoots(env.Paths.Home)
 	fmt.Fprintf(out, "Roots:    %s\n", orNone(strings.Join(roots, ", ")))
-	fmt.Fprintf(out, "Personal: %s\n", orNone(cfg.ResolvePersonal(env.Paths.Home)))
-	repos := Discover(roots, env.Paths.Home, cfg.ResolvePersonal(env.Paths.Home), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	repos := Discover(roots, env.Paths.Home, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	fmt.Fprintf(out, "Repos:    %d found\n", len(repos))
 	for _, r := range repos {
-		if on, ok := cfg.Sync[r.Name]; ok && !r.Personal {
+		if on, ok := cfg.Sync[r.Name]; ok {
 			r.Switch = &on
 		}
 		state := "synced"
 		switch {
-		case r.Personal:
-			state = "synced (personal)"
 		case r.Switch != nil && *r.Switch:
 			state = "synced (switched on in Settings)"
 		case r.Switch != nil:

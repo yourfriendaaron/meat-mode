@@ -138,12 +138,8 @@ func (c *CLI) Version(ctx context.Context) (string, error) {
 }
 
 // ListHuman implements Beads.
-func (c *CLI) ListHuman(ctx context.Context, dir string, personal bool) ([]Issue, error) {
-	args := []string{"list", "--all", "-n", "0", "--json"}
-	if !personal {
-		args = append(args, "-l", HumanLabel)
-	}
-	out, err := c.run(ctx, dir, args...)
+func (c *CLI) ListHuman(ctx context.Context, dir string) ([]Issue, error) {
+	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--json", "-l", HumanLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +150,7 @@ func (c *CLI) ListHuman(ctx context.Context, dir string, personal bool) ([]Issue
 	now := c.now()
 	keep := all[:0]
 	for _, i := range all {
-		if KeepHuman(i, personal, now) {
+		if KeepHuman(i, now) {
 			keep = append(keep, i)
 		}
 	}

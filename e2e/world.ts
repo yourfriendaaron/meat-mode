@@ -25,6 +25,7 @@ export const NTFY_TOPIC = "meat-mode-e2e";
 
 const liveChildren = new Set<ChildProcess>();
 const liveContainers = new Set<string>();
+const liveVolumes = new Set<string>();
 process.on("exit", () => {
   for (const c of liveChildren) {
     try {
@@ -34,6 +35,7 @@ process.on("exit", () => {
     }
   }
   for (const name of liveContainers) spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" });
+  for (const name of liveVolumes) spawnSync("docker", ["volume", "rm", "-f", name], { stdio: "ignore" });
 });
 
 /** Whether bd is on PATH. */
@@ -169,14 +171,15 @@ export interface Machine {
   name: string;
   home: string;
   root: string;
-  personal: string;
+  /** The bridge token from Settings, once paired. */
+  token?: string;
   /** Repo name (as the bridge reports it) to directory. */
   repos: Record<string, string>;
   proc?: Proc;
 }
 
 export interface RepoSpec {
-  name: string; // directory name; "personal" for the personal repo
+  name: string; // directory name under the machine's projects folder
   prefix: string;
   optedIn: boolean;
   /** Titles of beads labelled human. */
@@ -195,6 +198,8 @@ export class World {
   /** Bead title to id, for every seeded or added bead. */
   ids = new Map<string, string>();
   private bdHome = "";
+  private hubPort = 0;
+  private hubVolume = "";
 
   /** Builds the binary, starts the capture server and the hub. */
   static async create(): Promise<World> {
@@ -227,8 +232,14 @@ export class World {
     await execFileP("go", ["build", "-o", this.bin, "./cmd/meat-mode"], { cwd: repoRoot, env: { ...process.env, CGO_ENABLED: "0" } });
   }
 
+  /** Stops the hub and starts it again on the same address and data. */
+  async restartHub(): Promise<void> {
+    await this.hub.stop();
+    await this.startHub();
+  }
+
   private async startHub(): Promise<void> {
-    const port = await freePort();
+    const port = (this.hubPort ||= await freePort());
     this.hubURL = `http://127.0.0.1:${port}`;
     const env: Record<string, string> = {
       MEAT_MODE_LISTEN: `127.0.0.1:${port}`,
@@ -244,8 +255,11 @@ export class World {
       // Host networking lets the container listen on the free port and reach
       // the capture server on loopback, with Docker and rootless Podman alike.
       const name = `meat-mode-e2e-${port}`;
+      // A named volume keeps the data across restartHub, as a deployment does.
+      this.hubVolume = `${name}-data`;
       liveContainers.add(name);
-      const args = ["run", "--rm", "--name", name, "--network", "host"];
+      liveVolumes.add(this.hubVolume);
+      const args = ["run", "--rm", "--name", name, "--network", "host", "-v", `${this.hubVolume}:/data`];
       for (const [k, v] of Object.entries(env)) args.push("-e", `${k}=${v}`);
       args.push(image);
       this.hub = new Proc("hub", "docker", args, process.env, () => {
@@ -329,11 +343,11 @@ export class World {
   async addMachine(name: string, specs: RepoSpec[]): Promise<Machine> {
     const base = join(this.tmp, name);
     const home = join(base, "home");
-    const m: Machine = { name, home, root: join(home, "projects"), personal: join(home, "personal"), repos: {} };
+    const m: Machine = { name, home, root: join(home, "projects"), repos: {} };
     await mkdir(m.home, { recursive: true });
     await mkdir(m.root, { recursive: true });
     for (const s of specs) {
-      const dir = s.name === "personal" ? m.personal : join(m.root, s.name);
+      const dir = join(m.root, s.name);
       await mkdir(dir, { recursive: true });
       await execFileP("git", ["init", "-q"], { cwd: dir, env: this.bdEnv() });
       await this.bd(dir, "init", "-q", `--prefix=${s.prefix}`, "--non-interactive", "--skip-agents", "--skip-hooks");
@@ -353,11 +367,8 @@ export class World {
   /** Runs `meat-mode bridge pair` for a machine with the token from the app. */
   async pair(name: string, url: string, token: string): Promise<string> {
     const m = this.machine(name);
-    const { stdout } = await execFileP(
-      this.bin,
-      ["bridge", "pair", url, token, "--personal", m.personal, "--no-service"],
-      { env: this.bridgeEnv(m) },
-    );
+    const { stdout } = await execFileP(this.bin, ["bridge", "pair", url, token, "--no-service"], { env: this.bridgeEnv(m) });
+    m.token = token;
     return stdout;
   }
 
@@ -395,6 +406,10 @@ export class World {
   async dispose(): Promise<void> {
     for (const m of this.machines.values()) await m.proc?.stop();
     await this.hub?.stop();
+    if (this.hubVolume) {
+      spawnSync("docker", ["volume", "rm", "-f", this.hubVolume], { stdio: "ignore" });
+      liveVolumes.delete(this.hubVolume);
+    }
     await this.ntfy.stop().catch(() => {});
     if (this.tmp) await rm(this.tmp, { recursive: true, force: true });
   }

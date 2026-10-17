@@ -104,7 +104,7 @@ func (w *world) seed(dir, title string) string {
 
 // start builds a bridge over the world's state directory, as a fresh process
 // would. The bridge before it is gone, so its journal lock is released.
-func (w *world) start(personal string) *Bridge {
+func (w *world) start() *Bridge {
 	w.t.Helper()
 	if w.bridge != nil {
 		w.bridge.Journal.Close()
@@ -116,7 +116,7 @@ func (w *world) start(personal string) *Bridge {
 	w.t.Cleanup(func() { j.Close() })
 	w.bridge = &Bridge{
 		Hub: &Hub{URL: w.hub.URL, Token: token}, Beads: w.bd, Journal: j,
-		Roots: []string{w.root}, Home: w.root, Personal: personal, Version: "test", Log: quiet,
+		Roots: []string{w.root}, Home: w.root, Version: "test", Log: quiet,
 	}
 	return w.bridge
 }
@@ -176,7 +176,7 @@ func TestReplaysEveryKindOnce(t *testing.T) {
 		for _, a := range acts {
 			w.hub.Enqueue(us, a)
 		}
-		b := w.start("")
+		b := w.start()
 		w.tick(b)
 		for _, a := range acts {
 			w.oneOK(a.ID)
@@ -236,7 +236,7 @@ func TestSurvivesCrashMidReplay(t *testing.T) {
 		for _, a := range acts {
 			// One action per run, so each crash happens at that action.
 			w.hub.Enqueue(us, a)
-			b := w.start("")
+			b := w.start()
 			b.afterBD = func(api.Action) error { return errCrash }
 			if err := b.Tick(w.ctx, true); !errors.Is(err, errCrash) {
 				t.Fatalf("%s: tick = %v, want the simulated crash", a.ID, err)
@@ -246,7 +246,7 @@ func TestSurvivesCrashMidReplay(t *testing.T) {
 			}
 			b.Journal.Close()
 
-			w.tick(w.start(""))
+			w.tick(w.start())
 			w.oneOK(a.ID)
 		}
 
@@ -257,7 +257,7 @@ func TestSurvivesCrashMidReplay(t *testing.T) {
 		if wi.Status != "closed" {
 			t.Errorf("done not applied: %s", wi.Status)
 		}
-		list, err := w.bd.ListHuman(w.ctx, dir, false)
+		list, err := w.bd.ListHuman(w.ctx, dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -282,7 +282,7 @@ func TestResendsResultAfterLostReport(t *testing.T) {
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	water := w.seed(dir, "Water the plants")
-	b := w.start("")
+	b := w.start()
 	w.tick(b)
 	w.hub.Enqueue(us, action("r-note", api.KindNote, "garden", water, api.Payload{Text: "Done already"}))
 	b.afterBD = nil
@@ -291,7 +291,7 @@ func TestResendsResultAfterLostReport(t *testing.T) {
 	if _, err := b.apply(w.ctx, w.hub.Pending(us)[0], st.Repo); err != nil {
 		t.Fatal(err)
 	}
-	w.tick(w.start(""))
+	w.tick(w.start())
 	w.oneOK(aid("r-note"))
 	if n := len(w.show(dir, water).Comments); n != 1 {
 		t.Errorf("comments = %d", n)
@@ -304,23 +304,14 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 		out := w.repo("kitchen", false)
 		w.seed(in, "Water the plants")
 		cake := w.seed(out, "Bake a cake")
-		personal := filepath.Join(t.TempDir(), "me")
-		if w.real {
-			personal = beadstest.NewRepo(t, filepath.Dir(personal), "me")
-			beadstest.Run(t, personal, "bd", "create", "Call Sam", "--json")
-		} else {
-			writeFile(t, filepath.Join(personal, ".beads", "metadata.json"), "{}\n")
-			w.bd.(*fakebeads.Fake).Put(personal, beads.Issue{ID: "me-1", Title: "Call Sam", Status: "open"})
-		}
 		w.hub.Enqueue(us, action("n-1", api.KindDone, "kitchen", cake, api.Payload{}))
 
-		b := w.start(personal)
+		b := w.start()
 		w.tick(b)
 
 		want := []api.Repo{
 			{Name: "garden", OptedIn: true},
 			{Name: "kitchen", OptedIn: false},
-			{Name: "personal", Personal: true, OptedIn: true},
 		}
 		if got := w.hub.Repos(us); !slices.Equal(got, want) {
 			t.Errorf("repos = %+v, want %+v", got, want)
@@ -330,9 +321,6 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 		}
 		if items, _ := w.hub.Items(us, "garden"); len(items) != 1 {
 			t.Errorf("garden items = %+v", items)
-		}
-		if items, _ := w.hub.Items(us, "personal"); len(items) != 1 || items[0].Title != "Call Sam" {
-			t.Errorf("personal items (no human label needed) = %+v", items)
 		}
 		rs := w.hub.Results(aid("n-1"))
 		if len(rs) != 1 || rs[0].OK || rs[0].Error != ErrNotSynced {
@@ -367,7 +355,7 @@ func TestRefusesUnknownBeads(t *testing.T) {
 		for _, a := range acts {
 			w.hub.Enqueue(us, a)
 		}
-		w.tick(w.start(""))
+		w.tick(w.start())
 		for _, id := range []string{aid("u-chore"), aid("u-flag"), aid("u-prof")} {
 			if rs := w.hub.Results(id); len(rs) != 1 || rs[0].OK || rs[0].Error != ErrUnknownBead {
 				t.Errorf("%s: results = %+v", id, rs)
@@ -390,7 +378,7 @@ func TestIgnoresActionsForAnotherBridge(t *testing.T) {
 	a := action("o-1", api.KindDone, "garden", water, api.Payload{})
 	a.Bridge = "other"
 	w.hub.Enqueue(us, a) // the hub misroutes it to us
-	w.tick(w.start(""))
+	w.tick(w.start())
 	if rs := w.hub.Results(aid("o-1")); len(rs) != 0 {
 		t.Errorf("results = %+v", rs)
 	}
@@ -403,7 +391,7 @@ func TestSyncsOnlyWhenSomethingChanged(t *testing.T) {
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	water := w.seed(dir, "Water the plants")
-	b := w.start("")
+	b := w.start()
 	w.tick(b)
 	w.tick(b)
 	if n := w.hub.ItemPuts(us, "garden"); n != 1 {
@@ -438,7 +426,7 @@ func TestOneRepoFailingDoesNotStopOthers(t *testing.T) {
 	good := w.repo("garden", true)
 	w.seed(good, "Water the plants")
 	w.bd.(*fakebeads.Fake).FailDir[bad] = errors.New("database is locked")
-	w.tick(w.start(""))
+	w.tick(w.start())
 	if items, _ := w.hub.Items(us, "garden"); len(items) != 1 {
 		t.Errorf("garden items = %+v", items)
 	}
@@ -448,7 +436,7 @@ func TestHubDownThenBack(t *testing.T) {
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	w.seed(dir, "Water the plants")
-	b := w.start("")
+	b := w.start()
 	w.hub.SetDown(true)
 	if err := b.Tick(w.ctx, true); err == nil {
 		t.Fatal("tick with the hub down returned no error")
@@ -467,7 +455,7 @@ func TestHubDownThenBack(t *testing.T) {
 func TestRefusesOldBD(t *testing.T) {
 	w := newWorld(t, false)
 	w.bd.(*fakebeads.Fake).Ver = "1.2.2"
-	err := w.start("").Run(w.ctx)
+	err := w.start().Run(w.ctx)
 	if err == nil || !strings.Contains(err.Error(), "too old") {
 		t.Fatalf("Run with bd 1.2.2 = %v", err)
 	}
@@ -481,7 +469,7 @@ func TestRunStopsWithContext(t *testing.T) {
 	w.repo("garden", true)
 	ctx, cancel := context.WithCancel(w.ctx)
 	done := make(chan error, 1)
-	go func() { done <- w.start("").Run(ctx) }()
+	go func() { done <- w.start().Run(ctx) }()
 	deadline := time.Now().Add(5 * time.Second)
 	for len(w.hub.Repos(us)) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
@@ -499,7 +487,7 @@ func TestIgnoresActionsWithoutAUUID(t *testing.T) {
 	both(t, func(t *testing.T, w *world) {
 		dir := w.repo("garden", true)
 		water := w.seed(dir, "Water the plants")
-		b := w.start("")
+		b := w.start()
 		w.tick(b)
 		for _, id := range []string{"", "not-a-uuid", strings.Repeat("a", 5<<20)} {
 			a := action("x", api.KindNote, "garden", water, api.Payload{Text: "Hello"})
@@ -519,7 +507,7 @@ func TestIgnoresActionsWithoutAUUID(t *testing.T) {
 func TestScanCadence(t *testing.T) {
 	w := newWorld(t, false)
 	w.repo("garden", true)
-	b := w.start("")
+	b := w.start()
 	now := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 	b.Now = func() time.Time { return now }
 	if err := b.Tick(w.ctx, false); err != nil {
@@ -549,7 +537,7 @@ func TestSameNamedReposSyncSideBySide(t *testing.T) {
 		w.seed(home, "Water the plants")
 		hedge := w.seed(work, "Trim the hedge")
 		w.hub.Enqueue(us, action("s-done", api.KindDone, "work/garden", hedge, api.Payload{}))
-		b := w.start("")
+		b := w.start()
 		w.tick(b)
 
 		want := []api.Repo{{Name: "projects/garden", OptedIn: true}, {Name: "work/garden", OptedIn: true}}
@@ -576,7 +564,7 @@ func TestSyncSwitch(t *testing.T) {
 		kitchen := w.repo("projects/kitchen", true)
 		w.seed(kitchen, "Descale the kettle")
 		saved := map[string]bool{}
-		b := w.start("")
+		b := w.start()
 		b.SaveSwitch = func(repo string, on bool) error { saved[repo] = on; return nil }
 		on, off := true, false
 		w.hub.Enqueue(us, action("sw-on", api.KindSync, "projects/garden", "", api.Payload{On: &on}))
@@ -605,25 +593,11 @@ func TestSyncSwitch(t *testing.T) {
 		}
 
 		// A new process reads the saved switches, which beat the config file.
-		b = w.start("")
+		b = w.start()
 		b.Switches = saved
 		w.tick(b)
 		if got := w.hub.Repos(us); !slices.Equal(got, want) {
 			t.Errorf("repos after restart = %+v, want %+v", got, want)
 		}
 	})
-}
-
-func TestSyncSwitchRefusesThePersonalRepo(t *testing.T) {
-	w := newWorld(t, false)
-	personal := filepath.Join(t.TempDir(), "me")
-	writeFile(t, filepath.Join(personal, ".beads", "metadata.json"), "{}\n")
-	b := w.start(personal)
-	b.SaveSwitch = func(string, bool) error { t.Error("saved a switch for the personal repo"); return nil }
-	off := false
-	w.hub.Enqueue(us, action("sw-me", api.KindSync, PersonalRepo, "", api.Payload{On: &off}))
-	w.tick(b)
-	if rs := w.hub.Results(aid("sw-me")); len(rs) != 1 || rs[0].Error != ErrPersonalSwitch {
-		t.Errorf("results %+v", rs)
-	}
 }

@@ -79,14 +79,16 @@ test("swipe right marks done, swipe left opens snooze", async ({ page, hub }) =>
   await openApp(page);
   await swipe(page, row(page, "Water the plants"), 160, "Done");
   await expect(page.locator(".group-done")).toContainText("Water the plants");
-  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "home/personal/pe-1" });
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "hub/personal/pe-1" });
   await expect(page.locator("#toast")).toContainText("Done: Water the plants");
 
   await swipe(page, row(page, "Call Sam about the weekend"), -160, "Snooze");
   const dialog = page.getByRole("dialog", { name: "Snooze" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /This evening/ }).click();
-  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "snooze", key: "home/personal/pe-3", payload: { until: "2026-10-14T18:00:00.000Z" } });
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "snooze", key: "hub/personal/pe-3", payload: { until: "2026-10-14T18:00:00.000Z" } });
+  // The hub applies it at once; let the list redraw before the next drag.
+  await expect(row(page, "Call Sam about the weekend").locator(".chip-orange")).toHaveText("18:00");
 
   // A short drag springs back and does nothing.
   const before = hub.posted.length;
@@ -106,13 +108,13 @@ test("quick add opens in a sheet from +", async ({ page, hub }) => {
   await expect(input).toBeFocused();
   await input.fill("Water the plants tonight");
   await expect(page.locator("#qa-chips")).toContainText("Due 20:00");
-  await expect(page.locator("#qa-list")).toHaveValue("home/personal");
+  await expect(page.locator("#qa-list")).toHaveValue("hub/personal");
   await noHorizontalScroll(page);
   await page.locator("#qa-form").getByRole("button", { name: "Add" }).click();
   await expect(page.locator("#qa-form")).toBeHidden();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "add",
-    bridge: "home",
+    bridge: "hub",
     repo: "personal",
     payload: { title: "Water the plants", due: "2026-10-14T20:00:00.000Z" },
   });

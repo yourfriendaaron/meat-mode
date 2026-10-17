@@ -10,6 +10,7 @@ import {
   attention,
   buildView,
   dateChip,
+  HUB_BRIDGE,
   isAgentItem,
   isOpen,
   isUnreadComment,
@@ -257,7 +258,7 @@ function renderSync() {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
           const title = a.kind === "add" ? a.payload.title : a.kind === "sync" ? `${a.repo} on ${a.bridge}` : (item?.title ?? a.beadId ?? "");
           const state =
-            a.status === "applied" ? "Synced" : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
+            a.status === "applied" ? (a.bridge === HUB_BRIDGE ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
         })
         .join("") +
@@ -563,23 +564,20 @@ ${
 function machineRepos(bridge: string): string {
   const list = repos()
     .filter((r) => r.bridge === bridge)
-    .sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name));
   if (!list.length) return '<p class="muted small m-repos">No beads repos found on this machine yet.</p>';
   return `<ul class="m-repos" aria-label="Repos on ${esc(bridge)}">${list
     .map((r) => {
-      const where = r.personal ? "Personal list" : r.name;
-      const control = r.personal
-        ? '<span class="muted small">Always synced</span>'
-        : `<button class="switch" role="switch" id="${esc(`sync-${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
+      const control = `<button class="switch" role="switch" id="${esc(`sync-${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
       const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      return `<li class="m-repo"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(where)}</div>${note}</div>${control}</li>`;
+      return `<li class="m-repo"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</li>`;
     })
     .join("")}</ul>`;
 }
 
 async function switchSync(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
-  if (!r || r.personal) return;
+  if (!r) return;
   await post({ id: newId(), kind: "sync", bridge, repo, payload: { on: !r.optedIn } });
   await refresh();
 }

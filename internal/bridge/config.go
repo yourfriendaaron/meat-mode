@@ -22,10 +22,8 @@ type Config struct {
 	Token  string `json:"token"`
 	// Roots are the directories scanned for beads repos. Absent (null) means
 	// the home folder; an empty list means none.
-	Roots []string `json:"roots"`
-	// Personal is the personal beads repo directory; optional.
-	Personal          string `json:"personal,omitempty"`
-	AllowInsecureHTTP bool   `json:"allowInsecureHTTP,omitempty"`
+	Roots             []string `json:"roots"`
+	AllowInsecureHTTP bool     `json:"allowInsecureHTTP,omitempty"`
 	// BD is the bd executable; found on PATH when empty.
 	BD string `json:"bd,omitempty"`
 	// Sync holds the sync switches set in the app, by repo name. A switch
@@ -156,11 +154,6 @@ func (c Config) ResolveRoots(home string) []string {
 		out = append(out, expandHome(r, home))
 	}
 	return out
-}
-
-// ResolvePersonal returns the personal repo path with ~ expanded.
-func (c Config) ResolvePersonal(home string) string {
-	return expandHome(c.Personal, home)
 }
 
 func expandHome(p, home string) string {

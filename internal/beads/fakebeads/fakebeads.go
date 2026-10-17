@@ -112,7 +112,7 @@ func (f *Fake) touch(i *beads.Issue) { i.UpdatedAt = f.Now().UTC() }
 func (f *Fake) Version(context.Context) (string, error) { return f.Ver, nil }
 
 // ListHuman implements beads.Beads.
-func (f *Fake) ListHuman(_ context.Context, dir string, personal bool) ([]beads.Issue, error) {
+func (f *Fake) ListHuman(_ context.Context, dir string) ([]beads.Issue, error) {
 	f.mu.Lock()
 	if err := f.FailDir[dir]; err != nil {
 		f.mu.Unlock()
@@ -121,7 +121,7 @@ func (f *Fake) ListHuman(_ context.Context, dir string, personal bool) ([]beads.
 	f.mu.Unlock()
 	var out []beads.Issue
 	for _, i := range f.All(dir) {
-		if beads.KeepHuman(i, personal, f.Now()) {
+		if beads.KeepHuman(i, f.Now()) {
 			i.Comments = nil
 			out = append(out, i)
 		}

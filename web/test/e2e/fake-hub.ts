@@ -9,10 +9,14 @@ export const NOW = new Date("2026-10-14T10:00:00Z");
 
 const at = (day: number, h: number, m = 0) => new Date(Date.UTC(2026, 9, day, h, m)).toISOString();
 
+/** The hub keeps the personal list itself, under this reserved bridge name. */
+export const HUB = "hub";
+
 function item(repo: string, id: string, title: string, over: Partial<Item> = {}): Item {
+  const bridge = repo === "personal" ? HUB : "home";
   return {
-    key: `home/${repo}/${id}`,
-    bridge: "home",
+    key: `${bridge}/${repo}/${id}`,
+    bridge,
     repo,
     id,
     title,
@@ -29,7 +33,7 @@ function item(repo: string, id: string, title: string, over: Partial<Item> = {})
 export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } {
   return {
     repos: [
-      { bridge: "home", name: "personal", personal: true, optedIn: true },
+      { bridge: HUB, name: "personal", personal: true, optedIn: true },
       { bridge: "home", name: "garden", personal: false, optedIn: true },
       { bridge: "home", name: "website", personal: false, optedIn: true },
     ],
@@ -205,13 +209,15 @@ export class FakeHub {
     let repo = a.repo ?? "";
     let beadId = "";
     let before: Item | null = null;
+    // The hub applies an action on its own personal list at once.
+    const onHub = (a.bridge ?? a.key?.split("/")[0]) === HUB;
     if (a.kind === "sync") {
       const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
       if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
       r.optedIn = Boolean(a.payload.on);
       r.pending = true;
     } else if (a.kind === "add") {
-      beadId = `pending-${a.id}`;
+      beadId = onHub ? `mm-${this.seq + 1}` : `pending-${a.id}`;
       this.items.push({
         key: `${bridge}/${repo}/${beadId}`,
         bridge,
@@ -226,7 +232,7 @@ export class FakeHub {
         firstSeen: this.now(),
         seenAt: this.now(),
         comments: [],
-        pending: true,
+        pending: !onHub,
       });
     } else {
       const it = a.key ? this.find(a.key) : undefined;
@@ -255,10 +261,10 @@ export class FakeHub {
           it.deferUntil = a.payload.until ?? null;
           break;
         case "note":
-          (it.comments ??= []).push({ id: `n-${this.seq + 1}`, author: `${this.user}-app`, text: a.payload.text ?? "", createdAt: this.now() });
+          (it.comments ??= []).push({ id: onHub ? a.id : `n-${this.seq + 1}`, author: `${this.user}-app`, text: a.payload.text ?? "", createdAt: this.now() });
           break;
       }
-      it.pending = true;
+      it.pending = !onHub;
     }
     const action: Action = {
       id: a.id,
@@ -269,8 +275,9 @@ export class FakeHub {
       beadId,
       payload: a.payload,
       author: `${this.user}-app`,
-      status: "pending",
+      status: onHub ? "applied" : "pending",
       createdAt: this.now(),
+      ...(onHub ? { appliedAt: this.now() } : {}),
     };
     this.log.push({ action, before });
     return this.json(route, 201, action);

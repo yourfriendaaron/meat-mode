@@ -13,56 +13,38 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// PersonalRepo is the repo name of the personal database.
-const PersonalRepo = "personal"
-
 // optInKey is the .beads/config.yaml key that opts a repo into syncing.
 const optInKey = "meat-mode.sync"
 
 // Repo is one beads database the bridge found.
 type Repo struct {
 	// Name is the repo's key: its path relative to the home folder, such as
-	// projects/garden, or PersonalRepo for the personal database.
-	Name     string
-	Dir      string
-	Personal bool
-	OptedIn  bool  // the repo's config file has meat-mode.sync: true
-	Switch   *bool // the sync switch set in the app, when there is one
+	// projects/garden.
+	Name    string
+	Dir     string
+	OptedIn bool  // the repo's config file has meat-mode.sync: true
+	Switch  *bool // the sync switch set in the app, when there is one
 }
 
-// Synced reports whether the bridge sends this repo's items: always for the
-// personal repo, else as the app's switch says, else as the repo's own
-// config file says.
+// Synced reports whether the bridge sends this repo's items: as the app's
+// switch says, else as the repo's own config file says.
 func (r Repo) Synced() bool {
-	switch {
-	case r.Personal:
-		return true
-	case r.Switch != nil:
+	if r.Switch != nil {
 		return *r.Switch
 	}
 	return r.OptedIn
 }
 
-// Discover walks each root for beads repos and adds the personal repo.
+// Discover walks each root for beads repos.
 // The walk skips the folders in pruneNames and pruneHomePaths, symlinks,
 // Git worktrees and anything it cannot read, and finds repos nested at any
 // depth. A .beads folder counts only when it holds a database (see
 // hasDatabase). Names are paths relative to home (see repoName); the first
 // one found wins on a clash.
-func Discover(roots []string, home, personal string, log *slog.Logger) []Repo {
+func Discover(roots []string, home string, log *slog.Logger) []Repo {
 	var out []Repo
 	seen := map[string]bool{}    // names
 	seenDir := map[string]bool{} // directories, when roots overlap
-	personalPath := ""
-	if personal != "" {
-		personalPath = resolvePath(personal)
-		if hasDatabase(personal) {
-			out = append(out, Repo{Name: PersonalRepo, Dir: personal, Personal: true, OptedIn: true})
-			seen[PersonalRepo] = true
-		} else {
-			log.Warn("personal repo has no beads database", "dir", personal)
-		}
-	}
 	homePath := ""
 	if home != "" {
 		homePath = resolvePath(home)
@@ -74,7 +56,7 @@ func Discover(roots []string, home, personal string, log *slog.Logger) []Repo {
 		for _, dir := range scan(rootPath, homePath, &dirs, log) {
 			name := repoName(homePath, rootPath, dir)
 			switch {
-			case dir == personalPath || seenDir[dir]:
+			case seenDir[dir]:
 				continue
 			case !api.ValidRepoName(name):
 				log.Warn("skipping repo whose path the hub refuses (a folder name starting with -, or a control character)", "dir", dir)

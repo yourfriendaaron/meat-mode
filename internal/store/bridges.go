@@ -41,6 +41,9 @@ func (s *Store) CreateBridge(name string) (string, error) {
 	if !ValidBridgeName(name) {
 		return "", invalidf("bridge name must be 1 to 32 lowercase letters, digits or hyphens")
 	}
+	if err := reservedBridge(name); err != nil {
+		return "", err
+	}
 	token, err := newToken()
 	if err != nil {
 		return "", err
@@ -78,8 +81,8 @@ func (s *Store) CreateBridge(name string) (string, error) {
 
 // RevokeBridge revokes a bridge's token. Its items leave the app's view.
 func (s *Store) RevokeBridge(name string) error {
-	res, err := s.db.Exec(`UPDATE bridges SET revoked_at = ? WHERE name = ? AND revoked_at IS NULL`,
-		fmtTime(s.now()), name)
+	res, err := s.db.Exec(`UPDATE bridges SET revoked_at = ? WHERE name = ? AND name != ? AND revoked_at IS NULL`,
+		fmtTime(s.now()), name, HubBridge)
 	if err != nil {
 		return err
 	}
@@ -129,10 +132,10 @@ func (s *Store) Hello(name string, h api.Hello) error {
 	return nil
 }
 
-// Bridges lists active bridges by name.
+// Bridges lists active bridges by name, without the hub's own row.
 func (s *Store) Bridges() ([]api.Bridge, error) {
 	rows, err := s.db.Query(`SELECT name, created_at, last_seen, version, bd_version
-		FROM bridges WHERE revoked_at IS NULL ORDER BY name`)
+		FROM bridges WHERE revoked_at IS NULL AND name != ? ORDER BY name`, HubBridge)
 	if err != nil {
 		return nil, err
 	}

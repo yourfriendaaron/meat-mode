@@ -44,15 +44,14 @@ func must(t *testing.T, err error) {
 	}
 }
 
-// seed creates bridge "laptop" with repo "garden" (opted in), "personal"
-// and "chores" (not opted in), and two items in garden.
+// seed creates bridge "laptop" with repo "garden" (opted in) and "chores"
+// (not opted in), and two items in garden.
 func seed(t *testing.T, s *Store) {
 	t.Helper()
 	_, err := s.CreateBridge("laptop")
 	must(t, err)
 	must(t, s.ReplaceRepos("laptop", []api.Repo{
 		{Name: "garden", OptedIn: true},
-		{Name: "personal", Personal: true},
 		{Name: "chores"},
 	}))
 	must(t, s.ReplaceItems("laptop", "garden", []api.Item{
@@ -295,11 +294,11 @@ func TestAppendValidation(t *testing.T) {
 			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.want)
 		}
 	}
-	// Valid ones pass, including a note of exactly the limit and an add to the personal repo.
+	// Valid ones pass, including a note of exactly the limit and an add to the personal list.
 	ok := []api.NewAction{
 		{ID: id1, Kind: api.KindSnooze, Key: "laptop/garden/gd-1", Payload: api.Payload{Until: &until}},
 		{ID: id2, Kind: api.KindNote, Key: "laptop/garden/gd-1", Payload: api.Payload{Text: strings.Repeat("a", MaxNoteLen)}},
-		{ID: id3, Kind: api.KindAdd, Bridge: "laptop", Repo: "personal", Payload: api.Payload{Title: "Call Sam"}},
+		{ID: id3, Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo, Payload: api.Payload{Title: "Call Sam"}},
 	}
 	for _, na := range ok {
 		if _, _, err := s.AppendAction(na, "alex-app"); err != nil {
@@ -445,7 +444,7 @@ func TestReplaceItems(t *testing.T) {
 		t.Fatalf("unknown repo: %v", err)
 	}
 	// Dropping a repo drops its items.
-	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "personal", Personal: true}}))
+	must(t, s.ReplaceRepos("laptop", nil))
 	st, _ = s.State()
 	if len(st.Items) != 0 || len(st.Repos) != 1 {
 		t.Fatalf("after dropping repo: %d items, %d repos", len(st.Items), len(st.Repos))
@@ -547,7 +546,8 @@ func TestRevokedBridgeLeavesState(t *testing.T) {
 	must(t, s.RevokeBridge("laptop"))
 	st, err := s.State()
 	must(t, err)
-	if len(st.Items)+len(st.Repos)+len(st.Bridges)+st.Unapplied != 0 {
+	// Only the hub's own personal list is left.
+	if len(st.Items)+len(st.Bridges)+st.Unapplied != 0 || len(st.Repos) != 1 || st.Repos[0].Bridge != HubBridge {
 		t.Fatalf("revoked bridge still in state: %+v", st)
 	}
 }
@@ -590,7 +590,6 @@ func TestReplaceReposDropsItemsWhenOptedOut(t *testing.T) {
 	seed(t, s)
 	must(t, s.ReplaceRepos("laptop", []api.Repo{
 		{Name: "garden"},
-		{Name: "personal", Personal: true},
 	}))
 	st, _ := s.State()
 	if hasItem(st, "laptop/garden/gd-1") {
@@ -769,7 +768,6 @@ func TestFolderNameReposMoveToPathKeys(t *testing.T) {
 	// ambiguous and dropped.
 	must(t, s.ReplaceRepos("laptop", []api.Repo{
 		{Name: "projects/garden", OptedIn: true},
-		{Name: "personal", Personal: true},
 		{Name: "projects/chores"}, {Name: "work/chores"},
 	}))
 	st := mustState(t, s)
@@ -844,7 +842,7 @@ func TestSyncSwitchAction(t *testing.T) {
 	}
 	// Applied, the bridge's own list decides.
 	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true}))
-	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden", OptedIn: true}, {Name: "personal", Personal: true}, {Name: "chores", OptedIn: true}}))
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden", OptedIn: true}, {Name: "chores", OptedIn: true}}))
 	if r := repo(mustState(t, s), "chores"); !r.OptedIn || r.Pending {
 		t.Errorf("chores after the bridge applied it: %+v", r)
 	}
@@ -854,7 +852,7 @@ func TestSyncSwitchAction(t *testing.T) {
 	if r := repo(mustState(t, s), "garden"); r.OptedIn || !r.Pending {
 		t.Errorf("garden while switching off: %+v", r)
 	}
-	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden"}, {Name: "personal", Personal: true}, {Name: "chores", OptedIn: true}}))
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden"}, {Name: "chores", OptedIn: true}}))
 	for _, it := range mustState(t, s).Items {
 		if it.Repo == "garden" {
 			t.Errorf("garden item left after switching off: %s", it.Key)
@@ -862,7 +860,7 @@ func TestSyncSwitchAction(t *testing.T) {
 	}
 
 	for _, bad := range []api.NewAction{
-		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "personal", Payload: api.Payload{On: &off}},
+		{ID: id3, Kind: api.KindSync, Bridge: HubBridge, Repo: PersonalRepo, Payload: api.Payload{On: &off}},
 		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "chores"},
 		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "shed", Payload: api.Payload{On: &on}},
 		{ID: id3, Kind: api.KindSync, Key: ItemKey("laptop", "chores", "x"), Payload: api.Payload{On: &on}},
