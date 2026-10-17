@@ -127,10 +127,13 @@ type Registry struct {
 	now     func() time.Time
 	// Client is the HTTP client used for push services; nil means the default.
 	Client *http.Client
-	// RequireSession is set when the hub has a login: every subscription
-	// then belongs to a session (the store's sessions table, in the same
-	// database) and stops receiving when that session ends.
-	RequireSession bool
+	// RequireSession reports whether the hub has a login: every
+	// subscription then belongs to a session (the store's sessions table,
+	// in the same database) and stops receiving when that session ends.
+	// Nil means no login.
+	RequireSession func() bool
+	// Ntfy also receives test reminders; nil when ntfy is not set up.
+	Ntfy Notifier
 }
 
 // NewRegistry loads or creates the VAPID keys in dataDir and the
@@ -229,6 +232,10 @@ func (r *Registry) allowed(endpoint string) bool {
 	return false
 }
 
+func (r *Registry) requireSession() bool {
+	return r.RequireSession != nil && r.RequireSession()
+}
+
 // Subscribe stores a subscription as the newest, registered now by the
 // session sessionID ("" for a hub without a login), replacing any with the
 // same endpoint, and drops the oldest past MaxSubscriptions.
@@ -236,7 +243,7 @@ func (r *Registry) Subscribe(ctx context.Context, sessionID string, s api.PushSu
 	if s.Endpoint == "" || s.Keys.P256dh == "" || s.Keys.Auth == "" {
 		return fmt.Errorf("%w: push subscription needs endpoint, p256dh and auth", store.ErrInvalid)
 	}
-	if r.RequireSession && sessionID == "" {
+	if r.requireSession() && sessionID == "" {
 		return fmt.Errorf("%w: log in before turning on reminders", store.ErrUnauthorized)
 	}
 	var session any
@@ -287,7 +294,7 @@ func (r *Registry) prune(ctx context.Context) error {
 		now.Add(-SubscriptionTTL).Unix()); err != nil {
 		return err
 	}
-	if !r.RequireSession {
+	if !r.requireSession() {
 		return nil
 	}
 	_, err := r.db.ExecContext(ctx, `DELETE FROM push_subscriptions WHERE session_id IS NULL OR NOT EXISTS
@@ -297,10 +304,15 @@ func (r *Registry) prune(ctx context.Context) error {
 }
 
 func (r *Registry) list(ctx context.Context) ([]webpush.Subscription, error) {
+	return r.query(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY endpoint`)
+}
+
+// query prunes, then reads the subscriptions the statement selects.
+func (r *Registry) query(ctx context.Context, stmt string, args ...any) ([]webpush.Subscription, error) {
 	if err := r.prune(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY endpoint`)
+	rows, err := r.db.QueryContext(ctx, stmt, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -324,6 +336,33 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
+	_, err = r.send(ctx, subs, m)
+	return err
+}
+
+// notifyDevice sends m to the subscription at endpoint and reports whether
+// the hub had it and whether the push service accepted it. With a login it
+// must belong to the session sessionID, so one session cannot test another's
+// device.
+func (r *Registry) notifyDevice(ctx context.Context, sessionID, endpoint string, m Message) (found, delivered bool, err error) {
+	stmt := `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE endpoint = ?`
+	args := []any{endpoint}
+	if r.requireSession() {
+		stmt += ` AND session_id = ?`
+		args = append(args, sessionID)
+	}
+	subs, err := r.query(ctx, stmt, args...)
+	if err != nil {
+		return false, false, err
+	}
+	n, err := r.send(ctx, subs, m)
+	return len(subs) > 0, n > 0, err
+}
+
+// send pushes m to subs and reports how many the push service accepted. A
+// subscription it removes (gone, or not on a known push service) counts as
+// not delivered without being an error.
+func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Message) (int, error) {
 	payload, _ := json.Marshal(map[string]string{
 		"title": m.Title, "body": m.Body, "url": m.URL, "tag": m.Tag,
 	})
@@ -338,6 +377,7 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 		opts.HTTPClient = r.Client
 	}
 	var errs []error
+	delivered := 0
 	for i := range subs {
 		if !r.allowed(subs[i].Endpoint) {
 			// Stored before endpoints were checked; never send to it.
@@ -360,7 +400,35 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 			}
 		case resp.StatusCode/100 != 2:
 			errs = append(errs, fmt.Errorf("web push: status %d", resp.StatusCode))
+		default:
+			delivered++
 		}
 	}
-	return errors.Join(errs...)
+	return delivered, errors.Join(errs...)
+}
+
+// TestReminder sends a test reminder to the calling device's subscription,
+// the one at endpoint, and to ntfy when it is set up. A failure is reported
+// in the result, not returned, so the caller can say which way did not work.
+func (r *Registry) TestReminder(ctx context.Context, sessionID, endpoint, url string) api.ReminderTest {
+	m := Message{Title: "Test reminder", Body: "Reminders from Meat Mode are working.", URL: url, Tag: "test"}
+	out := api.ReminderTest{Push: "sent", Ntfy: "off"}
+	found, delivered, err := r.notifyDevice(ctx, sessionID, endpoint, m)
+	switch {
+	case delivered:
+	case err != nil:
+		out.Push = "failed"
+	case !found:
+		out.Push = "none"
+	default:
+		// The push service no longer knows the subscription, so it was removed.
+		out.Push = "expired"
+	}
+	if r.Ntfy != nil {
+		out.Ntfy = "sent"
+		if err := r.Ntfy.Notify(ctx, m); err != nil {
+			out.Ntfy = "failed"
+		}
+	}
+	return out
 }

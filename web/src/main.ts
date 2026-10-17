@@ -30,10 +30,22 @@ import {
 import { fmtAgo, fmtTime, fmtWhen, toLocalInput } from "./dates.ts";
 import { snoozeOptions } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
-import { applyTheme, getTheme, setTheme } from "./theme.ts";
+import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } from "./theme.ts";
 import { loginErrorText, needsLogin } from "./login.ts";
+import { esc } from "./html.ts";
+import { machineReposHTML } from "./agents.ts";
+import { remindersOn, subscribePush, turnOnReminders } from "./push.ts";
+import type { AppContext } from "./app-context.ts";
+import { extAct, extChange, extSubmit } from "./ext.ts";
+import { sectionsHTML } from "./settings/registry.ts";
+import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
-type View = ViewId | "settings";
+type View = ViewId | "settings" | "setup";
+
+/** Views that show a page in place of the task list. */
+function isPage(v: View): v is "settings" | "setup" {
+  return v === "settings" || v === "setup";
+}
 
 interface Toast {
   id: number;
@@ -77,10 +89,6 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = 
 
 function now(): Date {
   return new Date(Date.now() + S.offset);
-}
-
-function esc(s: string | null | undefined): string {
-  return (s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
 function items(): Item[] {
@@ -164,6 +172,8 @@ function viewTitle(v: View): string {
       return "Everything";
     case "settings":
       return "Settings";
+    case "setup":
+      return "Setup";
     default: {
       const r = repos().find((x) => `list:${repoKey(x)}` === v);
       return r ? listLabel(r) : "List";
@@ -184,7 +194,7 @@ function listLabelHTML(r: Repo): string {
 }
 
 function currentGroups() {
-  if (S.view === "settings") return [];
+  if (isPage(S.view)) return [];
   return buildView(S.view, items(), repos(), now());
 }
 
@@ -385,16 +395,25 @@ function renderMain() {
 
   const list = $("#list");
   const settings = $("#settings");
-  // Quick add belongs to the task views, not Settings.
-  $("#qa-form").hidden = S.view === "settings";
+  const wizard = $("#wizard");
+  const banner = $("#setup-banner");
+  const bannerBody = bannerHTML(ctx);
+  setHTML(banner, bannerBody);
+  banner.hidden = !bannerBody;
+  // Quick add belongs to the task views, not Settings or setup.
+  $("#qa-form").hidden = isPage(S.view);
+  list.hidden = isPage(S.view);
+  settings.hidden = S.view !== "settings";
+  wizard.hidden = S.view !== "setup";
   if (S.view === "settings") {
-    list.hidden = true;
-    settings.hidden = false;
     renderSettings();
     return;
   }
-  list.hidden = false;
-  settings.hidden = true;
+  if (S.view === "setup") {
+    setHTML(wizard, wizardHTML(ctx));
+    wizardShown();
+    return;
+  }
 
   if (!S.state) {
     setHTML(list, `<p class="empty">${S.loadError ? `Could not reach the hub: ${esc(S.loadError)}` : "Loading"}</p>`);
@@ -552,12 +571,7 @@ function renderSettings() {
         })
         .join("")}</ul>`
     : '<p class="muted">No machines yet.</p>';
-  setHTML(
-    $("#settings"),
-    `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look">Appearance</h2><button class="btn" data-act="theme"></button></section>
-<section class="set-section" aria-labelledby="s-push"><h2 id="s-push">Reminders</h2>${pushHTML}${S.pushStatus ? `<p class="muted small" role="status">${esc(S.pushStatus)}</p>` : ""}</section>
-${S.auth?.login ? '<section class="set-section" aria-labelledby="s-acct"><h2 id="s-acct">Account</h2><p class="muted">Logging out ends this device\'s session and stops its reminders.</p><button class="btn" data-act="logout">Log out</button></section>' : ""}
-<section class="set-section" aria-labelledby="s-mach"><h2 id="s-mach">Agent machines</h2>${machines}
+  const machinesHTML = `<section class="set-section" aria-labelledby="s-mach"><h2 id="s-mach">Agent machines</h2>${machines}
 <form class="add-machine" data-form="bridge"><label for="bridge-name">Machine name</label><div class="pick-row"><input id="bridge-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off"><button class="btn btn-primary" type="submit">Add machine</button></div><p class="muted small">Lowercase letters, digits and dashes.</p>${
       S.bridgeError ? `<p class="row-error" role="alert">${esc(S.bridgeError)}</p>` : ""
     }</form>
@@ -565,24 +579,34 @@ ${
   nb
     ? `<div class="token-box" role="status"><p>Run this on <strong>${esc(nb.name)}</strong>. The token is shown only once.</p><code class="cmd" id="pair-cmd">${esc(cmd)}</code><button class="btn" data-act="copy">${S.copied ? "Copied" : "Copy"}</button><button class="btn" data-act="token-done">Done</button></div>`
     : ""
-}</section>`,
+}</section>`;
+  const own: [number, string][] = [
+    [10, `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look">Appearance</h2>${themeChoicesHTML("settings-theme")}</section>`],
+    [
+      20,
+      `<section class="set-section" aria-labelledby="s-push"><h2 id="s-push">Reminders</h2>${pushHTML}${S.pushStatus ? `<p class="muted small" role="status">${esc(S.pushStatus)}</p>` : ""}</section>`,
+    ],
+    [
+      30,
+      S.auth?.login
+        ? '<section class="set-section" aria-labelledby="s-acct"><h2 id="s-acct">Account</h2><p class="muted">Logging out ends this device\'s session and stops its reminders.</p><button class="btn" data-act="logout">Log out</button></section>'
+        : "",
+    ],
+    [40, machinesHTML],
+  ];
+  setHTML(
+    $("#settings"),
+    [...own, ...sectionsHTML(ctx)]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, html]) => html)
+      .join("\n"),
   );
   renderTheme();
 }
 
 /** The repos a machine found, each with its sync switch. */
 function machineRepos(bridge: string): string {
-  const list = repos()
-    .filter((r) => r.bridge === bridge)
-    .sort((a, b) => a.name.localeCompare(b.name));
-  if (!list.length) return '<p class="muted small m-repos">No beads repos found on this machine yet.</p>';
-  return `<ul class="m-repos" aria-label="Repos on ${esc(bridge)}">${list
-    .map((r) => {
-      const control = `<button class="switch" role="switch" id="${esc(`sync-${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
-      const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      return `<li class="m-repo"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</li>`;
-    })
-    .join("")}</ul>`;
+  return machineReposHTML(repos(), bridge);
 }
 
 async function switchSync(bridge: string, repo: string) {
@@ -591,6 +615,45 @@ async function switchSync(bridge: string, repo: string) {
   await post({ id: newId(), kind: "sync", bridge, repo, payload: { on: !r.optedIn } });
   await refresh();
 }
+
+// ---------- setup wizard and Settings sections ----------
+
+/** What the setup wizard's steps and the Settings sections in their own modules see of the app. */
+const ctx: AppContext = {
+  get state() {
+    return S.state;
+  },
+  get session() {
+    return S.auth;
+  },
+  get setup() {
+    return setupInfo();
+  },
+  get view() {
+    return S.view;
+  },
+  now,
+  render,
+  refresh: async () => {
+    // The session too: claiming the hub turns its login on and logs this browser in.
+    const sess = api.session().then(
+      (s) => void (S.auth = s),
+      () => {},
+    );
+    await Promise.all([refresh(), reloadSetup(), sess]);
+    render();
+  },
+  toast: (text) => showToast(text),
+  setView: (v) => setView(v as View),
+  openSettings(section) {
+    setView("settings");
+    const h = section ? document.getElementById(section) : null;
+    if (h) {
+      h.setAttribute("tabindex", "-1");
+      h.focus();
+    }
+  },
+};
 
 // ---------- render ----------
 
@@ -854,6 +917,7 @@ function setView(v: View) {
   if (v !== "settings") S.newBridge = null;
   render();
   $("#list").scrollTop = 0;
+  $("#wizard").scrollTop = 0;
 }
 
 function openItem(key: string) {
@@ -1005,7 +1069,7 @@ function openQuickAdd() {
     S.qaOpen = true;
     render();
   }
-  if (S.view === "settings") setView("today");
+  if (isPage(S.view)) setView("today");
   $<HTMLInputElement>("#qa-input").focus();
 }
 
@@ -1017,47 +1081,13 @@ function closeQuickAdd() {
 
 // ---------- push ----------
 
-function b64ToBytes(s: string): Uint8Array<ArrayBuffer> {
-  const pad = "=".repeat((4 - (s.length % 4)) % 4);
-  const raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
-
-async function subscribePush(): Promise<void> {
-  const reg = await navigator.serviceWorker.register("/sw.js");
-  await navigator.serviceWorker.ready;
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    const { publicKey } = await api.pushKey();
-    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
-  }
-  await api.pushSubscribe(sub.toJSON());
-}
-
 async function enablePush() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window) || typeof Notification === "undefined") {
-    S.pushStatus = "This browser does not support reminders.";
-    render();
-    return;
-  }
-  try {
-    const perm = await Notification.requestPermission();
-    if (perm !== "granted") {
-      S.pushStatus = "Notifications were not allowed.";
-    } else {
-      await subscribePush();
-      S.pushStatus = "Reminders are on.";
-    }
-  } catch (e) {
-    S.pushStatus = `Could not turn on reminders: ${(e as Error).message}`;
-  }
+  S.pushStatus = await turnOnReminders();
   render();
 }
 
 function resubscribeOnOpen() {
-  if (typeof Notification === "undefined" || Notification.permission !== "granted" || !("serviceWorker" in navigator)) return;
+  if (!remindersOn() || !("serviceWorker" in navigator)) return;
   subscribePush().catch(() => {});
 }
 
@@ -1245,6 +1275,8 @@ function onClick(e: MouseEvent) {
       S.copied = false;
       render();
       break;
+    default:
+      void extAct(btn, ctx);
   }
 }
 
@@ -1320,6 +1352,8 @@ function onInput(e: Event) {
 
 function onChange(e: Event) {
   if ((e.target as HTMLElement).id === "qa-list") qaListTouched = true;
+  else if (themeChoiceChanged(e.target as HTMLElement, "settings-theme")) renderTheme();
+  else if (shellUp) extChange(e.target as HTMLElement, ctx);
 }
 
 function onSubmit(e: SubmitEvent) {
@@ -1328,6 +1362,7 @@ function onSubmit(e: SubmitEvent) {
   if (form.dataset.form === "login") void submitLogin(form);
   else if (form.id === "qa-form") void submitQuickAdd();
   else if (form.dataset.form === "bridge") void addBridge(form);
+  else if (shellUp) void extSubmit(form, ctx);
 }
 
 // Swipe on phone rows: right = done, left = snooze.
@@ -1423,8 +1458,10 @@ function shell(): string {
     <div class="qa-meta"><span id="qa-chips" class="chips" aria-live="polite"></span><label class="sr" for="qa-list">List</label><select id="qa-list"></select><button class="btn btn-primary" type="submit">Add</button></div>
   </form>
   <div id="dayload" class="dayload" hidden></div>
+  <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>
   <div id="list" class="list"></div>
   <div id="settings" class="settings" hidden></div>
+  <div id="wizard" class="settings wizard-view" hidden></div>
 </main>
 <aside id="detail" class="detail" aria-label="Task details"></aside>
 </div>
@@ -1538,6 +1575,7 @@ function startApp() {
   });
   connectEvents();
   resubscribeOnOpen();
+  void initSetup(ctx);
 }
 
 function boot() {

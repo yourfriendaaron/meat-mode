@@ -24,9 +24,11 @@ const (
 )
 
 type fakePush struct {
-	mu       sync.Mutex
-	subs     map[string]api.PushSubscription
-	sessions map[string]string // endpoint to the session that registered it
+	mu        sync.Mutex
+	subs      map[string]api.PushSubscription
+	sessions  map[string]string // endpoint to the session that registered it
+	testedURL string
+	dropErr   error // returned by DropSession when set
 }
 
 func (f *fakePush) PublicKey() string { return "BExampleKey" }
@@ -40,9 +42,25 @@ func (f *fakePush) Subscribe(_ context.Context, sessionID string, s api.PushSubs
 	f.sessions[s.Endpoint] = sessionID
 	return nil
 }
+
+// TestReminder reports "sent" when the session registered the subscription
+// at endpoint.
+func (f *fakePush) TestReminder(_ context.Context, sessionID, endpoint, url string) api.ReminderTest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.testedURL = url
+	out := api.ReminderTest{Push: "none", Ntfy: "off"}
+	if id, ok := f.sessions[endpoint]; ok && id == sessionID {
+		out.Push = "sent"
+	}
+	return out
+}
 func (f *fakePush) DropSession(_ context.Context, sessionID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.dropErr != nil {
+		return f.dropErr
+	}
 	for ep, id := range f.sessions {
 		if id == sessionID {
 			delete(f.subs, ep)

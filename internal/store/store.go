@@ -145,7 +145,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 var migrations = []string{
 	// 1: initial schema.
@@ -223,6 +223,24 @@ CREATE TABLE sessions (
 	expires_at INTEGER NOT NULL
 );
 CREATE INDEX sessions_expires ON sessions(expires_at);
+`,
+	// 4: hub setup (setup.go), one row. setup is '', 'done' or
+	// 'dismissed'. The setup code is kept only as its SHA-256; its times
+	// are Unix seconds, so expiry compares in SQL.
+	`
+CREATE TABLE hub_settings (
+	id                 INTEGER PRIMARY KEY CHECK (id = 1),
+	setup              TEXT NOT NULL DEFAULT '',
+	setup_at           TEXT,
+	user_name          TEXT NOT NULL DEFAULT '',
+	time_zone          TEXT NOT NULL DEFAULT '',
+	password_hash      TEXT NOT NULL DEFAULT '',
+	tailscale_only     INTEGER NOT NULL DEFAULT 0,
+	setup_code_hash    BLOB,
+	setup_code_expires INTEGER,
+	setup_code_used    INTEGER
+);
+INSERT INTO hub_settings (id) VALUES (1);
 `,
 }
 

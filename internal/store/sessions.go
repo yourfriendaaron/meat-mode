@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"time"
+
+	"github.com/yourfriendaaron/meat-mode/internal/auth"
 )
 
 // Session is a logged-in browser. ID is the hex SHA-256 of its token, safe
@@ -80,4 +82,44 @@ func SessionID(token string) string { return hex.EncodeToString(hashToken(token)
 func (s *Store) DeleteSession(token string) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE id = ?`, hashToken(token))
 	return err
+}
+
+// ChangePassword sets the app's password hash phc, ends every session but
+// token's and moves that one under tag, the new hash's, so the browser that
+// changed the password stays logged in and every other one is logged out.
+// It returns the IDs of the sessions it ended.
+func (s *Store) ChangePassword(phc, token, tag string) ([]string, error) {
+	if _, err := auth.ParseHash(phc); err != nil {
+		return nil, invalidf("password hash is %v", err)
+	}
+	keep := hashToken(token)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE hub_settings SET password_hash = ? WHERE id = 1`, phc); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(`DELETE FROM sessions WHERE id != ? RETURNING id`, keep)
+	if err != nil {
+		return nil, err
+	}
+	var ended []string
+	for rows.Next() {
+		var id []byte
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ended = append(ended, hex.EncodeToString(id))
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(`UPDATE sessions SET tag = ? WHERE id = ?`, tag, keep); err != nil {
+		return nil, err
+	}
+	return ended, tx.Commit()
 }

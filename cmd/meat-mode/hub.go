@@ -27,7 +27,14 @@ func runHub(args []string) error {
 			if err != nil {
 				return nil, err
 			}
-			reg.RequireSession = cfg.PasswordHash != ""
+			// The password can be set in the app while the hub runs.
+			reg.RequireSession = func() bool {
+				if cfg.PasswordHash != "" {
+					return true
+				}
+				h, err := st.Settings()
+				return err != nil || h.PasswordHash != ""
+			}
 			notifier = n
 			return reg, nil
 		},

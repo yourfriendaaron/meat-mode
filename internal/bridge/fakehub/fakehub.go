@@ -29,6 +29,10 @@ type Hub struct {
 	results  map[string][]api.ActionResult
 	personal []Personal
 	down     bool
+	timeZone string // what GET /bridge/v1/settings tells the bridge
+	// noSettings answers GET /bridge/v1/settings with 404, as a hub from
+	// before the route did.
+	noSettings bool
 }
 
 // Hello is one greeting the hub received.
@@ -51,6 +55,7 @@ func New(tokens map[string]string) *Hub {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bridge/v1/hello", h.auth(h.hello))
+	mux.HandleFunc("GET /bridge/v1/settings", h.auth(h.settings))
 	mux.HandleFunc("PUT /bridge/v1/repos", h.auth(h.putRepos))
 	mux.HandleFunc("PUT /bridge/v1/items", h.auth(h.putItems))
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
@@ -99,6 +104,17 @@ func (h *Hub) hello(w http.ResponseWriter, r *http.Request, bridge string) {
 	h.hellos = append(h.hellos, Hello{Bridge: bridge, Hello: hi})
 	h.mu.Unlock()
 	writeJSON(w, api.HelloReply{Bridge: bridge, ServerTime: time.Now().UTC()})
+}
+
+func (h *Hub) settings(w http.ResponseWriter, _ *http.Request, _ string) {
+	h.mu.Lock()
+	tz, gone := h.timeZone, h.noSettings
+	h.mu.Unlock()
+	if gone {
+		writeErr(w, http.StatusNotFound, "404 page not found")
+		return
+	}
+	writeJSON(w, api.Settings{Name: "alex", TimeZone: tz})
 }
 
 // addPersonal keeps each to-do once by id, as the real hub does, and
@@ -230,6 +246,21 @@ func (h *Hub) Results(id string) []api.ActionResult {
 func (h *Hub) SetDown(down bool) {
 	h.mu.Lock()
 	h.down = down
+	h.mu.Unlock()
+}
+
+// SetTimeZone sets the IANA time zone the hub tells bridges in its settings.
+func (h *Hub) SetTimeZone(tz string) {
+	h.mu.Lock()
+	h.timeZone = tz
+	h.mu.Unlock()
+}
+
+// SetNoSettings makes the hub answer GET /bridge/v1/settings with 404, as a
+// hub older than the bridge does.
+func (h *Hub) SetNoSettings(gone bool) {
+	h.mu.Lock()
+	h.noSettings = gone
 	h.mu.Unlock()
 }
 

@@ -157,6 +157,21 @@ test("an item an agent adds through the proxy appears live over the event stream
   await expect(row).toBeVisible();
 });
 
+test("the connection check sees live updates arrive through Caddy and an address that is not the public one", async ({ app }) => {
+  await app.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  const section = app.locator("[data-section=connection]");
+  await section.getByRole("button", { name: "Check connection" }).click();
+  const check = (title: string) => section.locator(".check", { has: app.locator("strong", { hasText: new RegExp(`^${title}$`) }) });
+
+  // The test event travels hub, Caddy and the browser's event stream.
+  await expect(check("Live updates").locator(".check-state")).toHaveText("Passed");
+  await expect(check("Clocks").locator(".check-state")).toHaveText("Passed");
+  await expect(check("Reminder keys").locator(".check-state")).toHaveText("Passed");
+  // The hub's public address here is localhost, and the app is opened under the proxy's name.
+  await expect(check("Address").locator(".check-state")).toHaveText("Problem");
+  await expect(check("Address").locator(".check-fix")).toContainText("MEAT_MODE_PUBLIC_URL");
+});
+
 test("through the proxy the hub checks Host, Origin and the session; bridges and /healthz pass", async ({ w }) => {
   const json = { "content-type": "application/json" };
 

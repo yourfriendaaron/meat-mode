@@ -99,3 +99,72 @@ func TestParseDue(t *testing.T) {
 		}
 	}
 }
+
+// A machine in UTC adds a date and it lands at 9:00 in the hub's zone.
+func TestAddReadsDatesInTheHubsTimeZone(t *testing.T) {
+	saved := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = saved })
+
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	hub.SetTimeZone("America/New_York")
+	env, _, _ := testEnv(t, "")
+	if err := (Config{HubURL: hub.URL, Token: token}).Save(env.Paths.Config); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for _, args := range [][]string{
+		{"Renew the library card", "--due", "2026-03-02"},
+		{"Water the plants", "--due", "2026-03-02 09:00"},
+		{"Buy stamps", "--due", "2026-03-02T14:00:00Z"}, // an explicit offset is kept
+	} {
+		if err := Add(ctx, args, env); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 9:00 in New York on 2 March 2026 (UTC-5) is 14:00 UTC.
+	want := time.Date(2026, 3, 2, 14, 0, 0, 0, time.UTC)
+	for _, p := range hub.Personals() {
+		if p.Due == nil || !p.Due.Equal(want) {
+			t.Errorf("%s due %v, want %v", p.Title, p.Due, want)
+		}
+	}
+	if n := len(hub.Hellos()); n != 0 {
+		t.Errorf("add said hello %d times; that would show the machine as connected", n)
+	}
+
+	// Until the hub has a zone, this machine's stands in.
+	hub.SetTimeZone("")
+	if err := Add(ctx, []string{"Call Sam", "--due", "2026-03-03"}, env); err != nil {
+		t.Fatal(err)
+	}
+	ps := hub.Personals()
+	if got, want := ps[len(ps)-1].Due, time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC); got == nil || !got.Equal(want) {
+		t.Errorf("without a hub zone: %v, want %v", got, want)
+	}
+}
+
+// A hub older than the bridge has no settings route; this machine's zone
+// stands in, as it does while the hub has none.
+func TestAddWithDueOnAHubWithoutSettings(t *testing.T) {
+	saved := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = saved })
+
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	hub.SetTimeZone("America/New_York")
+	hub.SetNoSettings(true)
+	env, _, _ := testEnv(t, "")
+	if err := (Config{HubURL: hub.URL, Token: token}).Save(env.Paths.Config); err != nil {
+		t.Fatal(err)
+	}
+	if err := Add(context.Background(), []string{"Water the plants", "--due", "2026-03-02"}, env); err != nil {
+		t.Fatal(err)
+	}
+	ps := hub.Personals()
+	if want := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC); len(ps) != 1 || ps[0].Due == nil || !ps[0].Due.Equal(want) {
+		t.Fatalf("got %+v, want one due %v", ps, want)
+	}
+}

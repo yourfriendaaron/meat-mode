@@ -102,3 +102,34 @@ export interface Session {
   login: boolean;
   authenticated: boolean;
 }
+
+/** GET /api/setup: whether to offer the setup wizard, and what is already set (docs/api.md, Setup). */
+export interface SetupInfo {
+  /** "new": no items, no machines, no record. "in-use": items or machines, no record. */
+  status: "new" | "in-use" | "done" | "dismissed";
+  user: string;
+  /** IANA time zone kept in the app, "" until chosen. */
+  timeZone: string;
+  /** Where the login password comes from. */
+  password: "env" | "app" | "none";
+  tailscaleOnly: boolean;
+}
+
+/** PUT /api/settings: the name and time zone the hub keeps. A field left out stays as it is. */
+export interface SettingsUpdate {
+  name?: string;
+  timeZone?: string;
+}
+
+/** GET /api/setup/status: what the connection check learns from the hub (docs/api.md, Setup). */
+export interface SetupStatus {
+  /** Where the login password comes from. */
+  login: "none" | "app" | "environment";
+  /** Whether this request came in under the host of MEAT_MODE_PUBLIC_URL. */
+  hostMatches: boolean;
+  publicUrl: string;
+  pushKeys: boolean;
+  ntfy: boolean;
+  /** The hub's clock, as an ISO time. */
+  time: string;
+}

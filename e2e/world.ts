@@ -5,7 +5,7 @@
 // run leaves behind.
 
 import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -323,6 +323,24 @@ export class World {
     return join(dest, "meat-mode.db");
   }
 
+  /**
+   * A file in the hub's data directory, or null when it does not exist. For
+   * a hub in a container it is copied out first; the image has no shell.
+   */
+  async hubFile(name: string): Promise<string | null> {
+    let path = join(this.tmp, "hub-data", name);
+    if (this.hubContainer) {
+      path = join(this.tmp, `hub-file-${Date.now()}`);
+      const r = spawnSync("docker", ["cp", `${this.hubContainer}:/data/${name}`, path], { encoding: "utf8" });
+      if (r.status !== 0) return null;
+    }
+    try {
+      return await readFile(path, "utf8");
+    } catch {
+      return null;
+    }
+  }
+
   /** Stops the hub and starts it again on the same address and data. */
   async restartHub(): Promise<void> {
     await this.hub.stop();
@@ -467,6 +485,13 @@ export class World {
     const m = this.machine(name);
     const { stdout } = await execFileP(this.bin, ["bridge", "pair", url, token, "--no-service"], { env: this.bridgeEnv(m) });
     m.token = token;
+    return stdout;
+  }
+
+  /** Runs a meat-mode command on a paired machine, as its agents do. extra adds to its environment. */
+  async run(name: string, args: string[], extra: NodeJS.ProcessEnv = {}): Promise<string> {
+    const env = { ...this.bridgeEnv(this.machine(name)), ...extra };
+    const { stdout } = await execFileP(this.bin, args, { env });
     return stdout;
   }
 

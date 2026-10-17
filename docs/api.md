@@ -30,15 +30,16 @@ The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `ht
 | `GET /api/push/key` | | `{"publicKey": "<VAPID public key>"}` |
 | `POST /api/push/subscriptions` | `PushSubscription` (the browser's JSON) | `204` (upsert by endpoint); `400` unless the endpoint is an https URL on a known push service (Mozilla, FCM, Apple, Windows). The hub keeps the 20 newest. |
 | `DELETE /api/push/subscriptions` | `{"endpoint": "…"}` | `204` |
+| `POST /api/reminders/test` | `{"endpoint": "…"}`, this device's push subscription (`""` when it has none) | `{"push", "ntfy"}`: sends a test reminder to that subscription only, and to ntfy when set up. With a login the subscription must belong to the calling session. `push` is `sent` (the push service accepted it), `none` (this device has no subscription), `expired` (the push service answered that the subscription is gone, or its endpoint is not a known push service, so the hub removed it and the app should subscribe again) or `failed`; `ntfy` is `sent`, `failed` or `off`. `404` when push is not set up. |
 | `GET /api/bridges` | | `[]Bridge` |
 | `POST /api/bridges` | `{"name": "…"}` | `201` with `{"name", "token"}`; the token is shown once |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |
 
 ### Login
 
-Login is on when the hub has a password hash (`MEAT_MODE_PASSWORD_HASH`, or `MEAT_MODE_PASSWORD_HASH_FILE` naming a file that holds it). The hash is an Argon2id string in PHC format (`$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`), printed by `meat-mode hash-password`. Setting both variables, or a value that is not such a string, stops the hub at start with a plain message. With no hash, login is off: no route needs a session, `GET /api/session` reports `authenticated: true`, `POST /api/logout` answers `204` and does nothing, and `POST /api/login` answers `404`.
+Login is on when the hub has a password hash: one set in the app (see Password below), or one from the environment (`MEAT_MODE_PASSWORD_HASH`, or `MEAT_MODE_PASSWORD_HASH_FILE` naming a file that holds it), which wins over the app's. The hash is an Argon2id string in PHC format (`$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`), printed by `meat-mode hash-password`. Setting both variables, or a value that is not such a string, stops the hub at start with a plain message. With no hash, login is off: no route needs a session, `GET /api/session` reports `authenticated: true`, `POST /api/logout` answers `204` and does nothing, and `POST /api/login` answers `404`.
 
-When login is on, every `/api/` route except the three below answers `401` with `{"error": "log in first"}` unless the request carries a valid session cookie. That includes `GET /api/events`, so an app whose session ended sees its event stream fail and checks `GET /api/session` before reconnecting. The three routes below still pass the Host, Origin and Content-Type checks above; they only skip the session check. The app's pages and static files stay public; they hold no data. The bridge API keeps its bearer tokens and `/healthz` stays public.
+When login is on, every `/api/` route except the three below and `POST /api/setup/claim` answers `401` with `{"error": "log in first"}` unless the request carries a valid session cookie. That includes `GET /api/events`, so an app whose session ended sees its event stream fail and checks `GET /api/session` before reconnecting. The three routes below still pass the Host, Origin and Content-Type checks above; they only skip the session check. The app's pages and static files stay public; they hold no data. The bridge API keeps its bearer tokens and `/healthz` stays public.
 
 | Method and path | Body | Response |
 |---|---|---|
@@ -46,9 +47,45 @@ When login is on, every `/api/` route except the three below answers `401` with 
 | `POST /api/login` | `{"password": "…"}` | `204` and the session cookie; `401` `{"error": "wrong password"}`; `429` with `Retry-After` after 5 failed logins within a minute, counted for the whole hub; `404` when login is off |
 | `POST /api/logout` | | `204`; ends this session, clears the cookie and drops the push subscriptions it registered |
 
-The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `MEAT_MODE_PUBLIC_URL` is `https://`. The hub stores only its SHA-256. A session lasts 90 days from its last use; the hub renews the cookie at most once a day. A session belongs to the password hash it was made under, so changing the hash logs every device out. Logins and the existing Host, Origin and Content-Type checks apply together: `POST /api/login` needs `Content-Type: application/json` like any other `/api/` write.
+The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `MEAT_MODE_PUBLIC_URL` is `https://`. The hub stores only its SHA-256. A session lasts 90 days from its last use; the hub renews the cookie at most once a day. A session belongs to the password hash it was made under, so changing the hash in the environment logs every device out; changing it in the app keeps the device that changed it logged in. Logins and the existing Host, Origin and Content-Type checks apply together: `POST /api/login` needs `Content-Type: application/json` like any other `/api/` write.
 
-**Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session; turning login on later drops those, and each device subscribes again once it logs in. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
+**Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session; turning login on later, in the environment or in the app, drops those, and each device subscribes again once it logs in. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
+
+### Setup
+
+The app offers a setup wizard in two parts: the hub part runs once per hub, and the device part runs on each device. The hub records only its own part; each device keeps its part, and a run in progress, in its own browser storage.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/setup` | | `{"status", "user", "timeZone", "password", "tailscaleOnly"}`, below |
+| `POST /api/setup` | `{"status": "done"}` or `{"status": "dismissed"}` | `204`; records the hub part as finished or closed. `400` for any other status. |
+| `GET /api/setup/status` | | `{"login", "hostMatches", "publicUrl", "pushKeys", "ntfy", "time"}`, below |
+| `POST /api/setup/test-event` | | `204`; sends a change event down every open event stream |
+
+- `status` is `done` or `dismissed` once recorded. With no record it is `new` when the hub has no items and no machines (revoked ones count), and `in-use` otherwise. The app opens the wizard on its own only for `new`, so a hub upgraded with data never sees it; Settings starts it again on any hub.
+- `user` is the name kept in the app, or `MEAT_MODE_USER`. `timeZone` is the IANA time zone kept in the app, `""` until chosen.
+- `password` is `env` when `MEAT_MODE_PASSWORD_HASH` or `MEAT_MODE_PASSWORD_HASH_FILE` sets it, `app` when it was set in the app, and `none` otherwise. `tailscaleOnly` is `true` when the user chose to run with no password on a private network.
+
+The connection check (a wizard step, also in Settings) combines what the browser sees with `GET /api/setup/status`:
+
+- `login` is `environment`, `app` or `none`, by the same rule as `password` above.
+- `hostMatches` is `true` when this request's Host is the host of `MEAT_MODE_PUBLIC_URL` (a default port counts as no port). `publicUrl` is that setting, so the app can say where to open it.
+- `pushKeys` is `true` when the hub has Web Push keys to hand out; `ntfy` is `true` when `MEAT_MODE_NTFY_URL` is set. `time` is the hub's clock, which the app compares with the device's; more than a minute apart is reported.
+- The live-updates check opens its own `GET /api/events` stream, notes the revision the stream opens with, calls `POST /api/setup/test-event`, and expects a higher revision within 5 seconds. A proxy that buffers the stream holds the events back. The test event is an ordinary change event, so every open app refreshes its state once.
+
+### Settings
+
+The name and the time zone the hub keeps, shown in the wizard's Name and time zone step and in Settings.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/settings` | | `{"name", "timeZone"}` |
+| `PUT /api/settings` | `{"name"?, "timeZone"?}` | `200` and the new `{"name", "timeZone"}`; `400` when either is refused, and then neither changes |
+
+- `name` is the name notes the app writes are signed with, as `<name>-app`. It is at most 64 characters with no control characters, and surrounding spaces are dropped. An empty name goes back to `MEAT_MODE_USER` (`user` when that is unset), which is also what `GET` returns while none was chosen. `GET /api/state` and `GET /api/setup` report the same name.
+- `timeZone` is an IANA name such as `Europe/Paris`, `""` until one is chosen. The empty string, `Local` and names the hub does not know are refused. The app prefills its first choice with the first browser's zone.
+- A field left out of `PUT` stays as it is.
+- The app keeps showing times in each device's own zone. The hub's zone is for agents: `meat-mode add` reads `--due 2026-03-02` and `--due "2026-03-02 14:30"` in it, so a to-do added from a server in UTC lands at 9:00 in the user's zone. A `--due` with an offset, such as `2026-03-02T09:00:00Z`, is used as written. While the hub has no zone, `meat-mode add` uses the zone of the machine it runs on.
 
 ### Actions
 
@@ -60,7 +97,7 @@ The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSit
 | `reopen` | `key` | `{}` | status `open` |
 | `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
-| `note` | `key` | `{"text": "…"}` | appends a comment by `<MEAT_MODE_USER>-app` |
+| `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
 | `add` | `bridge` + `repo` | `{"title": "…", "due": time or null}` | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |
 | `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list. |
 
@@ -79,6 +116,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 | Method and path | Body | Response |
 |---|---|---|
 | `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
+| `GET /bridge/v1/settings` | | `{"name", "timeZone"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
 | `PUT /bridge/v1/repos` | `[]Repo` (without `bridge` and `pending`): every repo the bridge found, `optedIn` true for those it syncs | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
@@ -114,6 +152,18 @@ Before the hub kept the personal list, each bridge sent a personal beads repo (r
 - A moved bead keeps its id unless another personal item has it, in which case it gets a `-2`, `-3`… suffix.
 
 The personal repo never appears as a list or in Settings. Current bridges no longer send it, and `meat-mode bridge pair` has no `--personal`. After the move, the beads repo on the agent machine is no longer read; keep it or delete it.
+
+### Password
+
+While the hub has no password, each start makes a one-time setup code shaped `XXXX-XXXX-XXXX`, writes it to the hub's log and to the file `setup-code` in the data directory (readable by the hub's user only), and keeps only its SHA-256. The code lasts an hour and works once; restarting the hub makes a new one and ends the old. A hub with a password makes no code and removes a leftover file.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `POST /api/setup/claim` | `{"code": "…", "password": "…"}` | `204` and the session cookie: the password is set, the code is used up, its file is removed and this browser is logged in. The code matches with or without dashes and spaces, in any case. `400` for a password under 8 characters; `403` for a wrong, expired or used code; `429` with `Retry-After` after 5 wrong codes within a minute, counted for the whole hub; `409` when the hub already has a password, saying so when it comes from the environment. Needs no session. |
+| `PUT /api/password` | `{"current": "…", "password": "…"}` | `204`; sets a new password. This browser stays logged in; every other session ends and its push subscriptions are dropped. `400` for a new password under 8 characters; `403` `{"error": "wrong password"}` for a wrong current one, counted with wrong logins; `429` as for login; `409` when the hub has no password or its password comes from the environment. |
+| `PUT /api/setup/tailscale-only` | `{"on": true}` or `{"on": false}` | `204`; records that the user keeps the hub with no password on a private network, so setup stops asking for one. `409` for `on: true` when the hub has a password. Setting a password clears it. |
+
+A wrong code or current password answers `403`, not `401`, because the app takes a `401` to mean its session ended.
 
 ## Configuration
 

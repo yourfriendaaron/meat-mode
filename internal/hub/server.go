@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -25,6 +26,12 @@ type PushRegistry interface {
 	Unsubscribe(ctx context.Context, endpoint string) error
 	// DropSession removes the subscriptions a session registered.
 	DropSession(ctx context.Context, sessionID string) error
+}
+
+// ReminderTester sends a test reminder to the calling device's subscription
+// and to ntfy. The PushRegistry from internal/notify provides it.
+type ReminderTester interface {
+	TestReminder(ctx context.Context, sessionID, endpoint, url string) api.ReminderTest
 }
 
 // Body size limits.
@@ -44,11 +51,16 @@ type Server struct {
 	push      PushRegistry
 	events    *broker
 	guard     *guard
-	login     *login // nil: the hub has no login
 	now       func() time.Time
 	heartbeat time.Duration
 	mux       *http.ServeMux
 	log       *slog.Logger
+
+	loginMu    sync.RWMutex
+	login      *login     // nil: the hub has no login; read it with currentLogin
+	verify     sync.Mutex // one password or setup code check at a time
+	loginFails limiter    // wrong passwords
+	codeFails  limiter    // wrong setup codes
 }
 
 // NewServer builds the handler. push may be nil, which turns the push
@@ -71,11 +83,18 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 		push:      push,
 		events:    newBroker(),
 		guard:     newGuard(cfg),
-		login:     newLogin(cfg.PasswordHash),
 		now:       time.Now,
 		heartbeat: 25 * time.Second,
 		mux:       http.NewServeMux(),
 		log:       slog.Default(),
+	}
+	s.login = newLogin(cfg.PasswordHash, true)
+	if s.login == nil {
+		h, err := st.Settings()
+		if err != nil {
+			panic(err) // Run reads the settings before it builds the server
+		}
+		s.login = newLogin(h.PasswordHash, false)
 	}
 	st.Watch(func(store.Change) { s.events.publish() })
 
@@ -95,6 +114,11 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.HandleFunc("GET /api/bridges", s.handleListBridges)
 	m.HandleFunc("POST /api/bridges", s.handleNewBridge)
 	m.HandleFunc("DELETE /api/bridges/{name}", s.handleRevokeBridge)
+	// Features in their own files register their routes here, one call each.
+	s.setupRoutes(m)
+	s.settingsRoutes(m)
+	s.passwordRoutes(m)
+	s.remindersRoutes(m)
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))
@@ -195,7 +219,11 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		s.storeError(w, r, err)
 		return
 	}
-	st.User = s.cfg.User
+	st.User, err = s.userName()
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, st)
 }
 
@@ -204,7 +232,12 @@ func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, maxBody, &na) {
 		return
 	}
-	a, created, err := s.store.AppendAction(na, s.cfg.User+"-app")
+	user, err := s.userName()
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	a, created, err := s.store.AppendAction(na, user+"-app")
 	if err != nil {
 		s.storeError(w, r, err)
 		return

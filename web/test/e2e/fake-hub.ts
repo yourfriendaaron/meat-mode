@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Item, NewAction, Repo, State } from "../../src/types.ts";
+import type { Action, Bridge, Item, NewAction, Repo, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -94,6 +94,60 @@ export class FakeHub {
   authenticated = false;
   /** When set, POST /api/login answers this status instead of checking the password. */
   loginStatus = 0;
+  /**
+   * What the hub keeps for GET /api/setup. `status` "" means nothing
+   * recorded: the reply then says "new" or "in-use" from the items and
+   * machines, as the real hub does. POST /api/setup sets it.
+   */
+  setup: { status: "" | "done" | "dismissed"; userName: string; timeZone: string; password: SetupInfo["password"]; tailscaleOnly: boolean } = {
+    status: "",
+    userName: "",
+    timeZone: "",
+    password: "none",
+    tailscaleOnly: false,
+  };
+  /** Every body PUT to /api/settings that the hub took in. */
+  settingsPuts: { name?: string; timeZone?: string }[] = [];
+  /** Push subscriptions the app registered, and the test reminders it asked for. */
+  pushSubscriptions = 0;
+  reminderTests = 0;
+  /** Endpoints of the push subscriptions the app registered. */
+  pushEndpoints = new Set<string>();
+  /** The endpoint the last test reminder was asked for. */
+  testedEndpoint = "";
+  /**
+   * Test reminders the push service turns away as gone. Each one removes the
+   * subscription, as the hub does, and reports "expired".
+   */
+  pushGone = 0;
+  /** Whether the fake hub reports ntfy as set up in the test reminder. */
+  ntfy = false;
+  /** When set, GET /api/setup answers after this many ms. */
+  setupDelayMs = 0;
+  /** The setup code the hub wrote to its log; claiming with it sets the password once. */
+  setupCode = "ABCD-EFGH-JKLM";
+  setupCodeUsed = false;
+  /** When set, POST /api/setup/claim answers this status instead of checking the code. */
+  claimStatus = 0;
+  /**
+   * What GET /api/setup/status says. `publicUrl` "" means the address the
+   * page was opened at. `time` "" means the hub's clock, which is also the
+   * browser's fixed clock; a test sets a time to skew it.
+   */
+  check: { login: SetupStatus["login"]; hostMatches: boolean; publicUrl: string; pushKeys: boolean; ntfy: boolean; time: string } = {
+    login: "none",
+    hostMatches: true,
+    publicUrl: "",
+    pushKeys: true,
+    ntfy: false,
+    time: "",
+  };
+  /**
+   * When set, /api/events carries two change events, the second one a
+   * revision later, as the real hub's stream does around a test event.
+   * Off, the stream stays silent, as a buffering proxy would leave it.
+   */
+  liveEvents = false;
 
   constructor() {
     const f = fixtures();
@@ -112,8 +166,38 @@ export class FakeHub {
       repos: this.repos,
       bridges: this.bridges,
       unapplied: this.log.filter((s) => s.action.status === "pending").length,
-      user: this.user,
+      user: this.setup.userName || this.user,
       serverTime: this.now(),
+    };
+  }
+
+  /** Makes this a hub fresh from install: the personal list with no items, no machines, no setup recorded. */
+  fresh(): void {
+    this.items = [];
+    this.bridges = [];
+    this.repos = this.repos.filter((r) => r.bridge === HUB);
+    this.setup.status = "";
+  }
+
+  /** What a newly paired bridge does on its first hello: it is seen, and reports the repos it found, all switched off. */
+  hello(name: string, repos: string[]): void {
+    const b = this.bridges.find((x) => x.name === name);
+    if (!b) throw new Error(`no machine ${name}`);
+    b.lastSeen = this.now();
+    b.version = "0.1.0";
+    b.bdVersion = "1.3.0";
+    for (const r of repos) this.repos.push({ bridge: name, name: r, personal: false, optedIn: false });
+  }
+
+  setupInfo(): SetupInfo {
+    const inUse = this.items.length > 0 || this.bridges.length > 0;
+    return {
+      status: this.setup.status || (inUse ? "in-use" : "new"),
+      user: this.setup.userName || this.user,
+      timeZone: this.setup.timeZone,
+      // A hub with a login has a password; one the tests did not set in the app came from the environment.
+      password: this.login && this.setup.password === "none" ? "env" : this.setup.password,
+      tailscaleOnly: this.setup.tailscaleOnly,
     };
   }
 
@@ -171,9 +255,60 @@ export class FakeHub {
       this.authenticated = false;
       return this.json(route, 204);
     }
+    if (method === "POST" && path === "/api/setup/claim") return this.claim(route, req.postDataJSON() as { code: string; password: string });
     if (this.login && !this.authenticated) return this.json(route, 401, { error: "log in first" });
 
     if (method === "GET" && path === "/api/state") return this.json(route, 200, this.state());
+    if (method === "GET" && path === "/api/setup") {
+      if (this.setupDelayMs) await new Promise((r) => setTimeout(r, this.setupDelayMs));
+      return this.json(route, 200, this.setupInfo());
+    }
+    if (method === "POST" && path === "/api/setup") {
+      const { status } = req.postDataJSON() as { status: string };
+      if (status !== "done" && status !== "dismissed") return this.json(route, 400, { error: "setup status must be done or dismissed" });
+      this.setup.status = status;
+      return this.json(route, 204);
+    }
+    if (method === "GET" && path === "/api/settings") {
+      return this.json(route, 200, { name: this.setup.userName || this.user, timeZone: this.setup.timeZone });
+    }
+    if (method === "PUT" && path === "/api/settings") {
+      const body = req.postDataJSON() as { name?: string; timeZone?: string };
+      this.settingsPuts.push(body);
+      if (body.timeZone !== undefined) {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: body.timeZone });
+        } catch {
+          return this.json(route, 400, { error: `unknown time zone "${body.timeZone}"; use an IANA name such as Europe/Paris` });
+        }
+        if (!body.timeZone) return this.json(route, 400, { error: "time zone must be an IANA name such as Europe/Paris" });
+      }
+      if (body.name !== undefined) this.setup.userName = body.name.trim();
+      if (body.timeZone !== undefined) this.setup.timeZone = body.timeZone;
+      return this.json(route, 200, { name: this.setup.userName || this.user, timeZone: this.setup.timeZone });
+    }
+    if (method === "PUT" && path === "/api/password") {
+      const { current, password } = req.postDataJSON() as { current: string; password: string };
+      if (this.setup.password !== "app") return this.json(route, 409, { error: "this hub has no password set in the app" });
+      if (password.length < 8) return this.json(route, 400, { error: "the password must be at least 8 characters" });
+      if (current !== this.password) return this.json(route, 403, { error: "wrong password" });
+      this.password = password;
+      return this.json(route, 204);
+    }
+    if (method === "PUT" && path === "/api/setup/tailscale-only") {
+      const { on } = req.postDataJSON() as { on: boolean };
+      if (on && this.setupInfo().password !== "none") return this.json(route, 409, { error: "this hub has a password" });
+      this.setup.tailscaleOnly = on;
+      return this.json(route, 204);
+    }
+    if (method === "GET" && path === "/api/setup/status") {
+      return this.json(route, 200, { ...this.check, publicUrl: this.check.publicUrl || url.origin, time: this.check.time || this.now() });
+    }
+    if (method === "POST" && path === "/api/setup/test-event") return this.json(route, 204);
+    if (method === "GET" && path === "/api/events" && this.liveEvents) {
+      const body = `retry: 3600000\n\nevent: change\ndata: {"rev": ${this.seq}}\n\nevent: change\ndata: {"rev": ${this.seq + 1}}\n\n`;
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body });
+    }
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
@@ -208,7 +343,27 @@ export class FakeHub {
       return this.json(route, 204);
     }
     if (method === "GET" && path === "/api/push/key") return this.json(route, 200, { publicKey: "BExampleKeyOnlyForTests" });
-    if (path === "/api/push/subscriptions") return this.json(route, 204);
+    if (path === "/api/push/subscriptions") {
+      if (method === "POST") {
+        this.pushSubscriptions++;
+        this.pushEndpoints.add((req.postDataJSON() as { endpoint: string }).endpoint);
+      }
+      return this.json(route, 204);
+    }
+    if (method === "POST" && path === "/api/reminders/test") {
+      this.reminderTests++;
+      const { endpoint } = req.postDataJSON() as { endpoint: string };
+      this.testedEndpoint = endpoint;
+      const ntfy = this.ntfy ? "sent" : "off";
+      const known = this.pushSubscriptions > 0 && this.pushEndpoints.has(endpoint);
+      if (known && this.pushGone > 0) {
+        this.pushGone--;
+        this.pushSubscriptions--;
+        this.pushEndpoints.delete(endpoint);
+        return this.json(route, 200, { push: "expired", ntfy });
+      }
+      return this.json(route, 200, { push: known ? "sent" : "none", ntfy });
+    }
     if (method === "GET" && path === "/api/bridges") return this.json(route, 200, this.bridges);
     if (method === "POST" && path === "/api/bridges") {
       const { name } = req.postDataJSON() as { name: string };
@@ -222,6 +377,26 @@ export class FakeHub {
       return this.json(route, 204);
     }
     return this.json(route, 404, { error: "not found" });
+  }
+
+  /** POST /api/setup/claim: sets the password with the setup code and logs this browser in. */
+  private claim(route: Route, body: { code: string; password: string }) {
+    if (this.claimStatus) return this.json(route, this.claimStatus, { error: "refused" });
+    const has = this.setupInfo().password;
+    if (has === "env") return this.json(route, 409, { error: "the password is set by the hub's environment" });
+    if (has === "app") return this.json(route, 409, { error: "this hub already has a password" });
+    if (body.password.length < 8) return this.json(route, 400, { error: "the password must be at least 8 characters" });
+    const norm = (c: string) => c.replace(/[-\s]/g, "").toUpperCase();
+    if (this.setupCodeUsed || norm(body.code) !== norm(this.setupCode)) {
+      return this.json(route, 403, { error: "the setup code is wrong, expired or used" });
+    }
+    this.setupCodeUsed = true;
+    this.setup.password = "app";
+    this.setup.tailscaleOnly = false;
+    this.password = body.password;
+    this.login = true;
+    this.authenticated = true;
+    return this.json(route, 204);
   }
 
   private postAction(route: Route, a: NewAction) {

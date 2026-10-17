@@ -28,7 +28,9 @@ func FromEnv(dataDir string, db *sql.DB) (*Registry, Notifier, error) {
 		if topic == "" {
 			return nil, nil, errors.New("MEAT_MODE_NTFY_TOPIC is not set: on a shared ntfy server the topic name works like a password, so pick a long random one (a token alone does not hide the topic)")
 		}
-		multi = append(multi, &Ntfy{URL: u, Topic: topic, Token: os.Getenv("MEAT_MODE_NTFY_TOKEN"), Client: client})
+		nt := &Ntfy{URL: u, Topic: topic, Token: os.Getenv("MEAT_MODE_NTFY_TOKEN"), Client: client}
+		reg.Ntfy = nt
+		multi = append(multi, nt)
 	}
 	return reg, multi, nil
 }

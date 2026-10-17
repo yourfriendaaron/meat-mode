@@ -120,6 +120,15 @@ var appRoutes = []struct{ method, path, body string }{
 	{"GET", "/api/bridges", ""},
 	{"POST", "/api/bridges", `{"name":"laptop"}`},
 	{"DELETE", "/api/bridges/laptop", ""},
+	{"POST", "/api/reminders/test", ""},
+	{"GET", "/api/setup", ""},
+	{"POST", "/api/setup", `{"status":"done"}`},
+	{"GET", "/api/settings", ""},
+	{"PUT", "/api/settings", `{"name":"Sam"}`},
+	{"PUT", "/api/setup/tailscale-only", `{"on":false}`},
+	{"PUT", "/api/password", `{"current":"x","password":"feed the cat"}`},
+	{"GET", "/api/setup/status", ""},
+	{"POST", "/api/setup/test-event", ""},
 	{"GET", "/api/no-such-route", ""},
 }
 

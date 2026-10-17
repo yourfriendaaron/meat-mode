@@ -1170,6 +1170,316 @@ kbd {
   user-select: all;
 }
 
+/* ---------- setup wizard ---------- */
+
+.setup-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 4px calc(16px + var(--safe-right)) 8px calc(16px + var(--safe-left));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--purple);
+  border-radius: var(--radius);
+  background: var(--raise);
+}
+.setup-banner[hidden] {
+  display: none;
+}
+.setup-banner p {
+  margin: 0;
+}
+.banner-actions,
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+  padding-top: 8px;
+}
+.wiz-side {
+  display: none;
+}
+.wiz-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.wiz-count {
+  margin: 0;
+}
+.wiz-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.wiz-bar-fill {
+  height: 100%;
+  background: var(--purple);
+}
+.wiz-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wiz-step h2 {
+  font-size: 20px;
+}
+/* Focus lands on the heading only so screen readers read the new step. */
+.wiz-step h2:focus {
+  outline: none;
+}
+.wiz-step p {
+  margin: 0;
+}
+.wiz-list {
+  margin: 0;
+  padding-left: 20px;
+}
+.wiz-summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.wiz-summary li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.wiz-outcome {
+  min-width: 80px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.wiz-done {
+  color: var(--green);
+}
+.wiz-skipped,
+.wiz-open {
+  color: var(--soft);
+}
+.wiz-sum-title {
+  flex: 1;
+}
+.wiz-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+.wiz-gap {
+  flex: 1;
+}
+.wiz-close {
+  align-self: flex-start;
+}
+
+@container app (min-width: 880px) {
+  .setup-banner {
+    margin: 4px 24px 8px;
+  }
+  .wizard {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 32px;
+  }
+  .wiz-side {
+    display: block;
+  }
+  .wiz-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: wiz;
+  }
+  .wiz-steps li {
+    counter-increment: wiz;
+    padding: 6px 8px;
+    border-radius: 6px;
+    color: var(--soft);
+  }
+  .wiz-steps li::before {
+    content: counter(wiz) ". ";
+  }
+  .wiz-steps li.current {
+    background: var(--hover);
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .wiz-steps li.done::after {
+    content: " \2713";
+    color: var(--green);
+  }
+}
+
+/* ---------- password: setup step and Settings ---------- */
+
+.pw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 460px;
+}
+.pw-form label {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--soft);
+}
+.pw-form input:not(.sr) {
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.pw-form .btn {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+.pw-form p,
+.pw-none p {
+  margin: 0;
+}
+.pw-error {
+  font-size: 13px;
+  color: var(--red);
+}
+.pw-ok {
+  color: var(--green);
+}
+.pw-error:focus,
+.pw-ok:focus {
+  outline: none;
+}
+.pw-where code {
+  overflow-wrap: anywhere;
+}
+.pw-none {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 460px;
+}
+
+/* ---------- name and time zone ---------- */
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 460px;
+}
+.profile-form label {
+  font-size: 13px;
+  color: var(--soft);
+}
+.profile-form input {
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.profile-form .small {
+  margin: 0 0 8px;
+}
+
+/* ---------- connection check ---------- */
+
+.check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.check {
+  display: flex;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.check > div {
+  min-width: 0;
+}
+.check p {
+  margin: 2px 0 0;
+}
+.check-state {
+  flex: none;
+  min-width: 64px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.check-pass .check-state {
+  color: var(--green);
+}
+.check-fail .check-state,
+.check-error {
+  color: var(--red);
+}
+.check-info .check-state {
+  color: var(--soft);
+}
+.check-fix {
+  color: var(--soft);
+}
+
+/* ---------- setup wizard: device steps ---------- */
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choices legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raise);
+  cursor: pointer;
+}
+.choice:has(input:checked) {
+  border-color: var(--purple);
+}
+.choice input {
+  margin: 3px 0 0;
+  accent-color: var(--purple);
+}
+.choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.choice-label {
+  font-weight: 600;
+}
+
 /* ---------- desktop: sidebar, list, detail pane ---------- */
 
 @container app (min-width: 880px) {
@@ -1462,4 +1772,69 @@ kbd {
 .login-error {
   font-size: 13px;
   color: var(--red);
+}
+
+/* ---------- first to-do step ---------- */
+
+.ft-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ft-form .chips {
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+.ft-form .chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wiz-added {
+  font-weight: 600;
+}
+
+/* ---------- setup wizard: agents ---------- */
+
+.wiz-step h3 {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.agents-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.agents-pick label {
+  font-size: 13px;
+  color: var(--soft);
+}
+.agents-pick select {
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+}
+.agents-copy {
+  align-self: flex-start;
+}
+.agents-pair:focus {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+.agents-status {
+  font-weight: 600;
+}
+.agents-on {
+  color: var(--green);
+}
+.agents-text {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  user-select: text;
 }
