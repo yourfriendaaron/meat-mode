@@ -1,4 +1,4 @@
-import { test, expect, axe, wizard, openWizardAt, openApp } from "./setup.ts";
+import { test, expect, axe, wizard, openWizardAt, openApp, skipToFinish } from "./setup.ts";
 import type { Page } from "@playwright/test";
 
 const NEW_PASSWORD = "water the plants";
@@ -72,7 +72,8 @@ test.describe("desktop", () => {
     await axe(page);
 
     await w.next.click();
-    await expect(w.heading).toHaveText("All set");
+    await expect(w.heading).not.toHaveText("Secure the hub");
+    await skipToFinish(page);
     await expect(w.region.locator(".wiz-summary li", { hasText: "Secure the hub" })).toContainText("Set up");
 
     // Logged in: Settings has Log out and the change form.
@@ -91,7 +92,8 @@ test.describe("desktop", () => {
 
     await fillClaim(page, "ABCD-EFGH-JKLM", NEW_PASSWORD);
     await w.next.click();
-    await expect(w.heading).toHaveText("All set");
+    await expect(w.heading).not.toHaveText("Secure the hub");
+    await skipToFinish(page);
     expect(hub.setup.password).toBe("app");
     expect(hub.requests).toContain("POST /api/setup/claim");
   });
@@ -117,7 +119,8 @@ test.describe("desktop", () => {
     await axe(page);
 
     await w.next.click();
-    await expect(w.heading).toHaveText("All set");
+    await expect(w.heading).not.toHaveText("Secure the hub");
+    await skipToFinish(page);
     await expect(w.region.locator(".wiz-summary li", { hasText: "Secure the hub" })).toContainText("Set up");
   });
 

@@ -4,7 +4,7 @@ import { registerSection } from "./registry.ts";
 registerSection({
   id: "connection",
   title: "Connection",
-  order: 45,
+  order: 48,
   render() {
     return `<p class="muted">Checks the address, the secure connection, live updates, the clocks and the reminder keys.</p>
 ${checksHTML()}${checkButtonHTML()}`;

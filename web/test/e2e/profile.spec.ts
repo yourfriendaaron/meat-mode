@@ -1,4 +1,4 @@
-import { test, expect, openApp, axe, wizard, openWizardAt } from "./setup.ts";
+import { test, expect, openApp, axe, wizard, openWizardAt, skipToFinish } from "./setup.ts";
 import type { Page } from "@playwright/test";
 
 async function lightTheme(page: Page) {
@@ -31,7 +31,8 @@ test.describe("desktop", () => {
 
     await name.fill("Sam");
     await w.next.click();
-    await expect(w.heading).toHaveText("All set");
+    await expect(w.heading).not.toHaveText("Name and time zone");
+    await skipToFinish(page);
     expect(hub.settingsPuts).toEqual([{ name: "Sam", timeZone: "Europe/Paris" }]);
     expect(hub.setup).toMatchObject({ userName: "Sam", timeZone: "Europe/Paris" });
     await expect(w.region.locator(".wiz-summary li", { hasText: "Name and time zone" })).toContainText("Set up");
@@ -52,7 +53,8 @@ test.describe("desktop", () => {
     await openWizardAt(page, hub, "profile");
     const w = wizard(page);
     await w.skip.click();
-    await expect(w.heading).toHaveText("All set");
+    await expect(w.heading).not.toHaveText("Name and time zone");
+    await skipToFinish(page);
     expect(hub.settingsPuts).toEqual([]);
     const summary = w.region.locator(".wiz-summary li", { hasText: "Name and time zone" });
     await expect(summary).toContainText("Skipped");

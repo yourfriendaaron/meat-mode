@@ -1,4 +1,4 @@
-import { test, expect, axe, wizard, openWizardAt } from "./setup.ts";
+import { test, expect, axe, wizard, openWizardAt, skipToFinish } from "./setup.ts";
 import type { Page } from "@playwright/test";
 
 const EXAMPLE = "Water the plants tomorrow 6pm #personal";
@@ -64,7 +64,8 @@ for (const [name, viewport] of [
       await axe(page);
 
       await w.next.click();
-      await expect(w.heading).toHaveText("All set");
+      await expect(w.heading).not.toHaveText("First to-do");
+      await skipToFinish(page);
       await expect(page.locator(".wiz-summary")).toContainText("First to-do");
       await expect(
         page.locator(".wiz-summary li", { hasText: "First to-do" }),
@@ -84,7 +85,8 @@ for (const [name, viewport] of [
       await openWizardAt(page, hub, "first-todo");
       await page.locator("#ft-input").fill("Call Sam on 20 Oct");
       await wizard(page).next.click();
-      await expect(wizard(page).heading).toHaveText("All set");
+      await expect(wizard(page).heading).not.toHaveText("First to-do");
+      await skipToFinish(page);
       expect(hub.posted.map((a) => a.payload.title)).toEqual(["Call Sam"]);
     });
 
@@ -93,7 +95,8 @@ for (const [name, viewport] of [
       const w = wizard(page);
       await page.locator("#ft-input").fill("Water the plants tomorrow");
       await w.skip.click();
-      await expect(w.heading).toHaveText("All set");
+      await expect(w.heading).not.toHaveText("First to-do");
+      await skipToFinish(page);
       await expect(
         page.locator(".wiz-summary li", { hasText: "First to-do" }),
       ).toContainText("Skipped");
