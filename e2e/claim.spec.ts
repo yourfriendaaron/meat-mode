@@ -47,6 +47,17 @@ async function newPage(browser: Browser): Promise<Page> {
 const wizard = (page: Page) => page.locator("#wizard");
 const heading = (page: Page) => page.locator("#wiz-h");
 
+/** Skips the steps on the way to the one titled title, whichever steps come before it. */
+async function skipUntil(page: Page, title: string) {
+  for (let i = 0; i < 30; i++) {
+    const h = (await heading(page).textContent()) ?? "";
+    if (h === title) return;
+    await wizard(page).getByRole("button", { name: "Skip" }).click();
+    await expect(heading(page)).not.toHaveText(h);
+  }
+  throw new Error(`setup did not reach ${title}`);
+}
+
 async function logIn(page: Page, url: string, password: string) {
   await page.goto(url);
   await page.getByLabel("Password").fill(password);
@@ -81,7 +92,8 @@ base.describe("a hub with no password", () => {
     await alex.goto(w.appURL);
     await expect(heading(alex)).toHaveText("Welcome");
     await wizard(alex).getByRole("button", { name: "Start" }).click();
-    await expect(heading(alex)).toHaveText("Secure the hub");
+    await expect(heading(alex)).not.toHaveText("Welcome");
+    await skipUntil(alex, "Secure the hub");
 
     const step = wizard(alex).locator('[data-step="secure"]');
     const fill = async (c: string) => {
@@ -99,7 +111,8 @@ base.describe("a hub with no password", () => {
     expect(await w.api("/api/session")).toEqual({ login: true, authenticated: false });
 
     await wizard(alex).locator("[data-act=wizard-next]").click();
-    await expect(heading(alex)).toHaveText("All set");
+    await expect(heading(alex)).not.toHaveText("Secure the hub");
+    await skipUntil(alex, "All set");
     await expect(wizard(alex).locator(".wiz-summary li", { hasText: "Secure the hub" })).toContainText("Set up");
     await wizard(alex).locator("[data-act=wizard-next]").click();
     await expect(alex.locator("#view-title")).toHaveText("Today");
@@ -178,7 +191,8 @@ base.describe("a hub with a password in its environment", () => {
     await logIn(alex, w.appURL, ENV_PASSWORD);
     await expect(heading(alex)).toHaveText("Welcome");
     await wizard(alex).getByRole("button", { name: "Start" }).click();
-    await expect(heading(alex)).toHaveText("Secure the hub");
+    await expect(heading(alex)).not.toHaveText("Welcome");
+    await skipUntil(alex, "Secure the hub");
     const step = wizard(alex).locator('[data-step="secure"]');
     await expect(step).toContainText("set in its environment");
     await expect(step.locator("form")).toHaveCount(0);
