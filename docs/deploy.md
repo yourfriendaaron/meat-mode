@@ -127,7 +127,7 @@ If a bridge was paired with `--personal`, the hub moves that repo's items into i
 1. Update the hub first. The items move when it starts.
 2. Then update the bridge and restart it (see Updating). It ignores the old personal setting in its config. A bridge that is not updated yet keeps sending the repo, and the hub only takes beads it has not had, so nothing is duplicated.
 
-From then on your personal list lives on the hub. The beads repo on the agent machine is no longer read; keep it or delete it.
+From then on your personal list lives on the hub. The bridge no longer treats the old beads repo as special: it shows up in Settings like any other repo, with its switch off. Leave it off, or delete the repo; switched on, its `human` beads would show a second time as agent items.
 
 ## Updating
 

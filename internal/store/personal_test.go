@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -46,6 +47,9 @@ func TestPersonalListWorksWithNoBridge(t *testing.T) {
 	}
 	key := hubKey(a.BeadID)
 	it := item(t, mustState(t, s), key)
+	if rk, err := s.ReminderKey(context.Background(), it); err != nil || rk != key {
+		t.Errorf("reminder key = %q, %v; want the item's own key", rk, err)
+	}
 	if it.Title != "Water the plants" || it.Status != "open" || it.Pending || it.DueAt == nil || !it.DueAt.Equal(due) || it.CreatedBy != "alex-app" {
 		t.Fatalf("added item %+v", it)
 	}
@@ -85,6 +89,13 @@ func TestPersonalListWorksWithNoBridge(t *testing.T) {
 	if created || again.BeadID != a.BeadID {
 		t.Errorf("repeated add = %+v, created %v", again, created)
 	}
+	// Won't do closes it as dismissed.
+	other := addPersonal(t, s, id6, "Sort the recycling", nil)
+	_, _, err = s.AppendAction(api.NewAction{ID: "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a57", Kind: api.KindDismiss, Key: hubKey(other.BeadID)}, "alex-app")
+	must(t, err)
+	if it := item(t, mustState(t, s), hubKey(other.BeadID)); it.Status != "closed" || it.CloseReason != ReasonDismissed {
+		t.Fatalf("dismissed item %+v", it)
+	}
 	s.Close()
 
 	// It all survives a restart.
@@ -92,10 +103,12 @@ func TestPersonalListWorksWithNoBridge(t *testing.T) {
 	must(t, err)
 	defer s.Close()
 	st = mustState(t, s)
+	// The reopened store runs on the real clock, so the item dismissed on
+	// the test clock is past its week and hidden.
 	if len(st.Items) != 1 {
 		t.Fatalf("items after restart = %+v", st.Items)
 	}
-	if it := st.Items[0]; it.Key != key || it.Status != "open" || len(it.Comments) != 1 {
+	if it := item(t, st, key); it.Key != key || it.Status != "open" || len(it.Comments) != 1 {
 		t.Fatalf("item after restart = %+v", it)
 	}
 }

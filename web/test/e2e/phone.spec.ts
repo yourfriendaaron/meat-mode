@@ -87,7 +87,6 @@ test("swipe right marks done, swipe left opens snooze", async ({ page, hub }) =>
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /This evening/ }).click();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "snooze", key: "hub/personal/pe-3", payload: { until: "2026-10-14T18:00:00.000Z" } });
-  // The hub applies it at once; let the list redraw before the next drag.
   await expect(row(page, "Call Sam about the weekend").locator(".chip-orange")).toHaveText("18:00");
 
   // A short drag springs back and does nothing.

@@ -669,7 +669,8 @@ function patchLocal(key: string, fn: (i: Item) => void) {
   const it = byKey(key);
   if (!it) return;
   fn(it);
-  it.pending = true;
+  // The hub applies actions on the personal list at once; nothing waits.
+  it.pending = it.bridge !== HUB_BRIDGE;
   it.error = undefined;
 }
 

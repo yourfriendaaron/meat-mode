@@ -433,6 +433,22 @@ test("an agent adds a personal to-do with a machine token", async ({ page, w }) 
   });
   expect(bad.status).toBe(401);
 
+  // A due personal to-do reminds like any other item.
+  const due = new Date(Date.now() + 6_000).toISOString().replace(/\.\d+Z$/, "Z");
+  const timed = await fetch(`${w.hubURL}/bridge/v1/personal`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ title: "Take the bins out", due }),
+  });
+  expect(timed.status).toBe(201);
+  const { key: binsKey } = (await timed.json()) as { key: string };
+  await expect
+    .poll(() => w.ntfy.requests.filter((r) => r.headers["title"] === "Take the bins out").length, { timeout: 30_000 })
+    .toBe(1);
+  const req = w.ntfy.requests.find((r) => r.headers["title"] === "Take the bins out")!;
+  expect(new URL(String(req.headers["click"])).searchParams.get("item")).toBe(binsKey);
+  expect(req.at).toBeGreaterThanOrEqual(Date.parse(due));
+
   await open(page, w);
   await expect(row(page, todo.title)).toHaveCount(1);
   await row(page, todo.title).locator(".row-body").click();

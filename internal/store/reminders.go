@@ -14,7 +14,8 @@ import (
 // the bridge reported it, so a reminder that fired for one does not fire
 // again for the other.
 func (s *Store) ReminderKey(ctx context.Context, it api.Item) (string, error) {
-	if it.Bridge == "" || strings.HasPrefix(it.ID, provisionalPrefix) {
+	// The personal list has no provisional copies: an add is the item.
+	if it.Bridge == "" || it.Bridge == HubBridge || strings.HasPrefix(it.ID, provisionalPrefix) {
 		return it.Key, nil
 	}
 	var id string
