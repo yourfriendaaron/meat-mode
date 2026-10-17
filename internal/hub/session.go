@@ -198,6 +198,12 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 			s.storeError(w, r, err)
 			return
 		}
+		if s.push != nil {
+			if err := s.push.DropSession(r.Context(), store.SessionID(c.Value)); err != nil {
+				s.storeError(w, r, err)
+				return
+			}
+		}
 		s.setSessionCookie(w, "", -1)
 	}
 	w.WriteHeader(http.StatusNoContent)

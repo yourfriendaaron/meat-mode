@@ -24,15 +24,31 @@ const (
 )
 
 type fakePush struct {
-	mu   sync.Mutex
-	subs map[string]api.PushSubscription
+	mu       sync.Mutex
+	subs     map[string]api.PushSubscription
+	sessions map[string]string // endpoint to the session that registered it
 }
 
 func (f *fakePush) PublicKey() string { return "BExampleKey" }
-func (f *fakePush) Subscribe(_ context.Context, s api.PushSubscription) error {
+func (f *fakePush) Subscribe(_ context.Context, sessionID string, s api.PushSubscription) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.subs[s.Endpoint] = s
+	if f.sessions == nil {
+		f.sessions = map[string]string{}
+	}
+	f.sessions[s.Endpoint] = sessionID
+	return nil
+}
+func (f *fakePush) DropSession(_ context.Context, sessionID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for ep, id := range f.sessions {
+		if id == sessionID {
+			delete(f.subs, ep)
+			delete(f.sessions, ep)
+		}
+	}
 	return nil
 }
 func (f *fakePush) Unsubscribe(_ context.Context, endpoint string) error {

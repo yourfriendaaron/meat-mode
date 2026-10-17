@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/store"
 )
 
@@ -28,10 +29,11 @@ func cheapHash(password string) string {
 }
 
 type loginHarness struct {
-	t   *testing.T
-	st  *store.Store
-	srv *Server
-	now time.Time
+	t    *testing.T
+	st   *store.Store
+	srv  *Server
+	push *fakePush
+	now  time.Time
 }
 
 func newLoginHarness(t *testing.T, cfg Config) *loginHarness {
@@ -52,7 +54,8 @@ func (h *loginHarness) server(cfg Config) *Server {
 	if cfg.User == "" {
 		cfg.User = "alex"
 	}
-	s := newServer(cfg, h.st, &fakePush{subs: nil}, fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}})
+	h.push = &fakePush{subs: map[string]api.PushSubscription{}}
+	s := newServer(cfg, h.st, h.push, fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}})
 	s.now = func() time.Time { return h.now }
 	h.t.Cleanup(s.Close)
 	return s
@@ -359,5 +362,35 @@ func TestConfigPasswordHash(t *testing.T) {
 	t.Setenv("MEAT_MODE_PASSWORD_HASH_FILE", "")
 	if got := ConfigFromEnv().PasswordHash; got != good {
 		t.Errorf("ConfigFromEnv hash = %q, want it trimmed", got)
+	}
+}
+
+func TestPushSubscriptionsBelongToTheSession(t *testing.T) {
+	const sub = `{"endpoint":"https://updates.push.services.mozilla.com/wpush/v2/a","keys":{"p256dh":"p","auth":"a"}}`
+	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
+	c := h.login("water the plants")
+	other := h.login("water the plants")
+	if w := h.do("POST", "/api/push/subscriptions", sub, c.Value); w.Code != http.StatusNoContent {
+		t.Fatalf("subscribe: %d %s", w.Code, w.Body)
+	}
+	if got := h.push.sessions["https://updates.push.services.mozilla.com/wpush/v2/a"]; got != store.SessionID(c.Value) {
+		t.Errorf("subscription session = %q, want %q", got, store.SessionID(c.Value))
+	}
+	// Logging out another device leaves it alone; logging out this one drops it.
+	h.do("POST", "/api/logout", "", other.Value)
+	if len(h.push.subs) != 1 {
+		t.Fatalf("another device's logout dropped the subscription")
+	}
+	h.do("POST", "/api/logout", "", c.Value)
+	if len(h.push.subs) != 0 {
+		t.Errorf("subscription kept after its session logged out: %v", h.push.subs)
+	}
+
+	h = newLoginHarness(t, Config{})
+	if w := h.do("POST", "/api/push/subscriptions", sub, ""); w.Code != http.StatusNoContent {
+		t.Fatalf("subscribe with login off: %d %s", w.Code, w.Body)
+	}
+	if got, ok := h.push.sessions["https://updates.push.services.mozilla.com/wpush/v2/a"]; !ok || got != "" {
+		t.Errorf("subscription session with login off = %q, %v; want none", got, ok)
 	}
 }

@@ -14,8 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -114,11 +116,11 @@ func TestSubscribeUpsertAndUnsubscribe(t *testing.T) {
 	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
 	ctx := context.Background()
 	s := newSub(t, "https://updates.push.services.mozilla.com/wpush/v2/a")
-	if err := r.Subscribe(ctx, s); err != nil {
+	if err := r.Subscribe(ctx, "", s); err != nil {
 		t.Fatal(err)
 	}
 	s2 := newSub(t, "https://updates.push.services.mozilla.com/wpush/v2/a")
-	if err := r.Subscribe(ctx, s2); err != nil {
+	if err := r.Subscribe(ctx, "", s2); err != nil {
 		t.Fatal(err)
 	}
 	if n := count(t, db); n != 1 {
@@ -153,7 +155,7 @@ func TestNotifyPrunesGoneAndContinues(t *testing.T) {
 		r.Client = ok.Client() // every httptest TLS server shares one certificate
 		ctx := context.Background()
 		for _, u := range []string{gone.URL, bad.URL, ok.URL} {
-			if err := r.Subscribe(ctx, newSub(t, u)); err != nil {
+			if err := r.Subscribe(ctx, "", newSub(t, u)); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -198,7 +200,7 @@ func TestSubscribeOnlyKnownPushServices(t *testing.T) {
 		"https://127.0.0.1:8080/api/actions":                   false,
 		"fcm.googleapis.com/a":                                 false,
 	} {
-		err := r.Subscribe(ctx, newSub(t, u))
+		err := r.Subscribe(ctx, "", newSub(t, u))
 		if ok && err != nil {
 			t.Errorf("Subscribe(%q) = %v", u, err)
 		}
@@ -226,12 +228,12 @@ func TestSubscribeKeepsTheNewest(t *testing.T) {
 	ctx := context.Background()
 	u := func(i int) string { return fmt.Sprintf("https://fcm.googleapis.com/fcm/send/%d", i) }
 	for i := range MaxSubscriptions + 5 {
-		if err := r.Subscribe(ctx, newSub(t, u(i))); err != nil {
+		if err := r.Subscribe(ctx, "", newSub(t, u(i))); err != nil {
 			t.Fatal(err)
 		}
 		if i == 10 {
 			// Renewing the first one makes it new again.
-			if err := r.Subscribe(ctx, newSub(t, u(0))); err != nil {
+			if err := r.Subscribe(ctx, "", newSub(t, u(0))); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -337,5 +339,163 @@ func TestFromEnv(t *testing.T) {
 	nt := n.(Multi)[1].(*Ntfy)
 	if nt.Topic != "plants" || nt.Client == nil || nt.Client.Timeout <= 0 {
 		t.Fatalf("ntfy = %+v; its client has no timeout", nt)
+	}
+}
+
+// pushServer is a push service that counts deliveries per path.
+func pushServer(t *testing.T, r *Registry) (*httptest.Server, func(path string) int32) {
+	t.Helper()
+	var mu sync.Mutex
+	hits := map[string]int32{}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+		mu.Lock()
+		hits[q.URL.Path]++
+		mu.Unlock()
+		w.WriteHeader(201)
+	}))
+	t.Cleanup(srv.Close)
+	r.hosts = append(r.hosts, srv.Listener.Addr().String())
+	r.Client = srv.Client()
+	return srv, func(path string) int32 {
+		mu.Lock()
+		defer mu.Unlock()
+		return hits[path]
+	}
+}
+
+func endpoints(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	rows, err := db.Query(`SELECT endpoint FROM push_subscriptions ORDER BY endpoint`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var e string
+		rows.Scan(&e)
+		out = append(out, e[strings.LastIndex(e, "/")+1:])
+	}
+	return out
+}
+
+func TestOldSubscriptionTableGainsColumns(t *testing.T) {
+	db := testDB(t)
+	if _, err := db.Exec(`CREATE TABLE push_subscriptions (
+		endpoint TEXT PRIMARY KEY,
+		p256dh   TEXT NOT NULL,
+		auth     TEXT NOT NULL
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	old := newSub(t, "https://updates.push.services.mozilla.com/wpush/v2/old")
+	db.Exec(`INSERT INTO push_subscriptions VALUES (?, ?, ?)`, old.Endpoint, old.Keys.P256dh, old.Keys.Auth)
+	before := time.Now().Unix()
+	if _, err := NewRegistry(t.TempDir(), db, "mailto:alex@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	var session sql.NullString
+	var renewed int64
+	if err := db.QueryRow(`SELECT session_id, renewed_at FROM push_subscriptions`).Scan(&session, &renewed); err != nil {
+		t.Fatal(err)
+	}
+	if session.Valid || renewed < before {
+		t.Errorf("old row: session %v, renewed_at %d; want no session and renewed now (>= %d)", session, renewed, before)
+	}
+	// Opening again changes nothing.
+	if _, err := NewRegistry(t.TempDir(), db, "mailto:alex@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, db); n != 1 {
+		t.Errorf("count %d after reopening", n)
+	}
+}
+
+func TestSubscriptionsExpireWithoutRenewal(t *testing.T) {
+	db := testDB(t)
+	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+	srv, hits := pushServer(t, r)
+	now := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	r.now = func() time.Time { return now }
+	ctx := context.Background()
+	for _, p := range []string{"/stale", "/fresh"} {
+		if err := r.Subscribe(ctx, "", newSub(t, srv.URL+p)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now = now.Add(SubscriptionTTL - time.Hour)
+	r.Subscribe(ctx, "", newSub(t, srv.URL+"/fresh")) // the app opened again
+	now = now.Add(2 * time.Hour)
+	if err := r.Notify(ctx, Message{Title: "T"}); err != nil {
+		t.Fatal(err)
+	}
+	if hits("/stale") != 0 || hits("/fresh") != 1 {
+		t.Errorf("hits stale %d, fresh %d; want 0, 1", hits("/stale"), hits("/fresh"))
+	}
+	if got := endpoints(t, db); len(got) != 1 || got[0] != "fresh" {
+		t.Errorf("left %v, want [fresh]", got)
+	}
+}
+
+func TestSubscriptionsFollowTheirSession(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	db := st.DB()
+	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+	srv, hits := pushServer(t, r)
+	now := time.Now()
+	r.now = func() time.Time { return now }
+	ctx := context.Background()
+
+	// Registered before the login was turned on.
+	if err := r.Subscribe(ctx, "", newSub(t, srv.URL+"/before")); err != nil {
+		t.Fatal(err)
+	}
+	r.RequireSession = true
+	if err := r.Subscribe(ctx, "", newSub(t, srv.URL+"/anon")); !errors.Is(err, store.ErrUnauthorized) {
+		t.Fatalf("subscribe without a session: %v, want ErrUnauthorized", err)
+	}
+	session := func(ttl time.Duration) (string, string) {
+		tok, s, err := st.CreateSession("tag", now, ttl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok, s.ID
+	}
+	_, live := session(time.Hour)
+	_, short := session(time.Minute)
+	outTok, out := session(time.Hour)
+	_, dropped := session(time.Hour)
+	for path, id := range map[string]string{"/live": live, "/short": short, "/out": out, "/dropped": dropped, "/made-up": "00ff"} {
+		if err := r.Subscribe(ctx, id, newSub(t, srv.URL+path)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.DeleteSession(outTok); err != nil { // logged out elsewhere
+		t.Fatal(err)
+	}
+	if err := r.DropSession(ctx, dropped); err != nil {
+		t.Fatal(err)
+	}
+	if got := endpoints(t, db); strings.Join(got, ",") != "before,live,made-up,out,short" {
+		t.Fatalf("after DropSession: %v", got)
+	}
+	now = now.Add(2 * time.Minute) // the short session has expired
+	if err := r.Notify(ctx, Message{Title: "T"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"/before", "/short", "/out", "/dropped", "/made-up"} {
+		if hits(p) != 0 {
+			t.Errorf("%s got a push", p)
+		}
+	}
+	if hits("/live") != 1 {
+		t.Errorf("/live got %d pushes, want 1", hits("/live"))
+	}
+	if got := endpoints(t, db); len(got) != 1 || got[0] != "live" {
+		t.Errorf("left %v, want [live]", got)
 	}
 }

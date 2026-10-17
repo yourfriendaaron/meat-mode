@@ -40,7 +40,7 @@ func (s *Store) CreateSession(tag string, now time.Time, ttl time.Duration) (str
 		id, tag, now.Unix(), now.Unix(), exp.Unix()); err != nil {
 		return "", Session{}, err
 	}
-	return token, Session{ID: hex.EncodeToString(id), ExpiresAt: time.Unix(exp.Unix(), 0)}, nil
+	return token, Session{ID: SessionID(token), ExpiresAt: time.Unix(exp.Unix(), 0)}, nil
 }
 
 // CheckSession returns the session for token if it exists under tag and has
@@ -59,7 +59,7 @@ func (s *Store) CheckSession(token, tag string, now time.Time, ttl time.Duration
 	if err != nil {
 		return nil, err
 	}
-	sess := &Session{ID: hex.EncodeToString(id), ExpiresAt: time.Unix(expires, 0)}
+	sess := &Session{ID: SessionID(token), ExpiresAt: time.Unix(expires, 0)}
 	if now.Sub(time.Unix(renewed, 0)) >= sessionRenewAfter {
 		exp := now.Add(ttl).Unix()
 		if _, err := s.db.Exec(`UPDATE sessions SET renewed_at = ?, expires_at = ? WHERE id = ?`,
@@ -71,6 +71,9 @@ func (s *Store) CheckSession(token, tag string, now time.Time, ttl time.Duration
 	}
 	return sess, nil
 }
+
+// SessionID is the ID of the session token names, whether or not it exists.
+func SessionID(token string) string { return hex.EncodeToString(hashToken(token)) }
 
 // DeleteSession ends the session for token; an unknown token is not an
 // error.

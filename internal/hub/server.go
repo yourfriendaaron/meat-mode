@@ -20,8 +20,11 @@ import (
 // PushRegistry keeps Web Push subscriptions. internal/notify provides it.
 type PushRegistry interface {
 	PublicKey() string
-	Subscribe(ctx context.Context, s api.PushSubscription) error
+	// Subscribe stores s for the session sessionID ("" when login is off).
+	Subscribe(ctx context.Context, sessionID string, s api.PushSubscription) error
 	Unsubscribe(ctx context.Context, endpoint string) error
+	// DropSession removes the subscriptions a session registered.
+	DropSession(ctx context.Context, sessionID string) error
 }
 
 // Body size limits.
@@ -269,7 +272,11 @@ func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "subscription needs an https endpoint and its p256dh and auth keys")
 		return
 	}
-	if err := s.push.Subscribe(r.Context(), sub); err != nil {
+	var sessionID string
+	if sess := sessionOf(r); sess != nil {
+		sessionID = sess.ID
+	}
+	if err := s.push.Subscribe(r.Context(), sessionID, sub); err != nil {
 		s.storeError(w, r, err)
 		return
 	}

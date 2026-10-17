@@ -48,7 +48,7 @@ When login is on, every `/api/` route except the three below answers `401` with 
 
 The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `MEAT_MODE_PUBLIC_URL` is `https://`. The hub stores only its SHA-256. A session lasts 90 days from its last use; the hub renews the cookie at most once a day. A session belongs to the password hash it was made under, so changing the hash logs every device out. Logins and the existing Host, Origin and Content-Type checks apply together: `POST /api/login` needs `Content-Type: application/json` like any other `/api/` write.
 
-**Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
+**Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session; turning login on later drops those, and each device subscribes again once it logs in. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
 
 ### Actions
 

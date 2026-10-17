@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/SherClockHolmes/webpush-go"
 
@@ -109,6 +110,10 @@ var PushHosts = []string{
 // past it drops the oldest.
 const MaxSubscriptions = 20
 
+// SubscriptionTTL is how long a subscription lasts without being registered
+// again. The app registers again each time it opens.
+const SubscriptionTTL = 60 * 24 * time.Hour
+
 // ErrBadEndpoint is returned for an endpoint that is not an https URL of a
 // known push service.
 var ErrBadEndpoint = fmt.Errorf("%w: push endpoint must be an https URL of a known push service", store.ErrInvalid)
@@ -119,8 +124,13 @@ type Registry struct {
 	keys    vapidKeys
 	subject string
 	hosts   []string // PushHosts; tests add their own
+	now     func() time.Time
 	// Client is the HTTP client used for push services; nil means the default.
 	Client *http.Client
+	// RequireSession is set when the hub has a login: every subscription
+	// then belongs to a session (the store's sessions table, in the same
+	// database) and stops receiving when that session ends.
+	RequireSession bool
 }
 
 // NewRegistry loads or creates the VAPID keys in dataDir and the
@@ -133,16 +143,57 @@ func NewRegistry(dataDir string, db *sql.DB, subject string) (*Registry, error) 
 	if err != nil {
 		return nil, err
 	}
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
-		endpoint TEXT PRIMARY KEY,
-		p256dh   TEXT NOT NULL,
-		auth     TEXT NOT NULL
-	)`)
-	if err != nil {
+	if err := createSubscriptions(db, time.Now()); err != nil {
 		return nil, err
 	}
 	subject, _ = strings.CutPrefix(subject, "mailto:") // the library adds mailto: back unless the value starts with https:
-	return &Registry{db: db, keys: keys, subject: subject, hosts: PushHosts}, nil
+	return &Registry{db: db, keys: keys, subject: subject, hosts: PushHosts, now: time.Now}, nil
+}
+
+// createSubscriptions creates the subscription table, or adds the session
+// and renewal columns to one from before the login. Existing rows count as
+// registered now, so they get the full SubscriptionTTL to register again.
+// session_id is the hex session ID, or NULL for a hub without a login;
+// renewed_at is Unix seconds.
+func createSubscriptions(db *sql.DB, now time.Time) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+		endpoint   TEXT PRIMARY KEY,
+		p256dh     TEXT NOT NULL,
+		auth       TEXT NOT NULL,
+		session_id TEXT,
+		renewed_at INTEGER NOT NULL DEFAULT 0
+	)`); err != nil {
+		return err
+	}
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('push_subscriptions')`)
+	if err != nil {
+		return err
+	}
+	cols := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		cols[name] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !cols["session_id"] {
+		if _, err := db.Exec(`ALTER TABLE push_subscriptions ADD COLUMN session_id TEXT`); err != nil {
+			return err
+		}
+	}
+	if !cols["renewed_at"] {
+		if _, err := db.Exec(`ALTER TABLE push_subscriptions ADD COLUMN renewed_at INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+	_, err = db.Exec(`UPDATE push_subscriptions SET renewed_at = ? WHERE renewed_at = 0`, now.Unix())
+	return err
 }
 
 // validSubject reports whether the VAPID subject is a mailto: address with
@@ -178,11 +229,19 @@ func (r *Registry) allowed(endpoint string) bool {
 	return false
 }
 
-// Subscribe stores a subscription as the newest, replacing any with the same
-// endpoint, and drops the oldest past MaxSubscriptions.
-func (r *Registry) Subscribe(ctx context.Context, s api.PushSubscription) error {
+// Subscribe stores a subscription as the newest, registered now by the
+// session sessionID ("" for a hub without a login), replacing any with the
+// same endpoint, and drops the oldest past MaxSubscriptions.
+func (r *Registry) Subscribe(ctx context.Context, sessionID string, s api.PushSubscription) error {
 	if s.Endpoint == "" || s.Keys.P256dh == "" || s.Keys.Auth == "" {
 		return fmt.Errorf("%w: push subscription needs endpoint, p256dh and auth", store.ErrInvalid)
+	}
+	if r.RequireSession && sessionID == "" {
+		return fmt.Errorf("%w: log in before turning on reminders", store.ErrUnauthorized)
+	}
+	var session any
+	if sessionID != "" {
+		session = sessionID
 	}
 	if !r.allowed(s.Endpoint) {
 		return ErrBadEndpoint
@@ -196,8 +255,8 @@ func (r *Registry) Subscribe(ctx context.Context, s api.PushSubscription) error 
 	if _, err := tx.Exec(`DELETE FROM push_subscriptions WHERE endpoint = ?`, s.Endpoint); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (?, ?, ?)`,
-		s.Endpoint, s.Keys.P256dh, s.Keys.Auth); err != nil {
+	if _, err := tx.Exec(`INSERT INTO push_subscriptions (endpoint, p256dh, auth, session_id, renewed_at) VALUES (?, ?, ?, ?, ?)`,
+		s.Endpoint, s.Keys.P256dh, s.Keys.Auth, session, r.now().Unix()); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM push_subscriptions WHERE rowid NOT IN
@@ -213,7 +272,34 @@ func (r *Registry) Unsubscribe(ctx context.Context, endpoint string) error {
 	return err
 }
 
+// DropSession removes the subscriptions the session sessionID registered,
+// when it logs out.
+func (r *Registry) DropSession(ctx context.Context, sessionID string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM push_subscriptions WHERE session_id = ?`, sessionID)
+	return err
+}
+
+// prune deletes subscriptions not registered again within SubscriptionTTL
+// and, with a login, those whose session has ended or that belong to none.
+func (r *Registry) prune(ctx context.Context) error {
+	now := r.now()
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM push_subscriptions WHERE renewed_at <= ?`,
+		now.Add(-SubscriptionTTL).Unix()); err != nil {
+		return err
+	}
+	if !r.RequireSession {
+		return nil
+	}
+	_, err := r.db.ExecContext(ctx, `DELETE FROM push_subscriptions WHERE session_id IS NULL OR NOT EXISTS
+		(SELECT 1 FROM sessions WHERE sessions.id = unhex(push_subscriptions.session_id) AND sessions.expires_at > ?)`,
+		now.Unix())
+	return err
+}
+
 func (r *Registry) list(ctx context.Context) ([]webpush.Subscription, error) {
+	if err := r.prune(ctx); err != nil {
+		return nil, err
+	}
 	rows, err := r.db.QueryContext(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY endpoint`)
 	if err != nil {
 		return nil, err
@@ -230,7 +316,7 @@ func (r *Registry) list(ctx context.Context) ([]webpush.Subscription, error) {
 	return out, rows.Err()
 }
 
-// Notify sends m to every subscription. A 404 or 410 from the push service
+// Notify sends m to every live subscription (see prune). A 404 or 410 from the push service
 // removes that subscription. Other failures are returned joined and do not
 // stop the remaining sends.
 func (r *Registry) Notify(ctx context.Context, m Message) error {
