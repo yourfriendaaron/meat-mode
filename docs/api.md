@@ -73,7 +73,7 @@ The bridge sends the full set per repo whenever any fingerprint in it changed. T
 
 ### Agents: adding to the personal list
 
-An agent on any machine adds a personal to-do with `POST /bridge/v1/personal` and a bridge token. No bridge needs to run; add a machine in Settings (for example `agents`) to issue a token for agents alone, and revoke it there.
+An agent adds a personal to-do with `POST /bridge/v1/personal` and the bridge token of its machine. No bridge needs to run, and the post leaves the bridge's last-seen time alone, so an agent's add never makes a stopped bridge look online. On a paired machine, `meat-mode add` makes this call with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
 
 `PersonalTodo` is `{"id"?, "title", "due"?, "note"?, "author"?}`:
 

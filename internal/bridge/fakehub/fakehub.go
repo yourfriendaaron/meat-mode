@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ type Hub struct {
 	itemPuts map[string]int
 	queue    map[string][]api.Action // bridge -> actions it was sent
 	results  map[string][]api.ActionResult
+	personal []Personal
 	down     bool
 }
 
@@ -33,6 +35,12 @@ type Hub struct {
 type Hello struct {
 	Bridge string
 	api.Hello
+}
+
+// Personal is one personal to-do the hub received.
+type Personal struct {
+	Bridge string
+	api.PersonalTodo
 }
 
 // New starts a fake hub that accepts the given tokens (token -> bridge name).
@@ -47,6 +55,7 @@ func New(tokens map[string]string) *Hub {
 	mux.HandleFunc("PUT /bridge/v1/items", h.auth(h.putItems))
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
 	mux.HandleFunc("POST /bridge/v1/actions/{id}/result", h.auth(h.result))
+	mux.HandleFunc("POST /bridge/v1/personal", h.auth(h.addPersonal))
 	h.Server = httptest.NewServer(mux)
 	return h
 }
@@ -90,6 +99,37 @@ func (h *Hub) hello(w http.ResponseWriter, r *http.Request, bridge string) {
 	h.hellos = append(h.hellos, Hello{Bridge: bridge, Hello: hi})
 	h.mu.Unlock()
 	writeJSON(w, api.HelloReply{Bridge: bridge, ServerTime: time.Now().UTC()})
+}
+
+// addPersonal keeps each to-do once by id, as the real hub does, and
+// replies with a key of the reserved hub bridge's personal repo.
+func (h *Hub) addPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
+	var t api.PersonalTodo
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if strings.TrimSpace(t.Title) == "" {
+		writeErr(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for i, p := range h.personal {
+		if t.ID != "" && p.ID == t.ID {
+			writeJSON(w, personalReply(i))
+			return
+		}
+	}
+	h.personal = append(h.personal, Personal{Bridge: bridge, PersonalTodo: t})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(personalReply(len(h.personal) - 1))
+}
+
+func personalReply(i int) api.PersonalTodoReply {
+	id := "mm-" + strconv.Itoa(i+1)
+	return api.PersonalTodoReply{Key: "hub/personal/" + id, ID: id}
 }
 
 func (h *Hub) putRepos(w http.ResponseWriter, r *http.Request, bridge string) {
@@ -213,6 +253,13 @@ func (h *Hub) Items(bridge, repo string) ([]api.Item, bool) {
 	defer h.mu.Unlock()
 	it, ok := h.items[bridge+"/"+repo]
 	return slices.Clone(it), ok
+}
+
+// Personals returns the personal to-dos received, in order.
+func (h *Hub) Personals() []Personal {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.personal)
 }
 
 // ItemPuts counts the item sets received for a repo.

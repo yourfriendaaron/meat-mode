@@ -91,7 +91,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.Handle("PUT /bridge/v1/items", s.bridgeAuth(s.handlePutItems))
 	m.Handle("GET /bridge/v1/actions", s.bridgeAuth(s.handlePullActions))
 	m.Handle("POST /bridge/v1/actions/{id}/result", s.bridgeAuth(s.handleResult))
-	m.Handle("POST /bridge/v1/personal", s.bridgeAuth(s.handleAddPersonal))
+	m.Handle("POST /bridge/v1/personal", s.tokenAuth(s.handleAddPersonal))
 
 	m.HandleFunc("GET /healthz", s.handleHealth)
 	staticH := newStatic(static)
@@ -330,8 +330,20 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // --- bridge API
 
-// bridgeAuth checks the bearer token and passes the bridge's name on.
+// bridgeAuth checks the bearer token, records the bridge's last-seen time
+// and passes its name on.
 func (s *Server) bridgeAuth(next func(http.ResponseWriter, *http.Request, string)) http.Handler {
+	return s.authToken(next, true)
+}
+
+// tokenAuth checks the bearer token and passes the bridge's name on without
+// touching its last-seen time: an agent using the token says nothing about
+// whether the bridge runs.
+func (s *Server) tokenAuth(next func(http.ResponseWriter, *http.Request, string)) http.Handler {
+	return s.authToken(next, false)
+}
+
+func (s *Server) authToken(next func(http.ResponseWriter, *http.Request, string), touch bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok || token == "" {
@@ -349,8 +361,10 @@ func (s *Server) bridgeAuth(next func(http.ResponseWriter, *http.Request, string
 			s.storeError(w, r, err)
 			return
 		}
-		if err := s.store.Touch(name); err != nil {
-			s.log.Warn("record bridge last-seen", "bridge", name, "err", err)
+		if touch {
+			if err := s.store.Touch(name); err != nil {
+				s.log.Warn("record bridge last-seen", "bridge", name, "err", err)
+			}
 		}
 		next(w, r, name)
 	})
