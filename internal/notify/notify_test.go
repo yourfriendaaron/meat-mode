@@ -542,3 +542,45 @@ func TestTestReminderReachesOnlyTheSessionAndNtfy(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+func TestTestReminderToAGoneSubscription(t *testing.T) {
+	for _, code := range []int{404, 410} {
+		db := testDB(t)
+		r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+		var hits atomic.Int32
+		gone := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+			hits.Add(1)
+			w.WriteHeader(code)
+		}))
+		r.hosts = append(r.hosts, gone.Listener.Addr().String())
+		r.Client = gone.Client()
+		ctx := context.Background()
+		if err := r.Subscribe(ctx, "", newSub(t, gone.URL+"/stale")); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.TestReminder(ctx, "", ""); got.Push != "expired" {
+			t.Fatalf("code %d: got %+v, want push expired", code, got)
+		}
+		if hits.Load() != 1 || count(t, db) != 0 {
+			t.Fatalf("code %d: %d pushes, %d subscriptions left; want 1, 0", code, hits.Load(), count(t, db))
+		}
+		gone.Close()
+	}
+}
+
+func TestTestReminderToADisallowedEndpoint(t *testing.T) {
+	db := testDB(t)
+	r, _ := NewRegistry(t.TempDir(), db, "mailto:alex@example.com")
+	// Stored before endpoints were checked.
+	old := newSub(t, "https://push.example.com/send/old")
+	if _, err := db.Exec(`INSERT INTO push_subscriptions (endpoint, p256dh, auth, renewed_at) VALUES (?, ?, ?, ?)`,
+		old.Endpoint, old.Keys.P256dh, old.Keys.Auth, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.TestReminder(context.Background(), "", ""); got.Push != "expired" {
+		t.Fatalf("got %+v, want push expired", got)
+	}
+	if n := count(t, db); n != 0 {
+		t.Fatalf("%d subscriptions left, want 0", n)
+	}
+}

@@ -331,24 +331,30 @@ func (r *Registry) Notify(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
-	return r.send(ctx, subs, m)
+	_, err = r.send(ctx, subs, m)
+	return err
 }
 
 // NotifySession sends m to the subscriptions the session sessionID
-// registered ("" for a hub without a login) and reports how many there were.
-func (r *Registry) NotifySession(ctx context.Context, sessionID string, m Message) (int, error) {
+// registered ("" for a hub without a login). It reports how many there were
+// and how many the push service accepted.
+func (r *Registry) NotifySession(ctx context.Context, sessionID string, m Message) (found, delivered int, err error) {
 	var session any
 	if sessionID != "" {
 		session = sessionID
 	}
 	subs, err := r.query(ctx, `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE session_id IS ? ORDER BY endpoint`, session)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return len(subs), r.send(ctx, subs, m)
+	delivered, err = r.send(ctx, subs, m)
+	return len(subs), delivered, err
 }
 
-func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Message) error {
+// send pushes m to subs and reports how many the push service accepted. A
+// subscription it removes (gone, or not on a known push service) counts as
+// not delivered without being an error.
+func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Message) (int, error) {
 	payload, _ := json.Marshal(map[string]string{
 		"title": m.Title, "body": m.Body, "url": m.URL, "tag": m.Tag,
 	})
@@ -363,6 +369,7 @@ func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Mess
 		opts.HTTPClient = r.Client
 	}
 	var errs []error
+	delivered := 0
 	for i := range subs {
 		if !r.allowed(subs[i].Endpoint) {
 			// Stored before endpoints were checked; never send to it.
@@ -385,9 +392,11 @@ func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Mess
 			}
 		case resp.StatusCode/100 != 2:
 			errs = append(errs, fmt.Errorf("web push: status %d", resp.StatusCode))
+		default:
+			delivered++
 		}
 	}
-	return errors.Join(errs...)
+	return delivered, errors.Join(errs...)
 }
 
 // TestReminder sends a test reminder to the session's own subscriptions and
@@ -396,10 +405,16 @@ func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Mess
 func (r *Registry) TestReminder(ctx context.Context, sessionID, url string) api.ReminderTest {
 	m := Message{Title: "Test reminder", Body: "Reminders from Meat Mode are working.", URL: url, Tag: "test"}
 	out := api.ReminderTest{Push: "sent", Ntfy: "off"}
-	if n, err := r.NotifySession(ctx, sessionID, m); err != nil {
+	found, delivered, err := r.NotifySession(ctx, sessionID, m)
+	switch {
+	case delivered > 0:
+	case err != nil:
 		out.Push = "failed"
-	} else if n == 0 {
+	case found == 0:
 		out.Push = "none"
+	default:
+		// The push service no longer knows the subscription, so it was removed.
+		out.Push = "expired"
 	}
 	if r.Ntfy != nil {
 		out.Ntfy = "sent"

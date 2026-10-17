@@ -4,7 +4,8 @@ package api
 // reminder went on each way the hub sends reminders.
 type ReminderTest struct {
 	// Push is "sent" (to this device), "none" (this device has no
-	// subscription) or "failed".
+	// subscription), "expired" (the push service no longer knows this
+	// device's subscription, so the hub removed it) or "failed".
 	Push string `json:"push"`
 	// Ntfy is "sent", "failed", or "off" when ntfy is not set up.
 	Ntfy string `json:"ntfy"`

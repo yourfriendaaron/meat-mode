@@ -1,11 +1,11 @@
 import { call } from "../../api.ts";
 import { isIOS, pushSupport } from "../../device.ts";
 import { esc } from "../../html.ts";
-import { remindersOn, turnOnReminders } from "../../push.ts";
+import { remindersOn, subscribePush, turnOnReminders } from "../../push.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
 interface ReminderTest {
-  push: "sent" | "none" | "failed";
+  push: "sent" | "none" | "expired" | "failed";
   ntfy: "sent" | "failed" | "off";
 }
 
@@ -18,6 +18,7 @@ function testMessage(r: ReminderTest): string {
   const parts: string[] = [];
   if (r.push === "sent") parts.push("A test reminder is on its way to this device. It should show up in a few seconds.");
   else if (r.push === "none") parts.push("This device has no reminder subscription yet. Turn on reminders first.");
+  else if (r.push === "expired") parts.push("The push service no longer accepts this device's reminder subscription, and renewing it did not help.");
   else parts.push("The hub could not send the test reminder to this device.");
   if (r.ntfy === "sent") parts.push("A test reminder was also sent to ntfy.");
   else if (r.ntfy === "failed") parts.push("The hub could not reach ntfy.");
@@ -26,7 +27,13 @@ function testMessage(r: ReminderTest): string {
 
 async function sendTest(): Promise<string> {
   try {
-    return testMessage(await call<ReminderTest>("POST", "/api/reminders/test"));
+    let r = await call<ReminderTest>("POST", "/api/reminders/test");
+    if (r.push === "expired") {
+      // The hub dropped the stale subscription; make a new one and try once more.
+      await subscribePush(true);
+      r = await call<ReminderTest>("POST", "/api/reminders/test");
+    }
+    return testMessage(r);
   } catch (e) {
     return `Could not send a test reminder: ${(e as Error).message}`;
   }

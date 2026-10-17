@@ -19,8 +19,26 @@ async function fakeBrowserPush(page: Page, permission: string, answer = "granted
       }
       Object.defineProperty(window, "Notification", { value: FakeNotification, configurable: true, writable: true });
       Object.defineProperty(window, "PushManager", { value: class {}, configurable: true, writable: true });
-      const sub = { toJSON: () => ({ endpoint: "https://push.example.com/send/abc", keys: { p256dh: "BP", auth: "AU" } }) };
-      const reg = { pushManager: { getSubscription: async () => null, subscribe: async () => sub } };
+      // Each subscribe makes a new endpoint; unsubscribing forgets it.
+      let made = 0;
+      let current: object | null = null;
+      const newSub = () => {
+        const sub = {
+          toJSON: () => ({ endpoint: `https://push.example.com/send/${made}`, keys: { p256dh: "BP", auth: "AU" } }),
+          unsubscribe: async () => {
+            if (current === sub) current = null;
+            return true;
+          },
+        };
+        made++;
+        return sub;
+      };
+      const reg = {
+        pushManager: {
+          getSubscription: async () => current,
+          subscribe: async () => (current = newSub()),
+        },
+      };
       Object.defineProperty(navigator, "serviceWorker", {
         value: { register: async () => reg, ready: Promise.resolve(reg) },
         configurable: true,
@@ -96,6 +114,28 @@ test.describe("desktop", () => {
     hub.pushSubscriptions = 0; // the hub lost it, as after a log out
     await w.region.getByRole("button", { name: "Send a test reminder" }).click();
     await expect(w.region.getByRole("status")).toContainText("no reminder subscription");
+  });
+
+  test("a subscription the push service dropped is renewed", async ({ page, hub }) => {
+    await fakeBrowserPush(page, "default");
+    await openWizardAt(page, hub, "reminders", "device");
+    const w = wizard(page);
+    await w.region.getByRole("button", { name: "Turn on reminders" }).click();
+    await expect(w.region.getByRole("status")).toContainText("A test reminder is on its way");
+    expect(hub.pushSubscriptions).toBe(1);
+
+    // The push service answers 410 once: the app makes a new subscription and tries again.
+    hub.pushGone = 1;
+    await w.region.getByRole("button", { name: "Send a test reminder" }).click();
+    await expect.poll(() => hub.reminderTests).toBe(3);
+    await expect(w.region.getByRole("status")).toContainText("A test reminder is on its way");
+    expect(hub.pushSubscriptions).toBe(1);
+
+    // When the new one is turned away too, the app says so instead of claiming it was sent.
+    hub.pushGone = 2;
+    await w.region.getByRole("button", { name: "Send a test reminder" }).click();
+    await expect(w.region.getByRole("status")).toContainText("no longer accepts");
+    expect(hub.reminderTests).toBe(5);
   });
 
   test("a browser without push says so and the step can be skipped", async ({ page, hub }) => {

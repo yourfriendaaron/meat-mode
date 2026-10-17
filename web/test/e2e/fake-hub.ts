@@ -109,6 +109,11 @@ export class FakeHub {
   /** Push subscriptions the app registered, and the test reminders it asked for. */
   pushSubscriptions = 0;
   reminderTests = 0;
+  /**
+   * Test reminders the push service turns away as gone. Each one removes the
+   * subscription, as the hub does, and reports "expired".
+   */
+  pushGone = 0;
   /** Whether the fake hub reports ntfy as set up in the test reminder. */
   ntfy = false;
   /** When set, GET /api/setup answers after this many ms. */
@@ -262,7 +267,13 @@ export class FakeHub {
     }
     if (method === "POST" && path === "/api/reminders/test") {
       this.reminderTests++;
-      return this.json(route, 200, { push: this.pushSubscriptions > 0 ? "sent" : "none", ntfy: this.ntfy ? "sent" : "off" });
+      const ntfy = this.ntfy ? "sent" : "off";
+      if (this.pushSubscriptions > 0 && this.pushGone > 0) {
+        this.pushGone--;
+        this.pushSubscriptions--;
+        return this.json(route, 200, { push: "expired", ntfy });
+      }
+      return this.json(route, 200, { push: this.pushSubscriptions > 0 ? "sent" : "none", ntfy });
     }
     if (method === "GET" && path === "/api/bridges") return this.json(route, 200, this.bridges);
     if (method === "POST" && path === "/api/bridges") {
