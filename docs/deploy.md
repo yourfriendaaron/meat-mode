@@ -51,7 +51,7 @@ On its first start the hub has no password, so it prints a one-time setup code i
 docker logs meat-mode          # or: docker compose logs meat-mode
 ```
 
-Look for the line `this hub has no password: open the app and set one with this setup code` and its `code=XXXX-XXXX-XXXX`. The same code is in the file `setup-code` in the data volume (`/data` in the container), for hosts such as a NAS where the log is easier to miss. The code works once and lasts an hour. Restart the hub for a new one.
+Look for the line `this hub has no password: open the app and set one with this setup code` and its `code=XXXX-XXXX-XXXX`. The same code is in the file `setup-code` in the data volume (`/data` in the container), for hosts such as a NAS where the log is easier to miss. The code works once and lasts an hour. Restart the hub for a new one. Wrong codes are limited hub-wide to 5 a minute, so if claiming keeps saying too many tries, restart the hub or set `MEAT_MODE_PASSWORD_HASH` instead.
 
 The data volume holds the database and the Web Push keys. Keep it on local storage: SQLite's write-ahead log does not work over NFS or SMB. If you bind-mount a host directory instead of a named volume, make it writable by user id 65532 (`chown 65532:65532 <dir>`); the hub says so and exits if it cannot write.
 
@@ -87,7 +87,7 @@ Open the app on the hub's loopback address, `http://127.0.0.1:8080`, in a browse
 ssh -L 8080:127.0.0.1:8080 <hub host>      # then open http://127.0.0.1:8080
 ```
 
-The setup wizard opens. Its **Secure the hub** step asks for the setup code from the hub's log (see step 1) and the new password, and logs this browser in. The rest of setup can wait until the proxy is up; run it again from **Settings**. **Settings**, **Password** changes the password later. It needs the current one, and every other device is logged out.
+The setup wizard opens. Its **Secure the hub** step asks for the setup code from the hub's log (see step 1) and the new password, and logs this browser in. The rest of setup can wait until the proxy is up; run it again from **Settings**. Until you open the app at `MEAT_MODE_PUBLIC_URL`, the Connection check reports an address problem; that is expected. **Settings**, **Password** changes the password later. It needs the current one, and every other device is logged out.
 
 **2. Or give the hub a password hash**, for scripted installs where nobody opens a browser first. A hash in the environment wins over a password set in the app, and the app then says the password is set by the environment and offers no way to change it. Make the hash with the image you built:
 

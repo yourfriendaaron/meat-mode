@@ -206,6 +206,26 @@ test("theme toggle persists, and axe passes in both themes", async ({ page, hub 
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(40, 42, 54)");
 });
 
+test("Settings Appearance offers dark, light and the device's setting", async ({ page, hub }) => {
+  void hub;
+  await page.emulateMedia({ colorScheme: "light" });
+  await openApp(page);
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  const look = page.locator("section[aria-labelledby=s-look]");
+  const html = page.locator("html");
+  await expect(look.getByRole("radio", { name: /^Dark/ })).toBeChecked();
+  await look.getByRole("radio", { name: /^Light/ }).check();
+  await expect(html).toHaveAttribute("data-theme", "light");
+  await look.getByRole("radio", { name: /^Match this device/ }).check();
+  expect(await page.evaluate(() => localStorage.getItem("meat-mode.theme"))).toBe("system");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  await axe(page);
+  await page.reload();
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  await expect(look.getByRole("radio", { name: /^Match this device/ })).toBeChecked();
+});
+
 test("axe passes on settings and the snooze dialog", async ({ page, hub }) => {
   await openApp(page);
   await page.keyboard.press("j");

@@ -171,11 +171,15 @@ export async function wizardAct(act: string, el: HTMLElement, ctx: AppContext): 
         break;
       case "wizard-skip":
         if (!r || !step) break;
+        step.leave?.();
         leave(step.id, "skipped");
         go(r.run.steps[r.index + 1], ctx);
         break;
       case "wizard-back":
-        if (r) go(r.run.steps[r.index - 1], ctx);
+        if (r) {
+          step?.leave?.();
+          go(r.run.steps[r.index - 1], ctx);
+        }
         break;
       case "wizard-close":
       case "wizard-later":

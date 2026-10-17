@@ -50,6 +50,8 @@ export interface Step extends Handlers {
   next?(ctx: AppContext): boolean | Promise<boolean>;
   /** Runs when a new run starts, so a step that keeps state in its module can forget the last run. */
   start?(): void;
+  /** Runs when the step is left by Skip or Back, so it can drop what must not outlive the visit, such as a one-time token. */
+  leave?(): void;
   /** The id of the heading of its section in Settings, such as "s-push"; Finish links to it. */
   settings?: string;
 }

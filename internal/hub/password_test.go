@@ -228,6 +228,21 @@ func TestChangePassword(t *testing.T) {
 	h.login("feed the cat")
 }
 
+func TestChangePasswordSucceedsWhenDroppingReminders(t *testing.T) {
+	h := newLoginHarness(t, Config{})
+	if err := h.st.SetPasswordHash(cheapHash("water the plants")); err != nil {
+		t.Fatal(err)
+	}
+	h.srv = h.server(Config{})
+	c := h.login("water the plants")
+	h.login("water the plants")
+	h.push.dropErr = errors.New("database is locked")
+	if w := h.do("PUT", "/api/password", `{"current":"water the plants","password":"feed the cat"}`, c.Value); w.Code != http.StatusNoContent {
+		t.Fatalf("change with a failing drop: %d %s, want 204", w.Code, w.Body)
+	}
+	h.login("feed the cat")
+}
+
 func TestWrongCurrentPasswordCountsAsAWrongLogin(t *testing.T) {
 	h := newLoginHarness(t, Config{})
 	if err := h.st.SetPasswordHash(cheapHash("water the plants")); err != nil {

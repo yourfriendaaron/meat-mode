@@ -32,6 +32,13 @@ function stopPolling() {
   poll = undefined;
 }
 
+/** Drops the one-time token and everything tied to it, so a revisit never draws it again. */
+function forget() {
+  pairing = null;
+  error = "";
+  stopPolling();
+}
+
 function waitForHello(ctx: AppContext, name: string) {
   stopPolling();
   poll = setInterval(() => {
@@ -98,6 +105,11 @@ registerStep({
       : "<p>Name the machine your agents work on. You can add more later in Settings.</p>";
     return `${intro}${machinesHTML(ctx)}${pairing ? pairingHTML(ctx, pairing) : formHTML(machines.length > 0)}`;
   },
+  start() {
+    forget();
+    wanted = false;
+  },
+  leave: forget,
   next(ctx) {
     if (!agentMachines(ctx.state?.bridges).length) {
       // Continue on the question means yes; on the empty form it asks for a name.
@@ -107,9 +119,7 @@ registerStep({
       document.getElementById("agents-name")?.focus();
       return false;
     }
-    pairing = null;
-    error = "";
-    stopPolling();
+    forget();
     return true;
   },
   async act(act, el, ctx) {

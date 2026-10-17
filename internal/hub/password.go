@@ -207,9 +207,10 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.push != nil {
 		for _, id := range ended {
+			// The password is already changed; a subscription left behind is
+			// pruned once its session is seen to have ended.
 			if err := s.push.DropSession(r.Context(), id); err != nil {
-				s.storeError(w, r, err)
-				return
+				slog.Warn("could not drop the reminders of a logged-out session", "err", err)
 			}
 		}
 	}

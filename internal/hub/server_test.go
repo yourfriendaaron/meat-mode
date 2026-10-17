@@ -28,6 +28,7 @@ type fakePush struct {
 	subs      map[string]api.PushSubscription
 	sessions  map[string]string // endpoint to the session that registered it
 	testedURL string
+	dropErr   error // returned by DropSession when set
 }
 
 func (f *fakePush) PublicKey() string { return "BExampleKey" }
@@ -57,6 +58,9 @@ func (f *fakePush) TestReminder(_ context.Context, sessionID, endpoint, url stri
 func (f *fakePush) DropSession(_ context.Context, sessionID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.dropErr != nil {
+		return f.dropErr
+	}
 	for ep, id := range f.sessions {
 		if id == sessionID {
 			delete(f.subs, ep)

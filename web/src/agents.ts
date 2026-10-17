@@ -76,7 +76,7 @@ To put something on ${who}'s personal to-do list instead, not tied to a repo:
 
     meat-mode add "Renew the library card" --due 2026-03-02 --note "It expires on Friday." --author <your name>
 
---due takes a date (due at 9:00), a local date and time such as "2026-03-02 18:30", or an RFC 3339 time. Pass --id with a UUID you make up, and running the command again changes nothing.
+--due takes a date (due at 9:00), a date and time in ${who}'s time zone such as "2026-03-02 18:30", or an RFC 3339 time. Pass --id with a UUID you make up, and running the command again changes nothing.
 
 Keep titles short and say what to do. Put the context in the description or the note.
 `;

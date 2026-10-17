@@ -30,7 +30,7 @@ import {
 import { fmtAgo, fmtTime, fmtWhen, toLocalInput } from "./dates.ts";
 import { snoozeOptions } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
-import { applyTheme, getTheme, setTheme } from "./theme.ts";
+import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } from "./theme.ts";
 import { loginErrorText, needsLogin } from "./login.ts";
 import { esc } from "./html.ts";
 import { machineReposHTML } from "./agents.ts";
@@ -581,7 +581,7 @@ ${
     : ""
 }</section>`;
   const own: [number, string][] = [
-    [10, `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look">Appearance</h2><button class="btn" data-act="theme"></button></section>`],
+    [10, `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look">Appearance</h2>${themeChoicesHTML("settings-theme")}</section>`],
     [
       20,
       `<section class="set-section" aria-labelledby="s-push"><h2 id="s-push">Reminders</h2>${pushHTML}${S.pushStatus ? `<p class="muted small" role="status">${esc(S.pushStatus)}</p>` : ""}</section>`,
@@ -1352,6 +1352,7 @@ function onInput(e: Event) {
 
 function onChange(e: Event) {
   if ((e.target as HTMLElement).id === "qa-list") qaListTouched = true;
+  else if (themeChoiceChanged(e.target as HTMLElement, "settings-theme")) renderTheme();
   else if (shellUp) extChange(e.target as HTMLElement, ctx);
 }
 

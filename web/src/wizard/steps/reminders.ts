@@ -77,6 +77,9 @@ registerStep({
   part: "device",
   order: ORDER.reminders,
   settings: "s-push",
+  start() {
+    message = "";
+  },
   render() {
     const status = message ? `<p class="muted small" role="status">${esc(message)}</p>` : "";
     return body() + status;
