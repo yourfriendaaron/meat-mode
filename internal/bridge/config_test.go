@@ -40,7 +40,7 @@ func TestCheckURL(t *testing.T) {
 
 func TestConfigSaveLoadAndEnv(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "meat-mode", "bridge.json")
-	c := Config{HubURL: "https://hub.example.com", Token: "secret", Roots: []string{}, Personal: "/srv/me"}
+	c := Config{HubURL: "https://hub.example.com", Token: "secret", Roots: []string{}}
 	if err := c.Save(path); err != nil {
 		t.Fatal(err)
 	}
@@ -66,6 +66,23 @@ func TestConfigSaveLoadAndEnv(t *testing.T) {
 	t.Setenv("MEAT_MODE_ALLOW_INSECURE_HTTP", "maybe")
 	if _, err := LoadConfig(path); err == nil {
 		t.Error("a bad MEAT_MODE_ALLOW_INSECURE_HTTP was accepted")
+	}
+}
+
+func TestConfigDropsTheOldPersonalRepo(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bridge.json")
+	if err := os.WriteFile(path, []byte(`{"hubURL":"https://hub.example.com","token":"secret","roots":null,"personal":"/srv/me"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("a config from an older bridge: %v", err)
+	}
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); strings.Contains(string(b), "personal") {
+		t.Errorf("saved config still names the personal repo: %s", b)
 	}
 }
 

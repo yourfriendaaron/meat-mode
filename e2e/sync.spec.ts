@@ -1,6 +1,7 @@
 // End to end: the app in a browser, a real hub, two real bridges (laptop and
 // desk) and real bd repos. The tests share one world and run in order; each
-// builds on the state the previous one left.
+// builds on the state the previous one left. The personal list is the hub's
+// own; the bead tests use opted-in repos.
 
 import { test as base, expect, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
@@ -38,12 +39,12 @@ base.beforeAll(async () => {
   if (process.env.E2E_REQUIRE_BD && !hasBd()) throw new Error(BD_MISSING);
   world = await World.create();
   await world.addMachine("laptop", [
-    { name: "personal", prefix: "lp", optedIn: false, human: ["Water the plants", "Renew the library card", "Buy stamps", "Fix the gate latch"] },
+    { name: "chores", prefix: "lp", optedIn: true, human: ["Water the plants", "Renew the library card", "Buy stamps", "Fix the gate latch"] },
     { name: "garden", prefix: "ga", optedIn: true, human: ["Order compost for the beds", "Prune the roses"], other: ["Refactor the watering script"] },
     { name: "clients/website", prefix: "we", optedIn: false, human: ["Approve the footer text"] },
   ]);
   await world.addMachine("desk", [
-    { name: "personal", prefix: "dp", optedIn: false, human: ["Call Sam about the weekend"] },
+    { name: "errands", prefix: "dp", optedIn: true, human: ["Call Sam about the weekend"] },
     { name: "kitchen", prefix: "ki", optedIn: true, human: ["Descale the kettle"] },
     { name: "garage", prefix: "gr", optedIn: false, human: ["Sort the toolbox"] },
   ]);
@@ -135,7 +136,10 @@ test("pairs two bridges through Settings and shows both machines' items", async 
   for (const t of ["Refactor the watering script", "Approve the footer text", "Sort the toolbox"]) {
     await expect(row(page, t)).toHaveCount(0);
   }
-  await expect(page.getByRole("navigation", { name: "Lists" })).toContainText("personalon desk");
+  // The hub's own personal list comes first, then each synced repo.
+  const lists = page.getByRole("navigation", { name: "Lists" }).getByRole("button");
+  await expect(lists.first()).toContainText("personal");
+  await expect(page.getByRole("navigation", { name: "Lists" })).toContainText("errands");
   await expect(page.locator(".sidebar .sync-pill")).toHaveText("Synced");
   deskBefore = await deskSnapshot(w);
 });
@@ -175,12 +179,12 @@ test("quick add with a date and #list creates a bead in that repo", async ({ pag
 
 test("done, snooze, note and won't do reach bd", async ({ page, w }) => {
   await open(page, w);
-  const personal = dir(w, "laptop", "personal");
+  const chores = dir(w, "laptop", "chores");
   const garden = dir(w, "laptop", "garden");
 
   await row(page, "Buy stamps").getByRole("button", { name: "Mark done: Buy stamps" }).click();
-  await expect.poll(async () => (await w.show(personal, id(w, "Buy stamps"))).status).toBe("closed");
-  expect((await w.show(personal, id(w, "Buy stamps"))).close_reason).toBe("Done in Meat Mode");
+  await expect.poll(async () => (await w.show(chores, id(w, "Buy stamps"))).status).toBe("closed");
+  expect((await w.show(chores, id(w, "Buy stamps"))).close_reason).toBe("Done in Meat Mode");
 
   await row(page, "Fix the gate latch").locator(".row-body").click();
   const detail = page.locator("#detail");
@@ -190,7 +194,7 @@ test("done, snooze, note and won't do reach bd", async ({ page, w }) => {
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await expect
     .poll(async () => {
-      const d = (await w.show(personal, id(w, "Fix the gate latch"))).defer_until;
+      const d = (await w.show(chores, id(w, "Fix the gate latch"))).defer_until;
       return d ? Date.parse(d) : null;
     })
     .toBe(until.getTime());
@@ -230,7 +234,7 @@ test("laptop's actions never reach desk; desk's own actions do", async ({ page, 
 });
 
 test("undo before replay: the bead never closes", async ({ page, w }) => {
-  const personal = dir(w, "laptop", "personal");
+  const chores = dir(w, "laptop", "chores");
   const bead = id(w, "Renew the library card");
   await w.stopBridge("laptop");
   await open(page, w);
@@ -250,27 +254,27 @@ test("undo before replay: the bead never closes", async ({ page, w }) => {
   await page.locator("#detail").getByLabel("Add a note").fill("Card is in the drawer.");
   await page.locator("#detail").getByRole("button", { name: "Save note" }).click();
   await expect
-    .poll(async () => (await w.show(personal, bead)).comments?.map((c) => c.text))
+    .poll(async () => (await w.show(chores, bead)).comments?.map((c) => c.text))
     .toContain("Card is in the drawer.");
 
-  expect((await w.show(personal, bead)).status).toBe("open");
-  const kinds = (await w.events(personal, bead)).map((e) => e.event_type);
+  expect((await w.show(chores, bead)).status).toBe("open");
+  const kinds = (await w.events(chores, bead)).map((e) => e.event_type);
   expect(kinds).not.toContain("closed");
 });
 
 test("undo after replay: the bead closes, then reopens", async ({ page, w }) => {
-  const personal = dir(w, "laptop", "personal");
+  const chores = dir(w, "laptop", "chores");
   const bead = id(w, "Water the plants");
   await open(page, w);
 
   await row(page, "Water the plants").getByRole("button", { name: "Mark done: Water the plants" }).click();
   await expect.poll(() => actionStatus(w, "done", bead), { timeout: 5_000 }).toBe("applied");
-  expect((await w.show(personal, bead)).status).toBe("closed");
+  expect((await w.show(chores, bead)).status).toBe("closed");
   // The toast is still up (6 seconds); its Undo now posts a reopen.
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect.poll(async () => (await w.show(personal, bead)).status).toBe("open");
+  await expect.poll(async () => (await w.show(chores, bead)).status).toBe("open");
   expect(await actionStatus(w, "reopen", bead)).toBe("applied");
-  const kinds = (await w.events(personal, bead)).map((e) => e.event_type);
+  const kinds = (await w.events(chores, bead)).map((e) => e.event_type);
   expect(kinds).toContain("closed");
   expect(kinds).toContain("reopened");
   await expect(row(page, "Water the plants")).not.toContainText("Waiting for sync");
@@ -278,7 +282,7 @@ test("undo after replay: the bead closes, then reopens", async ({ page, w }) => 
 
 test("a stopped bridge catches up on queued actions when it restarts", async ({ page, w }) => {
   const garden = dir(w, "laptop", "garden");
-  const personal = dir(w, "laptop", "personal");
+  const chores = dir(w, "laptop", "chores");
   await w.stopBridge("laptop");
   await open(page, w);
   const pill = page.locator(".sidebar .sync-pill");
@@ -293,14 +297,14 @@ test("a stopped bridge catches up on queued actions when it restarts", async ({ 
   w.startBridge("laptop");
   await expect(pill).toHaveText("Synced");
   expect((await w.show(garden, id(w, "Order compost for the beds"))).status).toBe("closed");
-  expect((await w.show(personal, id(w, "Renew the library card"))).status).toBe("closed");
+  expect((await w.show(chores, id(w, "Renew the library card"))).status).toBe("closed");
 });
 
 test("a reminder reaches ntfy with the title and a link to the item", async ({ w }) => {
-  const personal = dir(w, "laptop", "personal");
+  const chores = dir(w, "laptop", "chores");
   const due = new Date(Date.now() + 6_000).toISOString().replace(/\.\d+Z$/, "Z");
-  const bead = await w.create(personal, "Feed the cat", "--due", due);
-  const key = `laptop/personal/${bead}`;
+  const bead = await w.create(chores, "Feed the cat", "-l", "human", "--due", due);
+  const key = `laptop/projects/chores/${bead}`;
 
   await expect
     .poll(() => w.ntfy.requests.filter((r) => r.headers["title"] === "Feed the cat").length, { timeout: 30_000 })
@@ -322,7 +326,8 @@ test("a repo switched on in Settings syncs, and switched off leaves the app", as
   const repos = page.getByRole("list", { name: "Repos on laptop" });
   // Every repo the bridge found is listed, nested ones by their path.
   await expect(repos).toContainText("projects/clients/website");
-  await expect(repos).toContainText("Always synced");
+  // The personal list is the hub's, not a repo on a machine.
+  await expect(repos).not.toContainText("Always synced");
   const sw = repos.getByRole("switch", { name: "Sync website (projects/clients/website)" });
   await expect(sw).toHaveAttribute("aria-checked", "false");
 
@@ -341,4 +346,152 @@ test("a repo switched on in Settings syncs, and switched off leaves the app", as
   await expect(repos).not.toContainText("Waiting for laptop");
   await everything(page);
   await expect(row(page, "Approve the footer text")).toHaveCount(0);
+});
+
+// ---------- the personal list, kept on the hub ----------
+
+test("the personal list works with every bridge stopped and survives a hub restart", async ({ page, w }) => {
+  await w.stopBridge("laptop");
+  await w.stopBridge("desk");
+  await open(page, w);
+
+  const input = page.getByRole("textbox", { name: "New task" });
+  await input.click();
+  await input.pressSequentially("Book the dentist tomorrow");
+  // The personal list is the default.
+  await expect(page.locator("#qa-list")).toHaveValue("hub/personal");
+  await input.press("Enter");
+  await expect(input).toHaveValue("");
+  await input.pressSequentially("Return the library books");
+  await input.press("Enter");
+  await expect(row(page, "Book the dentist")).toBeVisible();
+  await expect(row(page, "Book the dentist")).not.toContainText("Waiting for sync");
+
+  // Done, snooze and a note, each applied by the hub with no bridge.
+  await row(page, "Return the library books").getByRole("button", { name: "Mark done: Return the library books" }).click();
+  await row(page, "Book the dentist").locator(".row-body").click();
+  const detail = page.locator("#detail");
+  await detail.getByLabel("Add a note").fill("Ask about a morning slot.");
+  await detail.getByRole("button", { name: "Save note" }).click();
+  const until = new Date(Date.now() + 2 * 24 * 3600 * 1000);
+  until.setUTCHours(8, 30, 0, 0);
+  await detail.getByLabel("Pick a time").fill(until.toISOString().slice(0, 16));
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
+
+  type Item = { key: string; bridge: string; title: string; status: string; pending?: boolean; deferUntil?: string; comments: { author: string; text: string }[] };
+  const personal = async () =>
+    (await w.api<{ items: Item[] }>("/api/state")).items.filter((i) => i.bridge === "hub");
+  const check = async () => {
+    const items = await personal();
+    const dentist = items.find((i) => i.title === "Book the dentist");
+    const books = items.find((i) => i.title === "Return the library books");
+    expect(dentist).toMatchObject({ status: "open" });
+    expect(dentist?.pending).toBeFalsy();
+    expect(Date.parse(dentist!.deferUntil!)).toBe(until.getTime());
+    expect(dentist!.comments.map((c) => [c.author, c.text])).toEqual([[`${USER}-app`, "Ask about a morning slot."]]);
+    expect(books).toMatchObject({ status: "closed" });
+  };
+  await expect.poll(async () => (await personal()).find((i) => i.title === "Book the dentist")?.deferUntil).toBeTruthy();
+  await check();
+  const applied = (await actions(w)).filter((a) => a.bridge === "hub");
+  expect(applied.length).toBe(5);
+  expect(applied.every((a) => a.status === "applied")).toBe(true);
+
+  await w.restartHub();
+  await check();
+  await page.reload();
+  await everything(page);
+  await expect(row(page, "Book the dentist")).toBeVisible();
+
+  w.startBridge("laptop");
+  w.startBridge("desk");
+});
+
+test("an agent adds a personal to-do with a machine token", async ({ page, w }) => {
+  const { token } = await w.api<{ token: string }>("/api/bridges", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "agents" }),
+  });
+  const todo = { title: "Sign the permission slip", note: "The school needs it by Friday.", author: "planner" };
+  const post = () =>
+    fetch(`${w.hubURL}/bridge/v1/personal`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ id: "5b0c6f1e-2a3d-4c5b-8e6f-7a8b9c0d1e2f", ...todo }),
+    });
+  const first = await post();
+  expect(first.status).toBe(201);
+  const { key } = (await first.json()) as { key: string };
+  expect(key).toMatch(/^hub\/personal\//);
+  // Posting the same id again adds nothing.
+  expect((await post()).status).toBe(200);
+  const bad = await fetch(`${w.hubURL}/bridge/v1/personal`, {
+    method: "POST",
+    headers: { authorization: "Bearer mm_not-a-token", "content-type": "application/json" },
+    body: JSON.stringify(todo),
+  });
+  expect(bad.status).toBe(401);
+
+  // A due personal to-do reminds like any other item.
+  const due = new Date(Date.now() + 6_000).toISOString().replace(/\.\d+Z$/, "Z");
+  const timed = await fetch(`${w.hubURL}/bridge/v1/personal`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ title: "Take the bins out", due }),
+  });
+  expect(timed.status).toBe(201);
+  const { key: binsKey } = (await timed.json()) as { key: string };
+  await expect
+    .poll(() => w.ntfy.requests.filter((r) => r.headers["title"] === "Take the bins out").length, { timeout: 30_000 })
+    .toBe(1);
+  const req = w.ntfy.requests.find((r) => r.headers["title"] === "Take the bins out")!;
+  expect(new URL(String(req.headers["click"])).searchParams.get("item")).toBe(binsKey);
+  expect(req.at).toBeGreaterThanOrEqual(Date.parse(due));
+
+  await open(page, w);
+  await expect(row(page, todo.title)).toHaveCount(1);
+  await row(page, todo.title).locator(".row-body").click();
+  await expect(page.locator("#detail")).toContainText(todo.note);
+  await expect(page.locator("#detail")).toContainText("planner");
+});
+
+test("an older bridge's personal repo moves to the hub once", async ({ page, w }) => {
+  // An older bridge still sends its personal repo; this one speaks its API.
+  const { token } = await w.api<{ token: string }>("/api/bridges", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "old-laptop" }),
+  });
+  const call = (method: string, path: string, body: unknown) =>
+    fetch(w.hubURL + path, {
+      method,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => expect(r.status, `${method} ${path}`).toBe(204));
+  const now = new Date().toISOString();
+  const closed = new Date(Date.now() - 3600_000).toISOString();
+  const set = [
+    { id: "op-1", title: "Mend the fence", status: "open", priority: 2, createdAt: now, updatedAt: now,
+      comments: [{ id: "c1", author: USER, text: "Use the spare boards.", createdAt: now }] },
+    { id: "op-2", title: "Post the birthday card", status: "closed", priority: 2, createdAt: now, updatedAt: now, closedAt: closed, closeReason: "Done in Meat Mode", comments: [] },
+  ];
+  await call("PUT", "/bridge/v1/repos", [{ name: "personal", personal: true, optedIn: true }]);
+  await call("PUT", "/bridge/v1/items?repo=personal", set);
+  // A rerun, with a change made in beads meanwhile, adds and changes nothing.
+  await call("PUT", "/bridge/v1/items?repo=personal", [{ ...set[0], title: "Mend the fence today" }, set[1]]);
+
+  type Item = { key: string; bridge: string; title: string; status: string; comments: { text: string }[] };
+  const items = (await w.api<{ items: Item[]; repos: { bridge: string; name: string }[] }>("/api/state"));
+  const moved = items.items.filter((i) => ["Mend the fence", "Mend the fence today", "Post the birthday card"].includes(i.title));
+  expect(moved.map((i) => [i.key, i.status])).toEqual([
+    ["hub/personal/op-1", "open"],
+    ["hub/personal/op-2", "closed"],
+  ]);
+  expect(moved[0].comments.map((c) => c.text)).toEqual(["Use the spare boards."]);
+  expect(items.repos.filter((r) => r.name === "personal").map((r) => r.bridge)).toEqual(["hub"]);
+
+  await open(page, w);
+  await expect(row(page, "Mend the fence")).toHaveCount(1);
+  await expect(row(page, "Mend the fence")).toContainText("personal");
 });

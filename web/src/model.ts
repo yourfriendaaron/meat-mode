@@ -246,8 +246,14 @@ export function bridgeOnline(b: Bridge, now: Date): boolean {
   return seen !== null && now.getTime() - seen.getTime() <= ONLINE_WINDOW_MS;
 }
 
+/** The bridge name under which the hub keeps the personal list itself. */
+export const HUB_BRIDGE = "hub";
+
 export function syncStatus(state: Pick<State, "unapplied" | "bridges">, now: Date): SyncStatus {
-  const online = (state.bridges ?? []).some((b) => bridgeOnline(b, now));
+  const bridges = state.bridges ?? [];
+  // With no machine paired there is only the personal list, which the hub keeps.
+  if (!bridges.length) return { tone: "green", text: "Synced" };
+  const online = bridges.some((b) => bridgeOnline(b, now));
   if (!online) return { tone: "orange", text: "Agent machine offline" };
   if (state.unapplied > 0) return { tone: "orange", text: `${state.unapplied} waiting` };
   return { tone: "green", text: "Synced" };

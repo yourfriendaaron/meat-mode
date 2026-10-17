@@ -1,5 +1,5 @@
 // Package store keeps the hub's state in SQLite: bridges and their tokens,
-// repos, items, and the append-only action log.
+// repos, items, the personal list, and the append-only action log.
 package store
 
 import (
@@ -99,6 +99,10 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := s.TransferPersonal(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("move personal items to the hub: %w", err)
+	}
 	return s, nil
 }
 
@@ -141,7 +145,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 var migrations = []string{
 	// 1: initial schema.
@@ -194,6 +198,19 @@ CREATE TABLE actions (
 CREATE INDEX actions_bridge_status ON actions(bridge, status, seq);
 CREATE INDEX actions_target ON actions(bridge, repo, bead_id, seq);
 `,
+	// 2: the personal list on the hub. The reserved bridge row has a random
+	// token hash, so no token ever authenticates as it.
+	`
+INSERT INTO bridges (name, token_hash, created_at) VALUES ('hub', randomblob(32), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+INSERT INTO repos (bridge, name, personal, opted_in) VALUES ('hub', 'personal', 1, 1);
+
+CREATE TABLE personal_origins (
+	bridge  TEXT NOT NULL,
+	bead_id TEXT NOT NULL,
+	item_id TEXT NOT NULL,
+	PRIMARY KEY (bridge, bead_id)
+);
+`,
 }
 
 func (s *Store) migrate() error {
@@ -203,6 +220,15 @@ func (s *Store) migrate() error {
 	}
 	if v > schemaVersion {
 		return fmt.Errorf("database schema version %d is newer than this hub understands (%d); run a newer hub", v, schemaVersion)
+	}
+	if v == 1 {
+		var n int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM bridges WHERE name = ?`, HubBridge).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return fmt.Errorf("a machine is named %q, which this hub now keeps for its own list; run the previous hub, revoke that machine and pair it again under another name", HubBridge)
+		}
 	}
 	for ; v < schemaVersion; v++ {
 		tx, err := s.db.Begin()

@@ -159,6 +159,7 @@ func TestBridgeAuth(t *testing.T) {
 	routes := [][2]string{
 		{"POST", "/bridge/v1/hello"}, {"PUT", "/bridge/v1/repos"}, {"PUT", "/bridge/v1/items?repo=garden"},
 		{"GET", "/bridge/v1/actions"}, {"POST", "/bridge/v1/actions/" + aid1 + "/result"},
+		{"POST", "/bridge/v1/personal"},
 	}
 	for _, rt := range routes {
 		h.expect(h.do(rt[0], rt[1], "{}", ""), http.StatusUnauthorized)
@@ -278,6 +279,71 @@ func TestAddOverHTTP(t *testing.T) {
 	}
 }
 
+func TestPersonalListOverHTTP(t *testing.T) {
+	h := newHarness(t, nil, false)
+	w := h.do("POST", "/api/actions", api.NewAction{ID: aid1, Kind: api.KindAdd, Bridge: store.HubBridge, Repo: store.PersonalRepo,
+		Payload: api.Payload{Title: "Water the plants"}}, "")
+	h.expect(w, http.StatusCreated)
+	a := decode[api.Action](t, w)
+	if a.Status != api.StatusApplied || a.BeadID == "" {
+		t.Fatalf("add with no bridge = %+v", a)
+	}
+	key := store.ItemKey(store.HubBridge, store.PersonalRepo, a.BeadID)
+	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: aid2, Kind: api.KindDone, Key: key}, ""), http.StatusCreated)
+	st := decode[api.State](t, h.do("GET", "/api/state", nil, ""))
+	if len(st.Items) != 1 || st.Items[0].Status != "closed" || st.Items[0].Pending || st.Unapplied != 0 {
+		t.Fatalf("state %+v", st)
+	}
+	// Undo of an applied action falls back to the inverse action.
+	h.expect(h.do("POST", "/api/actions/"+aid2+"/cancel", nil, ""), http.StatusConflict)
+	h.expect(h.do("POST", "/api/items/"+url.PathEscape(key)+"/seen", nil, ""), http.StatusNoContent)
+}
+
+func TestAgentAddsPersonalTodo(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	due := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	todo := api.PersonalTodo{ID: aid1, Title: "Renew the library card", Due: &due, Note: "It expires on Friday.", Author: "planner"}
+	w := h.do("POST", "/bridge/v1/personal", todo, h.token)
+	h.expect(w, http.StatusCreated)
+	reply := decode[api.PersonalTodoReply](t, w)
+	if reply.Key != store.ItemKey(store.HubBridge, store.PersonalRepo, reply.ID) {
+		t.Fatalf("reply %+v", reply)
+	}
+	// Posting it again changes nothing.
+	w = h.do("POST", "/bridge/v1/personal", todo, h.token)
+	h.expect(w, http.StatusOK)
+	if decode[api.PersonalTodoReply](t, w) != reply {
+		t.Fatal("a repeat named another item")
+	}
+	st := decode[api.State](t, h.do("GET", "/api/state", nil, ""))
+	var got []api.Item
+	for _, it := range st.Items {
+		if it.Bridge == store.HubBridge {
+			got = append(got, it)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("personal items %+v", got)
+	}
+	it := got[0]
+	if it.Title != todo.Title || it.DueAt == nil || !it.DueAt.Equal(due) || it.CreatedBy != "planner" ||
+		len(it.Comments) != 1 || it.Comments[0].Author != "planner" || it.Comments[0].Text != todo.Note {
+		t.Fatalf("item %+v", it)
+	}
+	// With no author, the machine name stands in; a title is required.
+	w = h.do("POST", "/bridge/v1/personal", api.PersonalTodo{Title: "Buy stamps"}, h.token)
+	h.expect(w, http.StatusCreated)
+	h.expect(h.do("POST", "/bridge/v1/personal", api.PersonalTodo{}, h.token), http.StatusBadRequest)
+	h.expect(h.do("POST", "/bridge/v1/personal", api.PersonalTodo{Title: "x", Author: "a\nb"}, h.token), http.StatusBadRequest)
+	st = decode[api.State](t, h.do("GET", "/api/state", nil, ""))
+	for _, it := range st.Items {
+		if it.Title == "Buy stamps" && it.CreatedBy != "laptop" {
+			t.Errorf("created by %q, want the machine name", it.CreatedBy)
+		}
+	}
+}
+
 func TestItemsAndReposRoutes(t *testing.T) {
 	h := newHarness(t, nil, false)
 	h.pair()
@@ -294,7 +360,8 @@ func TestItemsAndReposRoutes(t *testing.T) {
 	if it.Pending || it.Error != "" || it.Key != "laptop/garden/gd-1" || it.Bridge != "laptop" || it.Repo != "garden" {
 		t.Fatalf("item %+v", it)
 	}
-	if len(st.Repos) != 2 || st.Repos[0].Bridge != "laptop" {
+	// The hub's own personal list sorts first.
+	if len(st.Repos) != 3 || st.Repos[0].Bridge != store.HubBridge || st.Repos[1].Bridge != "laptop" {
 		t.Fatalf("repos %+v", st.Repos)
 	}
 }

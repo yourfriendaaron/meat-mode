@@ -32,11 +32,10 @@ var ErrNotFound = errors.New("bead not found")
 type Beads interface {
 	// Version returns the bd version, such as "1.3.1".
 	Version(ctx context.Context) (string, error)
-	// ListHuman returns the human items in a repo: every item when personal,
-	// otherwise those labelled human. Open, in-progress, blocked and deferred
-	// items are included, and closed ones from the last ClosedWindow.
-	// Comment bodies are not filled.
-	ListHuman(ctx context.Context, dir string, personal bool) ([]Issue, error)
+	// ListHuman returns the items labelled human in a repo. Open,
+	// in-progress, blocked and deferred items are included, and closed ones
+	// from the last ClosedWindow. Comment bodies are not filled.
+	ListHuman(ctx context.Context, dir string) ([]Issue, error)
 	// Show returns one bead with its comments.
 	Show(ctx context.Context, dir, id string) (Issue, error)
 	Close(ctx context.Context, dir, id, reason, actor string) error
@@ -144,8 +143,8 @@ func (i Issue) ActionID() string {
 }
 
 // KeepHuman reports whether a listed bead belongs in the human set at now.
-func KeepHuman(i Issue, personal bool, now time.Time) bool {
-	if !personal && !slices.Contains(i.Labels, HumanLabel) {
+func KeepHuman(i Issue, now time.Time) bool {
+	if !slices.Contains(i.Labels, HumanLabel) {
 		return false
 	}
 	if i.Status == "closed" {

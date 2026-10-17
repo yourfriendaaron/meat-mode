@@ -141,7 +141,8 @@ test("sync status", () => {
   assert.deepEqual(syncStatus({ unapplied: 0, bridges: online }, now), { tone: "green", text: "Synced" });
   assert.deepEqual(syncStatus({ unapplied: 2, bridges: online }, now), { tone: "orange", text: "2 waiting" });
   assert.deepEqual(syncStatus({ unapplied: 0, bridges: stale }, now), { tone: "orange", text: "Agent machine offline" });
-  assert.deepEqual(syncStatus({ unapplied: 0, bridges: [] }, now), { tone: "orange", text: "Agent machine offline" });
+  // No machine paired: only the personal list, which the hub keeps.
+  assert.deepEqual(syncStatus({ unapplied: 0, bridges: [] }, now), { tone: "green", text: "Synced" });
 });
 
 test("visible lists: personal first, opted-in only", () => {

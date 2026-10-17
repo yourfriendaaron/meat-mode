@@ -72,7 +72,8 @@ func (s *Store) Action(id string) (api.Action, error) {
 }
 
 // AppendAction validates na and appends it to the log as pending, routed to
-// the bridge that owns its repo. If an action with the same id exists, it
+// the bridge that owns its repo. An action on the personal list is applied
+// at once and logged as applied. If an action with the same id exists, it
 // returns that one unchanged and created is false.
 func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, created bool, err error) {
 	if !ValidActionID(na.ID) {
@@ -133,10 +134,12 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
 			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
 		}
-		var personal, optedIn bool
-		err := tx.QueryRow(`SELECT r.personal, r.opted_in FROM repos r
+		// A bridge's own personal repo only feeds the personal list.
+		var optedIn bool
+		err := tx.QueryRow(`SELECT r.opted_in FROM repos r
 			JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
-			WHERE r.bridge = ? AND r.name = ?`, na.Bridge, na.Repo).Scan(&personal, &optedIn)
+			WHERE r.bridge = ? AND r.name = ? AND (r.personal = 0 OR r.bridge = ?)`,
+			na.Bridge, na.Repo, HubBridge).Scan(&optedIn)
 		if errors.Is(err, sql.ErrNoRows) {
 			return a, false, notFoundf("bridge %q has no repo %q", na.Bridge, na.Repo)
 		}
@@ -144,9 +147,9 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 			return a, false, err
 		}
 		switch {
-		case na.Kind == api.KindSync && personal:
-			return a, false, invalidf("the personal repo always syncs")
-		case na.Kind == api.KindAdd && !personal && !optedIn:
+		case na.Kind == api.KindSync && isHubRepo(na.Bridge, na.Repo):
+			return a, false, invalidf("the personal list is kept on the hub and always shows")
+		case na.Kind == api.KindAdd && !optedIn:
 			return a, false, invalidf("repo %q is not synced with Meat Mode", na.Repo)
 		}
 		a.Bridge, a.Repo = na.Bridge, na.Repo
@@ -183,10 +186,19 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 	if a.Seq, err = res.LastInsertId(); err != nil {
 		return a, false, err
 	}
+	var newItems []string
+	if isHubRepo(a.Bridge, a.Repo) {
+		if newItems, err = s.applyHub(tx, &a); err != nil {
+			return a, false, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return a, false, err
 	}
 	s.emit(Change{Kind: "actions", Bridge: a.Bridge, Repo: a.Repo})
+	if isHubRepo(a.Bridge, a.Repo) {
+		s.emit(Change{Kind: "items", Bridge: a.Bridge, Repo: a.Repo, NewItems: newItems})
+	}
 	return a, true, nil
 }
 

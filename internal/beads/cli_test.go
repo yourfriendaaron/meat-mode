@@ -30,19 +30,17 @@ func TestKeepHuman(t *testing.T) {
 	old := now.Add(-8 * 24 * time.Hour)
 	recent := now.Add(-time.Hour)
 	cases := []struct {
-		name     string
-		i        beads.Issue
-		personal bool
-		want     bool
+		name string
+		i    beads.Issue
+		want bool
 	}{
-		{"labelled open", beads.Issue{Status: "open", Labels: []string{"human"}}, false, true},
-		{"unlabelled open", beads.Issue{Status: "open"}, false, false},
-		{"unlabelled personal", beads.Issue{Status: "deferred"}, true, true},
-		{"recently closed", beads.Issue{Status: "closed", Labels: []string{"human"}, ClosedAt: &recent}, false, true},
-		{"closed long ago", beads.Issue{Status: "closed", Labels: []string{"human"}, ClosedAt: &old}, false, false},
+		{"labelled open", beads.Issue{Status: "open", Labels: []string{"human"}}, true},
+		{"unlabelled open", beads.Issue{Status: "open"}, false},
+		{"recently closed", beads.Issue{Status: "closed", Labels: []string{"human"}, ClosedAt: &recent}, true},
+		{"closed long ago", beads.Issue{Status: "closed", Labels: []string{"human"}, ClosedAt: &old}, false},
 	}
 	for _, c := range cases {
-		if got := beads.KeepHuman(c.i, c.personal, now); got != c.want {
+		if got := beads.KeepHuman(c.i, now); got != c.want {
 			t.Errorf("%s: got %v", c.name, got)
 		}
 	}
@@ -90,15 +88,12 @@ func TestCLI(t *testing.T) {
 		t.Fatalf("FindByActionID for unknown action = %q", found)
 	}
 
-	list, err := c.ListHuman(ctx, dir, false)
+	list, err := c.ListHuman(ctx, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 1 || list[0].ID != id {
 		t.Fatalf("ListHuman = %+v", list)
-	}
-	if all, _ := c.ListHuman(ctx, dir, true); len(all) != 2 {
-		t.Fatalf("personal ListHuman returned %d items, want 2", len(all))
 	}
 	fp := list[0].Fingerprint()
 
@@ -109,7 +104,7 @@ func TestCLI(t *testing.T) {
 	if err := c.Defer(ctx, dir, id, &until, "alex-app"); err != nil {
 		t.Fatal(err)
 	}
-	list, _ = c.ListHuman(ctx, dir, false)
+	list, _ = c.ListHuman(ctx, dir)
 	if len(list) != 1 || list[0].Status != "deferred" || list[0].Fingerprint() == fp || list[0].CommentCount != 1 {
 		t.Fatalf("after comment and defer: %+v", list)
 	}
@@ -150,7 +145,7 @@ func TestCLI(t *testing.T) {
 	if it := got.Item(); it.Status != "closed" || it.CloseReason != "Done in Meat Mode" || it.ClosedAt == nil {
 		t.Fatalf("after close: %+v", it)
 	}
-	if list, _ := c.ListHuman(ctx, dir, false); len(list) != 1 {
+	if list, _ := c.ListHuman(ctx, dir); len(list) != 1 {
 		t.Fatalf("recently closed item missing from list: %+v", list)
 	}
 

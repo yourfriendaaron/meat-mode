@@ -108,7 +108,7 @@ func TestDiscoverWalksTheHomeFolder(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(locked, 0o755) })
 
-	got := repoDirs(Discover(Config{}.ResolveRoots(home), home, "", quiet))
+	got := repoDirs(Discover(Config{}.ResolveRoots(home), home, quiet))
 	want := []string{
 		in(".notes/house/todo"),
 		in("notes/deep/down/journal"),
@@ -131,12 +131,12 @@ func TestDiscoverRootOverride(t *testing.T) {
 	writeRepo(t, filepath.Join(home, "projects", "garden"), "")
 	writeRepo(t, filepath.Join(home, "notes", "journal"), "")
 	roots := Config{Roots: []string{"~/notes"}}.ResolveRoots(home)
-	got := repoDirs(Discover(roots, home, "", quiet))
+	got := repoDirs(Discover(roots, home, quiet))
 	if !slices.Equal(got, []string{filepath.Join(home, "notes", "journal")}) {
 		t.Errorf("found %v, want only the repo under --root", got)
 	}
 	// Overlapping roots find a repo once.
-	got = repoDirs(Discover([]string{home, filepath.Join(home, "notes")}, home, "", quiet))
+	got = repoDirs(Discover([]string{home, filepath.Join(home, "notes")}, home, quiet))
 	if len(got) != 2 {
 		t.Errorf("overlapping roots found %v", got)
 	}
@@ -159,15 +159,11 @@ func TestDiscover(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "notes.txt"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	personal := filepath.Join(t.TempDir(), "me")
-	writeRepo(t, personal, "")
-
-	got := Discover([]string{root, filepath.Join(root, "missing")}, root, personal, quiet)
+	got := Discover([]string{root, filepath.Join(root, "missing")}, root, quiet)
 	want := []Repo{
 		{Name: "attic", Dir: filepath.Join(root, "attic")},
 		{Name: "garden", Dir: filepath.Join(root, "garden"), OptedIn: true},
 		{Name: "kitchen", Dir: filepath.Join(root, "kitchen")},
-		{Name: "personal", Dir: personal, Personal: true, OptedIn: true},
 		{Name: "quoted", Dir: filepath.Join(root, "quoted"), OptedIn: true},
 	}
 	if len(got) != len(want) {
@@ -180,36 +176,18 @@ func TestDiscover(t *testing.T) {
 	}
 }
 
-func TestDiscoverSkipsPersonalThroughSymlink(t *testing.T) {
-	root := t.TempDir()
-	personal := filepath.Join(root, "me")
-	writeRepo(t, personal, "")
-	// The root is reached through a symlink, so the personal repo's absolute
-	// path under the link differs from the one given as --personal.
-	link := filepath.Join(t.TempDir(), "projects-link")
-	if err := os.Symlink(root, link); err != nil {
-		t.Skipf("cannot symlink: %v", err)
-	}
-	got := Discover([]string{link}, "", personal, quiet)
-	if len(got) != 1 || got[0].Name != PersonalRepo || !got[0].Personal {
-		t.Fatalf("Discover = %+v, want the personal repo once", got)
-	}
-}
-
 func TestRepoNamesArePaths(t *testing.T) {
 	home := t.TempDir()
 	writeRepo(t, filepath.Join(home, "projects", "garden"), "")
 	writeRepo(t, filepath.Join(home, "work", "garden"), "")
-	writeRepo(t, filepath.Join(home, "personal"), "") // clashes with the personal repo's name
+	writeRepo(t, filepath.Join(home, "personal"), "") // an ordinary repo, whatever its name
 	outside := t.TempDir()
 	writeRepo(t, filepath.Join(outside, "repos", "shed"), "")
 	writeRepo(t, filepath.Join(outside, "solo"), "")
-	me := filepath.Join(t.TempDir(), "me")
-	writeRepo(t, me, "")
 
 	roots := []string{home, filepath.Join(outside, "repos"), filepath.Join(outside, "solo")}
 	var got []string
-	for _, r := range Discover(roots, home, me, quiet) {
+	for _, r := range Discover(roots, home, quiet) {
 		got = append(got, r.Name)
 	}
 	want := []string{"personal", "projects/garden", "repos/shed", "solo", "work/garden"}

@@ -75,7 +75,7 @@ test("keyboard: j/k, Enter, x, s, n, Escape", async ({ page, hub }) => {
 
   await page.keyboard.press("x");
   await expect(page.locator("#toast")).toContainText("Done: Water the plants");
-  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "home/personal/pe-1" });
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "hub/personal/pe-1" });
   await expect(page.locator(".group-done .row-title")).toContainText(["Water the plants"]);
   // Selection moved on to the next open row.
   await expect(row(page, "Call Sam about the weekend")).toHaveClass(/is-selected/);
@@ -90,7 +90,7 @@ test("keyboard: j/k, Enter, x, s, n, Escape", async ({ page, hub }) => {
   await expect(dialog).toBeHidden();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "snooze",
-    key: "home/personal/pe-3",
+    key: "hub/personal/pe-3",
     payload: { until: "2026-10-15T09:00:00.000Z", previous: null },
   });
 
@@ -112,19 +112,31 @@ test("keyboard: j/k, Enter, x, s, n, Escape", async ({ page, hub }) => {
 
 test("Undo cancels a pending Done", async ({ page, hub }) => {
   await openApp(page);
-  await row(page, "Water the plants").getByRole("button", { name: "Mark done: Water the plants" }).click();
-  await expect(page.locator(".group-done")).toContainText("Water the plants");
+  await row(page, "Order compost for the beds").getByRole("button", { name: "Mark done: Order compost for the beds" }).click();
+  await expect(page.locator(".group-done")).toContainText("Order compost for the beds");
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
+  await expect(page.locator(".group-evening")).toContainText("Order compost for the beds");
   expect(hub.requests.some((r) => /^POST \/api\/actions\/.+\/cancel$/.test(r))).toBe(true);
   expect(hub.posted.map((a) => a.kind)).toEqual(["done"]);
 });
 
 test("Undo after the bridge applied it posts a reopen", async ({ page, hub }) => {
   await openApp(page);
+  await row(page, "Order compost for the beds").getByRole("button", { name: "Mark done: Order compost for the beds" }).click();
+  await expect(page.locator(".group-done")).toContainText("Order compost for the beds");
+  hub.applyAll();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".group-evening")).toContainText("Order compost for the beds");
+  expect(hub.posted.map((a) => a.kind)).toEqual(["done", "reopen"]);
+});
+
+test("the personal list applies at once, and Undo posts a reopen", async ({ page, hub }) => {
+  await openApp(page);
+  const pill = page.locator(".sidebar .sync-pill");
   await row(page, "Water the plants").getByRole("button", { name: "Mark done: Water the plants" }).click();
   await expect(page.locator(".group-done")).toContainText("Water the plants");
-  hub.applyAll();
+  await expect(row(page, "Water the plants")).not.toContainText("Waiting for sync");
+  await expect(pill).toHaveText("Synced");
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
   expect(hub.posted.map((a) => a.kind)).toEqual(["done", "reopen"]);
@@ -149,16 +161,17 @@ test("Won't do and Snooze all are undoable; Done today reopens", async ({ page, 
 
   await row(page, "Sweep the porch").getByRole("button", { name: "Reopen", exact: true }).click();
   await expect(page.locator(".group-done")).toHaveCount(0);
-  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "reopen", key: "home/personal/pe-6" });
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "reopen", key: "hub/personal/pe-6" });
 });
 
 test("sync pill and popover", async ({ page, hub }) => {
   await openApp(page);
   const pill = page.locator(".sidebar .sync-pill");
   await expect(pill).toHaveText("Synced");
-  await row(page, "Water the plants").getByRole("button", { name: /Mark done/ }).click();
+  await row(page, "Order compost for the beds").getByRole("button", { name: /Mark done/ }).click();
   await expect(pill).toHaveText("1 waiting");
   await row(page, "Call Sam about the weekend").getByRole("button", { name: /Mark done/ }).click();
+  await expect(pill).toHaveText("1 waiting");
   hub.applyAll();
   hub.posted.length = 0;
   await pill.click();
@@ -230,7 +243,7 @@ test("snooze to a picked time; failed actions show their error", async ({ page, 
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "snooze",
-    key: "home/personal/pe-7",
+    key: "hub/personal/pe-7",
     payload: { until: "2026-10-20T08:30:00.000Z", previous: null },
   });
   await expect(row(page, "Fix the gate latch").locator(".chip-orange")).toHaveText("Tue, Oct 20");
@@ -278,7 +291,7 @@ test("sync popover says when actions could not be loaded", async ({ page, hub })
 test("live updates: a change event re-fetches state", async ({ page, hub }) => {
   hub.eventRetryMs = 200;
   await openApp(page);
-  hub.items.push({ ...hub.items[0], key: "home/personal/pe-9", id: "pe-9", title: "Feed the cat" });
+  hub.items.push({ ...hub.items[0], key: "hub/personal/pe-9", id: "pe-9", title: "Feed the cat" });
   await expect(row(page, "Feed the cat")).toBeVisible();
 });
 
@@ -287,8 +300,9 @@ test("Settings lists each machine's repos with a sync switch", async ({ page, hu
   await openApp(page);
   await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
   const repos = page.getByRole("list", { name: "Repos on home" });
-  await expect(repos.getByRole("listitem")).toHaveCount(4);
-  await expect(repos.getByRole("listitem").first()).toContainText("Always synced");
+  // The personal list lives on the hub, not under a machine.
+  await expect(repos.getByRole("listitem")).toHaveCount(3);
+  await expect(repos).not.toContainText("personal");
   const sw = repos.getByRole("switch", { name: "Sync journal (notes/journal)" });
   await expect(sw).toHaveAttribute("aria-checked", "false");
   await sw.click();

@@ -164,8 +164,10 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 
 // Repos lists the repos of active bridges.
 func (s *Store) Repos() ([]api.Repo, error) {
+	// A bridge's own personal repo is only a source for the personal list.
 	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in FROM repos r
-		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL ORDER BY r.bridge, r.name`)
+		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
+		WHERE r.personal = 0 OR r.bridge = ? ORDER BY r.bridge, r.name`, HubBridge)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +185,8 @@ func (s *Store) Repos() ([]api.Repo, error) {
 
 // ReplaceItems replaces the complete item set of one repo. Items missing
 // from the set are dropped; items still there keep their seen and
-// first-seen times.
+// first-seen times. The set of a personal repo, which only an older bridge
+// sends, goes to the personal list instead; see TransferPersonal.
 func (s *Store) ReplaceItems(bridge, repo string, items []api.Item) error {
 	seen := map[string]bool{}
 	for i := range items {
@@ -222,6 +225,11 @@ func (s *Store) ReplaceItems(bridge, repo string, items []api.Item) error {
 	}
 	if n == 0 {
 		return notFoundf("repo %q is not in this bridge's repo list; send PUT /bridge/v1/repos first", repo)
+	}
+	if legacy, err := isLegacyPersonal(tx, bridge, repo); err != nil {
+		return err
+	} else if legacy {
+		return s.importFromBridge(tx, bridge, repo, items)
 	}
 	existing, err := queryStrings(tx, `SELECT id FROM items WHERE bridge = ? AND repo = ?`, bridge, repo)
 	if err != nil {

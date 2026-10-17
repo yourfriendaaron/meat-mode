@@ -91,6 +91,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.Handle("PUT /bridge/v1/items", s.bridgeAuth(s.handlePutItems))
 	m.Handle("GET /bridge/v1/actions", s.bridgeAuth(s.handlePullActions))
 	m.Handle("POST /bridge/v1/actions/{id}/result", s.bridgeAuth(s.handleResult))
+	m.Handle("POST /bridge/v1/personal", s.bridgeAuth(s.handleAddPersonal))
 
 	m.HandleFunc("GET /healthz", s.handleHealth)
 	staticH := newStatic(static)
@@ -417,4 +418,24 @@ func (s *Server) handleResult(w http.ResponseWriter, r *http.Request, bridge str
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleAddPersonal lets an agent add to the personal list with any bridge
+// token, with no bridge running.
+func (s *Server) handleAddPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
+	var t api.PersonalTodo
+	if !readJSON(w, r, maxBody, &t) {
+		return
+	}
+	key, created, err := s.store.AddPersonal(t, bridge)
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	_, _, id, _ := store.SplitKey(key)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, api.PersonalTodoReply{Key: key, ID: id})
 }

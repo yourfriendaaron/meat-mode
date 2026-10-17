@@ -83,11 +83,9 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 	return touched, nil
 }
 
-// Results for a sync switch the bridge refuses.
-const (
-	ErrUnknownRepo    = "unknown repo"
-	ErrPersonalSwitch = "the personal repo always syncs"
-)
+// ErrUnknownRepo is the result for a sync switch on a repo the bridge did
+// not find.
+const ErrUnknownRepo = "unknown repo"
 
 // applySwitch saves a sync switch from the app and reports the new repo
 // list at once. It takes switches only for repos this bridge found itself,
@@ -96,8 +94,6 @@ func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (
 	switch {
 	case st == nil:
 		return api.ActionResult{Error: ErrUnknownRepo}, nil
-	case st.Personal:
-		return api.ActionResult{Error: ErrPersonalSwitch}, nil
 	case a.Payload.On == nil:
 		return api.ActionResult{Error: "sync switch has no position"}, nil
 	case b.SaveSwitch == nil:
@@ -136,7 +132,7 @@ func (b *Bridge) known(ctx context.Context, st *repoState, a api.Action, listed 
 	}
 	ids, ok := listed[st.Name]
 	if !ok {
-		list, err := b.Beads.ListHuman(ctx, st.Dir, st.Personal)
+		list, err := b.Beads.ListHuman(ctx, st.Dir)
 		if err != nil {
 			return false, err
 		}

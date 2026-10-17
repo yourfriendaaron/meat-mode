@@ -2,8 +2,10 @@
 
 Meat Mode has two parts:
 
-- **The hub** is a container on any always-on host (a home server, a NAS, a Raspberry Pi, a VPS). It keeps a copy of your items, the log of what you tapped, and sends reminders. It never connects to your agent machine.
-- **The bridge** is the same `meat-mode` program, run as a user service on the machine where your beads repos live. It dials out to the hub, sends your items up and replays your taps into beads with `bd`.
+- **The hub** is a container on any always-on host (a home server, a NAS, a Raspberry Pi, a VPS). It keeps your personal to-do list, a copy of your agents' items and the log of what you tapped, and sends reminders. It never connects to your agent machine.
+- **The bridge** is the same `meat-mode` program, run as a user service on the machine where your beads repos live. It dials out to the hub, sends your agents' items up and replays your taps on them into beads with `bd`.
+
+Your personal list needs only the hub. You can stop at step 1 and use it on its own, then add a bridge when you want your agents' tasks too.
 
 You reach the app through [Tailscale](https://tailscale.com), and only through Tailscale. The app has no login, so who can reach the hub is the whole of its access control: on a tailnet that is your own signed-in devices, not everyone on your Wi-Fi. Tailscale also gives the hub a publicly trusted HTTPS certificate, which browsers require before they allow reminders (Web Push) or installing the app to the home screen.
 
@@ -83,7 +85,7 @@ go install github.com/yourfriendaaron/meat-mode/cmd/meat-mode@latest
    meat-mode bridge pair https://meat-mode.example.com mm_xxxxxxxx
    ```
 
-   Options: `--personal DIR` for your personal to-do beads repo, `--root DIR` (repeatable) to look for beads repos only in those folders instead of your whole home folder, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
+   Options: `--root DIR` (repeatable) to look for beads repos only in those folders instead of your whole home folder, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
 
 Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/bridge.json` on Linux, `~/Library/Application Support/meat-mode/bridge.json` on macOS) and installs a user service:
 
@@ -104,12 +106,33 @@ You can also opt a repo in from the repo itself, with this line in its `.beads/c
 meat-mode.sync: true
 ```
 
-Your personal repo always syncs, and every item in it is yours; in other repos only beads labelled `human` appear. Repos are told apart by their path, so `projects/garden` and `work/garden` both sync; the app shows the folder name, and the path where two names match.
+Only beads labelled `human` appear. Repos are told apart by their path, so `projects/garden` and `work/garden` both sync; the app shows the folder name, and the path where two names match.
+
+## Let agents add to your personal list
+
+An agent can put a to-do on your personal list from any machine, with no bridge running. In **Settings**, choose **Add machine** and name it `agents`; use the token it shows (skip the pair command). The agent then posts:
+
+```sh
+curl -fsS https://meat-mode.example.com/bridge/v1/personal \
+  -H "Authorization: Bearer $MEAT_MODE_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title": "Renew the library card", "due": "2026-03-02T09:00:00Z", "note": "It expires on Friday.", "author": "planner"}'
+```
+
+The to-do appears in the app at once, with the note as its first comment. The fields are in [api.md](api.md#agents-adding-to-the-personal-list). Revoke the `agents` machine in Settings to take the token back.
+
+## Moving from a personal beads repo
+
+If a bridge was paired with `--personal`, the hub moves that repo's items into its own personal list, once each, with their dates, status, notes and recently closed items. It happens when you update the hub. Any taps still waiting for that machine are applied on the hub.
+
+1. Update the hub first. The items move when it starts.
+2. Then update the bridge and restart it (see Updating). It ignores the old personal setting in its config. A bridge that is not updated yet keeps sending the repo, and the hub only takes beads it has not had, so nothing is duplicated.
+
+From then on your personal list lives on the hub. The bridge no longer treats the old beads repo as special: it shows up in Settings like any other repo, with its switch off. Leave it off, or delete the repo; switched on, its `human` beads would show a second time as agent items.
 
 ## Updating
 
 - **Hub**: `git pull && docker compose up -d --build`. The database migrates itself on start.
-- **Bridge**: replace the binary, then run `meat-mode bridge pair …` again with the same arguments, or restart the service (`systemctl --user restart meat-mode-bridge`, or on macOS `launchctl kickstart -k gui/$(id -u)/com.github.yourfriendaaron.meat-mode.bridge`).
+- **Bridge**: replace the binary, then run `meat-mode bridge pair …` again with the same arguments (leaving out `--personal`), or restart the service (`systemctl --user restart meat-mode-bridge`, or on macOS `launchctl kickstart -k gui/$(id -u)/com.github.yourfriendaaron.meat-mode.bridge`).
 
 ## Uninstalling
 

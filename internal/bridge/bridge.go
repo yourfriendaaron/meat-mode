@@ -32,12 +32,11 @@ const ErrNotSynced = "repo not synced"
 
 // Bridge syncs beads repos with the hub.
 type Bridge struct {
-	Hub      *Hub
-	Beads    beads.Beads
-	Journal  *Journal
-	Roots    []string
-	Home     string // repo keys are relative to it; empty in tests that need no keys
-	Personal string
+	Hub     *Hub
+	Beads   beads.Beads
+	Journal *Journal
+	Roots   []string
+	Home    string // repo keys are relative to it; empty in tests that need no keys
 	// Switches are the app's sync switches by repo name, and SaveSwitch
 	// records one (in bridge.json). A nil SaveSwitch refuses switches.
 	Switches   map[string]bool
@@ -235,19 +234,17 @@ func (b *Bridge) syncedNames() []string {
 // changed.
 func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.scanEvery() {
-		b.found = Discover(b.Roots, b.Home, b.Personal, b.log())
+		b.found = Discover(b.Roots, b.Home, b.log())
 		b.scannedAt = b.now()
 	}
 	next := map[string]*repoState{}
 	wire := make([]api.Repo, 0, len(b.found))
 	for i := range b.found {
 		r := &b.found[i]
-		if !r.Personal {
-			r.OptedIn = OptedIn(r.Dir)
-			r.Switch = nil
-			if on, ok := b.Switches[r.Name]; ok {
-				r.Switch = &on
-			}
+		r.OptedIn = OptedIn(r.Dir)
+		r.Switch = nil
+		if on, ok := b.Switches[r.Name]; ok {
+			r.Switch = &on
 		}
 		st := b.repos[r.Name]
 		if st == nil || st.Dir != r.Dir || st.Synced() != r.Synced() {
@@ -255,7 +252,7 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		}
 		st.Repo = *r
 		next[r.Name] = st
-		wire = append(wire, api.Repo{Name: r.Name, Personal: r.Personal, OptedIn: r.Synced()})
+		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced()})
 	}
 	b.repos = next
 	if slices.Equal(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {
@@ -271,7 +268,7 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 // syncRepo lists a repo's human items and pushes the full set when any
 // fingerprint changed, on the first run, or after RefreshEvery.
 func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
-	list, err := b.Beads.ListHuman(ctx, st.Dir, st.Personal)
+	list, err := b.Beads.ListHuman(ctx, st.Dir)
 	if err != nil {
 		return err
 	}

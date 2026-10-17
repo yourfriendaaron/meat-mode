@@ -60,8 +60,7 @@ func TestPair(t *testing.T) {
 	defer hub.Close()
 	bd := fakeBD(t, "1.3.1")
 	env, svc, out := testEnv(t, bd)
-	personal := filepath.Join(env.Paths.Home, "me")
-	err := Main(context.Background(), []string{"pair", hub.URL, token, "--personal", personal, "--root", "~/code"}, env)
+	err := Main(context.Background(), []string{"pair", hub.URL, token, "--root", "~/code"}, env)
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
@@ -76,7 +75,7 @@ func TestPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.HubURL != hub.URL || cfg.Token != token || cfg.BD != bd || cfg.Personal != personal ||
+	if cfg.HubURL != hub.URL || cfg.Token != token || cfg.BD != bd ||
 		len(cfg.Roots) != 1 || cfg.Roots[0] != filepath.Join(env.Paths.Home, "code") {
 		t.Errorf("config = %+v", cfg)
 	}
@@ -110,7 +109,7 @@ func TestPairMakesRootsAbsolute(t *testing.T) {
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// A relative root and a bare ~ are stored as absolute paths, like --personal.
+	// A relative root and a bare ~ are stored as absolute paths.
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -217,6 +216,7 @@ func TestPairRefusals(t *testing.T) {
 		{"old bd", []string{hub.URL, token}, "1.2.0", "too old"},
 		{"missing token", []string{hub.URL}, "1.3.1", "needs a hub URL and a token"},
 		{"token from stdin, none given", []string{hub.URL, "-"}, "1.3.1", "no token on standard input"},
+		{"personal repo, now kept on the hub", []string{hub.URL, token, "--personal", "/srv/me"}, "1.3.1", "-personal"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
