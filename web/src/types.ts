@@ -102,3 +102,15 @@ export interface Session {
   login: boolean;
   authenticated: boolean;
 }
+
+/** GET /api/setup: whether to offer the setup wizard, and what is already set (docs/api.md, Setup). */
+export interface SetupInfo {
+  /** "new": no items, no machines, no record. "in-use": items or machines, no record. */
+  status: "new" | "in-use" | "done" | "dismissed";
+  user: string;
+  /** IANA time zone kept in the app, "" until chosen. */
+  timeZone: string;
+  /** Where the login password comes from. */
+  password: "env" | "app" | "none";
+  tailscaleOnly: boolean;
+}

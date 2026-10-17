@@ -1170,6 +1170,161 @@ kbd {
   user-select: all;
 }
 
+/* ---------- setup wizard ---------- */
+
+.setup-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 4px calc(16px + var(--safe-right)) 8px calc(16px + var(--safe-left));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--purple);
+  border-radius: var(--radius);
+  background: var(--raise);
+}
+.setup-banner[hidden] {
+  display: none;
+}
+.setup-banner p {
+  margin: 0;
+}
+.banner-actions,
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+  padding-top: 8px;
+}
+.wiz-side {
+  display: none;
+}
+.wiz-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.wiz-count {
+  margin: 0;
+}
+.wiz-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.wiz-bar-fill {
+  height: 100%;
+  background: var(--purple);
+}
+.wiz-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wiz-step h2 {
+  font-size: 20px;
+}
+/* Focus lands on the heading only so screen readers read the new step. */
+.wiz-step h2:focus {
+  outline: none;
+}
+.wiz-step p {
+  margin: 0;
+}
+.wiz-list {
+  margin: 0;
+  padding-left: 20px;
+}
+.wiz-summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.wiz-summary li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.wiz-outcome {
+  min-width: 80px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.wiz-done {
+  color: var(--green);
+}
+.wiz-skipped,
+.wiz-open {
+  color: var(--soft);
+}
+.wiz-sum-title {
+  flex: 1;
+}
+.wiz-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+.wiz-gap {
+  flex: 1;
+}
+.wiz-close {
+  align-self: flex-start;
+}
+
+@container app (min-width: 880px) {
+  .setup-banner {
+    margin: 4px 24px 8px;
+  }
+  .wizard {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 32px;
+  }
+  .wiz-side {
+    display: block;
+  }
+  .wiz-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: wiz;
+  }
+  .wiz-steps li {
+    counter-increment: wiz;
+    padding: 6px 8px;
+    border-radius: 6px;
+    color: var(--soft);
+  }
+  .wiz-steps li::before {
+    content: counter(wiz) ". ";
+  }
+  .wiz-steps li.current {
+    background: var(--hover);
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .wiz-steps li.done::after {
+    content: " \2713";
+    color: var(--green);
+  }
+}
+
 /* ---------- desktop: sidebar, list, detail pane ---------- */
 
 @container app (min-width: 880px) {

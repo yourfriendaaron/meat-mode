@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Item, NewAction, Repo, State } from "../../src/types.ts";
+import type { Action, Bridge, Item, NewAction, Repo, SetupInfo, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -94,6 +94,20 @@ export class FakeHub {
   authenticated = false;
   /** When set, POST /api/login answers this status instead of checking the password. */
   loginStatus = 0;
+  /**
+   * What the hub keeps for GET /api/setup. `status` "" means nothing
+   * recorded: the reply then says "new" or "in-use" from the items and
+   * machines, as the real hub does. POST /api/setup sets it.
+   */
+  setup: { status: "" | "done" | "dismissed"; userName: string; timeZone: string; password: SetupInfo["password"]; tailscaleOnly: boolean } = {
+    status: "",
+    userName: "",
+    timeZone: "",
+    password: "none",
+    tailscaleOnly: false,
+  };
+  /** When set, GET /api/setup answers after this many ms. */
+  setupDelayMs = 0;
 
   constructor() {
     const f = fixtures();
@@ -114,6 +128,25 @@ export class FakeHub {
       unapplied: this.log.filter((s) => s.action.status === "pending").length,
       user: this.user,
       serverTime: this.now(),
+    };
+  }
+
+  /** Makes this a hub fresh from install: the personal list with no items, no machines, no setup recorded. */
+  fresh(): void {
+    this.items = [];
+    this.bridges = [];
+    this.repos = this.repos.filter((r) => r.bridge === HUB);
+    this.setup.status = "";
+  }
+
+  setupInfo(): SetupInfo {
+    const inUse = this.items.length > 0 || this.bridges.length > 0;
+    return {
+      status: this.setup.status || (inUse ? "in-use" : "new"),
+      user: this.setup.userName || this.user,
+      timeZone: this.setup.timeZone,
+      password: this.setup.password,
+      tailscaleOnly: this.setup.tailscaleOnly,
     };
   }
 
@@ -174,6 +207,16 @@ export class FakeHub {
     if (this.login && !this.authenticated) return this.json(route, 401, { error: "log in first" });
 
     if (method === "GET" && path === "/api/state") return this.json(route, 200, this.state());
+    if (method === "GET" && path === "/api/setup") {
+      if (this.setupDelayMs) await new Promise((r) => setTimeout(r, this.setupDelayMs));
+      return this.json(route, 200, this.setupInfo());
+    }
+    if (method === "POST" && path === "/api/setup") {
+      const { status } = req.postDataJSON() as { status: string };
+      if (status !== "done" && status !== "dismissed") return this.json(route, 400, { error: "setup status must be done or dismissed" });
+      this.setup.status = status;
+      return this.json(route, 204);
+    }
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });

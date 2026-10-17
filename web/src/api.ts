@@ -1,6 +1,6 @@
 // Thin client for the hub's app API (docs/api.md).
 
-import type { Action, Bridge, NewAction, NewBridgeReply, Session, State } from "./types.ts";
+import type { Action, Bridge, NewAction, NewBridgeReply, Session, SetupInfo, State } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -16,7 +16,12 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+/**
+ * Calls one hub route and returns its JSON reply (undefined for 204). Throws
+ * ApiError with the hub's message. Features with their own module call it
+ * directly rather than adding to `api` below.
+ */
+export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
     // The hub refuses a state change without this type, even with no body.
@@ -63,6 +68,8 @@ export const api = {
   bridges: () => call<Bridge[]>("GET", "/api/bridges"),
   addBridge: (name: string) => call<NewBridgeReply>("POST", "/api/bridges", { name }),
   revokeBridge: (name: string) => call<void>("DELETE", `/api/bridges/${encodeURIComponent(name)}`),
+  setup: () => call<SetupInfo>("GET", "/api/setup"),
+  recordSetup: (status: "done" | "dismissed") => call<void>("POST", "/api/setup", { status }),
 };
 
 /** A fresh action id. randomUUID needs a secure context, so plain-HTTP LAN use falls back to getRandomValues. */

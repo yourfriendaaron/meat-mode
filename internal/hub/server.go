@@ -95,6 +95,8 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.HandleFunc("GET /api/bridges", s.handleListBridges)
 	m.HandleFunc("POST /api/bridges", s.handleNewBridge)
 	m.HandleFunc("DELETE /api/bridges/{name}", s.handleRevokeBridge)
+	// Features in their own files register their routes here, one call each.
+	s.setupRoutes(m)
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))

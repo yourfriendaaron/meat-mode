@@ -50,6 +50,19 @@ The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSit
 
 **Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session; turning login on later drops those, and each device subscribes again once it logs in. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
 
+### Setup
+
+The app offers a setup wizard in two parts: the hub part runs once per hub, and the device part runs on each device. The hub records only its own part; each device keeps its part, and a run in progress, in its own browser storage.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/setup` | | `{"status", "user", "timeZone", "password", "tailscaleOnly"}`, below |
+| `POST /api/setup` | `{"status": "done"}` or `{"status": "dismissed"}` | `204`; records the hub part as finished or closed. `400` for any other status. |
+
+- `status` is `done` or `dismissed` once recorded. With no record it is `new` when the hub has no items and no machines (revoked ones count), and `in-use` otherwise. The app opens the wizard on its own only for `new`, so a hub upgraded with data never sees it; Settings starts it again on any hub.
+- `user` is the name kept in the app, or `MEAT_MODE_USER`. `timeZone` is the IANA time zone kept in the app, `""` until chosen.
+- `password` is `env` when `MEAT_MODE_PASSWORD_HASH` or `MEAT_MODE_PASSWORD_HASH_FILE` sets it, `app` when it was set in the app, and `none` otherwise. `tailscaleOnly` is `true` when the user chose to run with no password on a private network.
+
 ### Actions
 
 `NewAction` is `{id, kind, key?, bridge?, repo?, payload}`.
