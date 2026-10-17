@@ -88,6 +88,12 @@ export class FakeHub {
   posted: NewAction[] = [];
   /** When set, every /api/events connection sends one change event and asks to reconnect after this many ms. */
   eventRetryMs = 0;
+  /** When set, the hub has a login: every /api/ route but the session ones needs a logged-in session. */
+  login = false;
+  password = "correct horse battery staple";
+  authenticated = false;
+  /** When set, POST /api/login answers this status instead of checking the password. */
+  loginStatus = 0;
 
   constructor() {
     const f = fixtures();
@@ -149,6 +155,23 @@ export class FakeHub {
     if (method !== "GET" && method !== "HEAD" && !/^application\/json(\s*;\s*charset=[^;]+)?$/i.test(ctype)) {
       return this.json(route, 415, { error: "Content-Type must be application/json" });
     }
+
+    if (method === "GET" && path === "/api/session") {
+      return this.json(route, 200, { login: this.login, authenticated: !this.login || this.authenticated });
+    }
+    if (method === "POST" && path === "/api/login") {
+      if (!this.login) return this.json(route, 404, { error: "this hub has no login" });
+      if (this.loginStatus) return this.json(route, this.loginStatus, { error: "too many failed logins" });
+      const { password } = req.postDataJSON() as { password: string };
+      if (password !== this.password) return this.json(route, 401, { error: "wrong password" });
+      this.authenticated = true;
+      return this.json(route, 204);
+    }
+    if (method === "POST" && path === "/api/logout") {
+      this.authenticated = false;
+      return this.json(route, 204);
+    }
+    if (this.login && !this.authenticated) return this.json(route, 401, { error: "log in first" });
 
     if (method === "GET" && path === "/api/state") return this.json(route, 200, this.state());
     if (method === "GET" && path === "/api/events") {

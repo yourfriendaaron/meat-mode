@@ -23,6 +23,8 @@ func main() {
 		err = runBridge(os.Args[2:])
 	case "add":
 		err = runAdd(os.Args[2:])
+	case "hash-password":
+		err = runHashPassword(os.Args[2:])
 	case "version", "--version":
 		fmt.Println(version)
 	default:
@@ -44,5 +46,6 @@ func usage() {
   meat-mode bridge uninstall          remove the user service and config
   meat-mode add "<title>" [--due TIME] [--note TEXT] [--author NAME] [--id UUID]
                                       add a to-do to the personal list with this machine's bridge config
+  meat-mode hash-password             print the hash of a login password for MEAT_MODE_PASSWORD_HASH
   meat-mode version`)
 }

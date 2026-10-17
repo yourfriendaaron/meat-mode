@@ -41,6 +41,8 @@ type Server struct {
 	push      PushRegistry
 	events    *broker
 	guard     *guard
+	login     *login // nil: the hub has no login
+	now       func() time.Time
 	heartbeat time.Duration
 	mux       *http.ServeMux
 	log       *slog.Logger
@@ -66,6 +68,8 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 		push:      push,
 		events:    newBroker(),
 		guard:     newGuard(cfg),
+		login:     newLogin(cfg.PasswordHash),
+		now:       time.Now,
 		heartbeat: 25 * time.Second,
 		mux:       http.NewServeMux(),
 		log:       slog.Default(),
@@ -73,6 +77,9 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	st.Watch(func(store.Change) { s.events.publish() })
 
 	m := s.mux
+	m.HandleFunc("GET /api/session", s.handleSession)
+	m.HandleFunc("POST /api/login", s.handleLogin)
+	m.HandleFunc("POST /api/logout", s.handleLogout)
 	m.HandleFunc("GET /api/state", s.handleState)
 	m.HandleFunc("GET /api/events", s.handleEvents)
 	m.HandleFunc("POST /api/actions", s.handleNewAction)
@@ -105,8 +112,8 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	return s
 }
 
-// ServeHTTP adds security headers, applies the guard and dispatches to the
-// routes.
+// ServeHTTP adds security headers, applies the guard and the login gate,
+// and dispatches to the routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("X-Content-Type-Options", "nosniff")
@@ -114,6 +121,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Content-Security-Policy", contentSecurityPolicy)
 	if !s.guard.check(w, r) {
+		return
+	}
+	r, ok := s.gate(w, r)
+	if !ok {
 		return
 	}
 	s.mux.ServeHTTP(w, r)

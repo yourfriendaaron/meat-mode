@@ -127,3 +127,25 @@ test("light theme on phone passes axe", async ({ page, hub }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await axe(page);
 });
+
+test("login screen fits the phone in both themes, and Log out is in Settings", async ({ page, hub }) => {
+  hub.login = true;
+  await page.goto("/");
+  const pw = page.getByLabel("Password");
+  await expect(pw).toBeVisible();
+  await noHorizontalScroll(page);
+  await axe(page);
+  await page.evaluate(() => localStorage.setItem("meat-mode.theme", "light"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await axe(page);
+
+  await pw.fill(hub.password);
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(row(page, "Water the plants")).toBeVisible();
+  await page.locator("#tabs").getByRole("button", { name: "Browse" }).click();
+  await page.locator("#browse").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(pw).toBeVisible();
+  await noHorizontalScroll(page);
+});

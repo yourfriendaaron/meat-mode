@@ -46,8 +46,16 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	if err := cfg.LoadPasswordHash(); err != nil {
+		return err
+	}
 	if err := cfg.Validate(); err != nil {
 		return err
+	}
+	if cfg.PasswordHash != "" {
+		slog.Info("login is on")
+	} else {
+		slog.Warn("login is off: keep the hub behind Tailscale or another private network")
 	}
 	st, err := store.Open(cfg.DataDir)
 	if err != nil {

@@ -1,6 +1,6 @@
 // Thin client for the hub's app API (docs/api.md).
 
-import type { Action, Bridge, NewAction, NewBridgeReply, State } from "./types.ts";
+import type { Action, Bridge, NewAction, NewBridgeReply, Session, State } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -8,6 +8,12 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+/** Runs when the hub answers 401 to anything but a login attempt: the session has ended. */
+let onUnauthorized: () => void = () => {};
+export function setUnauthorizedHandler(fn: () => void) {
+  onUnauthorized = fn;
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -26,6 +32,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     } catch {
       // keep the status line
     }
+    if (res.status === 401 && path !== "/api/login") onUnauthorized();
     throw new ApiError(res.status, msg);
   }
   if (res.status === 204) return undefined as T;
@@ -34,6 +41,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export const api = {
+  session: () => call<Session>("GET", "/api/session"),
+  login: (password: string) => call<void>("POST", "/api/login", { password }),
+  logout: () => call<void>("POST", "/api/logout"),
   state: () => call<State>("GET", "/api/state"),
   postAction: (a: NewAction) => call<Action>("POST", "/api/actions", a),
   /** Resolves to true when cancelled, false when the action was already applied (409). */

@@ -1417,3 +1417,49 @@ kbd {
     bottom: 24px;
   }
 }
+
+/* ---------- login ---------- */
+
+.login {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: calc(24px + var(--safe-top)) calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(16px + var(--safe-left));
+}
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--pane);
+}
+.login-card h1 {
+  font-size: 22px;
+}
+.login-card p {
+  margin: 0;
+}
+.login-card label {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--soft);
+}
+.login-card input[type="password"] {
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.login-card .btn {
+  margin-top: 6px;
+  min-height: 40px;
+}
+.login-error {
+  font-size: 13px;
+  color: var(--red);
+}

@@ -13,7 +13,7 @@ The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges a
 
 ## App API
 
-The app relies on the network boundary: it is reached only over Tailscale (docs/deploy.md), so only the user's own devices reach it. No login in v1. The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `http://` on localhost only). Because it has no credentials, the hub refuses requests another site could make from the user's browser:
+The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `http://` on localhost only). Whether the app has a login depends on the hub's settings (see Login below). With no login, the app relies on the network boundary: it is reached only over Tailscale (docs/deploy.md), so only the user's own devices reach it. Either way, the hub refuses requests another site could make from the user's browser:
 
 - A `Host` other than `localhost`, `127.0.0.1`, `[::1]`, the host of `MEAT_MODE_PUBLIC_URL` or one listed in `MEAT_MODE_ALLOWED_HOSTS` gets `421` (on `/api/` and the app's pages).
 - An `/api/` request (any method) or a non-GET page request whose `Origin` is neither the request's own origin nor that of `MEAT_MODE_PUBLIC_URL` gets `403`, and so does an `/api/` request whose `Sec-Fetch-Site` is `same-site` or `cross-site`. A plain subresource load such as an image carries no `Origin`, so in a browser too old to send `Sec-Fetch-Site` a hostile page can still tie up event stream slots.
@@ -33,6 +33,22 @@ The app relies on the network boundary: it is reached only over Tailscale (docs/
 | `GET /api/bridges` | | `[]Bridge` |
 | `POST /api/bridges` | `{"name": "…"}` | `201` with `{"name", "token"}`; the token is shown once |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |
+
+### Login
+
+Login is on when the hub has a password hash (`MEAT_MODE_PASSWORD_HASH`, or `MEAT_MODE_PASSWORD_HASH_FILE` naming a file that holds it). The hash is an Argon2id string in PHC format (`$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`), printed by `meat-mode hash-password`. Setting both variables, or a value that is not such a string, stops the hub at start with a plain message. With no hash, login is off: no route needs a session, `GET /api/session` reports `authenticated: true`, `POST /api/logout` answers `204` and does nothing, and `POST /api/login` answers `404`.
+
+When login is on, every `/api/` route except the three below answers `401` with `{"error": "log in first"}` unless the request carries a valid session cookie. That includes `GET /api/events`, so an app whose session ended sees its event stream fail and checks `GET /api/session` before reconnecting. The three routes below still pass the Host, Origin and Content-Type checks above; they only skip the session check. The app's pages and static files stay public; they hold no data. The bridge API keeps its bearer tokens and `/healthz` stays public.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/session` | | `{"login": bool, "authenticated": bool}`: whether this hub has a login, and whether this request is logged in (always `true` when login is off) |
+| `POST /api/login` | `{"password": "…"}` | `204` and the session cookie; `401` `{"error": "wrong password"}`; `429` with `Retry-After` after 5 failed logins within a minute, counted for the whole hub; `404` when login is off |
+| `POST /api/logout` | | `204`; ends this session, clears the cookie and drops the push subscriptions it registered |
+
+The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `MEAT_MODE_PUBLIC_URL` is `https://`. The hub stores only its SHA-256. A session lasts 90 days from its last use; the hub renews the cookie at most once a day. A session belongs to the password hash it was made under, so changing the hash logs every device out. Logins and the existing Host, Origin and Content-Type checks apply together: `POST /api/login` needs `Content-Type: application/json` like any other `/api/` write.
+
+**Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
 
 ### Actions
 
@@ -101,6 +117,6 @@ The personal repo never appears as a list or in Settings. Current bridges no lon
 
 ## Configuration
 
-Hub, from environment variables (see `.env.example`): `MEAT_MODE_LISTEN`, `MEAT_MODE_DATA_DIR`, `MEAT_MODE_PUBLIC_URL`, `MEAT_MODE_ALLOWED_HOSTS`, `MEAT_MODE_USER`, `MEAT_MODE_VAPID_SUBJECT`, `MEAT_MODE_NTFY_URL`, `MEAT_MODE_NTFY_TOPIC`, `MEAT_MODE_NTFY_TOKEN`.
+Hub, from environment variables (see `.env.example`): `MEAT_MODE_LISTEN`, `MEAT_MODE_DATA_DIR`, `MEAT_MODE_PUBLIC_URL`, `MEAT_MODE_ALLOWED_HOSTS`, `MEAT_MODE_PASSWORD_HASH`, `MEAT_MODE_PASSWORD_HASH_FILE`, `MEAT_MODE_USER`, `MEAT_MODE_VAPID_SUBJECT`, `MEAT_MODE_NTFY_URL`, `MEAT_MODE_NTFY_TOPIC`, `MEAT_MODE_NTFY_TOKEN`.
 
 Bridge: `MEAT_MODE_BRIDGE_TOKEN` gives `meat-mode bridge pair <url>` its token without putting it on the command line.

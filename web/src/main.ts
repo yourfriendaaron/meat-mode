@@ -2,8 +2,8 @@
 // is a render function returning an HTML string, written only when it changed,
 // and one delegated handler per event type.
 
-import { api, newId } from "./api.ts";
-import type { Action, Item, NewAction, NewBridgeReply, Payload, Repo, State } from "./types.ts";
+import { ApiError, api, newId, setUnauthorizedHandler } from "./api.ts";
+import type { Action, Item, NewAction, NewBridgeReply, Payload, Repo, Session, State } from "./types.ts";
 import {
   DAY_CAPACITY,
   agentNewCount,
@@ -31,6 +31,7 @@ import { fmtAgo, fmtTime, fmtWhen, toLocalInput } from "./dates.ts";
 import { snoozeOptions } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
 import { applyTheme, getTheme, setTheme } from "./theme.ts";
+import { loginErrorText, needsLogin } from "./login.ts";
 
 type View = ViewId | "settings";
 
@@ -64,7 +65,13 @@ const S = {
   revoking: null as string | null,
   pushStatus: "",
   copied: false,
+  auth: null as Session | null,
+  loginError: "",
+  loggingIn: false,
 };
+
+/** Whether the app's shell is on screen. The login screen replaces it, and nothing renders into it meanwhile. */
+let shellUp = false;
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector<T>(sel)!;
 
@@ -234,6 +241,7 @@ function renderNav() {
 }
 
 function renderSync() {
+  if (!shellUp) return;
   const st = S.state;
   const status = st ? syncStatus(st, now()) : { tone: "orange" as const, text: S.loadError ? "Hub unreachable" : "Loading" };
   const html = `<span class="pill-dot" aria-hidden="true"></span><span>${esc(status.text)}</span>`;
@@ -499,6 +507,7 @@ function renderSnoozeDialog() {
 }
 
 function renderToast() {
+  if (!shellUp) return;
   const t = S.toast;
   setHTML(
     $("#toast"),
@@ -547,6 +556,7 @@ function renderSettings() {
     $("#settings"),
     `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look">Appearance</h2><button class="btn" data-act="theme"></button></section>
 <section class="set-section" aria-labelledby="s-push"><h2 id="s-push">Reminders</h2>${pushHTML}${S.pushStatus ? `<p class="muted small" role="status">${esc(S.pushStatus)}</p>` : ""}</section>
+${S.auth?.login ? '<section class="set-section" aria-labelledby="s-acct"><h2 id="s-acct">Account</h2><p class="muted">Logging out ends this device\'s session and stops its reminders.</p><button class="btn" data-act="logout">Log out</button></section>' : ""}
 <section class="set-section" aria-labelledby="s-mach"><h2 id="s-mach">Agent machines</h2>${machines}
 <form class="add-machine" data-form="bridge"><label for="bridge-name">Machine name</label><div class="pick-row"><input id="bridge-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off"><button class="btn btn-primary" type="submit">Add machine</button></div><p class="muted small">Lowercase letters, digits and dashes.</p>${
       S.bridgeError ? `<p class="row-error" role="alert">${esc(S.bridgeError)}</p>` : ""
@@ -585,6 +595,7 @@ async function switchSync(bridge: string, repo: string) {
 // ---------- render ----------
 
 function render() {
+  if (!shellUp) return;
   renderNav();
   renderSync();
   renderMain();
@@ -603,6 +614,7 @@ let refreshing: Promise<void> | null = null;
 let refreshAgain = false;
 
 async function refresh(): Promise<void> {
+  if (!shellUp) return;
   if (refreshing) {
     refreshAgain = true;
     return refreshing;
@@ -619,6 +631,7 @@ async function refresh(): Promise<void> {
     } catch (e) {
       S.loadError = (e as Error).message;
     }
+    if (!shellUp) return;
     render();
     updateQuickAdd();
   })();
@@ -646,8 +659,10 @@ async function loadSyncActions() {
 
 let es: EventSource | null = null;
 let esRetry = 0;
+let esTimer: ReturnType<typeof setTimeout> | undefined;
 function connectEvents() {
-  if (typeof EventSource === "undefined") return;
+  if (typeof EventSource === "undefined" || !shellUp) return;
+  clearTimeout(esTimer);
   es?.close();
   es = new EventSource("/api/events");
   es.addEventListener("open", () => {
@@ -657,8 +672,18 @@ function connectEvents() {
   es.addEventListener("change", () => void refresh());
   es.addEventListener("error", () => {
     if (es && es.readyState === EventSource.CLOSED) {
+      // A closed stream may mean the session ended: ask once before trying
+      // again, so a logged-out app does not keep knocking on /api/events.
       const wait = Math.min(30000, 1000 * 2 ** esRetry++);
-      setTimeout(connectEvents, wait);
+      void api.session().then(
+        (sess) => {
+          if (needsLogin(sess)) showLogin();
+          else esTimer = setTimeout(connectEvents, wait);
+        },
+        (e) => {
+          if (!(e instanceof ApiError && e.status === 401)) esTimer = setTimeout(connectEvents, wait);
+        },
+      );
     }
   });
 }
@@ -903,6 +928,7 @@ function defaultList(): string {
 }
 
 function updateQuickAdd() {
+  if (!shellUp) return;
   const input = $<HTMLInputElement>("#qa-input");
   const select = $<HTMLSelectElement>("#qa-list");
   const opts = visibleRepos(repos())
@@ -1088,6 +1114,7 @@ async function copyCommand() {
 let swipeEnded = 0;
 
 function onClick(e: MouseEvent) {
+  if (!shellUp) return;
   if (Date.now() - swipeEnded < 400 && (e.target as HTMLElement).closest("#list")) {
     swipeEnded = 0;
     e.preventDefault();
@@ -1190,6 +1217,9 @@ function onClick(e: MouseEvent) {
       setTheme(getTheme() === "dark" ? "light" : "dark");
       renderTheme();
       break;
+    case "logout":
+      void logout();
+      break;
     case "push":
       void enablePush();
       break;
@@ -1225,6 +1255,7 @@ function isTyping(el: Element | null): boolean {
 }
 
 function onKey(e: KeyboardEvent) {
+  if (!shellUp) return;
   if (e.key === "Tab" && S.snoozeKeys) {
     // Keep focus inside the modal snooze dialog.
     const f = [...document.querySelectorAll<HTMLElement>("#snooze button, #snooze input")];
@@ -1294,7 +1325,8 @@ function onChange(e: Event) {
 function onSubmit(e: SubmitEvent) {
   const form = e.target as HTMLFormElement;
   e.preventDefault();
-  if (form.id === "qa-form") void submitQuickAdd();
+  if (form.dataset.form === "login") void submitLogin(form);
+  else if (form.id === "qa-form") void submitQuickAdd();
   else if (form.dataset.form === "bridge") void addBridge(form);
 }
 
@@ -1404,18 +1436,96 @@ function shell(): string {
 <div id="toast" class="toast-region" aria-live="polite" aria-atomic="true"></div>`;
 }
 
-function boot() {
+// ---------- login ----------
+
+function loginHTML(): string {
+  return `<main class="login">
+<form class="login-card" data-form="login" aria-labelledby="login-h">
+  <h1 id="login-h">Meat Mode</h1>
+  <p class="muted">Enter the password to open your list.</p>
+  <input class="sr" type="text" name="username" autocomplete="username" value="meat-mode" tabindex="-1" aria-hidden="true">
+  <label for="login-password">Password</label>
+  <input id="login-password" name="password" type="password" autocomplete="current-password" required${S.loginError ? ' aria-describedby="login-error"' : ""}>
+  ${S.loginError ? `<p id="login-error" class="login-error" role="alert">${esc(S.loginError)}</p>` : ""}
+  <button class="btn btn-primary" type="submit"${S.loggingIn ? " disabled" : ""}>Log in</button>
+</form>
+</main>`;
+}
+
+/** Replaces the app with the login screen and stops everything that talks to the hub. */
+function showLogin() {
+  if (!shellUp && $("#app").querySelector(".login")) return;
+  shellUp = false;
+  clearTimeout(esTimer);
+  es?.close();
+  es = null;
+  clearTimeout(toastTimer);
+  S.toast = null;
+  S.state = null;
+  S.open = null;
+  S.selected = null;
+  S.snoozeKeys = null;
+  S.qaOpen = false;
+  S.syncOpen = false;
+  S.newBridge = null;
+  S.auth = { login: true, authenticated: false };
+  S.loggingIn = false;
+  $("#app").className = "app";
+  $("#app").innerHTML = loginHTML();
+  $<HTMLInputElement>("#login-password").focus();
+}
+
+async function submitLogin(form: HTMLFormElement) {
+  if (S.loggingIn) return;
+  const password = form.querySelector<HTMLInputElement>("input[name=password]")!.value;
+  S.loggingIn = true;
+  try {
+    await api.login(password);
+    S.loginError = "";
+    S.auth = { login: true, authenticated: true };
+    S.loggingIn = false;
+    startApp();
+    return;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) {
+      // This hub has no login after all.
+      S.loginError = "";
+      S.auth = { login: false, authenticated: true };
+      S.loggingIn = false;
+      startApp();
+      return;
+    }
+    S.loginError = e instanceof ApiError ? loginErrorText(e.status, e.message) : loginErrorText(0, (e as Error).message);
+  }
+  S.loggingIn = false;
+  $("#app").innerHTML = loginHTML();
+  $<HTMLInputElement>("#login-password").focus();
+}
+
+async function logout() {
+  try {
+    await api.logout();
+  } catch (e) {
+    if (!(e instanceof ApiError && e.status === 401)) {
+      showToast(`Could not log out: ${(e as Error).message}`);
+      return;
+    }
+  }
+  S.loginError = "";
+  history.replaceState(null, "", location.pathname);
+  showLogin();
+}
+
+// ---------- boot ----------
+
+/** Puts the app's shell on screen and loads it. Runs on boot and after each login. */
+function startApp() {
   const app = $("#app");
   app.innerHTML = shell();
-  applyTheme(getTheme());
-  document.addEventListener("click", onClick);
-  document.addEventListener("keydown", onKey);
-  document.addEventListener("input", onInput);
-  document.addEventListener("change", onChange);
-  document.addEventListener("submit", onSubmit);
+  shellUp = true;
+  esRetry = 0;
   $("#qa-input").addEventListener("scroll", () => ($("#qa-backdrop").scrollLeft = $<HTMLInputElement>("#qa-input").scrollLeft));
   setupSwipe($("#list"));
-  new ResizeObserver(() => render()).observe(app);
 
   const want = new URL(location.href).searchParams.get("item");
   render();
@@ -1427,11 +1537,36 @@ function boot() {
     }
   });
   connectEvents();
+  resubscribeOnOpen();
+}
+
+function boot() {
+  const app = $("#app");
+  applyTheme(getTheme());
+  document.addEventListener("click", onClick);
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("input", onInput);
+  document.addEventListener("change", onChange);
+  document.addEventListener("submit", onSubmit);
+  new ResizeObserver(() => render()).observe(app);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void refresh();
   });
   setInterval(render, 30000);
-  resubscribeOnOpen();
+  setUnauthorizedHandler(showLogin);
+
+  // Ask whether this hub wants a password before loading anything else. If
+  // the hub cannot be reached, load the app anyway: it shows the error.
+  void api.session().then(
+    (sess) => {
+      S.auth = sess;
+      if (needsLogin(sess)) showLogin();
+      else startApp();
+    },
+    (e) => {
+      if (!(e instanceof ApiError && e.status === 401)) startApp();
+    },
+  );
 }
 
 boot();

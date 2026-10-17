@@ -96,3 +96,9 @@ export interface NewBridgeReply {
   name: string;
   token: string;
 }
+
+/** GET /api/session: whether the hub has a login, and whether this browser is logged in. */
+export interface Session {
+  login: boolean;
+  authenticated: boolean;
+}
