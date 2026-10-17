@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	_ "time/tzdata" // the hub's time zone must resolve on a machine without zone files
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

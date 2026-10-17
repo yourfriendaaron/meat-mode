@@ -63,6 +63,20 @@ The app offers a setup wizard in two parts: the hub part runs once per hub, and 
 - `user` is the name kept in the app, or `MEAT_MODE_USER`. `timeZone` is the IANA time zone kept in the app, `""` until chosen.
 - `password` is `env` when `MEAT_MODE_PASSWORD_HASH` or `MEAT_MODE_PASSWORD_HASH_FILE` sets it, `app` when it was set in the app, and `none` otherwise. `tailscaleOnly` is `true` when the user chose to run with no password on a private network.
 
+### Settings
+
+The name and the time zone the hub keeps, shown in the wizard's Name and time zone step and in Settings.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/settings` | | `{"name", "timeZone"}` |
+| `PUT /api/settings` | `{"name"?, "timeZone"?}` | `200` and the new `{"name", "timeZone"}`; `400` when either is refused, and then neither changes |
+
+- `name` is the name notes the app writes are signed with, as `<name>-app`. It is at most 64 characters with no control characters, and surrounding spaces are dropped. An empty name goes back to `MEAT_MODE_USER` (`user` when that is unset), which is also what `GET` returns while none was chosen. `GET /api/state` and `GET /api/setup` report the same name.
+- `timeZone` is an IANA name such as `Europe/Paris`, `""` until one is chosen. The empty string, `Local` and names the hub does not know are refused. The app prefills its first choice with the first browser's zone.
+- A field left out of `PUT` stays as it is.
+- The app keeps showing times in each device's own zone. The hub's zone is for agents: `meat-mode add` reads `--due 2026-03-02` and `--due "2026-03-02 14:30"` in it, so a to-do added from a server in UTC lands at 9:00 in the user's zone. A `--due` with an offset, such as `2026-03-02T09:00:00Z`, is used as written. While the hub has no zone, `meat-mode add` uses the zone of the machine it runs on.
+
 ### Actions
 
 `NewAction` is `{id, kind, key?, bridge?, repo?, payload}`.
@@ -91,7 +105,8 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 
 | Method and path | Body | Response |
 |---|---|---|
-| `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
+| `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime", "timeZone"?}`; updates last-seen. `timeZone` is the hub's IANA time zone, left out until one is chosen |
+| `GET /bridge/v1/settings` | | `{"name", "timeZone"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
 | `PUT /bridge/v1/repos` | `[]Repo` (without `bridge` and `pending`): every repo the bridge found, `optedIn` true for those it syncs | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |

@@ -20,7 +20,7 @@ const defaultDueHour = 9
 func Add(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
-	due := fs.String("due", "", "when it is due: an RFC 3339 time, YYYY-MM-DD HH:MM in local time, or YYYY-MM-DD (9:00 local)")
+	due := fs.String("due", "", "when it is due: an RFC 3339 time, YYYY-MM-DD HH:MM in the hub's time zone, or YYYY-MM-DD (9:00 there)")
 	note := fs.String("note", "", "a note, added as the first comment")
 	author := fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id := fs.String("id", "", "a UUID for this to-do; adding the same id again changes nothing")
@@ -39,11 +39,10 @@ func Add(ctx context.Context, args []string, env Env) error {
 	}
 	t := api.PersonalTodo{ID: *id, Title: title, Note: *note, Author: *author}
 	if *due != "" {
-		d, err := ParseDue(*due, time.Local)
-		if err != nil {
+		// Checked before the hub is asked for its time zone.
+		if _, err := ParseDue(*due, time.UTC); err != nil {
 			return err
 		}
-		t.Due = &d
 	}
 
 	cfg, err := LoadConfig(env.Paths.Config)
@@ -56,12 +55,43 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
 		return err
 	}
-	reply, err := env.hub(cfg).AddPersonal(ctx, t)
+	hub := env.hub(cfg)
+	if *due != "" {
+		loc, err := hubZone(ctx, hub)
+		if err != nil {
+			return err
+		}
+		d, err := ParseDue(*due, loc)
+		if err != nil {
+			return err
+		}
+		t.Due = &d
+	}
+	reply, err := hub.AddPersonal(ctx, t)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintln(env.Stdout, reply.Key)
 	return nil
+}
+
+// hubZone is the hub's time zone, which reads a date or time without one:
+// the person who wrote it means their own, which the hub keeps rather than
+// this machine, often a server in UTC. It is this machine's zone while the
+// hub has none yet.
+func hubZone(ctx context.Context, hub *Hub) (*time.Location, error) {
+	settings, err := hub.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if settings.TimeZone == "" {
+		return time.Local, nil
+	}
+	loc, err := time.LoadLocation(settings.TimeZone)
+	if err != nil {
+		return nil, fmt.Errorf("the hub's time zone %q is not known on this machine: %w", settings.TimeZone, err)
+	}
+	return loc, nil
 }
 
 // ParseDue reads a due time: RFC 3339, or a date and time or a date alone in

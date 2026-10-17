@@ -190,3 +190,41 @@ func TestSetupCodeExpires(t *testing.T) {
 	}
 	must(t, s.ClaimSetupCode(code2, cheapHash("pw")))
 }
+
+func TestUpdateProfileIsAllOrNothing(t *testing.T) {
+	s, _ := open(t)
+	name, tz := "Sam", "Europe/Paris"
+	must(t, s.UpdateProfile(&name, &tz))
+	bad, other := "Mars/Olympus", "Casey"
+	if err := s.UpdateProfile(&other, &bad); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad zone: %v", err)
+	}
+	h, err := s.Settings()
+	must(t, err)
+	if h.UserName != "Sam" || h.TimeZone != "Europe/Paris" {
+		t.Fatalf("after a refused update: %+v", h)
+	}
+	must(t, s.UpdateProfile(nil, nil))
+	must(t, s.UpdateProfile(&other, nil))
+	h, _ = s.Settings()
+	if h.UserName != "Casey" || h.TimeZone != "Europe/Paris" {
+		t.Fatalf("name only: %+v", h)
+	}
+}
+
+func TestNameAndTimeZoneSurviveARestart(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	must(t, err)
+	must(t, s.SetUserName("Sam"))
+	must(t, s.SetTimeZone("America/New_York"))
+	s.Close()
+	s, err = Open(dir)
+	must(t, err)
+	defer s.Close()
+	h, err := s.Settings()
+	must(t, err)
+	if h.UserName != "Sam" || h.TimeZone != "America/New_York" {
+		t.Fatalf("after reopening: %+v", h)
+	}
+}

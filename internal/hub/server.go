@@ -97,6 +97,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.HandleFunc("DELETE /api/bridges/{name}", s.handleRevokeBridge)
 	// Features in their own files register their routes here, one call each.
 	s.setupRoutes(m)
+	s.settingsRoutes(m)
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))
@@ -197,7 +198,11 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		s.storeError(w, r, err)
 		return
 	}
-	st.User = s.cfg.User
+	st.User, err = s.userName()
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, st)
 }
 
@@ -206,7 +211,12 @@ func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, maxBody, &na) {
 		return
 	}
-	a, created, err := s.store.AppendAction(na, s.cfg.User+"-app")
+	user, err := s.userName()
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	a, created, err := s.store.AppendAction(na, user+"-app")
 	if err != nil {
 		s.storeError(w, r, err)
 		return
@@ -399,7 +409,12 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request, bridge stri
 		s.storeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, api.HelloReply{Bridge: bridge, ServerTime: time.Now().UTC()})
+	settings, err := s.store.Settings()
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.HelloReply{Bridge: bridge, ServerTime: time.Now().UTC(), TimeZone: settings.TimeZone})
 }
 
 func (s *Server) handlePutRepos(w http.ResponseWriter, r *http.Request, bridge string) {

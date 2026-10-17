@@ -104,25 +104,64 @@ func (s *Store) RecordSetup(status string) error {
 // SetUserName keeps the user's name: up to 64 characters with no control
 // characters, trimmed. An empty name goes back to MEAT_MODE_USER.
 func (s *Store) SetUserName(name string) error {
-	name = strings.TrimSpace(name)
-	if utf8.RuneCountInString(name) > maxUserName {
-		return invalidf("name must be at most %d characters", maxUserName)
-	}
-	if strings.ContainsFunc(name, unicode.IsControl) {
-		return invalidf("name must not contain control characters")
+	name, err := cleanUserName(name)
+	if err != nil {
+		return err
 	}
 	return s.setSetting(`user_name = ?`, name)
 }
 
+func cleanUserName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if utf8.RuneCountInString(name) > maxUserName {
+		return "", invalidf("name must be at most %d characters", maxUserName)
+	}
+	if strings.ContainsFunc(name, unicode.IsControl) {
+		return "", invalidf("name must not contain control characters")
+	}
+	return name, nil
+}
+
 // SetTimeZone keeps the user's IANA time zone, such as Europe/Paris.
 func (s *Store) SetTimeZone(tz string) error {
+	if err := checkTimeZone(tz); err != nil {
+		return err
+	}
+	return s.setSetting(`time_zone = ?`, tz)
+}
+
+func checkTimeZone(tz string) error {
 	if tz == "" || tz == "Local" {
 		return invalidf("time zone must be an IANA name such as Europe/Paris")
 	}
 	if _, err := time.LoadLocation(tz); err != nil {
 		return invalidf("unknown time zone %q; use an IANA name such as Europe/Paris", tz)
 	}
-	return s.setSetting(`time_zone = ?`, tz)
+	return nil
+}
+
+// UpdateProfile keeps the name and the time zone that are not nil, both or
+// neither: a refused one leaves the other unchanged.
+func (s *Store) UpdateProfile(name, tz *string) error {
+	var set []string
+	var args []any
+	if name != nil {
+		n, err := cleanUserName(*name)
+		if err != nil {
+			return err
+		}
+		set, args = append(set, "user_name = ?"), append(args, n)
+	}
+	if tz != nil {
+		if err := checkTimeZone(*tz); err != nil {
+			return err
+		}
+		set, args = append(set, "time_zone = ?"), append(args, *tz)
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return s.setSetting(strings.Join(set, ", "), args...)
 }
 
 // SetPasswordHash keeps the login password set in the app, as an Argon2id

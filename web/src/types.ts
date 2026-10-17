@@ -114,3 +114,9 @@ export interface SetupInfo {
   password: "env" | "app" | "none";
   tailscaleOnly: boolean;
 }
+
+/** PUT /api/settings: the name and time zone the hub keeps. A field left out stays as it is. */
+export interface SettingsUpdate {
+  name?: string;
+  timeZone?: string;
+}

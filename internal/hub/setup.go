@@ -25,13 +25,10 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	out := api.Setup{
 		Status:        status,
-		User:          h.UserName,
+		User:          s.nameFrom(h),
 		TimeZone:      h.TimeZone,
 		Password:      "none",
 		TailscaleOnly: h.TailscaleOnly,
-	}
-	if out.User == "" {
-		out.User = s.cfg.User
 	}
 	switch {
 	case s.cfg.PasswordHash != "":

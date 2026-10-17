@@ -2,4 +2,5 @@
 // comes from each section's `order`. Add a section with its module and one
 // line here.
 
+import "./profile.ts";
 import "./setup.ts";
