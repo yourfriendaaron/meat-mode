@@ -45,10 +45,13 @@ The app relies on the network boundary: it is reached only over Tailscale (docs/
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<MEAT_MODE_USER>-app` |
 | `add` | `bridge` + `repo` | `{"title": "…", "due": time or null}` | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |
+| `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal repo. |
 
 Undo is the client's job: it cancels the closing action when it is still unapplied, or else posts the inverse (`reopen`, or `snooze` back to `previous`).
 
 An action's `status` is `pending`, `applied`, `failed` or `cancelled`. `failed` carries `error`; the app shows it on the item. A bridge fails an action on a bead it does not list in that repo with the error `unknown bead`.
+
+A `sync` switch is applied by the bridge, not by bd. The bridge accepts it only for a repo it found itself, looked up by name, so the app cannot make it read anywhere else; any other name fails with `unknown repo`. It saves the choice in the `sync` map of its own `bridge.json`, where it overrides the repo's `meat-mode.sync` line, and sends its new repo list before reporting the result. A repo with no switch syncs when its `.beads/config.yaml` has the top-level line `meat-mode.sync: true`.
 
 ## Bridge API
 
@@ -57,7 +60,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 | Method and path | Body | Response |
 |---|---|---|
 | `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
-| `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`) | `204`; replaces this bridge's repo list |
+| `PUT /bridge/v1/repos` | `[]Repo` (without `bridge` and `pending`): every repo the bridge found, `optedIn` true for those it syncs | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |

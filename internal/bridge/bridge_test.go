@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -566,4 +567,63 @@ func TestSameNamedReposSyncSideBySide(t *testing.T) {
 			t.Error("the action went to the wrong repo")
 		}
 	})
+}
+
+func TestSyncSwitch(t *testing.T) {
+	both(t, func(t *testing.T, w *world) {
+		garden := w.repo("projects/garden", false)
+		w.seed(garden, "Water the plants")
+		kitchen := w.repo("projects/kitchen", true)
+		w.seed(kitchen, "Descale the kettle")
+		saved := map[string]bool{}
+		b := w.start("")
+		b.SaveSwitch = func(repo string, on bool) error { saved[repo] = on; return nil }
+		on, off := true, false
+		w.hub.Enqueue(us, action("sw-on", api.KindSync, "projects/garden", "", api.Payload{On: &on}))
+		w.hub.Enqueue(us, action("sw-off", api.KindSync, "projects/kitchen", "", api.Payload{On: &off}))
+		// Repos the bridge did not find, and paths outside what it found, are refused.
+		w.hub.Enqueue(us, action("sw-unknown", api.KindSync, "projects/shed", "", api.Payload{On: &on}))
+		w.hub.Enqueue(us, action("sw-escape", api.KindSync, "projects/garden/../../..", "", api.Payload{On: &on}))
+		w.tick(b)
+
+		w.oneOK(aid("sw-on"))
+		w.oneOK(aid("sw-off"))
+		for _, name := range []string{"sw-unknown", "sw-escape"} {
+			if rs := w.hub.Results(aid(name)); len(rs) != 1 || rs[0].OK || rs[0].Error != ErrUnknownRepo {
+				t.Errorf("%s: results %+v, want %q", name, rs, ErrUnknownRepo)
+			}
+		}
+		if !maps.Equal(saved, map[string]bool{"projects/garden": true, "projects/kitchen": false}) {
+			t.Errorf("saved switches %v", saved)
+		}
+		want := []api.Repo{{Name: "projects/garden", OptedIn: true}, {Name: "projects/kitchen", OptedIn: false}}
+		if got := w.hub.Repos(us); !slices.Equal(got, want) {
+			t.Errorf("repos = %+v, want %+v", got, want)
+		}
+		if items, _ := w.hub.Items(us, "projects/garden"); len(items) != 1 {
+			t.Errorf("garden items after switching on = %+v", items)
+		}
+
+		// A new process reads the saved switches, which beat the config file.
+		b = w.start("")
+		b.Switches = saved
+		w.tick(b)
+		if got := w.hub.Repos(us); !slices.Equal(got, want) {
+			t.Errorf("repos after restart = %+v, want %+v", got, want)
+		}
+	})
+}
+
+func TestSyncSwitchRefusesThePersonalRepo(t *testing.T) {
+	w := newWorld(t, false)
+	personal := filepath.Join(t.TempDir(), "me")
+	writeFile(t, filepath.Join(personal, ".beads", "metadata.json"), "{}\n")
+	b := w.start(personal)
+	b.SaveSwitch = func(string, bool) error { t.Error("saved a switch for the personal repo"); return nil }
+	off := false
+	w.hub.Enqueue(us, action("sw-me", api.KindSync, PersonalRepo, "", api.Payload{On: &off}))
+	w.tick(b)
+	if rs := w.hub.Results(aid("sw-me")); len(rs) != 1 || rs[0].Error != ErrPersonalSwitch {
+		t.Errorf("results %+v", rs)
+	}
 }

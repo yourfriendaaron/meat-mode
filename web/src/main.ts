@@ -255,7 +255,7 @@ function renderSync() {
       list
         .map((a) => {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
-          const title = a.kind === "add" ? a.payload.title : item?.title ?? a.beadId ?? "";
+          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" ? `${a.repo} on ${a.bridge}` : (item?.title ?? a.beadId ?? "");
           const state =
             a.status === "applied" ? "Synced" : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
@@ -280,6 +280,8 @@ function actionLabel(a: Action): string {
       return "Note on";
     case "add":
       return "Add";
+    case "sync":
+      return a.payload.on ? "Sync on:" : "Sync off:";
     case "snooze":
       return a.payload.until ? `Snooze to ${fmtWhen(new Date(a.payload.until), now())}:` : "Clear snooze on";
   }
@@ -536,7 +538,7 @@ function renderSettings() {
             S.revoking === b.name
               ? `<span class="confirm">Revoke ${esc(b.name)}?</span><button class="btn btn-small btn-danger" data-act="revoke-confirm" data-name="${esc(b.name)}">Revoke</button><button class="btn btn-small" data-act="revoke-cancel">Cancel</button>`
               : `<button class="btn btn-small" data-act="revoke" data-name="${esc(b.name)}">Revoke</button>`;
-          return `<li class="machine"><div><div class="m-name">${esc(b.name)}</div><div class="muted small">${esc(seen)}${b.version ? ` · ${esc(b.version)}` : ""}</div></div><div class="m-actions">${actions}</div></li>`;
+          return `<li class="machine"><div><div class="m-name">${esc(b.name)}</div><div class="muted small">${esc(seen)}${b.version ? ` · ${esc(b.version)}` : ""}</div></div><div class="m-actions">${actions}</div>${machineRepos(b.name)}</li>`;
         })
         .join("")}</ul>`
     : '<p class="muted">No machines yet.</p>';
@@ -555,6 +557,31 @@ ${
 }</section>`,
   );
   renderTheme();
+}
+
+/** The repos a machine found, each with its sync switch. */
+function machineRepos(bridge: string): string {
+  const list = repos()
+    .filter((r) => r.bridge === bridge)
+    .sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name));
+  if (!list.length) return '<p class="muted small m-repos">No beads repos found on this machine yet.</p>';
+  return `<ul class="m-repos" aria-label="Repos on ${esc(bridge)}">${list
+    .map((r) => {
+      const where = r.personal ? "Personal list" : r.name;
+      const control = r.personal
+        ? '<span class="muted small">Always synced</span>'
+        : `<button class="switch" role="switch" id="${esc(`sync-${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
+      const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
+      return `<li class="m-repo"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(where)}</div>${note}</div>${control}</li>`;
+    })
+    .join("")}</ul>`;
+}
+
+async function switchSync(bridge: string, repo: string) {
+  const r = repos().find((x) => x.bridge === bridge && x.name === repo);
+  if (!r || r.personal) return;
+  await post({ id: newId(), kind: "sync", bridge, repo, payload: { on: !r.optedIn } });
+  await refresh();
 }
 
 // ---------- render ----------
@@ -1177,6 +1204,9 @@ function onClick(e: MouseEvent) {
       break;
     case "revoke-confirm":
       void revokeBridge(btn.dataset.name ?? "");
+      break;
+    case "sync-switch":
+      void switchSync(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
       break;
     case "copy":
       void copyCommand();

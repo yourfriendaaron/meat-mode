@@ -257,9 +257,13 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		Roots:    cfg.ResolveRoots(env.Paths.Home),
 		Home:     env.Paths.Home,
 		Personal: cfg.ResolvePersonal(env.Paths.Home),
-		Version:  env.Version,
-		Log:      log,
-		Poll:     poll,
+		Switches: cfg.Sync,
+		SaveSwitch: func(repo string, on bool) error {
+			return SaveSwitch(env.Paths.Config, repo, on)
+		},
+		Version: env.Version,
+		Log:     log,
+		Poll:    poll,
 	}, nil
 }
 
@@ -318,9 +322,21 @@ func status(ctx context.Context, env Env) error {
 	repos := Discover(roots, env.Paths.Home, cfg.ResolvePersonal(env.Paths.Home), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	fmt.Fprintf(out, "Repos:    %d found\n", len(repos))
 	for _, r := range repos {
+		if on, ok := cfg.Sync[r.Name]; ok && !r.Personal {
+			r.Switch = &on
+		}
 		state := "synced"
-		if !r.Synced() {
-			state = "not opted in (add `meat-mode.sync: true` to .beads/config.yaml)"
+		switch {
+		case r.Personal:
+			state = "synced (personal)"
+		case r.Switch != nil && *r.Switch:
+			state = "synced (switched on in Settings)"
+		case r.Switch != nil:
+			state = "not synced (switched off in Settings)"
+		case r.OptedIn:
+			state = "synced (meat-mode.sync: true in .beads/config.yaml)"
+		default:
+			state = "not synced (switch it on in Settings)"
 		}
 		fmt.Fprintf(out, "  %-24s %s\n  %-24s %s\n", r.Name, state, "", r.Dir)
 	}

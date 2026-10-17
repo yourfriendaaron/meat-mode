@@ -117,6 +117,11 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 			return a, false, invalidf("title is longer than %d characters", MaxTitleLen)
 		}
 		p = api.Payload{Title: title, Due: p.Due}
+	case api.KindSync:
+		if p.On == nil {
+			return a, false, invalidf("sync needs payload.on")
+		}
+		p = api.Payload{On: p.On}
 	case "":
 		return a, false, invalidf("action needs a kind")
 	default:
@@ -124,9 +129,9 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 	}
 	a.Payload = normalisePayload(p)
 
-	if na.Kind == api.KindAdd {
+	if na.Kind == api.KindAdd || na.Kind == api.KindSync {
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
-			return a, false, invalidf("add needs a bridge and a repo")
+			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
 		}
 		var personal, optedIn bool
 		err := tx.QueryRow(`SELECT r.personal, r.opted_in FROM repos r
@@ -138,7 +143,10 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 		if err != nil {
 			return a, false, err
 		}
-		if !personal && !optedIn {
+		switch {
+		case na.Kind == api.KindSync && personal:
+			return a, false, invalidf("the personal repo always syncs")
+		case na.Kind == api.KindAdd && !personal && !optedIn:
 			return a, false, invalidf("repo %q is not synced with Meat Mode", na.Repo)
 		}
 		a.Bridge, a.Repo = na.Bridge, na.Repo

@@ -273,7 +273,7 @@ func TestStatus(t *testing.T) {
 	if err := Main(context.Background(), []string{"status"}, env); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Hub:      " + hub.URL, "bd:       1.3.1", "garden", "synced", "kitchen", "not opted in", journal, `reachable, this bridge is "desk"`} {
+	for _, want := range []string{"Hub:      " + hub.URL, "bd:       1.3.1", "garden", "synced", "kitchen", "not synced (switch it on in Settings)", journal, `reachable, this bridge is "desk"`} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out)
 		}

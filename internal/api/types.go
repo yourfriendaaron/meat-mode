@@ -43,7 +43,10 @@ type Repo struct {
 	Bridge   string `json:"bridge,omitempty"`
 	Name     string `json:"name"`
 	Personal bool   `json:"personal"`
-	OptedIn  bool   `json:"optedIn"`
+	OptedIn  bool   `json:"optedIn"` // synced: switched on in the app, or by the repo's config file
+	// Hub-only: a sync switch the bridge has not applied yet. OptedIn then
+	// shows the position it was switched to.
+	Pending bool `json:"pending,omitempty"`
 }
 
 // Bridge is one paired agent machine.
@@ -63,6 +66,7 @@ const (
 	KindDismiss = "dismiss"
 	KindNote    = "note"
 	KindAdd     = "add"
+	KindSync    = "sync" // switch a repo's syncing on or off
 )
 
 // Action statuses.
@@ -80,6 +84,7 @@ type Payload struct {
 	Text     string     `json:"text,omitempty"`     // note
 	Title    string     `json:"title,omitempty"`    // add
 	Due      *time.Time `json:"due,omitempty"`      // add
+	On       *bool      `json:"on,omitempty"`       // sync
 }
 
 // NewAction is what the app posts.
@@ -87,8 +92,8 @@ type NewAction struct {
 	ID      string  `json:"id"`
 	Kind    string  `json:"kind"`
 	Key     string  `json:"key,omitempty"`
-	Bridge  string  `json:"bridge,omitempty"` // add only
-	Repo    string  `json:"repo,omitempty"`   // add only
+	Bridge  string  `json:"bridge,omitempty"` // add and sync only
+	Repo    string  `json:"repo,omitempty"`   // add and sync only
 	Payload Payload `json:"payload"`
 }
 

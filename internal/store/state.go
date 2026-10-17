@@ -87,6 +87,16 @@ func (s *Store) State() (api.State, error) {
 		return st, err
 	}
 	st.Unapplied = len(pending)
+	// The latest pending sync switch on a repo shows where it was switched to.
+	repoAt := map[string]int{}
+	for i, r := range st.Repos {
+		repoAt[r.Bridge+"/"+r.Name] = i
+	}
+	for _, a := range pending {
+		if i, ok := repoAt[a.Bridge+"/"+a.Repo]; ok && a.Kind == api.KindSync && a.Payload.On != nil {
+			st.Repos[i].OptedIn, st.Repos[i].Pending = *a.Payload.On, true
+		}
+	}
 
 	since := fmtTime(st.ServerTime.Add(-provisionalTTL))
 	added, err := s.queryActions(`SELECT `+actionCols+` FROM actions

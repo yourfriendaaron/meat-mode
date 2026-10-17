@@ -281,3 +281,20 @@ test("live updates: a change event re-fetches state", async ({ page, hub }) => {
   hub.items.push({ ...hub.items[0], key: "home/personal/pe-9", id: "pe-9", title: "Feed the cat" });
   await expect(row(page, "Feed the cat")).toBeVisible();
 });
+
+test("Settings lists each machine's repos with a sync switch", async ({ page, hub }) => {
+  hub.repos.push({ bridge: "home", name: "notes/journal", personal: false, optedIn: false });
+  await openApp(page);
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  const repos = page.getByRole("list", { name: "Repos on home" });
+  await expect(repos.getByRole("listitem")).toHaveCount(4);
+  await expect(repos.getByRole("listitem").first()).toContainText("Always synced");
+  const sw = repos.getByRole("switch", { name: "Sync journal (notes/journal)" });
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await expect(repos).toContainText("Waiting for home");
+  await expect(sw).toBeFocused();
+  expect(hub.posted.at(-1)).toMatchObject({ kind: "sync", bridge: "home", repo: "notes/journal", payload: { on: true } });
+  await axe(page);
+});

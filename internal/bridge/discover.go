@@ -26,11 +26,22 @@ type Repo struct {
 	Name     string
 	Dir      string
 	Personal bool
-	OptedIn  bool
+	OptedIn  bool  // the repo's config file has meat-mode.sync: true
+	Switch   *bool // the sync switch set in the app, when there is one
 }
 
-// Synced reports whether the bridge sends this repo's items.
-func (r Repo) Synced() bool { return r.Personal || r.OptedIn }
+// Synced reports whether the bridge sends this repo's items: always for the
+// personal repo, else as the app's switch says, else as the repo's own
+// config file says.
+func (r Repo) Synced() bool {
+	switch {
+	case r.Personal:
+		return true
+	case r.Switch != nil:
+		return *r.Switch
+	}
+	return r.OptedIn
+}
 
 // Discover walks each root for beads repos and adds the personal repo.
 // The walk skips the folders in pruneNames and pruneHomePaths, symlinks,

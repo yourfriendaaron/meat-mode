@@ -47,6 +47,13 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 			// The journal keys on the id; the hub only ever mints UUIDs.
 			b.log().Warn("ignoring an action without a valid id", "kind", a.Kind, "repo", a.Repo)
 			continue
+		} else if a.Kind == api.KindSync {
+			if res, err = b.applySwitch(ctx, a, st); err != nil {
+				return touched, err
+			}
+			if res.OK {
+				touched[a.Repo] = true
+			}
 		} else if st == nil || !st.Synced() {
 			res = api.ActionResult{Error: ErrNotSynced}
 		} else if ok, lerr := b.known(ctx, st, a, listed); lerr != nil || !ok {
@@ -74,6 +81,42 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 		}
 	}
 	return touched, nil
+}
+
+// Results for a sync switch the bridge refuses.
+const (
+	ErrUnknownRepo    = "unknown repo"
+	ErrPersonalSwitch = "the personal repo always syncs"
+)
+
+// applySwitch saves a sync switch from the app and reports the new repo
+// list at once. It takes switches only for repos this bridge found itself,
+// looked up by name, so the app cannot point it anywhere else.
+func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (api.ActionResult, error) {
+	switch {
+	case st == nil:
+		return api.ActionResult{Error: ErrUnknownRepo}, nil
+	case st.Personal:
+		return api.ActionResult{Error: ErrPersonalSwitch}, nil
+	case a.Payload.On == nil:
+		return api.ActionResult{Error: "sync switch has no position"}, nil
+	case b.SaveSwitch == nil:
+		return api.ActionResult{Error: "this bridge cannot save sync switches"}, nil
+	}
+	on := *a.Payload.On
+	if err := b.SaveSwitch(a.Repo, on); err != nil {
+		return fail(fmt.Errorf("save the sync switch: %w", err)), nil
+	}
+	if b.Switches == nil {
+		b.Switches = map[string]bool{}
+	}
+	b.Switches[a.Repo] = on
+	// Report the repo list before the result, so the app never shows the old
+	// position between the two.
+	if err := b.discover(ctx, false); err != nil {
+		return api.ActionResult{}, err
+	}
+	return api.ActionResult{OK: true}, nil
 }
 
 // ErrUnknownBead is the result for an action on a bead this bridge never

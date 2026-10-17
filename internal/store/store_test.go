@@ -815,3 +815,60 @@ func mustState(t *testing.T, s *Store) api.State {
 	must(t, err)
 	return st
 }
+
+func TestSyncSwitchAction(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	on, off := true, false
+	repo := func(st api.State, name string) api.Repo {
+		t.Helper()
+		for _, r := range st.Repos {
+			if r.Name == name {
+				return r
+			}
+		}
+		t.Fatalf("no repo %s", name)
+		return api.Repo{}
+	}
+	// A repo that is not synced can be switched on; nothing else can target it.
+	a, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindSync, Bridge: "laptop", Repo: "chores", Payload: api.Payload{On: &on}}, "alex-app")
+	must(t, err)
+	if a.Repo != "chores" || a.Payload.On == nil || !*a.Payload.On {
+		t.Fatalf("action %+v", a)
+	}
+	if r := repo(mustState(t, s), "chores"); !r.OptedIn || !r.Pending {
+		t.Errorf("chores while the switch is pending: %+v", r)
+	}
+	if r := repo(mustState(t, s), "garden"); r.Pending {
+		t.Errorf("garden marked pending: %+v", r)
+	}
+	// Applied, the bridge's own list decides.
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true}))
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden", OptedIn: true}, {Name: "personal", Personal: true}, {Name: "chores", OptedIn: true}}))
+	if r := repo(mustState(t, s), "chores"); !r.OptedIn || r.Pending {
+		t.Errorf("chores after the bridge applied it: %+v", r)
+	}
+	// Switching garden off drops its items once the bridge reports it.
+	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindSync, Bridge: "laptop", Repo: "garden", Payload: api.Payload{On: &off}}, "alex-app")
+	must(t, err)
+	if r := repo(mustState(t, s), "garden"); r.OptedIn || !r.Pending {
+		t.Errorf("garden while switching off: %+v", r)
+	}
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden"}, {Name: "personal", Personal: true}, {Name: "chores", OptedIn: true}}))
+	for _, it := range mustState(t, s).Items {
+		if it.Repo == "garden" {
+			t.Errorf("garden item left after switching off: %s", it.Key)
+		}
+	}
+
+	for _, bad := range []api.NewAction{
+		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "personal", Payload: api.Payload{On: &off}},
+		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "chores"},
+		{ID: id3, Kind: api.KindSync, Bridge: "laptop", Repo: "shed", Payload: api.Payload{On: &on}},
+		{ID: id3, Kind: api.KindSync, Key: ItemKey("laptop", "chores", "x"), Payload: api.Payload{On: &on}},
+	} {
+		if _, _, err := s.AppendAction(bad, "alex-app"); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+}

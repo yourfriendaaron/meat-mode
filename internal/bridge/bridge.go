@@ -38,9 +38,13 @@ type Bridge struct {
 	Roots    []string
 	Home     string // repo keys are relative to it; empty in tests that need no keys
 	Personal string
-	Version  string
-	Log      *slog.Logger
-	Now      func() time.Time
+	// Switches are the app's sync switches by repo name, and SaveSwitch
+	// records one (in bridge.json). A nil SaveSwitch refuses switches.
+	Switches   map[string]bool
+	SaveSwitch func(repo string, on bool) error
+	Version    string
+	Log        *slog.Logger
+	Now        func() time.Time
 	// Poll, when set, replaces ActionEvery, SyncEvery and ScanEvery. New sets it
 	// from the undocumented MEAT_MODE_BRIDGE_POLL variable (a Go duration),
 	// which the end-to-end tests use to avoid waiting 30 seconds per round.
@@ -240,6 +244,10 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		r := &b.found[i]
 		if !r.Personal {
 			r.OptedIn = OptedIn(r.Dir)
+			r.Switch = nil
+			if on, ok := b.Switches[r.Name]; ok {
+				r.Switch = &on
+			}
 		}
 		st := b.repos[r.Name]
 		if st == nil || st.Dir != r.Dir || st.Synced() != r.Synced() {

@@ -3,6 +3,8 @@
 // builds on the state the previous one left.
 
 import { test as base, expect, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { hasBd, NTFY_TOPIC, USER, World, type Issue } from "./world.ts";
 
 interface Action {
@@ -312,4 +314,31 @@ test("a reminder reaches ntfy with the title and a link to the item", async ({ w
   expect(click.searchParams.get("item")).toBe(key);
   // It fired at the due time, not before.
   expect(req.at).toBeGreaterThanOrEqual(Date.parse(due));
+});
+
+test("a repo switched on in Settings syncs, and switched off leaves the app", async ({ page, w }) => {
+  await page.goto(w.hubURL + "/");
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  const repos = page.getByRole("list", { name: "Repos on laptop" });
+  // Every repo the bridge found is listed, nested ones by their path.
+  await expect(repos).toContainText("projects/clients/website");
+  await expect(repos).toContainText("Always synced");
+  const sw = repos.getByRole("switch", { name: "Sync website (projects/clients/website)" });
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await expect(repos).not.toContainText("Waiting for laptop");
+  await everything(page);
+  await expect(row(page, "Approve the footer text")).toBeVisible();
+  // The bridge keeps the choice in its own config.
+  const cfg = JSON.parse(await readFile(join(w.machine("laptop").home, ".config", "meat-mode", "bridge.json"), "utf8"));
+  expect(cfg.sync).toEqual({ "projects/clients/website": true });
+
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await expect(repos).not.toContainText("Waiting for laptop");
+  await everything(page);
+  await expect(row(page, "Approve the footer text")).toHaveCount(0);
 });
