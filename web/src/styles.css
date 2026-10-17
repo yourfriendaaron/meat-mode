@@ -1325,6 +1325,57 @@ kbd {
   }
 }
 
+/* ---------- password: setup step and Settings ---------- */
+
+.pw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 460px;
+}
+.pw-form label {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--soft);
+}
+.pw-form input:not(.sr) {
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.pw-form .btn {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+.pw-form p,
+.pw-none p {
+  margin: 0;
+}
+.pw-error {
+  font-size: 13px;
+  color: var(--red);
+}
+.pw-ok {
+  color: var(--green);
+}
+.pw-error:focus,
+.pw-ok:focus {
+  outline: none;
+}
+.pw-where code {
+  overflow-wrap: anywhere;
+}
+.pw-none {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 460px;
+}
+
 /* ---------- desktop: sidebar, list, detail pane ---------- */
 
 @container app (min-width: 880px) {
