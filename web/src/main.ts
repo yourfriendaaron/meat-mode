@@ -372,6 +372,12 @@ function actionLabel(a: Action): string {
       return "Add";
     case "sync":
       return a.payload.on ? "Sync on:" : "Sync off:";
+    case "ask":
+      return "Ask agent on";
+    case "stop":
+      return "Stop agent on";
+    case "agents":
+      return a.payload.on ? "Agents on:" : "Agents off:";
     case "snooze":
       return a.payload.until ? `Snooze to ${fmtWhen(new Date(a.payload.until), now())}:` : "Clear snooze on";
     case "edit":

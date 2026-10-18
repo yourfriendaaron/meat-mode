@@ -99,8 +99,11 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 | `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
-| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat}` (`repeat` on the personal list only) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |
+| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true}` (`repeat` on the personal list only; `ask` only where agents are allowed) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs). |
 | `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list. |
+| `ask` | `key` | `{"text"?: "…"}` | wakes an agent on the item (see Agent runs). With `text`, appends it as a note first, as `note` does, in the same action. The item's `run` shows `working` at once; on a live run it counts the note in `queued` instead. |
+| `stop` | `key` | `{}` | ends the item's live run; `run` shows `stopped` with reason `stopped` at once |
+| `agents` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `agentsAllowed: on` with `agentsPending: true` until the bridge reports its repo list again. Not allowed on the personal list. |
 | `edit` | `key` | `{"set": Edit}` | sets each field `set` names; the hub records the old values as `was` |
 | `note-edit` | `key` | `{"commentId": "…", "text": "…"}` | replaces that comment's text, up to 10000 characters; the hub records the comment as it was in `comment` |
 | `note-delete` | `key` | `{"commentId": "…"}` | removes that comment; the hub records it as `comment` |
@@ -170,7 +173,37 @@ Undo is the client's job: it cancels the closing action when it is still unappli
 
 An action's `status` is `pending`, `applied`, `failed` or `cancelled`. `failed` carries `error`; the app shows it on the item, and for a failed `add`, whose bead never existed, in Recent actions with the title that was typed. A bridge fails an action on a bead it does not list in that repo with the error `unknown bead`.
 
+An `agents` switch is applied the same way: the bridge accepts it only for a repo it found, saves it in the `agents` map of its `bridge.json`, and reports it as the repo's `agentsAllowed`. There is no config-file line for it: agents work only where the user switched them on in the app.
+
 A `sync` switch is applied by the bridge, not by bd. The bridge accepts it only for a repo it found itself, looked up by name, so the app cannot make it read anywhere else; any other name fails with `unknown repo`. It saves the choice in the `sync` map of its own `bridge.json`, where it overrides the repo's `meat-mode.sync` line, and sends its new repo list before reporting the result. A repo with no switch syncs when its `.beads/config.yaml` has the top-level line `meat-mode.sync: true`.
+
+### Agent runs
+
+An ask wakes an agent on one item: it reads the item's latest state, then does the work and closes the bead, or replies with a note. Only the user's own actions wake an agent; an agent's comments and closes never do. The bridge runs the agent; the hub only carries the ask and shows what the bridge reports.
+
+The hub refuses `ask` with `400` on a personal item (`hub/…`), and on an item, or an `add` with `ask`, in a repo whose `agentsAllowed` is off (a pending switch counts as where it was switched to). `stop` takes any item; on one with no live run it changes nothing. An `ask` is allowed on a closed item, so the user can tell the agent they did the task.
+
+An item's `run` is its latest `Run`: `{"id", "state", "agent", "activity"?, "startedAt", "endedAt"?, "reason"?, "detail"?, "queued"?, "count"}`. No `run` means no agent was ever asked (idle).
+
+- `state` is `working` while the agent runs; then `waiting` when the run ended after the agent wrote a note (it is waiting on the user), `done` when it ended with the bead closed, or `stopped`.
+- `reason` says why a run stopped: `stopped` (by the user), `usage-limit`, `timeout` (past the machine's time limit for one run), `budget` (spent its budget for one run), `run-limit` (the item used up its lifetime number of runs), `busy` (too many runs live on that machine), `not-allowed` (the machine does not allow agents in that repo), `no-reply` (it ended without a note or closing the bead), `failed` (the agent command failed or reported an error), `crashed` (the agent process died), `restarted` (the bridge stopped while it ran) or `offline` (the bridge stopped reporting while it ran; set by the hub). `detail` is a plain sentence about it, such as when a usage limit resets.
+- `agent` is the name to show for the agent: the bead's creator, else the bridge's configured agent name.
+- `activity` is one line in plain words of what the agent is doing, such as `Editing notes.txt`; once the run ends, the last thing it did.
+- `queued` counts the follow-up notes written to a live run that the agent has not reached yet: the newest `queued` of the user's comments on the item are still on their way.
+- `count` is how many runs the item has had in its lifetime, this one included.
+- `id` is the bridge's id for the run. A new run gets a new id; a follow-up into a live run keeps it.
+
+One item never has two runs. An `ask` on an item whose run is `working` becomes a follow-up: its note goes to the live run, which reads it at its next step. With no note it changes nothing. An `ask` on a settled run starts a new run that continues the agent's earlier conversation on that item where the agent supports it.
+
+The bridge applies an `ask` by writing its note to the bead first, then starting or following up the run, and reports the action applied once the note is written: a run that could not start shows `stopped` with its reason, and the note stays. A `stop` is applied when the run has ended.
+
+While a run is `working` and its bridge has not been seen for 60 seconds, the hub shows the run `stopped` with reason `offline`, and keeps showing that until the bridge reports the run again.
+
+#### Agent push
+
+When a run ends the hub sends one notification for it, through Web Push and ntfy as reminders go: `<agent> replied` (`waiting`), `<agent> finished` (`done`) or `<agent> stopped` with the reason in words (`stopped`). It sends one per run end, keyed on the run's `id` and state, never one per agent comment mid-run, and none for a run the user stopped or on an item the user closed. Its link opens the item, and the Reply action opens it at the note box: `/?item=<key>&reply=1`.
+
+The Web Push payload is `{"title", "body", "url", "tag", "actions"?}`; `actions` is a list of `{"action", "title"}` where `action` is `reply`, `open` or `retry` (`retry` on `stopped` only), and the payload then also carries `"key"`, the item key. The service worker opens `url` for `open` and a tap on the notification, `/?item=<key>&reply=1` for `reply`, and for `retry` posts `{"kind": "ask", "key"}` as a new action. ntfy gets the same title, body and link, with Reply and Open as view actions.
 
 ## Bridge API
 
@@ -180,11 +213,14 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 |---|---|---|
 | `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
 | `GET /bridge/v1/settings` | | `{"name", "timeZone"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
-| `PUT /bridge/v1/repos` | `[]Repo` (without `bridge` and `pending`): every repo the bridge found, `optedIn` true for those it syncs | `204`; replaces this bridge's repo list |
+| `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`, `pending` and `agentsPending`): every repo the bridge found, `optedIn` true for those it syncs, `agentsAllowed` true for those whose agents switch is on | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
+| `PUT /bridge/v1/runs` | `[]RunReport`: `{"repo", "beadId", …Run}` for every run the bridge knows, live and the latest settled one per bead | `204`; replaces this bridge's run list. The hub shows each on the item it names (see Agent runs) and ignores one whose item it does not hold. |
 | `POST /bridge/v1/personal` | `PersonalTodo` | `201` with `{"key", "id"}` of the new personal item, or `200` with the same for a repeated `id` |
+
+The bridge sends its run list whenever a run changes, at most once a second, and with every full push. It keeps a bead's latest settled run while the bead is in its set.
 
 The bridge sends the full set per repo whenever any fingerprint in it changed. The set holds every open, in-progress, blocked and deferred item labelled `human`, plus items closed in the last 7 days so the Done section and Undo work.
 
@@ -252,4 +288,4 @@ A wrong code or current password answers `403`, not `401`, because the app takes
 
 Hub, from environment variables (see `.env.example`): `MEAT_MODE_LISTEN`, `MEAT_MODE_DATA_DIR`, `MEAT_MODE_PUBLIC_URL`, `MEAT_MODE_ALLOWED_HOSTS`, `MEAT_MODE_PASSWORD_HASH`, `MEAT_MODE_PASSWORD_HASH_FILE`, `MEAT_MODE_USER`, `MEAT_MODE_VAPID_SUBJECT`, `MEAT_MODE_NTFY_URL`, `MEAT_MODE_NTFY_TOPIC`, `MEAT_MODE_NTFY_TOKEN`.
 
-Bridge: `MEAT_MODE_BRIDGE_TOKEN` gives `meat-mode bridge pair <url>` its token without putting it on the command line.
+Bridge: `MEAT_MODE_BRIDGE_TOKEN` gives `meat-mode bridge pair <url>` its token without putting it on the command line. Agent runs read `MEAT_MODE_AGENT_COMMAND`, `MEAT_MODE_AGENT_NAME`, `MEAT_MODE_AGENT_TIMEOUT`, `MEAT_MODE_AGENT_BUDGET_USD`, `MEAT_MODE_AGENT_RUNS_PER_TASK` and `MEAT_MODE_AGENT_CONCURRENT` (see `.env.example` and deploy.md).

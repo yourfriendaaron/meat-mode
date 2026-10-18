@@ -31,6 +31,8 @@ export interface Item {
   repeat?: Repeat | null;
   /** Minutes before the due time an early reminder comes; unset uses the hub's reminderLead. Personal items only. */
   remindBefore?: number | null;
+  /** The latest agent run on this item; absent when no agent was ever asked. */
+  run?: Run | null;
   pending?: boolean;
   seenAt?: string | null;
   firstSeen?: string;
@@ -95,8 +97,51 @@ export interface Repo {
   name: string;
   personal: boolean;
   optedIn: boolean;
+  /** An ask may wake an agent on this repo's items. Off by default. */
+  agentsAllowed?: boolean;
   /** A sync switch the machine has not applied yet; optedIn shows where it was switched to. */
   pending?: boolean;
+  /** An agents switch the machine has not applied yet; agentsAllowed shows where it was switched to. */
+  agentsPending?: boolean;
+}
+
+/** An agent run's state (docs/api.md, Agent runs). No run on an item means no agent was ever asked. */
+export type RunState = "working" | "waiting" | "done" | "stopped";
+
+/** Why a run stopped. */
+export type RunReason =
+  | "stopped"
+  | "usage-limit"
+  | "timeout"
+  | "budget"
+  | "run-limit"
+  | "busy"
+  | "not-allowed"
+  | "no-reply"
+  | "failed"
+  | "crashed"
+  | "restarted"
+  | "offline";
+
+/** One agent run on one item, as its machine reports it. */
+export interface Run {
+  /** A new run gets a new id. */
+  id: string;
+  state: RunState;
+  /** The agent's name to show, such as "planner". */
+  agent: string;
+  /** One line of what the agent is doing now; while settled, the last thing it did. */
+  activity?: string;
+  startedAt: string;
+  endedAt?: string | null;
+  /** Stopped only. */
+  reason?: RunReason;
+  /** A plain sentence about the reason. */
+  detail?: string;
+  /** Follow-up notes the live run has not reached yet: the newest `queued` of the user's comments. */
+  queued?: number;
+  /** Runs this item has had in its lifetime, this one included. */
+  count: number;
 }
 
 export interface Bridge {
@@ -115,7 +160,10 @@ export interface Payload {
   due?: string | null;
   /** add, personal list only; needs `due`. */
   repeat?: Repeat;
+  /** sync and agents */
   on?: boolean;
+  /** add: an agent starts on the new item. */
+  ask?: boolean;
   /** edit */
   set?: Edit;
   /**
@@ -137,6 +185,9 @@ export type ActionKind =
   | "note"
   | "add"
   | "sync"
+  | "ask"
+  | "stop"
+  | "agents"
   // Personal list only.
   | "edit"
   | "note-edit"

@@ -28,6 +28,9 @@ type Item struct {
 	// RemindBefore is how many minutes before the due time an early
 	// reminder comes; nil uses the hub's ReminderLead. Personal items only.
 	RemindBefore *int `json:"remindBefore,omitempty"`
+	// Run is the latest agent run on this item; nil when no agent was ever
+	// asked. Hub-only: the hub joins it from the bridge's run list.
+	Run *Run `json:"run,omitempty"`
 	// Hub-only fields, never sent by a bridge.
 	Pending   bool       `json:"pending,omitempty"`   // an unapplied action changed this copy
 	SeenAt    *time.Time `json:"seenAt,omitempty"`    // when the user last opened it
@@ -111,9 +114,68 @@ type Repo struct {
 	Name     string `json:"name"`
 	Personal bool   `json:"personal"` // the hub's own personal list; from a bridge, only an older one's personal repo
 	OptedIn  bool   `json:"optedIn"`  // synced: switched on in the app, or by the repo's config file
+	// AgentsAllowed: an ask may wake an agent on this repo's items. Off by
+	// default; switched in the app (the agents action kind).
+	AgentsAllowed bool `json:"agentsAllowed"`
 	// Hub-only: a sync switch the bridge has not applied yet. OptedIn then
 	// shows the position it was switched to.
 	Pending bool `json:"pending,omitempty"`
+	// Hub-only: an agents switch the bridge has not applied yet.
+	// AgentsAllowed then shows the position it was switched to.
+	AgentsPending bool `json:"agentsPending,omitempty"`
+}
+
+// Run states. An item with no Run has never had an agent asked (idle).
+const (
+	RunWorking = "working" // the agent is running
+	RunWaiting = "waiting" // the run ended after the agent wrote a note: waiting on the user
+	RunDone    = "done"    // the run ended with the bead closed
+	RunStopped = "stopped" // the run ended without either; Reason says why
+)
+
+// Reasons a run stopped.
+const (
+	ReasonStopped    = "stopped"     // the user stopped it
+	ReasonUsageLimit = "usage-limit" // the agent hit its provider's usage limit
+	ReasonTimeout    = "timeout"     // it ran past the wall-clock limit
+	ReasonBudget     = "budget"      // it spent its budget for one run
+	ReasonRunLimit   = "run-limit"   // the bead used up its lifetime number of runs
+	ReasonBusy       = "busy"        // too many runs were live on the machine to start one
+	ReasonNotAllowed = "not-allowed" // the repo does not allow agents (on the machine's side)
+	ReasonNoReply    = "no-reply"    // it ended without a note or closing the bead
+	ReasonFailed     = "failed"      // the agent command failed to start or reported an error
+	ReasonCrashed    = "crashed"     // the agent process died
+	ReasonRestarted  = "restarted"   // the bridge stopped while it ran
+	ReasonOffline    = "offline"     // hub-only: the bridge stopped reporting while it ran
+)
+
+// Run is one agent run on one bead, as its bridge reports it.
+type Run struct {
+	ID    string `json:"id"`    // the bridge's id for this run; a new ask that starts a run gets a new one
+	State string `json:"state"` // RunWorking, RunWaiting, RunDone or RunStopped
+	// Agent is the name the app shows for the agent ("planner"): the bead's
+	// creator, else the bridge's configured agent name.
+	Agent string `json:"agent"`
+	// Activity is one line in plain words of what the agent is doing now,
+	// such as "Editing notes.txt"; while settled, the last thing it did.
+	Activity  string     `json:"activity,omitempty"`
+	StartedAt time.Time  `json:"startedAt"`
+	EndedAt   *time.Time `json:"endedAt,omitempty"`
+	Reason    string     `json:"reason,omitempty"` // RunStopped only: one of the Reason constants
+	Detail    string     `json:"detail,omitempty"` // a plain sentence about Reason, such as when a usage limit resets
+	// Queued counts the follow-up notes written to this live run that the
+	// agent has not reached yet: the newest Queued of the user's comments.
+	Queued int `json:"queued,omitempty"`
+	// Count is how many runs this bead has had in its lifetime, this one
+	// included. No recovery path resets it.
+	Count int `json:"count"`
+}
+
+// RunReport is one entry of PUT /bridge/v1/runs.
+type RunReport struct {
+	Repo   string `json:"repo"`
+	BeadID string `json:"beadId"`
+	Run
 }
 
 // Bridge is one paired agent machine.
@@ -133,7 +195,10 @@ const (
 	KindDismiss = "dismiss"
 	KindNote    = "note"
 	KindAdd     = "add"
-	KindSync    = "sync" // switch a repo's syncing on or off
+	KindSync    = "sync"   // switch a repo's syncing on or off
+	KindAsk     = "ask"    // wake an agent on an item, with an optional note
+	KindStop    = "stop"   // end an item's live run
+	KindAgents  = "agents" // switch whether agents may work in a repo
 	// Personal list only.
 	KindEdit        = "edit"
 	KindNoteEdit    = "note-edit"
@@ -157,7 +222,8 @@ type Payload struct {
 	Title    string     `json:"title,omitempty"`    // add
 	Due      *time.Time `json:"due,omitempty"`      // add
 	Repeat   *Repeat    `json:"repeat,omitempty"`   // add, personal list only; needs Due
-	On       *bool      `json:"on,omitempty"`       // sync
+	On       *bool      `json:"on,omitempty"`       // sync and agents
+	Ask      bool       `json:"ask,omitempty"`      // add: an agent starts on the new item
 	Set      *Edit      `json:"set,omitempty"`      // edit
 	// Was is filled in by the hub. On edit it holds the fields Set changed,
 	// as they were; on done of a repeating item, the due time and checklist
@@ -175,8 +241,8 @@ type NewAction struct {
 	ID      string  `json:"id"`
 	Kind    string  `json:"kind"`
 	Key     string  `json:"key,omitempty"`
-	Bridge  string  `json:"bridge,omitempty"` // add and sync only
-	Repo    string  `json:"repo,omitempty"`   // add and sync only
+	Bridge  string  `json:"bridge,omitempty"` // add, sync and agents only
+	Repo    string  `json:"repo,omitempty"`   // add, sync and agents only
 	Payload Payload `json:"payload"`
 }
 
