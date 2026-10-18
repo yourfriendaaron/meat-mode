@@ -34,6 +34,6 @@ export function sectionsHTML(ctx: AppContext): [number, string][] {
     .filter((s) => s.applies?.(ctx) ?? true)
     .map((s) => [
       s.order,
-      `<section class="set-section" data-section="${esc(s.id)}" aria-labelledby="s-${esc(s.id)}"><h2 id="s-${esc(s.id)}">${esc(s.title)}</h2>${s.render(ctx)}</section>`,
+      `<section class="set-section" data-section="${esc(s.id)}" aria-labelledby="s-${esc(s.id)}"><h2 id="s-${esc(s.id)}" tabindex="-1">${esc(s.title)}</h2>${s.render(ctx)}</section>`,
     ]);
 }

@@ -44,6 +44,12 @@ export function fmtWhen(d: Date, now: Date): string {
   return fmtDay(d);
 }
 
+/** fmtWhen with the time on every day: "14:30", "Tomorrow 9:00", "Fri, Oct 23 9:00". */
+export function fmtWhenAt(d: Date, now: Date): string {
+  const when = fmtWhen(d, now);
+  return when.includes(":") ? when : `${when} ${fmtTime(d)}`;
+}
+
 /** "35m overdue", "3h overdue", "2d overdue". */
 export function fmtOverdue(due: Date, now: Date): string {
   const mins = Math.max(1, Math.floor((now.getTime() - due.getTime()) / 60000));

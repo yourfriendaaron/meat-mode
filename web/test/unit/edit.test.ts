@@ -160,3 +160,75 @@ test("undo of each edit kind comes from what the hub filled in", () => {
   assert.equal(undoOf(action("edit", { set: { title: "New" } }), key, "u4"), null);
   assert.equal(undoOf(action("done", {}), key, "u5"), null);
 });
+
+test("undo of a done that moved a repeating item on is an edit back", () => {
+  const key = "hub/personal/pe-1";
+  const was = { due: due, checklist: [{ id: "k1", text: "Soil", done: true }] };
+  assert.deepEqual(undoOf(action("done", { was }), key, "u6"), { id: "u6", kind: "edit", key, payload: { set: was } });
+});
+
+const daily = { every: "day" as const, timeZone: "Europe/Paris", start: due };
+
+test("the draft holds the item's repeat and lead time", () => {
+  const d = draftOf(item({ repeat: { every: "week", interval: 2, weekdays: [1, 4], timeZone: "UTC" }, remindBefore: 30 }), "Europe/Paris");
+  assert.deepEqual(
+    { repeat: d.repeat, interval: d.interval, weekdays: d.weekdays, fromDone: d.fromDone, timeZone: d.timeZone, remindBefore: d.remindBefore },
+    { repeat: "week", interval: "2", weekdays: [1, 4], fromDone: false, timeZone: "Europe/Paris", remindBefore: 30 },
+  );
+  const none = draftOf(item());
+  assert.deepEqual([none.repeat, none.interval, none.remindBefore], ["", "1", null]);
+});
+
+test("setting a repeat sends the rule in the device's zone", () => {
+  const it = item();
+  const d = { ...draftOf(it, "Europe/Paris"), repeat: "week" as const, interval: " 2 ", weekdays: [4, 1] };
+  assert.deepEqual(diffEdit(it, d, now), { repeat: { every: "week", interval: 2, weekdays: [1, 4], timeZone: "Europe/Paris" } });
+});
+
+test("a repeat changed only in its zone is no change", () => {
+  const it = item({ repeat: daily });
+  assert.equal(diffEdit(it, draftOf(it, "Asia/Tokyo"), now), null);
+});
+
+test("weekdays go only with a weekly rule that does not count from done", () => {
+  const it = item();
+  const base = { ...draftOf(it, "UTC"), weekdays: [1] };
+  assert.deepEqual(diffEdit(it, { ...base, repeat: "month" }, now), { repeat: { every: "month", timeZone: "UTC" } });
+  assert.deepEqual(diffEdit(it, { ...base, repeat: "week", fromDone: true }, now), { repeat: { every: "week", fromDone: true, timeZone: "UTC" } });
+});
+
+test("ending a repeat sends clearRepeat, except when the due date is cleared, which ends it on the hub", () => {
+  const it = item({ repeat: daily });
+  assert.deepEqual(diffEdit(it, { ...draftOf(it), repeat: "" }, now), { clearRepeat: true });
+  assert.deepEqual(diffEdit(it, { ...draftOf(it), repeat: "", clearDue: true }, now), { clearDue: true });
+});
+
+test("a repeat needs a due date and an interval from 1 to 100", () => {
+  const it = item({ dueAt: null });
+  const d = { ...draftOf(it), repeat: "day" as const };
+  assert.match(editError(it, d, now), /needs a due date/);
+  assert.equal(editError(it, { ...d, dueText: "tomorrow 8am" }, now), "");
+  assert.match(editError(item(), { ...draftOf(item()), repeat: "day", clearDue: true }, now), /needs a due date/);
+  for (const interval of ["0", "101", "1.5", "two", ""]) assert.match(editError(item(), { ...d, interval }, now), /^Repeat every 1 to 100/);
+  assert.equal(editError(item(), { ...d, interval: "100" }, now), "");
+});
+
+test("the lead time sends remindBefore, or clearRemindBefore for the default", () => {
+  const it = item();
+  assert.deepEqual(diffEdit(it, { ...draftOf(it), remindBefore: 30 }, now), { remindBefore: 30 });
+  assert.deepEqual(diffEdit(it, { ...draftOf(it), remindBefore: 0 }, now), { remindBefore: 0 });
+  const own = item({ remindBefore: 30 });
+  assert.deepEqual(diffEdit(own, { ...draftOf(own), remindBefore: null }, now), { clearRemindBefore: true });
+  assert.equal(diffEdit(own, draftOf(own), now), null);
+});
+
+test("applyEdit follows repeat and lead fields, and clearDue ends the repeat", () => {
+  const it = item();
+  applyEdit(it, { repeat: daily, remindBefore: 15 });
+  assert.deepEqual([it.repeat, it.remindBefore], [daily, 15]);
+  applyEdit(it, { clearRemindBefore: true, clearDue: true });
+  assert.deepEqual([it.repeat, it.remindBefore, it.dueAt], [null, null, null]);
+  applyEdit(it, { due, repeat: daily });
+  applyEdit(it, { clearRepeat: true });
+  assert.equal(it.repeat, null);
+});

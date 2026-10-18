@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Edit, Item, NewAction, Payload, Repo, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Bridge, Edit, Item, NewAction, Payload, Repeat, Repo, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -69,6 +69,63 @@ export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } 
   };
 }
 
+/**
+ * Why the hub refuses a repeat (docs/api.md, Repeating to-dos), or "". The
+ * real hub's wording differs; the tests look at the status.
+ */
+function repeatError(r: Repeat): string {
+  if (!["day", "week", "month", "year"].includes(r.every)) return "repeat every must be day, week, month or year";
+  const n = r.interval ?? 0;
+  if (!Number.isInteger(n) || n < 0 || n > 100) return "repeat interval must be 1 to 100";
+  const days = r.weekdays ?? [];
+  if (days.length && r.every !== "week") return "only a weekly repeat takes weekdays";
+  if (days.length && r.fromDone) return "weekdays and fromDone together";
+  if (days.some((d) => !Number.isInteger(d) || d < 0 || d > 6) || new Set(days).size !== days.length) return "weekdays must be 0 to 6, each once";
+  try {
+    if (!r.timeZone) throw new Error();
+    new Intl.DateTimeFormat("en", { timeZone: r.timeZone });
+  } catch {
+    return `unknown repeat time zone "${r.timeZone}"`;
+  }
+  return "";
+}
+
+/** The hub's copy of a repeat: the client's rule with `start` at the due time. */
+function keptRepeat(r: Repeat, due: string): Repeat {
+  const out: Repeat = { ...r, start: due };
+  if (!out.interval) delete out.interval;
+  if (!out.weekdays?.length) delete out.weekdays;
+  return out;
+}
+
+/**
+ * The next occurrence of a repeating item after its due time and now. The
+ * fake hub counts in UTC, the zone the tests run in, and a weekly rule with
+ * weekdays only every week; tests stay within that.
+ */
+export function nextDue(r: Repeat, dueAt: string, now: Date): string {
+  const n = r.interval || 1;
+  const step = (d: Date): Date => {
+    const x = new Date(d);
+    if (r.every === "day") x.setUTCDate(x.getUTCDate() + n);
+    else if (r.every === "week" && r.weekdays?.length) {
+      do x.setUTCDate(x.getUTCDate() + 1);
+      while (!r.weekdays.includes(x.getUTCDay()));
+    } else if (r.every === "week") x.setUTCDate(x.getUTCDate() + 7 * n);
+    else if (r.every === "month") x.setUTCMonth(x.getUTCMonth() + n);
+    else x.setUTCFullYear(x.getUTCFullYear() + n);
+    return x;
+  };
+  const due = new Date(dueAt);
+  if (r.fromDone) {
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), due.getUTCHours(), due.getUTCMinutes()));
+    return step(today).toISOString();
+  }
+  let d = step(due);
+  while (d <= now) d = step(d);
+  return d.toISOString();
+}
+
 /** Kinds that change a personal item only (docs/api.md, Edit rules). */
 const EDIT_KINDS: string[] = ["edit", "note-edit", "note-delete", "note-restore"];
 
@@ -112,7 +169,13 @@ export class FakeHub {
     tailscaleOnly: false,
   };
   /** Every body PUT to /api/settings that the hub took in. */
-  settingsPuts: { name?: string; timeZone?: string }[] = [];
+  settingsPuts: { name?: string; timeZone?: string; reminderLead?: number }[] = [];
+  /** Minutes before a due time an early reminder comes; 0 is none. */
+  reminderLead = 0;
+  /** The calendar feed: whether it is on, and the token of its current link. */
+  calendar = { on: false, token: "" };
+  /** Links POST /api/calendar has made; each token is the next number. */
+  calendarLinks = 0;
   /** Push subscriptions the app registered, and the test reminders it asked for. */
   pushSubscriptions = 0;
   reminderTests = 0;
@@ -206,6 +269,10 @@ export class FakeHub {
     };
   }
 
+  settings() {
+    return { name: this.setup.userName || this.user, timeZone: this.setup.timeZone, reminderLead: this.reminderLead };
+  }
+
   find(key: string): Item | undefined {
     return this.items.find((i) => i.key === key);
   }
@@ -274,12 +341,14 @@ export class FakeHub {
       this.setup.status = status;
       return this.json(route, 204);
     }
-    if (method === "GET" && path === "/api/settings") {
-      return this.json(route, 200, { name: this.setup.userName || this.user, timeZone: this.setup.timeZone });
-    }
+    if (method === "GET" && path === "/api/settings") return this.json(route, 200, this.settings());
     if (method === "PUT" && path === "/api/settings") {
-      const body = req.postDataJSON() as { name?: string; timeZone?: string };
+      const body = req.postDataJSON() as { name?: string; timeZone?: string; reminderLead?: number };
       this.settingsPuts.push(body);
+      const lead = body.reminderLead;
+      if (lead !== undefined && (!Number.isInteger(lead) || lead < 0 || lead > 10080)) {
+        return this.json(route, 400, { error: "reminderLead must be 0 to 10080 minutes" });
+      }
       if (body.timeZone !== undefined) {
         try {
           new Intl.DateTimeFormat("en", { timeZone: body.timeZone });
@@ -290,7 +359,19 @@ export class FakeHub {
       }
       if (body.name !== undefined) this.setup.userName = body.name.trim();
       if (body.timeZone !== undefined) this.setup.timeZone = body.timeZone;
-      return this.json(route, 200, { name: this.setup.userName || this.user, timeZone: this.setup.timeZone });
+      if (lead !== undefined) this.reminderLead = lead;
+      return this.json(route, 200, this.settings());
+    }
+    if (path === "/api/calendar") {
+      if (method === "GET") return this.json(route, 200, { on: this.calendar.on });
+      if (method === "POST") {
+        this.calendar = { on: true, token: `feed-token-${++this.calendarLinks}` };
+        return this.json(route, 200, { url: `${url.origin}/calendar/${this.calendar.token}.ics` });
+      }
+      if (method === "DELETE") {
+        this.calendar = { on: false, token: "" };
+        return this.json(route, 204);
+      }
     }
     if (method === "PUT" && path === "/api/password") {
       const { current, password } = req.postDataJSON() as { current: string; password: string };
@@ -415,6 +496,16 @@ export class FakeHub {
       const set = p.set;
       if (!set || !Object.keys(set).length) return bad("edit needs at least one field in payload.set");
       if (set.due && set.clearDue) return bad("due and clearDue together");
+      if (set.repeat && set.clearRepeat) return bad("repeat and clearRepeat together");
+      if (set.remindBefore !== undefined && set.clearRemindBefore) return bad("remindBefore and clearRemindBefore together");
+      if (set.remindBefore !== undefined && (!Number.isInteger(set.remindBefore) || set.remindBefore < 0 || set.remindBefore > 10080)) {
+        return bad("remindBefore must be 0 to 10080 minutes");
+      }
+      if (set.repeat) {
+        const why = repeatError(set.repeat);
+        if (why) return bad(why);
+        if (set.clearDue || !(set.due ?? it.dueAt)) return bad("a repeat needs a due date");
+      }
       const was: Edit = {};
       if (set.title !== undefined) {
         const t = set.title.trim();
@@ -431,6 +522,22 @@ export class FakeHub {
         if (it.dueAt) was.due = it.dueAt;
         else was.clearDue = true;
         it.dueAt = set.clearDue ? null : set.due;
+        // Clearing the due date ends the repeat; moving it moves the series.
+        if (set.clearDue && it.repeat && !set.clearRepeat) {
+          was.repeat = it.repeat;
+          it.repeat = null;
+        }
+        if (it.repeat && it.dueAt) it.repeat = keptRepeat(it.repeat, it.dueAt);
+      }
+      if (set.repeat || set.clearRepeat) {
+        if (it.repeat) was.repeat = it.repeat;
+        else was.clearRepeat = true;
+        it.repeat = set.repeat ? keptRepeat(set.repeat, it.dueAt!) : null;
+      }
+      if (set.remindBefore !== undefined || set.clearRemindBefore) {
+        if (it.remindBefore != null) was.remindBefore = it.remindBefore;
+        else was.clearRemindBefore = true;
+        it.remindBefore = set.clearRemindBefore ? null : set.remindBefore;
       }
       if (set.priority !== undefined) {
         if (set.priority < 0 || set.priority > 4) return bad("priority must be 0 to 4");
@@ -503,6 +610,13 @@ export class FakeHub {
       r.optedIn = Boolean(a.payload.on);
       r.pending = true;
     } else if (a.kind === "add") {
+      const r = a.payload.repeat;
+      if (r) {
+        if (!onHub) return this.json(route, 400, { error: "repeat is for the personal list only" });
+        if (!a.payload.due) return this.json(route, 400, { error: "a repeat needs a due date" });
+        const why = repeatError(r);
+        if (why) return this.json(route, 400, { error: why });
+      }
       beadId = onHub ? `mm-${this.seq + 1}` : `pending-${a.id}`;
       this.items.push({
         key: `${bridge}/${repo}/${beadId}`,
@@ -513,6 +627,7 @@ export class FakeHub {
         status: "open",
         priority: 2,
         dueAt: a.payload.due ?? null,
+        ...(r ? { repeat: keptRepeat(r, a.payload.due!) } : {}),
         createdAt: this.now(),
         updatedAt: this.now(),
         firstSeen: this.now(),
@@ -529,6 +644,14 @@ export class FakeHub {
       beadId = it.id;
       switch (a.kind) {
         case "done":
+          if (it.repeat && it.dueAt && onHub) {
+            // A repeating item moves on and stays open (docs/api.md, Repeating to-dos).
+            payload = { ...a.payload, was: { due: it.dueAt, checklist: structuredClone(it.checklist ?? []) } };
+            it.dueAt = nextDue(it.repeat, it.dueAt, NOW);
+            it.deferUntil = null;
+            it.checklist = (it.checklist ?? []).map((c) => ({ ...c, done: false }));
+            break;
+          }
           it.status = "closed";
           it.closeReason = "Done in Meat Mode";
           it.closedAt = this.now();
@@ -536,6 +659,7 @@ export class FakeHub {
         case "dismiss":
           it.status = "closed";
           it.closeReason = "Dismissed";
+          it.repeat = null;
           it.closedAt = this.now();
           break;
         case "reopen":

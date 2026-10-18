@@ -78,13 +78,15 @@ To put something on ${who}'s personal to-do list instead, not tied to a repo:
 
 --due takes a date (due at 9:00), a date and time in ${who}'s time zone such as "2026-03-02 18:30", or an RFC 3339 time. Pass --id with a UUID you make up, and running the command again changes nothing. It prints the new to-do's id, such as mm-12.
 
+--every makes it repeat and needs --due, its first date: day, week, month or year, "3 days", weekday, mon,thu or "2 weeks on mon,thu". Done moves it to its next date; add --from-done to count from the day it is done.
+
 To change a to-do this machine added, by that id:
 
     meat-mode edit mm-12 --due "2026-03-09 18:30"
     meat-mode done mm-12
     meat-mode reopen mm-12
 
-edit takes --title, --description, --due or --clear-due, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
+edit takes --title, --description, --due or --clear-due, --every (with --from-done) or --no-repeat, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
 
 Keep titles short and say what to do. Put the context in the description or the note.
 `;
