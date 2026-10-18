@@ -1827,7 +1827,7 @@ let qaAsk: boolean | null = null;
 /** Whether Add will also wake an agent on the new task. */
 function qaWakes(listKey: string): boolean {
   const r = repos().find((x) => repoKey(x) === listKey);
-  return !!r && !noAgentReason(r) && (qaAsk ?? true);
+  return !!r && !noAgentReason(r) && (qaAsk ?? false);
 }
 
 /**

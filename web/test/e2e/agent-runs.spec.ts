@@ -219,8 +219,12 @@ test.describe("desktop", () => {
     await expect(page.locator("#qa-agent")).toContainText("Personal to-dos have no agent.");
     await expect(add).toHaveText("Add");
 
+    // A list that allows agents: the switch starts off, so a plain Add wakes nobody.
     await page.locator("#qa-list").selectOption("home/garden");
     await expect(ask).toBeEnabled();
+    await expect(ask).toHaveAttribute("aria-checked", "false");
+    await expect(add).toHaveText("Add");
+    await ask.click();
     await expect(ask).toHaveAttribute("aria-checked", "true");
     await expect(add).toHaveText("Add and ask agent");
     await expect(add).toHaveClass(/btn-agent/);
@@ -233,9 +237,8 @@ test.describe("desktop", () => {
     await expect(row(page, "Find a cheaper soil sensor")).toHaveAttribute("data-run", "working");
     await expect(row(page, "Find a cheaper soil sensor").locator(".run-line")).toHaveText("agent · Starting");
 
-    // Switched off, Add is plain and posts no ask.
+    // The next task starts with the switch off again: Add is plain and posts no ask.
     await page.locator("#qa-list").selectOption("home/garden");
-    await ask.click();
     await expect(ask).toHaveAttribute("aria-checked", "false");
     await expect(add).toHaveText("Add");
     await input.fill("Label the seed trays");

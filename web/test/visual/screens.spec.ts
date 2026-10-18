@@ -299,6 +299,7 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await page.getByRole("button", { name: "New task" }).first().click();
           await page.locator("#qa-form input").first().fill("Find a cheaper soil sensor");
           await page.locator("#qa-list").selectOption("home/garden");
+          await page.getByRole("switch", { name: "An agent starts on it" }).click();
           await expect(page.locator("#qa-add")).toHaveText("Add and ask agent");
           await shot(page, "runs-new-task");
         });
