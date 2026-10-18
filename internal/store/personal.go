@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -143,15 +142,24 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := applyPersonal(&it, a); err != nil {
+			return nil, err
+		}
 		apply(&it, *a, a.ID)
 		if err := putHubItem(tx, it, it.FirstSeen, it.SeenAt); err != nil {
 			return nil, err
 		}
 	}
+	// The payload is stored again: an edit or a note change records in it
+	// what it replaced.
+	payload, err := json.Marshal(a.Payload)
+	if err != nil {
+		return nil, err
+	}
 	now := s.now()
 	a.Bridge, a.Repo, a.Status, a.Error, a.AppliedAt = HubBridge, PersonalRepo, api.StatusApplied, "", &now
-	_, err := tx.Exec(`UPDATE actions SET bridge = ?, repo = ?, bead_id = ?, status = ?, error = '', applied_at = ? WHERE seq = ?`,
-		a.Bridge, a.Repo, a.BeadID, a.Status, fmtTime(now), a.Seq)
+	_, err = tx.Exec(`UPDATE actions SET bridge = ?, repo = ?, bead_id = ?, payload = ?, status = ?, error = '', applied_at = ? WHERE seq = ?`,
+		a.Bridge, a.Repo, a.BeadID, string(payload), a.Status, fmtTime(now), a.Seq)
 	return created, err
 }
 
@@ -395,15 +403,14 @@ func (s *Store) importFromBridge(tx *sql.Tx, bridge, repo string, items []api.It
 }
 
 // AddPersonal adds an agent's to-do to the personal list, with its note as
-// the first comment. Both are by t.Author, or by fallback when it is empty.
-// A repeated t.ID returns the item it added and changes nothing.
-func (s *Store) AddPersonal(t api.PersonalTodo, fallback string) (key string, created bool, err error) {
-	author := truncRunes(strings.TrimSpace(t.Author), maxCommentAuthorLen)
-	if author == "" {
-		author = fallback
-	}
-	if strings.ContainsFunc(author, unicode.IsControl) {
-		return "", false, invalidf("author must be plain text on one line")
+// the first comment, for the agents of the machine whose token is bridge's.
+// Both are by t.Author, or by the machine's name when it is empty. The item
+// is recorded as that machine's, so its agents may change it later. A
+// repeated t.ID returns the item it added and changes nothing.
+func (s *Store) AddPersonal(t api.PersonalTodo, bridge string) (key string, created bool, err error) {
+	author, err := agentAuthor(t.Author, bridge)
+	if err != nil {
+		return "", false, err
 	}
 	if t.ID == "" {
 		t.ID = uuid.NewString()
@@ -414,8 +421,10 @@ func (s *Store) AddPersonal(t api.PersonalTodo, fallback string) (key string, cr
 	if utf8.RuneCountInString(t.Note) > MaxNoteLen {
 		return "", false, invalidf("note is longer than %d characters", MaxNoteLen)
 	}
-	a, created, err := s.AppendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo,
-		Payload: api.Payload{Title: t.Title, Due: t.Due}}, author)
+	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo,
+		Payload: api.Payload{Title: t.Title, Due: t.Due}}, author, func(tx *sql.Tx, a api.Action) error {
+		return recordOwner(tx, a.BeadID, bridge)
+	})
 	if err != nil {
 		return "", false, err
 	}

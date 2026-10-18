@@ -145,7 +145,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 var migrations = []string{
 	// 1: initial schema.
@@ -241,6 +241,15 @@ CREATE TABLE hub_settings (
 	setup_code_used    INTEGER
 );
 INSERT INTO hub_settings (id) VALUES (1);
+`,
+	// 5: which machine's token added each personal item through
+	// POST /bridge/v1/personal, so its agents may change it. Items added in
+	// the app or moved from a bridge's personal repo have no row.
+	`
+CREATE TABLE personal_owners (
+	item_id TEXT PRIMARY KEY,
+	bridge  TEXT NOT NULL
+);
 `,
 }
 
