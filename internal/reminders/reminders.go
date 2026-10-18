@@ -1,5 +1,6 @@
 // Package reminders fires a notification when an item becomes due or a
-// snooze ends, once per (item, fire time).
+// snooze ends, once per (item, fire time), and an early reminder a lead
+// time before the due time, once per (item, due time).
 package reminders
 
 import (
@@ -20,13 +21,21 @@ import (
 // Interval is how often Run checks.
 const Interval = 30 * time.Second
 
-// MaxAge is how late a missed reminder may still fire. Older ones are
-// recorded as fired without notifying.
-const MaxAge = 7 * 24 * time.Hour
+// Late is how long after its moment a reminder counts as missed: it came due
+// while the hub was stopped or its checks were failing.
+const Late = 5 * time.Minute
+
+// MissedTag is the tag of the one reminder that sums up several missed ones.
+const MissedTag = "missed-reminders"
 
 // ItemSource lists the hub's current items.
 type ItemSource interface {
 	Items(ctx context.Context) ([]api.Item, error)
+}
+
+// LeadSource gives the hub's reminder lead time in minutes, 0 for none.
+type LeadSource interface {
+	ReminderLead(ctx context.Context) (int, error)
 }
 
 // Clock lets tests control time.
@@ -56,19 +65,30 @@ type Scheduler struct {
 	// undocumented MEAT_MODE_REMINDER_INTERVAL variable for end-to-end tests.
 	Every time.Duration
 
+	// Lead, when set, gives the lead time of items without their own
+	// RemindBefore. Nil means none.
+	Lead LeadSource
+
 	// KeyOf, when set, names the item a reminder is recorded under, so two
-	// copies of one task share a reminder: the hub maps a bead created by an
-	// add to the provisional item the app showed before. Nil means the
-	// item's key.
-	KeyOf func(context.Context, api.Item) (string, error)
+	// copies of one task share a reminder, and when the hub first knew of
+	// the task: the hub maps a bead created by an add to the provisional
+	// item the app showed before. Nil means the item's key and FirstSeen.
+	KeyOf func(context.Context, api.Item) (string, time.Time, error)
 }
 
-// New creates the scheduler and its reminder_fired table in db.
+// New creates the scheduler and its tables in db: reminder_fired for the
+// reminders at the due time or a snooze end, reminder_early for the early
+// ones, keyed by the due time they came before.
 func New(db *sql.DB, src ItemSource, n notify.Notifier, clock Clock, publicURL string) (*Scheduler, error) {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS reminder_fired (
 		item_key TEXT NOT NULL,
 		fire_at  INTEGER NOT NULL, -- unix milliseconds
 		PRIMARY KEY (item_key, fire_at)
+	);
+	CREATE TABLE IF NOT EXISTS reminder_early (
+		item_key TEXT NOT NULL,
+		due_at   INTEGER NOT NULL, -- unix milliseconds
+		PRIMARY KEY (item_key, due_at)
 	)`)
 	if err != nil {
 		return nil, err
@@ -99,6 +119,20 @@ func fireTime(it api.Item, now time.Time) (time.Time, bool, bool) {
 	return time.Time{}, false, false
 }
 
+// earlyTime is when the item's early reminder comes, lead before its due
+// time. There is none without a lead, for a closed item, or when it would
+// fall inside a snooze: the user picked the snooze end.
+func earlyTime(it api.Item, lead time.Duration) (time.Time, bool) {
+	if lead <= 0 || it.Status == "closed" || it.DueAt == nil {
+		return time.Time{}, false
+	}
+	at := it.DueAt.Add(-lead)
+	if it.DeferUntil != nil && at.Before(*it.DeferUntil) {
+		return time.Time{}, false
+	}
+	return at, true
+}
+
 // Run checks every Interval until ctx ends. The first check runs at once,
 // which catches reminders that came due while the hub was down.
 func (s *Scheduler) Run(ctx context.Context) {
@@ -121,9 +155,16 @@ func (s *Scheduler) every() time.Duration {
 	return Interval
 }
 
+// due is one reminder a check sends.
+type due struct {
+	msg  notify.Message
+	late bool
+}
+
 // Tick runs one check. A reminder is recorded as fired even when delivery
 // fails, so a broken push service cannot cause a flood of repeats; the
-// delivery errors are returned.
+// delivery errors are returned. Reminders more than Late late go out as
+// they are when there is one, and as one summary when there are more.
 func (s *Scheduler) Tick(ctx context.Context) error {
 	items, err := s.src.Items(ctx)
 	if err != nil {
@@ -131,53 +172,165 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	}
 	now := s.clock.Now()
 	var errs []error
-	for _, it := range items {
-		at, snoozed, ok := fireTime(it, now)
-		if !ok || at.After(now) {
-			continue
+	hubLead, leadOK := 0, true
+	if s.Lead != nil {
+		if hubLead, err = s.Lead.ReminderLead(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("reminder lead time: %w", err))
+			leadOK = false
 		}
+	}
+	var out []due
+	for _, it := range items {
 		// link is the item's own key; key is what the fired-once record uses,
 		// which for an added bead is the provisional key.
 		link := it.Key
 		if link == "" {
 			link = it.ID
 		}
-		key := link
+		key, first := link, it.FirstSeen
 		if s.KeyOf != nil {
-			if key, err = s.KeyOf(ctx, it); err != nil {
+			if key, first, err = s.KeyOf(ctx, it); err != nil {
 				errs = append(errs, err)
 				continue
 			}
 		}
-		// Whole seconds: bd stores times to the second, so a time the app
-		// sent with milliseconds comes back from the bridge without them.
-		ms := at.Truncate(time.Second).UnixMilli()
-		res, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO reminder_fired (item_key, fire_at) VALUES (?, ?)`, key, ms)
+		msg := notify.Message{
+			Title: truncTitle(it.Title),
+			URL:   fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(link)),
+			Tag:   link,
+		}
+
+		lead := hubLead
+		if it.RemindBefore != nil {
+			lead = *it.RemindBefore
+		} else if !leadOK {
+			lead = 0
+		}
+		if at, ok := earlyTime(it, time.Duration(lead)*time.Minute); ok && !at.After(now) && it.DueAt.After(now) {
+			sent, err := s.record(ctx, `reminder_early (item_key, due_at)`, key, *it.DueAt)
+			switch {
+			case err != nil:
+				errs = append(errs, err)
+			case sent && !first.After(at):
+				m := msg
+				m.Body = "Due in " + span(it.DueAt.Sub(now))
+				out = append(out, due{m, now.Sub(at) > Late})
+			}
+		}
+
+		at, snoozed, ok := fireTime(it, now)
+		if !ok || at.After(now) {
+			continue
+		}
+		sent, err := s.record(ctx, `reminder_fired (item_key, fire_at)`, key, at)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			continue // already fired
+		// An item the hub first saw after its moment, such as an old bead
+		// on a bridge's first sync, is recorded silently.
+		if !sent || first.After(at) {
+			continue
 		}
-		if now.Sub(at) > MaxAge {
-			continue // too old; recorded silently
+		m, late := msg, now.Sub(at) > Late
+		switch {
+		case snoozed && late:
+			m.Body = "Snoozed until " + span(now.Sub(at)) + " ago"
+		case snoozed:
+			m.Body = "Snoozed until now"
+		case late:
+			m.Body = "Due " + span(now.Sub(at)) + " ago"
+		default:
+			m.Body = "Due now"
 		}
-		body := "Due now"
-		if snoozed {
-			body = "Snoozed until now"
+		out = append(out, due{m, late})
+	}
+
+	var late []notify.Message
+	for _, d := range out {
+		if d.late {
+			late = append(late, d.msg)
+			continue
 		}
-		err = s.notifier.Notify(ctx, notify.Message{
-			Title: truncTitle(it.Title),
-			Body:  body,
-			URL:   fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(link)),
-			Tag:   link,
-		})
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", link, err))
+		if err := s.notifier.Notify(ctx, d.msg); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", d.msg.Tag, err))
+		}
+	}
+	switch {
+	case len(late) == 1:
+		if err := s.notifier.Notify(ctx, late[0]); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", late[0].Tag, err))
+		}
+	case len(late) > 1:
+		if err := s.notifier.Notify(ctx, s.missed(late)); err != nil {
+			errs = append(errs, fmt.Errorf("missed reminders: %w", err))
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// record notes that the reminder for key at t was sent, and reports whether
+// it is new. Times are whole seconds: bd stores times to the second, so a
+// time the app sent with milliseconds comes back from the bridge without
+// them.
+func (s *Scheduler) record(ctx context.Context, into, key string, t time.Time) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO `+into+` VALUES (?, ?)`, key, t.Truncate(time.Second).UnixMilli())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// maxMissedTitles is how many titles the summary of missed reminders names.
+const maxMissedTitles = 3
+
+// missed is the one reminder for several that came due while reminders were
+// off. It opens the app.
+func (s *Scheduler) missed(late []notify.Message) notify.Message {
+	var titles []string
+	for i, m := range late {
+		if i == maxMissedTitles {
+			titles = append(titles, fmt.Sprintf("and %d more", len(late)-maxMissedTitles))
+			break
+		}
+		titles = append(titles, m.Title)
+	}
+	return notify.Message{
+		Title: fmt.Sprintf("%d reminders came due while reminders were off", len(late)),
+		Body:  strings.Join(titles, ", "),
+		URL:   s.publicURL + "/",
+		Tag:   MissedTag,
+	}
+}
+
+// span says a duration in words, in its two largest units: "1 minute",
+// "2 hours 30 minutes", "3 days". It rounds to the minute and says at least
+// a minute.
+func span(d time.Duration) string {
+	m := int(d.Round(time.Minute) / time.Minute)
+	if m < 1 {
+		m = 1
+	}
+	days, hours, mins := m/(24*60), m/60%24, m%60
+	switch {
+	case days > 0 && hours > 0:
+		return count(days, "day") + " " + count(hours, "hour")
+	case days > 0:
+		return count(days, "day")
+	case hours > 0 && mins > 0:
+		return count(hours, "hour") + " " + count(mins, "minute")
+	case hours > 0:
+		return count(hours, "hour")
+	}
+	return count(mins, "minute")
+}
+
+func count(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return fmt.Sprintf("%d %ss", n, unit)
 }
 
 // truncTitle caps a notification title at maxTitleRunes runes: a huge bead

@@ -7,8 +7,8 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/store"
 )
 
-// settingsRoutes registers the routes for the name and time zone kept in
-// the app (docs/api.md, Settings).
+// settingsRoutes registers the routes for the name, time zone and reminder
+// lead time kept in the app (docs/api.md, Settings).
 func (s *Server) settingsRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/settings", s.handleSettings)
 	m.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
@@ -36,7 +36,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.storeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, api.Settings{Name: s.nameFrom(h), TimeZone: h.TimeZone})
+	writeJSON(w, http.StatusOK, api.Settings{Name: s.nameFrom(h), TimeZone: h.TimeZone, ReminderLead: h.ReminderLead})
 }
 
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +44,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, maxBody, &body) {
 		return
 	}
-	if err := s.store.UpdateProfile(body.Name, body.TimeZone); err != nil {
+	if err := s.store.UpdateProfile(body.Name, body.TimeZone, body.ReminderLead); err != nil {
 		s.storeError(w, r, err)
 		return
 	}

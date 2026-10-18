@@ -726,26 +726,27 @@ func TestNewPendingActionClearsShownError(t *testing.T) {
 }
 
 func TestReminderKeyOfAnAddedBead(t *testing.T) {
-	s, _ := open(t)
+	s, c := open(t)
 	seed(t, s)
 	ctx := context.Background()
-	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+	added, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
 		Payload: api.Payload{Title: "Buy seeds"}}, "alex-app")
 	must(t, err)
 	provisional := "laptop/garden/" + provisionalPrefix + id1
 	st, err := s.State()
 	must(t, err)
-	if k, err := s.ReminderKey(ctx, item(t, st, provisional)); err != nil || k != provisional {
+	if k, _, err := s.ReminderKey(ctx, item(t, st, provisional)); err != nil || k != provisional {
 		t.Fatalf("provisional key = %q, %v", k, err)
 	}
 	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true, BeadID: "gd-8"}))
-	real := api.Item{Key: "laptop/garden/gd-8", Bridge: "laptop", Repo: "garden", ID: "gd-8"}
-	if k, err := s.ReminderKey(ctx, real); err != nil || k != provisional {
-		t.Fatalf("added bead key = %q, %v; want the provisional item's", k, err)
+	// The bridge reports the bead an hour later; the task was known since the add.
+	real := api.Item{Key: "laptop/garden/gd-8", Bridge: "laptop", Repo: "garden", ID: "gd-8", FirstSeen: c.t.Add(time.Hour)}
+	if k, first, err := s.ReminderKey(ctx, real); err != nil || k != provisional || !first.Equal(added.CreatedAt) {
+		t.Fatalf("added bead key = %q, %v, %v; want the provisional item's key and the add's time", k, first, err)
 	}
-	other := api.Item{Key: "laptop/garden/gd-1", Bridge: "laptop", Repo: "garden", ID: "gd-1"}
-	if k, err := s.ReminderKey(ctx, other); err != nil || k != other.Key {
-		t.Fatalf("plain bead key = %q, %v", k, err)
+	other := api.Item{Key: "laptop/garden/gd-1", Bridge: "laptop", Repo: "garden", ID: "gd-1", FirstSeen: c.t}
+	if k, first, err := s.ReminderKey(ctx, other); err != nil || k != other.Key || !first.Equal(c.t) {
+		t.Fatalf("plain bead key = %q, %v, %v", k, first, err)
 	}
 }
 
@@ -758,6 +759,9 @@ func TestFolderNameReposMoveToPathKeys(t *testing.T) {
 	_, err = s.DB().Exec(`CREATE TABLE reminder_fired (item_key TEXT NOT NULL, fire_at INTEGER NOT NULL, PRIMARY KEY (item_key, fire_at))`)
 	must(t, err)
 	_, err = s.DB().Exec(`INSERT INTO reminder_fired VALUES ('laptop/garden/gd-1', 1), ('laptop/gardenia/gd-9', 2)`)
+	must(t, err)
+	_, err = s.DB().Exec(`CREATE TABLE reminder_early (item_key TEXT NOT NULL, due_at INTEGER NOT NULL, PRIMARY KEY (item_key, due_at));
+		INSERT INTO reminder_early VALUES ('laptop/garden/gd-1', 1)`)
 	must(t, err)
 	before := item(t, mustState(t, s), "laptop/garden/gd-1")
 
@@ -787,6 +791,9 @@ func TestFolderNameReposMoveToPathKeys(t *testing.T) {
 	must(t, err)
 	if !slices.Equal(keys, []string{"laptop/gardenia/gd-9", "laptop/projects/garden/gd-1"}) {
 		t.Errorf("reminder keys %v", keys)
+	}
+	if keys, _ = queryStrings(s.DB(), `SELECT item_key FROM reminder_early`); !slices.Equal(keys, []string{"laptop/projects/garden/gd-1"}) {
+		t.Errorf("early reminder keys %v", keys)
 	}
 	var names []string
 	for _, r := range st.Repos {

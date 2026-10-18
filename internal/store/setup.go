@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/auth"
 )
 
@@ -36,6 +37,9 @@ type HubSettings struct {
 	UserName string
 	// TimeZone is an IANA name such as Europe/Paris; "" until chosen.
 	TimeZone string
+	// ReminderLead is how many minutes before a due time an early reminder
+	// comes, 0 for none.
+	ReminderLead int
 	// PasswordHash is the Argon2id PHC string of a password set in the
 	// app; "" for none. MEAT_MODE_PASSWORD_HASH wins over it.
 	PasswordHash string
@@ -53,9 +57,9 @@ func (s *Store) Settings() (HubSettings, error) {
 	var h HubSettings
 	var setupAt sql.NullString
 	var expires, used sql.NullInt64
-	err := s.db.QueryRow(`SELECT setup, setup_at, user_name, time_zone, password_hash, tailscale_only,
+	err := s.db.QueryRow(`SELECT setup, setup_at, user_name, time_zone, reminder_lead, password_hash, tailscale_only,
 		setup_code_expires, setup_code_used FROM hub_settings WHERE id = 1`).Scan(
-		&h.Setup, &setupAt, &h.UserName, &h.TimeZone, &h.PasswordHash, &h.TailscaleOnly, &expires, &used)
+		&h.Setup, &setupAt, &h.UserName, &h.TimeZone, &h.ReminderLead, &h.PasswordHash, &h.TailscaleOnly, &expires, &used)
 	if err != nil {
 		return h, err
 	}
@@ -140,9 +144,16 @@ func checkTimeZone(tz string) error {
 	return nil
 }
 
-// UpdateProfile keeps the name and the time zone that are not nil, both or
-// neither: a refused one leaves the other unchanged.
-func (s *Store) UpdateProfile(name, tz *string) error {
+func checkReminderLead(minutes int) error {
+	if minutes < 0 || minutes > api.MaxLeadMinutes {
+		return invalidf("reminder lead time must be 0 to %d minutes", api.MaxLeadMinutes)
+	}
+	return nil
+}
+
+// UpdateProfile keeps the name, the time zone and the reminder lead time
+// that are not nil, all or none: a refused one leaves the others unchanged.
+func (s *Store) UpdateProfile(name, tz *string, lead *int) error {
 	var set []string
 	var args []any
 	if name != nil {
@@ -157,6 +168,12 @@ func (s *Store) UpdateProfile(name, tz *string) error {
 			return err
 		}
 		set, args = append(set, "time_zone = ?"), append(args, *tz)
+	}
+	if lead != nil {
+		if err := checkReminderLead(*lead); err != nil {
+			return err
+		}
+		set, args = append(set, "reminder_lead = ?"), append(args, *lead)
 	}
 	if len(set) == 0 {
 		return nil

@@ -92,3 +92,32 @@ func TestBridgeLearnsTheTimeZone(t *testing.T) {
 	}
 	h.expect(h.do("GET", "/bridge/v1/settings", nil, ""), http.StatusUnauthorized)
 }
+
+func minutes(n int) *int { return &n }
+
+func TestReminderLeadSetting(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	w := h.do("PUT", "/api/settings", api.SettingsUpdate{ReminderLead: minutes(30)}, "")
+	h.expect(w, http.StatusOK)
+	if got := decode[api.Settings](t, w); got.ReminderLead != 30 || got.Name != "alex" {
+		t.Fatalf("reply: %+v", got)
+	}
+	// Out of range, or beside a refused field, nothing changes.
+	h.expect(h.do("PUT", "/api/settings", api.SettingsUpdate{ReminderLead: minutes(-1)}, ""), http.StatusBadRequest)
+	h.expect(h.do("PUT", "/api/settings", api.SettingsUpdate{ReminderLead: minutes(api.MaxLeadMinutes + 1)}, ""), http.StatusBadRequest)
+	h.expect(h.do("PUT", "/api/settings", api.SettingsUpdate{Name: str("Sam"), ReminderLead: minutes(60), TimeZone: str("Mars/Olympus")}, ""), http.StatusBadRequest)
+	want := api.Settings{Name: "alex", ReminderLead: 30}
+	if got := decode[api.Settings](t, h.do("GET", "/api/settings", nil, "")); got != want {
+		t.Fatalf("after refusals: %+v", got)
+	}
+	w = h.do("GET", "/bridge/v1/settings", nil, h.token)
+	h.expect(w, http.StatusOK)
+	if got := decode[api.Settings](t, w); got.ReminderLead != 30 {
+		t.Fatalf("bridge settings %+v", got)
+	}
+	h.expect(h.do("PUT", "/api/settings", api.SettingsUpdate{ReminderLead: minutes(0)}, ""), http.StatusOK)
+	if got := decode[api.Settings](t, h.do("GET", "/api/settings", nil, "")); got.ReminderLead != 0 {
+		t.Fatalf("after turning it off: %+v", got)
+	}
+}

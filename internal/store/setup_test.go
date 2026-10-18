@@ -193,22 +193,33 @@ func TestSetupCodeExpires(t *testing.T) {
 
 func TestUpdateProfileIsAllOrNothing(t *testing.T) {
 	s, _ := open(t)
-	name, tz := "Sam", "Europe/Paris"
-	must(t, s.UpdateProfile(&name, &tz))
-	bad, other := "Mars/Olympus", "Casey"
-	if err := s.UpdateProfile(&other, &bad); !errors.Is(err, ErrInvalid) {
+	name, tz, lead := "Sam", "Europe/Paris", 30
+	must(t, s.UpdateProfile(&name, &tz, &lead))
+	bad, other, otherLead := "Mars/Olympus", "Casey", 60
+	if err := s.UpdateProfile(&other, &bad, &otherLead); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("bad zone: %v", err)
+	}
+	for _, l := range []int{-1, api.MaxLeadMinutes + 1} {
+		if err := s.UpdateProfile(&other, nil, &l); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("lead %d: %v", l, err)
+		}
 	}
 	h, err := s.Settings()
 	must(t, err)
-	if h.UserName != "Sam" || h.TimeZone != "Europe/Paris" {
+	if h.UserName != "Sam" || h.TimeZone != "Europe/Paris" || h.ReminderLead != 30 {
 		t.Fatalf("after a refused update: %+v", h)
 	}
-	must(t, s.UpdateProfile(nil, nil))
-	must(t, s.UpdateProfile(&other, nil))
+	must(t, s.UpdateProfile(nil, nil, nil))
+	must(t, s.UpdateProfile(&other, nil, nil))
 	h, _ = s.Settings()
-	if h.UserName != "Casey" || h.TimeZone != "Europe/Paris" {
+	if h.UserName != "Casey" || h.TimeZone != "Europe/Paris" || h.ReminderLead != 30 {
 		t.Fatalf("name only: %+v", h)
+	}
+	for _, l := range []int{0, api.MaxLeadMinutes} {
+		must(t, s.UpdateProfile(nil, nil, &l))
+		if h, _ = s.Settings(); h.ReminderLead != l {
+			t.Fatalf("lead %d: %+v", l, h)
+		}
 	}
 }
 

@@ -145,7 +145,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 5
+const schemaVersion = 7
 
 var migrations = []string{
 	// 1: initial schema.
@@ -250,6 +250,15 @@ CREATE TABLE personal_owners (
 	item_id TEXT PRIMARY KEY,
 	bridge  TEXT NOT NULL
 );
+`,
+	// 6: the reminder lead time in minutes, 0 for none.
+	`
+ALTER TABLE hub_settings ADD COLUMN reminder_lead INTEGER NOT NULL DEFAULT 0;
+`,
+	// 7: the calendar feed's token, kept only as its SHA-256; NULL while
+	// the feed is off.
+	`
+ALTER TABLE hub_settings ADD COLUMN calendar_hash BLOB;
 `,
 }
 
