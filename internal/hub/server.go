@@ -133,7 +133,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.HandleFunc("GET /healthz", s.handleHealth)
 	staticH := newStatic(static)
 	m.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/bridge/") {
+		if isAPIPath(r.URL.Path) || strings.HasPrefix(r.URL.Path, "/bridge/") {
 			writeError(w, http.StatusNotFound, "no such route")
 			return
 		}

@@ -47,7 +47,7 @@ func (g *guard) check(w http.ResponseWriter, r *http.Request) bool {
 	if p == "/healthz" || strings.HasPrefix(p, "/bridge/") {
 		return true
 	}
-	isAPI := strings.HasPrefix(p, "/api/")
+	isAPI := isAPIPath(p)
 	if host := hostOnly(r.Host); !g.hosts[host] {
 		msg := fmt.Sprintf("This hub does not answer to the name %q. If that is how you open the app, "+
 			"add it to MEAT_MODE_ALLOWED_HOSTS (or set MEAT_MODE_PUBLIC_URL to it) and restart the hub.", host)
@@ -86,6 +86,11 @@ func (g *guard) check(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+// isAPIPath reports whether p is in the app API: /api/... or bare /api.
+func isAPIPath(p string) bool {
+	return p == "/api" || strings.HasPrefix(p, "/api/")
 }
 
 // originOK reports whether origin is the request's own origin or the public

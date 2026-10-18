@@ -21,8 +21,9 @@ type Options struct {
 	Push func(cfg Config, st *store.Store) (PushRegistry, error)
 	// OnStart runs once the store is open, before the hub serves. Start
 	// background work here (the reminder scheduler) and stop it when ctx
-	// ends; ctx ends when the hub shuts down.
-	OnStart func(ctx context.Context, st *store.Store) error
+	// ends; ctx ends when the hub shuts down. cfg is the validated config
+	// Run serves with.
+	OnStart func(ctx context.Context, cfg Config, st *store.Store) error
 }
 
 // newHTTPServer wraps h with the hub's timeouts. ReadTimeout bounds reading
@@ -34,7 +35,10 @@ func newHTTPServer(ctx context.Context, h *Server) *http.Server {
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		BaseContext:       func(net.Listener) context.Context { return ctx },
+		// Requests keep ctx's values but not its end, so a signal lets
+		// Shutdown drain them instead of cancelling them all at once. Event
+		// streams end through Close.
+		BaseContext: func(net.Listener) context.Context { return context.WithoutCancel(ctx) },
 	}
 	srv.RegisterOnShutdown(h.Close)
 	return srv
@@ -79,13 +83,18 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 			return fmt.Errorf("push notifications: %w", err)
 		}
 	}
+	// Old logins end before OnStart starts the reminders, so none reach a
+	// device that is logged out.
+	h := NewServer(cfg, st, push)
+	if err := h.endOtherLogins(ctx); err != nil {
+		return err
+	}
 	if opts.OnStart != nil {
-		if err := opts.OnStart(ctx, st); err != nil {
+		if err := opts.OnStart(ctx, cfg, st); err != nil {
 			return err
 		}
 	}
 
-	h := NewServer(cfg, st, push)
 	srv := newHTTPServer(ctx, h)
 
 	ln, err := net.Listen("tcp", cfg.Listen)

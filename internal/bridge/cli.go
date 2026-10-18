@@ -147,11 +147,18 @@ func pair(ctx context.Context, args []string, env Env) error {
 			return err
 		}
 	}
-	cfg, err := LoadConfig(env.Paths.Config)
+	// Start from the file as saved: environment overrides apply to this
+	// command's own checks but are never written back.
+	cfg, err := readConfigFile(env.Paths.Config)
+	if err != nil {
+		return err
+	}
+	effective, err := LoadConfig(env.Paths.Config)
 	if err != nil {
 		return err
 	}
 	cfg.HubURL, cfg.Token = strings.TrimRight(pos[0], "/"), pos[1]
+	allowInsecure := effective.AllowInsecureHTTP || *insecure
 	if *insecure {
 		cfg.AllowInsecureHTTP = true
 	}
@@ -166,8 +173,12 @@ func pair(ctx context.Context, args []string, env Env) error {
 		}
 		cfg.Roots = abs
 	}
-	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
+	if err := CheckURL(cfg.HubURL, allowInsecure); err != nil {
 		return err
+	}
+	if !*noService && CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP) != nil {
+		return errors.New("the service does not get MEAT_MODE_ALLOW_INSECURE_HTTP from this shell; " +
+			"pass --allow-insecure-http to save it, or --no-service")
 	}
 	bd, ver, err := findBD(ctx, cfg.BD, env)
 	if err != nil {

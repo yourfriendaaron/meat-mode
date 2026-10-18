@@ -259,7 +259,8 @@ func (s *Store) TransferPersonal() error {
 	defer tx.Rollback()
 	type repo struct{ bridge, name string }
 	var legacy []repo
-	rows, err := tx.Query(`SELECT bridge, name FROM repos WHERE personal = 1 AND bridge != ?`, HubBridge)
+	rows, err := tx.Query(`SELECT bridge, name FROM repos WHERE personal = 1 AND name = ? AND bridge != ?`,
+		PersonalRepo, HubBridge)
 	if err != nil {
 		return err
 	}
@@ -417,11 +418,15 @@ func (s *Store) importFromBridge(tx *sql.Tx, bridge, repo string, items []api.It
 	return nil
 }
 
+// noteNamespace derives the id of the note an agent adds with a to-do.
+var noteNamespace = uuid.MustParse("5d0c2f3a-7b1e-4c6d-9a48-2e1f0b7c3d95")
+
 // AddPersonal adds an agent's to-do to the personal list, with its note as
 // the first comment, for the agents of the machine whose token is bridge's.
 // Both are by t.Author, or by the machine's name when it is empty. The item
 // is recorded as that machine's, so its agents may change it later. A
-// repeated t.ID returns the item it added and changes nothing.
+// repeated t.ID returns the item it added and changes nothing, except that
+// a note lost to a failure after the add is written.
 func (s *Store) AddPersonal(t api.PersonalTodo, bridge string) (key string, created bool, err error) {
 	author, err := agentAuthor(t.Author, bridge)
 	if err != nil {
@@ -447,10 +452,13 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge string) (key string, crea
 		return "", false, conflictf("action %q is not a personal to-do", t.ID)
 	}
 	key = ItemKey(HubBridge, PersonalRepo, a.BeadID)
-	if created && t.Note != "" {
-		if _, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindNote, Key: key,
-			Payload: api.Payload{Text: t.Note}}, author); err != nil {
-			return key, true, err
+	// The note's id comes from the add's, so a retry after a failure between
+	// the two writes stores the note once and a plain retry adds none.
+	if t.Note != "" {
+		if _, _, err := s.AppendAction(api.NewAction{ID: uuid.NewSHA1(noteNamespace, []byte(t.ID)).String(), Kind: api.KindNote, Key: key,
+			Payload: api.Payload{Text: t.Note}}, author); err != nil && (created || !errors.Is(err, ErrNotFound)) {
+			// A retry for an item since deleted or moved has nothing to add to.
+			return key, created, err
 		}
 	}
 	return key, created, nil

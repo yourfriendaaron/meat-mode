@@ -321,3 +321,33 @@ func TestCLIRealFailureStillFails(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// TestCLIHidesBridgeEnvironment keeps the bridge's own MEAT_MODE_* settings,
+// the hub token above all, out of the bd child.
+func TestCLIHidesBridgeEnvironment(t *testing.T) {
+	t.Setenv("MEAT_MODE_BRIDGE_TOKEN", "example-secret")
+	t.Setenv("MEAT_MODE_HUB_URL", "https://hub.example.com")
+	t.Setenv("MEAT_MODE_TEST_KEEP", "")
+	dir := t.TempDir()
+	seen := filepath.Join(dir, "env")
+	bin := filepath.Join(dir, "bd")
+	script := "#!/bin/sh\nenv > '" + seen + "'\necho '[]'\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cli := &beads.CLI{Bin: bin}
+	if _, err := cli.ListHuman(context.Background(), t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(seen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Contains(got, "MEAT_MODE_") || strings.Contains(got, "example-secret") {
+		t.Errorf("bd saw a MEAT_MODE_ variable:\n%s", got)
+	}
+	if !strings.Contains(got, "PATH=") || !strings.Contains(got, "BD_NON_INTERACTIVE=1") {
+		t.Errorf("bd lost the rest of its environment:\n%s", got)
+	}
+}

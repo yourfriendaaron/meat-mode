@@ -123,3 +123,24 @@ func (s *Store) ChangePassword(phc, token, tag string) ([]string, error) {
 	}
 	return ended, tx.Commit()
 }
+
+// EndOtherLogins ends every session not started under tag, the current
+// password's, or every session when tag is "" (login off). The hub calls it
+// at start, so a password hash changed outside the app logs out every
+// device of the old one. It returns the IDs of the sessions it ended.
+func (s *Store) EndOtherLogins(tag string) ([]string, error) {
+	rows, err := s.db.Query(`DELETE FROM sessions WHERE ? = '' OR tag != ? RETURNING id`, tag, tag)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ended []string
+	for rows.Next() {
+		var id []byte
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ended = append(ended, hex.EncodeToString(id))
+	}
+	return ended, rows.Err()
+}

@@ -66,8 +66,8 @@ type Scheduler struct {
 	clock     Clock
 	publicURL string
 
-	// Every, when set, replaces Interval. The hub sets it from the
-	// undocumented MEAT_MODE_REMINDER_INTERVAL variable for end-to-end tests.
+	// Every, when set, replaces Interval. The hub sets it from
+	// MEAT_MODE_REMINDER_INTERVAL, a setting for end-to-end tests.
 	Every time.Duration
 
 	// Lead, when set, gives the lead time of items without their own

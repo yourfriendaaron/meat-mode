@@ -6,7 +6,7 @@ The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges a
 
 - A **bridge** has a unique name chosen when it is added (`[a-z0-9-]{1,32}`). The name `hub` is reserved.
 - The **personal list** belongs to the hub itself: it is repo `personal` of the reserved bridge `hub`, with `personal: true`. The hub stores its items and applies every action on them at once, so it works with no bridge running. Its items are keyed `hub/personal/<id>`; the hub gives a new item the id `mm-<n>`, and keeps the bead id of an item moved from a bridge (see below).
-- A **repo** is named by the bridge with its folder's path relative to the home folder, such as `projects/garden` (for a `--root` outside the home folder, relative to that root's parent). Repo names are unique per bridge, so two folders called `garden` stay apart. A name is up to 512 bytes of `/`-separated segments; each segment is 1 to 128 characters with no control character, is not `.` or `..`, and does not start with `-`. The app shows the last segment, and the path where two repos share it.
+- A **repo** is named by the bridge with its folder's path relative to the home folder, such as `projects/garden` (for a `--root` outside the home folder, relative to that root's parent). Repo names are unique per bridge, so two folders called `garden` stay apart. A name is up to 512 bytes of `/`-separated segments; each segment is 1 to 128 bytes with no control character, is not `.` or `..`, and does not start with `-`. The app shows the last segment, and the path where two repos share it.
 - An **item key** is `<bridge>/<repo>/<bead id>`, for example `laptop/projects/garden/gd-1`. Bridge names and bead ids hold no `/`, so the repo is everything between the first and the last `/`. In URL paths the key is percent-encoded as one segment. Bead ids may not start with `-`; the bridge passes bead ids to `bd` only when they match `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`.
 - A hub that stored repos under an older bridge's folder names (`garden`) moves each one, with its items, actions and reminders, to the one new name that ends in it (`projects/garden`) when the bridge first sends its new list. A folder name that two new names end in is dropped instead.
 - An **action id** is a UUID the client generates. Posting the same id twice returns the stored action and changes nothing.
@@ -25,7 +25,7 @@ The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `ht
 | `GET /api/events` | | Server-sent events: `event: change` with `data: {"rev": n}` whenever state changes; the app then re-fetches `/api/state`. Past 32 open streams the hub answers `503` with `Retry-After: 30`. |
 | `POST /api/actions` | `NewAction` | `201` with `Action` (or `200` with the stored one for a duplicate id) |
 | `POST /api/actions/{id}/cancel` | | `200` with `Action` (status `cancelled`) when it was not yet applied; `409` when it already was |
-| `GET /api/actions?limit=n` | | Recent actions, newest first, for the sync popover |
+| `GET /api/actions?limit=n` | | Recent actions, newest first, for the sync popover; `limit` defaults to 50 and is capped at 500 |
 | `POST /api/items/{key}/seen` | | `204`; marks replies on the item read |
 | `GET /api/push/key` | | `{"publicKey": "<VAPID public key>"}` |
 | `POST /api/push/subscriptions` | `PushSubscription` (the browser's JSON) | `204` (upsert by endpoint); `400` unless the endpoint is an https URL on a known push service (Mozilla, FCM, Apple, Windows). The hub keeps the 20 newest. |
@@ -49,7 +49,7 @@ When login is on, every `/api/` route except the three below and `POST /api/setu
 
 The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `MEAT_MODE_PUBLIC_URL` is `https://`. The hub stores only its SHA-256. A session lasts 90 days from its last use; the hub renews the cookie at most once a day. A session belongs to the password hash it was made under, so changing the hash in the environment logs every device out; changing it in the app keeps the device that changed it logged in. Logins and the existing Host, Origin and Content-Type checks apply together: `POST /api/login` needs `Content-Type: application/json` like any other `/api/` write.
 
-**Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session; turning login on later, in the environment or in the app, drops those, and each device subscribes again once it logs in. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
+**Push subscriptions** belong to the session that registered them while login is on. Logging out, or the session expiring, stops reminders to that device. With login off a subscription belongs to no session; turning login on later, in the environment or in the app, drops those, and each device subscribes again once it logs in. Turning login off, or changing the hash in the environment, ends the old sessions at the next start and drops their subscriptions; each device subscribes again when the app opens. Either way, a subscription that has not been registered again for 60 days is dropped; the app registers again each time it opens.
 
 ### Setup
 
