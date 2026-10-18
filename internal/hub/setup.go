@@ -70,6 +70,9 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		PushKeys:    s.push != nil && s.push.PublicKey() != "",
 		Ntfy:        s.cfg.NtfyURL != "",
 		Time:        s.now().UTC(),
+
+		PublicDNS:         s.publicDNS(),
+		TailscaleIdentity: r.Header.Get("Tailscale-User-Login") != "",
 	}
 	switch {
 	case s.cfg.PasswordHash != "":

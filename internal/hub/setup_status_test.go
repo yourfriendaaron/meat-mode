@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -19,8 +20,9 @@ func TestSetupStatusReportsTheHubSide(t *testing.T) {
 	})
 	got := decode[api.SetupStatus](t, h.do("GET", "/api/setup/status", "", ""))
 	// The harness opens the app as localhost, which is allowed but is not the public address.
-	want := api.SetupStatus{Login: "none", HostMatches: false, PublicURL: "https://meat-mode.example.com", PushKeys: true, Ntfy: true, Time: h.now}
-	if got != want {
+	want := api.SetupStatus{Login: "none", HostMatches: false, PublicURL: "https://meat-mode.example.com", PushKeys: true, Ntfy: true, Time: h.now,
+		PublicDNS: api.PublicDNS{State: api.DNSUnchecked}}
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }

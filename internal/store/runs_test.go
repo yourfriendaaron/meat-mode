@@ -85,20 +85,16 @@ func TestAgentsSwitchGatesAsk(t *testing.T) {
 	seed(t, s)
 	garden := ItemKey("laptop", "garden", "gd-1")
 	on, off := true, false
-	// A pending switch on counts at once.
-	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAgents, Bridge: "laptop", Repo: "garden", Payload: api.Payload{On: &on}}, "alex-app")
-	must(t, err)
-	if r := repoOf(t, mustState(t, s), "garden"); !r.AgentsAllowed || !r.AgentsPending || r.Pending {
-		t.Errorf("garden while the switch is pending: %+v", r)
+	// The app cannot switch agents on; only the bridge's list does.
+	if _, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAgents, Bridge: "laptop", Repo: "garden", Payload: api.Payload{On: &on}}, "alex-app"); !errors.Is(err, ErrInvalid) {
+		t.Errorf("agents on from the app: %v, want a refusal", err)
 	}
-	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindAsk, Key: garden}, "alex-app")
-	must(t, err)
-	// Applied, the bridge's list decides.
-	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true}))
 	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "garden", OptedIn: true, AgentsAllowed: true}, {Name: "chores"}}))
 	if r := repoOf(t, mustState(t, s), "garden"); !r.AgentsAllowed || r.AgentsPending {
-		t.Errorf("garden after the bridge applied it: %+v", r)
+		t.Errorf("garden after the bridge switched it on: %+v", r)
 	}
+	_, _, err := s.AppendAction(api.NewAction{ID: id2, Kind: api.KindAsk, Key: garden}, "alex-app")
+	must(t, err)
 	// A pending switch off refuses at once, ask and add with ask alike.
 	_, _, err = s.AppendAction(api.NewAction{ID: id3, Kind: api.KindAgents, Bridge: "laptop", Repo: "garden", Payload: api.Payload{On: &off}}, "alex-app")
 	must(t, err)

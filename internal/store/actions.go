@@ -215,6 +215,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 			return a, false, invalidf("the personal list is kept on the hub and always shows")
 		case na.Kind == api.KindAgents && isHubRepo(na.Bridge, na.Repo):
 			return a, false, invalidf(noPersonalAgents)
+		case na.Kind == api.KindAgents && *a.Payload.On:
+			// A hub that is taken over must not widen what agents may do.
+			return a, false, invalidf("agents are switched on at the agent machine, not in the app: run `meat-mode bridge agents on %s` there", na.Repo)
 		case na.Kind == api.KindAdd && !optedIn:
 			return a, false, invalidf("repo %q is not synced with Meat Mode", na.Repo)
 		case na.Kind == api.KindAdd && a.Payload.Ask:
@@ -301,7 +304,7 @@ func checkAgentsAllowed(tx *sql.Tx, bridge, repo string) error {
 		return err
 	}
 	if !ok {
-		return invalidf("agents are not allowed in repo %q; switch them on in Settings", repo)
+		return invalidf("agents are not allowed in repo %q; switch them on at the agent machine with `meat-mode bridge agents on %s`", repo, repo)
 	}
 	return nil
 }

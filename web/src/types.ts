@@ -286,6 +286,18 @@ export interface SetupStatus {
   ntfy: boolean;
   /** The hub's clock, as an ISO time. */
   time: string;
+  /** The latest public DNS check of MEAT_MODE_PUBLIC_URL (docs/api.md, Private network only). */
+  publicDns: PublicDns;
+  /** Whether this request carried a Tailscale identity header. */
+  tailscaleIdentity: boolean;
+}
+
+/** What a public resolver says the public address's host resolves to. */
+export interface PublicDns {
+  state: "private" | "public" | "unchecked" | "skipped";
+  /** The global addresses found, for `public` only. */
+  addresses?: string[];
+  checkedAt: string | null;
 }
 
 /** One place reminders go: a browser's push subscription or the Android app (docs/api.md, Devices). */

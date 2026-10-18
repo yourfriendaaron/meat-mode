@@ -62,4 +62,29 @@ type SetupStatus struct {
 	Ntfy bool `json:"ntfy"`
 	// Time is the hub's clock.
 	Time time.Time `json:"time"`
+	// PublicDNS is the latest public DNS check of MEAT_MODE_PUBLIC_URL.
+	PublicDNS PublicDNS `json:"publicDns"`
+	// TailscaleIdentity is whether this request carried a non-empty
+	// Tailscale-User-Login header, as Tailscale Serve sets for a tailnet
+	// user. It reports presence only, never the value.
+	TailscaleIdentity bool `json:"tailscaleIdentity"`
+}
+
+// Public DNS check states (docs/api.md, Private network only).
+const (
+	DNSPrivate   = "private"   // no public record, or only private addresses
+	DNSPublic    = "public"    // a public resolver returned a global address
+	DNSUnchecked = "unchecked" // no public resolver answered, or no check ran yet
+	DNSSkipped   = "skipped"   // the host is an IP address or localhost
+)
+
+// PublicDNS is what a public resolver says MEAT_MODE_PUBLIC_URL's host
+// resolves to.
+type PublicDNS struct {
+	State string `json:"state"`
+	// Addresses are the global addresses found, for DNSPublic only.
+	Addresses []string `json:"addresses,omitempty"`
+	// CheckedAt is when the check last got an answer or gave up, null
+	// before the first.
+	CheckedAt *time.Time `json:"checkedAt"`
 }

@@ -6,7 +6,8 @@ const HUB_TIME = "2026-03-02T09:00:00Z";
 
 function probe(over: Partial<Probe> = {}, status: Partial<Probe["status"]> = {}): Probe {
   return {
-    status: { login: "app", hostMatches: true, publicUrl: "https://meat-mode.example.com", pushKeys: true, ntfy: false, time: HUB_TIME, ...status },
+    status: { login: "app", hostMatches: true, publicUrl: "https://meat-mode.example.com", pushKeys: true, ntfy: false, time: HUB_TIME,
+      publicDns: { state: "private", checkedAt: HUB_TIME }, tailscaleIdentity: false, ...status },
     origin: "https://meat-mode.example.com",
     host: "meat-mode.example.com",
     secure: true,

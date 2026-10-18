@@ -295,6 +295,13 @@ type State struct {
 	ServerTime time.Time `json:"serverTime"`
 }
 
+// NewBridge is POST /api/bridges. Password is needed unless this session
+// entered the password within the last 10 minutes (docs/api.md, Login).
+type NewBridge struct {
+	Name     string `json:"name"`
+	Password string `json:"password,omitempty"`
+}
+
 // NewBridgeReply carries a bridge token, shown once.
 type NewBridgeReply struct {
 	Name  string `json:"name"`
