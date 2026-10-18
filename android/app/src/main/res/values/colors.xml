@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The web app's colours (web/src/theme.ts and web/scripts/icons.mjs). -->
+    <color name="background">#FFFBEB</color>
+    <color name="text">#282A36</color>
+    <color name="accent">#A8447F</color>
+    <color name="icon_background">#282A36</color>
+</resources>
