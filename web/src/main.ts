@@ -1821,7 +1821,7 @@ function selectBy(delta: number) {
 
 let qa: QuickAdd = { title: "", due: null, repeat: null, list: null, tokens: [] };
 let qaListTouched = false;
-/** The New task form's agent switch as the user set it; null is its default, on where agents may work. */
+/** The New task form's agent switch as the user set it; null is its default, off, so Add wakes no agent until it is switched on. */
 let qaAsk: boolean | null = null;
 
 /** Whether Add will also wake an agent on the new task. */

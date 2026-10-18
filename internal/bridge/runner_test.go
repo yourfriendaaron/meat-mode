@@ -1,6 +1,9 @@
 package bridge
 
 import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -282,6 +285,46 @@ func TestAgentFollowUpJoinsLiveRun(t *testing.T) {
 	logf := filepath.Join(w.state, "agents", "logs", "garden", id, run.ID+".jsonl")
 	if b, _ := os.ReadFile(logf); !strings.Contains(string(b), `"isReplay":true,"message":{"content":"New note from the user`) {
 		t.Errorf("the agent never read the follow-up:\n%s", b)
+	}
+}
+
+// TestOnLineStoresOnlyAValidSessionID checks the guard around the session
+// id the agent's stream reports: it becomes the argument of --resume on the
+// next run, so a malformed one is ignored, warned of once, and never saved.
+func TestOnLineStoresOnlyAValidSessionID(t *testing.T) {
+	var log bytes.Buffer
+	r := &AgentRunner{Dir: t.TempDir(), Log: slog.New(slog.NewTextHandler(&log, &slog.HandlerOptions{Level: slog.LevelWarn}))}
+	r.init()
+	rec := &beadRecord{Repo: "garden", BeadID: "gd-1"}
+	r.records[runKey("garden", "gd-1")] = rec
+	lr := &liveRun{rec: rec, run: &api.Run{}, repo: Repo{Name: "garden"}}
+	line := func(id string) []byte {
+		b, err := json.Marshal(map[string]any{"session_id": id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	for range 2 {
+		r.onLine(lr, line("--dangerously-skip-permissions"))
+	}
+	r.onLine(lr, line("two words"))
+	if rec.Session != "" {
+		t.Fatalf("stored a malformed session id %q", rec.Session)
+	}
+	if n := strings.Count(log.String(), "level=WARN"); n != 2 {
+		t.Fatalf("%d warnings for 2 malformed ids, want one each: %s", n, log.String())
+	}
+	r.onLine(lr, line("abc-123"))
+	if rec.Session != "abc-123" {
+		t.Fatalf("a valid session id was not stored: %q", rec.Session)
+	}
+	b, err := os.ReadFile(filepath.Join(r.Dir, "runs.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"session": "abc-123"`) || strings.Contains(string(b), "--dangerously") {
+		t.Errorf("the journal holds the wrong session: %s", b)
 	}
 }
 

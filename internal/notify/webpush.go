@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -359,8 +360,15 @@ func (r *Registry) notifyDevice(ctx context.Context, sessionID, endpoint string,
 	return len(subs) > 0, n > 0, err
 }
 
+// pushBudget is the most bytes a marshalled Web Push payload may be. Web
+// Push caps the whole message at 4096 bytes and the encryption overhead
+// eats into that, so the hub keeps the JSON itself under this.
+const pushBudget = 3800
+
 // pushPayload is the JSON a service worker receives for m. actions and key
-// are there only when m has actions.
+// are there only when m has actions. A payload over budget is trimmed, its
+// body before its title; url, key, tag and the actions always stay whole,
+// because the service worker needs them.
 func pushPayload(m Message) []byte {
 	type payload struct {
 		Title   string   `json:"title"`
@@ -374,8 +382,43 @@ func pushPayload(m Message) []byte {
 	if len(m.Actions) > 0 {
 		p.Actions, p.Key = m.Actions, m.Key
 	}
-	b, _ := json.Marshal(p)
+	b := marshalPayload(p)
+	for len(b) > pushBudget {
+		switch {
+		case p.Body != "":
+			p.Body = shortenRunes(p.Body)
+		case p.Title != "":
+			p.Title = shortenRunes(p.Title)
+		default:
+			// url and key alone are over budget; send them whole anyway.
+			return b
+		}
+		b = marshalPayload(p)
+	}
 	return b
+}
+
+// marshalPayload is json.Marshal without HTML escaping: a key may hold <, >
+// and &, and \u003c for each would make it six times longer.
+func marshalPayload(p any) []byte {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(p)
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
+}
+
+// shortenRunes cuts s to about half its runes and marks the cut with an
+// ellipsis, so repeated cuts converge on the empty string without ever
+// splitting a rune.
+func shortenRunes(s string) string {
+	rs := []rune(s)
+	n := len(rs) / 2
+	if n <= 1 {
+		// "a…" would halve to itself.
+		return ""
+	}
+	return string(rs[:n]) + "…"
 }
 
 // send pushes m to subs and reports how many the push service accepted. A

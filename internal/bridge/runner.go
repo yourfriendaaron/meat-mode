@@ -101,6 +101,7 @@ type liveRun struct {
 	result      *streamLine
 	usage       string // detail when the agent hit a usage limit
 	budget      bool
+	badSession  string        // the last session id refused, to warn once per value
 	ending      string        // a reason the runner ended it for: stopped, timeout, restarted
 	again       *askRequest   // an ask that came while it was closing
 	exited      chan struct{} // closed when the process is reaped
@@ -568,8 +569,16 @@ func (r *AgentRunner) onLine(lr *liveRun, raw []byte) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if m.SessionID != "" && lr.rec.Session != m.SessionID {
-		lr.rec.Session = m.SessionID
-		r.saveOrLog()
+		if ValidSessionID(m.SessionID) {
+			lr.rec.Session = m.SessionID
+			r.saveOrLog()
+		} else if lr.badSession != m.SessionID {
+			// The id becomes the argument of --resume on the next run, so a
+			// malformed one is ignored, never stored.
+			lr.badSession = m.SessionID
+			r.log().Warn("ignoring a malformed session id from the agent; the next run starts fresh",
+				"repo", lr.repo.Name, "bead", lr.rec.BeadID, "session", m.SessionID)
+		}
 	}
 	switch m.Type {
 	case "user":

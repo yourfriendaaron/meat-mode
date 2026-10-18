@@ -21,9 +21,14 @@ func seedAgents(t *testing.T, s *Store) {
 }
 
 func run(bead, id, state string, start time.Time) api.RunReport {
-	return api.RunReport{Repo: "garden", BeadID: bead, Run: api.Run{
+	end := start.Add(time.Minute)
+	r := api.RunReport{Repo: "garden", BeadID: bead, Run: api.Run{
 		ID: id, State: state, Agent: "planner", Activity: "Reading the task", StartedAt: start, Count: 1,
 	}}
+	if state != api.RunWorking {
+		r.Run.EndedAt = &end
+	}
+	return r
 }
 
 func repoOf(t *testing.T, st api.State, name string) api.Repo {
@@ -237,10 +242,11 @@ func TestReplaceRuns(t *testing.T) {
 	var changes []Change
 	s.Watch(func(ch Change) { changes = append(changes, ch) })
 	started := c.t.Add(-time.Minute)
+	ended := started.Add(time.Minute)
 	must(t, s.ReplaceRuns("laptop", []api.RunReport{
 		run("gd-1", "r1", api.RunWorking, started),
 		run("gd-9", "r9", api.RunWorking, started), // a bead the hub does not hold
-		{Repo: "attic", BeadID: "at-1", Run: api.Run{ID: "r8", State: api.RunDone, StartedAt: started}},
+		{Repo: "attic", BeadID: "at-1", Run: api.Run{ID: "r8", State: api.RunDone, StartedAt: started, EndedAt: &ended}},
 	}))
 	if len(changes) != 1 || changes[0].Kind != "runs" || changes[0].Bridge != "laptop" {
 		t.Fatalf("changes %+v", changes)
@@ -257,7 +263,7 @@ func TestReplaceRuns(t *testing.T) {
 	must(t, s.ReplaceRuns("laptop", []api.RunReport{
 		run("gd-1", "r1", api.RunWorking, started),
 		run("gd-9", "r9", api.RunWorking, started),
-		{Repo: "attic", BeadID: "at-1", Run: api.Run{ID: "r8", State: api.RunDone, StartedAt: started}},
+		{Repo: "attic", BeadID: "at-1", Run: api.Run{ID: "r8", State: api.RunDone, StartedAt: started, EndedAt: &ended}},
 	}))
 	if len(changes) != 0 {
 		t.Fatalf("an unchanged list emitted %+v", changes)
@@ -306,15 +312,23 @@ func TestReplaceRunsValidation(t *testing.T) {
 	seedAgents(t, s)
 	good := run("gd-1", "r1", api.RunWorking, c.t)
 	for name, bad := range map[string]func(*api.RunReport){
-		"bad repo":         func(r *api.RunReport) { r.Repo = "a//b" },
-		"bad bead":         func(r *api.RunReport) { r.BeadID = "a/b" },
-		"provisional bead": func(r *api.RunReport) { r.BeadID = "pending-x" },
-		"no id":            func(r *api.RunReport) { r.ID = " " },
-		"unknown state":    func(r *api.RunReport) { r.State = "idle" },
-		"unknown reason":   func(r *api.RunReport) { r.State, r.Reason = api.RunStopped, "tired" },
-		"offline reason":   func(r *api.RunReport) { r.State, r.Reason = api.RunStopped, api.ReasonOffline },
-		"no start":         func(r *api.RunReport) { r.StartedAt = time.Time{} },
-		"negative count":   func(r *api.RunReport) { r.Count = -1 },
+		"bad repo":            func(r *api.RunReport) { r.Repo = "a//b" },
+		"bad bead":            func(r *api.RunReport) { r.BeadID = "a/b" },
+		"provisional bead":    func(r *api.RunReport) { r.BeadID = "pending-x" },
+		"no id":               func(r *api.RunReport) { r.ID = " " },
+		"unknown state":       func(r *api.RunReport) { r.State = "idle" },
+		"unknown reason":      func(r *api.RunReport) { r.State, r.Reason = api.RunStopped, "tired" },
+		"offline reason":      func(r *api.RunReport) { r.State, r.Reason = api.RunStopped, api.ReasonOffline },
+		"no start":            func(r *api.RunReport) { r.StartedAt = time.Time{} },
+		"negative count":      func(r *api.RunReport) { r.Count = -1 },
+		"huge count":          func(r *api.RunReport) { r.Count = 1000001 },
+		"huge queued":         func(r *api.RunReport) { r.Queued = 1000001 },
+		"working with an end": func(r *api.RunReport) { end := r.StartedAt.Add(time.Second); r.EndedAt = &end },
+		"end before the start": func(r *api.RunReport) {
+			r.State = api.RunWaiting
+			end := r.StartedAt.Add(-time.Second)
+			r.EndedAt = &end
+		},
 	} {
 		r := good
 		bad(&r)
@@ -324,6 +338,21 @@ func TestReplaceRunsValidation(t *testing.T) {
 	}
 	if err := s.ReplaceRuns("laptop", []api.RunReport{good, good}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("two runs on one bead: %v", err)
+	}
+	// A settled run passes with an end after its start, and is refused without one.
+	end := good.StartedAt.Add(time.Minute)
+	settle := func() api.RunReport {
+		r := good
+		r.State, r.EndedAt = api.RunWaiting, &end
+		return r
+	}
+	if err := s.ReplaceRuns("laptop", []api.RunReport{settle()}); err != nil {
+		t.Errorf("a settled run with an end: %v", err)
+	}
+	noEnd := settle()
+	noEnd.EndedAt = nil
+	if err := s.ReplaceRuns("laptop", []api.RunReport{noEnd}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a settled run without an end: %v", err)
 	}
 }
 
@@ -360,10 +389,29 @@ func TestOfflineRun(t *testing.T) {
 	if r := item(t, mustState(t, s), key).Run; r.State != api.RunWorking || r.ID != "pending-"+id1 || r.Count != 2 {
 		t.Errorf("ask on an offline run %+v", r)
 	}
-	// The bridge reporting again shows the run as it reports it.
+	// The bridge reporting again shows the run as it reports it, and the
+	// first State after that emits once more: apps told of the offline stop
+	// are told of the recovery too.
 	must(t, s.Touch("laptop"))
 	if r := item(t, mustState(t, s), key).Run; r.State != api.RunWorking || r.ID != "r1" {
 		t.Errorf("run after the bridge came back %+v", r)
+	}
+	var runChanges int
+	for _, ch := range changes {
+		if ch.Kind == "runs" {
+			runChanges++
+		}
+	}
+	if runChanges != 2 {
+		t.Fatalf("%d runs changes, want 2 (offline, then recovery): %+v", runChanges, changes)
+	}
+	// Nothing new: no further emit.
+	n := len(changes)
+	mustState(t, s)
+	for _, ch := range changes[n:] {
+		if ch.Kind == "runs" {
+			t.Errorf("an unchanged state emitted %+v", ch)
+		}
 	}
 }
 

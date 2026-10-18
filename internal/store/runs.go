@@ -27,6 +27,10 @@ const (
 	maxDetailLen    = 2000
 )
 
+// maxRunCount bounds the counts a bridge may report: real ones stay far
+// below it, and a huge one would only be noise.
+const maxRunCount = 1000000
+
 // startingActivity is the activity of a run the hub shows before the bridge
 // has started it.
 const startingActivity = "Starting"
@@ -64,8 +68,22 @@ func checkRun(r api.RunReport) (api.Run, error) {
 	if run.StartedAt.IsZero() {
 		return run, invalidf("the run on %q needs startedAt", r.BeadID)
 	}
+	// Only a working run is open; every settled one says when it ended, so
+	// the push check can tell a fresh end from an old one.
+	if run.State == api.RunWorking && run.EndedAt != nil {
+		return run, invalidf("the working run on %q has endedAt", r.BeadID)
+	}
+	if run.State != api.RunWorking && run.EndedAt == nil {
+		return run, invalidf("the settled run on %q needs endedAt", r.BeadID)
+	}
+	if run.EndedAt != nil && run.EndedAt.Before(run.StartedAt) {
+		return run, invalidf("the run on %q ended before it started", r.BeadID)
+	}
 	if run.Count < 0 || run.Queued < 0 {
 		return run, invalidf("the run on %q has a negative count", r.BeadID)
+	}
+	if run.Count > maxRunCount || run.Queued > maxRunCount {
+		return run, invalidf("the run on %q has a count too large to be real", r.BeadID)
 	}
 	run.ID = truncRunes(run.ID, maxRunIDLen)
 	run.Agent = truncRunes(run.Agent, maxAgentNameLen)
@@ -163,8 +181,9 @@ func (s *Store) ReplaceRuns(bridge string, reports []api.RunReport) error {
 // with reason offline, ended when the bridge was last seen. The personal list
 // has no runs.
 //
-// No write marks a run offline, so the first State that shows one emits a
-// runs change: open apps fetch the state again and the push check runs.
+// No write marks a run offline, so the first State that shows one offline,
+// or shows one back after the bridge was heard from again, emits a runs
+// change: open apps fetch the state again and the push check runs.
 func (s *Store) joinRuns(items []api.Item, index map[string]int, bridges []api.Bridge, now time.Time) error {
 	lastSeen := map[string]*time.Time{}
 	for _, b := range bridges {
@@ -205,6 +224,11 @@ func (s *Store) joinRuns(items []api.Item, index map[string]int, bridges []api.B
 	fresh := false
 	for k := range offline {
 		if !s.offline[k] {
+			fresh = true
+		}
+	}
+	for k := range s.offline {
+		if !offline[k] {
 			fresh = true
 		}
 	}

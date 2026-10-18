@@ -358,7 +358,7 @@ func (s *Store) ReportResult(bridge, id string, r api.ActionResult) error {
 		now := fmtTime(s.now())
 		beadID := a.BeadID
 		if a.Kind == api.KindAdd {
-			if !validSegment(r.BeadID) {
+			if !validSegment(r.BeadID) || strings.HasPrefix(r.BeadID, provisionalPrefix) {
 				return invalidf("an add result needs the created beadId")
 			}
 			beadID = r.BeadID

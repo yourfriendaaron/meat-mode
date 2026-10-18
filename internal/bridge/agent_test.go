@@ -46,6 +46,27 @@ func TestAgentConfigFromEnv(t *testing.T) {
 	}
 }
 
+// A session id from the agent's stream becomes the argument of --resume, so
+// only an id of the documented shape is stored or passed.
+func TestValidSessionID(t *testing.T) {
+	for s, ok := range map[string]bool{
+		"s-1": true, "A0._-x": true, "a" + strings.Repeat("b", 127): true,
+		"": false, "-abc": false, ".abc": false, "_abc": false,
+		"--dangerously-skip-permissions": false, "two words": false, "a;b": false, "héllo": false,
+		"a" + strings.Repeat("b", 128): false,
+	} {
+		if got := ValidSessionID(s); got != ok {
+			t.Errorf("ValidSessionID(%q) = %v", s, got)
+		}
+	}
+	c := DefaultAgentConfig()
+	for _, bad := range []string{"--dangerously-skip-permissions", "two words", "x;y"} {
+		if got := c.args(bad); slices.Contains(got, "--resume") {
+			t.Errorf("args(%q) = %q, want no --resume", bad, got)
+		}
+	}
+}
+
 func TestAgentEnv(t *testing.T) {
 	got := agentEnv([]string{
 		"PATH=/usr/bin", "HOME=/srv/alex", "CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=x", "CLAUDE_CONFIG_DIR=/c",

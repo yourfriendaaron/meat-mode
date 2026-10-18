@@ -17,6 +17,14 @@ import (
 const DefaultAgentCommand = "claude -p --input-format stream-json --output-format stream-json --verbose " +
 	"--replay-user-messages --permission-mode auto --permission-prompts none"
 
+// sessionRE is the shape of a session id the bridge will pass to --resume.
+// The id comes from the agent's own stream, so anything that could read as
+// a flag, a separate argument or more than an id is refused.
+var sessionRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+// ValidSessionID reports whether s is a session id the bridge may resume.
+func ValidSessionID(s string) bool { return sessionRE.MatchString(s) }
+
 // AgentConfig is how the bridge runs agents, from the MEAT_MODE_AGENT_*
 // variables.
 type AgentConfig struct {
@@ -83,11 +91,12 @@ func AgentConfigFromEnv(getenv func(string) string) (AgentConfig, error) {
 	return c, nil
 }
 
-// args returns the command line for one run.
+// args returns the command line for one run, resuming session when it is
+// an id the bridge trusts.
 func (c AgentConfig) args(session string) []string {
 	out := append([]string{}, c.Command[1:]...)
 	out = append(out, "--max-budget-usd", strconv.FormatFloat(c.BudgetUSD, 'f', -1, 64))
-	if session != "" {
+	if ValidSessionID(session) {
 		out = append(out, "--resume", session)
 	}
 	return out
