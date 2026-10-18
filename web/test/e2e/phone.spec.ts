@@ -80,6 +80,7 @@ test("the detail head stays in view when the sheet scrolls to the note", async (
   await openApp(page);
   await row(page, "Order compost for the beds").locator(".row-body").click();
   const sheet = page.locator("#detail");
+  await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
   await sheet.evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect.poll(() => sheet.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   const box = (await sheet.boundingBox())!;
