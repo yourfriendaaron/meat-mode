@@ -472,6 +472,7 @@ func TestSecurityHeaders(t *testing.T) {
 	w := h.do("GET", "/api/state", nil, "")
 	if w.Header().Get("X-Content-Type-Options") != "nosniff" ||
 		w.Header().Get("Referrer-Policy") == "" ||
+		w.Header().Get("Cross-Origin-Opener-Policy") != "same-origin" ||
 		!strings.Contains(w.Header().Get("Content-Security-Policy"), "default-src 'self'") {
 		t.Fatalf("headers %v", w.Header())
 	}
