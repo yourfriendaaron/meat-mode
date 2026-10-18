@@ -56,6 +56,11 @@ type Server struct {
 	mux       *http.ServeMux
 	log       *slog.Logger
 
+	lookup   dnsLookup     // public DNS, for the public DNS check
+	dnsEvery time.Duration // between public DNS checks after start
+	dnsMu    sync.Mutex
+	dns      api.PublicDNS // the latest public DNS check; read it with publicDNS
+
 	loginMu    sync.RWMutex
 	login      *login     // nil: the hub has no login; read it with currentLogin
 	verify     sync.Mutex // one password or setup code check at a time
@@ -87,6 +92,9 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 		heartbeat: 25 * time.Second,
 		mux:       http.NewServeMux(),
 		log:       slog.Default(),
+		lookup:    lookupPublic,
+		dnsEvery:  dnsEvery,
+		dns:       api.PublicDNS{State: api.DNSUnchecked},
 	}
 	s.login = newLogin(cfg.PasswordHash, true)
 	if s.login == nil {
@@ -151,6 +159,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("X-Frame-Options", "DENY")
+	h.Set("Cross-Origin-Opener-Policy", "same-origin")
 	h.Set("Content-Security-Policy", contentSecurityPolicy)
 	if !s.guard.check(w, r) {
 		return

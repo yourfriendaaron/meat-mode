@@ -15,6 +15,7 @@ import (
 	"github.com/coder/safedial"
 
 	"github.com/yourfriendaaron/meat-mode/internal/auth"
+	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 )
 
 // Config is the hub's settings, read from MEAT_MODE_* environment variables.
@@ -39,6 +40,9 @@ type Config struct {
 	// CIDRs of push servers the Android app may register that are not at
 	// global addresses (docs/api.md, Devices). PushAllowList parses it.
 	PushAllow string
+	// TrustedNetworks is MEAT_MODE_TRUSTED_NETWORKS: the operator's own
+	// networks outside the private set, as netguard.ParseTrusted reads them.
+	TrustedNetworks string
 }
 
 // ConfigFromEnv reads Config from the environment.
@@ -54,6 +58,7 @@ func ConfigFromEnv() Config {
 		PasswordHashFile: os.Getenv("MEAT_MODE_PASSWORD_HASH_FILE"),
 		NtfyURL:          strings.TrimSpace(os.Getenv("MEAT_MODE_NTFY_URL")),
 		PushAllow:        os.Getenv("MEAT_MODE_PUSH_ALLOW"),
+		TrustedNetworks:  os.Getenv(netguard.EnvTrusted),
 	}
 }
 
@@ -78,11 +83,13 @@ func (c *Config) LoadPasswordHash() error {
 	return nil
 }
 
-// Validate refuses a hub without an HTTPS public address, or with a password
-// hash it cannot read. Browsers allow Web Push and the installed app only in
-// a secure context, and without a login the app is meant to be opened over a
-// private network's HTTPS address (docs/deploy.md). Plain HTTP is accepted
-// on loopback only, for development and tests.
+// Validate refuses a hub without an HTTPS public address, with a password
+// hash it cannot read, or with a list in MEAT_MODE_PUSH_ALLOW or
+// MEAT_MODE_TRUSTED_NETWORKS it cannot parse. Browsers allow Web Push and
+// the installed app only in a secure context, and without a login the app
+// is meant to be opened over a private network's HTTPS address
+// (docs/deploy.md). Plain HTTP is accepted on loopback only, for
+// development and tests.
 func (c Config) Validate() error {
 	if c.PasswordHash != "" && c.PasswordHashFile != "" {
 		return errors.New("set MEAT_MODE_PASSWORD_HASH or MEAT_MODE_PASSWORD_HASH_FILE, not both")
@@ -93,6 +100,9 @@ func (c Config) Validate() error {
 		}
 	}
 	if _, _, err := c.PushAllowList(); err != nil {
+		return err
+	}
+	if _, err := netguard.ParseTrusted(c.TrustedNetworks); err != nil {
 		return err
 	}
 	if c.PublicURL == "" {

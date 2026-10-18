@@ -208,6 +208,25 @@ test("through the proxy the hub checks Host, Origin and the session; bridges and
   expect((await viaProxy(w, "GET", "/bridge/v1/actions", { authorization: `Bearer ${token}` })).status).toBe(200);
 });
 
+test("through the proxy the hub refuses a request that names a public client address", async ({ w }) => {
+  const cookie = `meat_mode_session=${await sessionCookie()}`;
+  // Caddy sets X-Forwarded-For to the address it saw, loopback here, and
+  // drops the one a client sends unless that client is a trusted proxy.
+  expect((await viaProxy(w, "GET", "/api/state", { cookie })).status).toBe(200);
+  expect((await viaProxy(w, "GET", "/api/state", { cookie, "x-forwarded-for": "203.0.113.5" })).status).toBe(200);
+
+  // Headers Caddy passes on as they are reach the hub, which refuses a
+  // public address in any of them on every route.
+  for (const path of ["/", "/healthz", "/bridge/v1/actions", "/api/state"]) {
+    const r = await viaProxy(w, "GET", path, { cookie, "x-real-ip": "203.0.113.5" });
+    expect(r.status, path).toBe(403);
+    expect(r.body, path).toContain("private network");
+  }
+  expect((await viaProxy(w, "GET", "/healthz", { "cf-connecting-ip": "198.51.100.7" })).status).toBe(403);
+  expect((await viaProxy(w, "GET", "/healthz", { forwarded: 'for="[2001:db8::1]:4711"' })).status).toBe(403);
+  expect((await viaProxy(w, "GET", "/healthz", { "tailscale-funnel-request": "?1" })).status).toBe(403);
+});
+
 test("a push subscription belongs to the session and logging out drops it", async ({ w, app }) => {
   // Simulated subscription (see the top of this file).
   const sub = { endpoint: FAKE_ENDPOINT, keys: { p256dh: "BExampleKeyForTheE2eSuiteOnly", auth: "ExampleAuthKey" } };
