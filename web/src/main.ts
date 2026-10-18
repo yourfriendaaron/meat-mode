@@ -29,7 +29,7 @@ import {
   type ViewId,
 } from "./model.ts";
 import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput } from "./dates.ts";
-import { snoozeOptions } from "./snooze.ts";
+import { snoozeOptions, typedSnooze } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
 import { leadSelect, loadLead } from "./lead.ts";
@@ -514,7 +514,44 @@ function snoozeBlock(prefix: string): string {
       (o) =>
         `<button class="snz" data-act="snooze-opt" data-until="${o.until.toISOString()}"><span class="snz-label">${esc(o.label)}</span><span class="snz-hint">${esc(o.hint)}</span></button>`,
     )
-    .join("")}</div><div class="snooze-pick"><label for="${prefix}-pick">Pick a time</label><div class="pick-row"><input id="${prefix}-pick" type="datetime-local" min="${toLocalInput(n)}" data-pick><button class="btn" data-act="snooze-pick">Snooze</button></div></div>`;
+    .join("")}</div><div class="snooze-pick"><label for="${prefix}-pick">Pick a time</label><div class="pick-row"><input id="${prefix}-pick" type="datetime-local" min="${toLocalInput(n)}" data-pick><button class="btn" data-act="snooze-pick">Snooze</button></div></div>${snoozeTypeForm(prefix)}`;
+}
+
+/** Text typed in a snooze time box, by the box's id, so its line survives a redraw. */
+const snoozeTyped = new Map<string, string>();
+
+function snoozeTypeForm(prefix: string): string {
+  const id = `${prefix}-type`;
+  const { until, line } = typedSnooze(snoozeTyped.get(id) ?? "", now());
+  const invalid = !until && line ? ` aria-invalid="true"` : "";
+  return `<form class="snooze-pick" data-form="snooze-type"><label for="${id}">Type a time</label><div class="pick-row"><input id="${id}" type="text" autocomplete="off" enterkeyhint="go" placeholder="8pm, in 2 hours, tomorrow morning" aria-describedby="${id}-now"${invalid} data-type-time><button type="submit" class="btn" aria-label="Snooze to the typed time">Snooze</button></div><p id="${id}-now" class="snooze-type-now" aria-live="polite">${esc(line)}</p></form>`;
+}
+
+/** Updates the line under a snooze time box, and only that, while typing. */
+function updateSnoozeType(input: HTMLInputElement) {
+  snoozeTyped.set(input.id, input.value);
+  const { until, line } = typedSnooze(input.value, now());
+  const out = document.getElementById(`${input.id}-now`);
+  if (out) out.textContent = line;
+  if (!until && line) input.setAttribute("aria-invalid", "true");
+  else input.removeAttribute("aria-invalid");
+}
+
+function submitSnoozeType(form: HTMLFormElement) {
+  const input = form.querySelector<HTMLInputElement>("input[data-type-time]")!;
+  updateSnoozeType(input);
+  const { until } = typedSnooze(input.value, now());
+  if (!until) {
+    input.setAttribute("aria-invalid", "true");
+    const out = document.getElementById(`${input.id}-now`);
+    if (out && !input.value.trim()) out.textContent = "Type a time, such as 8pm or tomorrow morning.";
+    input.focus();
+    return;
+  }
+  const keys = form.closest("#snooze") ? S.snoozeKeys ?? [] : S.open ? [S.open] : [];
+  snoozeTyped.delete(input.id);
+  input.value = "";
+  doSnooze(keys, until);
 }
 
 /** The edit form of a personal item: title, due, details and priority. Values are set after the HTML is written. */
@@ -1319,6 +1356,7 @@ let snoozeReturn: HTMLElement | null = null;
 function openSnooze(keys: string[]) {
   if (!keys.length) return;
   snoozeReturn = document.activeElement as HTMLElement | null;
+  snoozeTyped.delete("dlg-type");
   S.snoozeKeys = keys;
   render();
   $<HTMLElement>("#snooze .snz")?.focus();
@@ -1736,6 +1774,7 @@ function onKey(e: KeyboardEvent) {
 function onInput(e: Event) {
   const t = e.target as HTMLElement;
   if (t.id === "qa-input") updateQuickAdd();
+  else if (t.dataset.typeTime !== undefined) updateSnoozeType(t as HTMLInputElement);
   else if (t.id === "note-input" && S.open) S.drafts.set(S.open, (t as HTMLTextAreaElement).value);
   else if (t.id === "check-input" && S.open) S.checkDrafts.set(S.open, (t as HTMLInputElement).value);
   else if (t.id === "note-edit-input" && S.noteEdit) S.noteEdit.text = (t as HTMLTextAreaElement).value;
@@ -1793,6 +1832,7 @@ function onSubmit(e: SubmitEvent) {
   else if (form.dataset.form === "edit") saveEdit();
   else if (form.dataset.form === "note-edit") saveNoteEdit();
   else if (form.dataset.form === "check-add" && S.open) addToChecklist(S.open);
+  else if (form.dataset.form === "snooze-type") submitSnoozeType(form);
   else if (shellUp) void extSubmit(form, ctx);
 }
 

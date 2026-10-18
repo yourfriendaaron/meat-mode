@@ -15,7 +15,7 @@ import {
   syncStatus,
   visibleRepos,
 } from "../../src/model.ts";
-import { snoozeOptions } from "../../src/snooze.ts";
+import { snoozeOptions, typedSnooze } from "../../src/snooze.ts";
 
 // Wednesday 14 October 2026, 10:00 local time.
 const now = new Date(2026, 9, 14, 10, 0);
@@ -204,4 +204,22 @@ test("repo labels are folder names, with the path where they repeat", () => {
     visibleRepos(repos).map((r) => `${r.bridge}:${r.name}`),
     ["laptop:personal", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],
   );
+});
+
+test("a typed snooze time reads like quick add and refuses the past", () => {
+  const cases: [string, string | null, string][] = [
+    ["", null, ""],
+    ["8p", "14 20:00", "Until 20:00"],
+    ["in 2 hours", "14 12:00", "Until 12:00"],
+    ["tomorrow morning", "15 9:00", "Until Tomorrow 9:00"],
+    ["friday 3pm", "16 15:00", "Until Fri, Oct 16 15:00"],
+    ["today 8am", null, "That time has passed. Pick a later one."],
+    ["whenever", null, "Could not read that time. Try something like tomorrow 9am."],
+  ];
+  const fmt = (d: Date | null) => (d ? `${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}` : null);
+  for (const [text, until, line] of cases) {
+    const r = typedSnooze(text, now);
+    assert.equal(fmt(r.until), until, text);
+    assert.equal(r.line, line, text);
+  }
 });

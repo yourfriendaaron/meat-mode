@@ -1,4 +1,14 @@
-import { addDays, at, fmtDay, nextMonday, startOfDay } from "./dates.ts";
+import { addDays, at, fmtDay, fmtWhenAt, nextMonday, startOfDay } from "./dates.ts";
+import { parseQuickAdd } from "./quickadd.ts";
+
+/** A snooze time typed the way quick add reads one: the time, or null and why not. */
+export function typedSnooze(text: string, now: Date): { until: Date | null; line: string } {
+  if (!text.trim()) return { until: null, line: "" };
+  const until = parseQuickAdd(text, now, [], { repeat: false }).due;
+  if (!until) return { until: null, line: "Could not read that time. Try something like tomorrow 9am." };
+  if (until <= now) return { until: null, line: "That time has passed. Pick a later one." };
+  return { until, line: `Until ${fmtWhenAt(until, now)}` };
+}
 
 export interface SnoozeOption {
   id: string;

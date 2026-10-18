@@ -286,6 +286,51 @@ test("snooze to a picked time; failed actions show their error", async ({ page, 
   await expect(row(page, "Fix the gate latch").locator(".chip-orange")).toHaveText("Tue, Oct 20");
 });
 
+test("snooze to a typed time", async ({ page, hub }) => {
+  await openApp(page);
+  await page.keyboard.press("j");
+  await page.keyboard.press("s");
+  const dialog = page.getByRole("dialog", { name: "Snooze" });
+  const typed = dialog.getByRole("textbox", { name: "Type a time" });
+  const line = dialog.locator(".snooze-type-now");
+  await typed.focus();
+  // What it cannot read, and a time already past, are refused with a reason and post nothing.
+  await typed.fill("whenever");
+  await expect(line).toHaveText("Could not read that time. Try something like tomorrow 9am.");
+  await typed.press("Enter");
+  await expect(typed).toHaveAttribute("aria-invalid", "true");
+  await typed.fill("today 8am");
+  await expect(line).toHaveText("That time has passed. Pick a later one.");
+  await typed.press("Enter");
+  expect(hub.posted).toHaveLength(0);
+  await expect(dialog).toBeVisible();
+  // The time it reads shows as it is typed, and Enter snoozes to it.
+  await typed.fill("8p");
+  await expect(line).toHaveText("Until 20:00");
+  await expect(typed).not.toHaveAttribute("aria-invalid");
+  await typed.press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "snooze", payload: { until: "2026-10-14T20:00:00.000Z" } });
+  // A reopened dialog starts empty.
+  await page.keyboard.press("s");
+  await expect(typed).toHaveValue("");
+  await expect(line).toBeHidden();
+  await page.keyboard.press("Escape");
+
+  // The detail pane takes a typed time too, from its button.
+  await page.getByRole("button", { name: /Everything/ }).click();
+  await row(page, "Fix the gate latch").locator(".row-body").click();
+  const detail = page.locator("#detail");
+  await detail.getByRole("textbox", { name: "Type a time" }).fill("tomorrow morning");
+  await expect(detail.locator(".snooze-type-now")).toHaveText("Until Tomorrow 9:00");
+  await detail.getByRole("button", { name: "Snooze to the typed time" }).click();
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({
+    kind: "snooze",
+    key: "hub/personal/pe-7",
+    payload: { until: "2026-10-15T09:00:00.000Z", previous: null },
+  });
+});
+
 test("pairing token is shown once and leaves the screen with Settings", async ({ page, hub }) => {
   hub.eventRetryMs = 200; // live refreshes while Settings is open
   await openApp(page);

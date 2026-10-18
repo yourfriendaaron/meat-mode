@@ -1018,10 +1018,17 @@ kbd {
 .repeat-opts .small {
   margin: 0;
 }
-.edit-due-now {
+.edit-due-now,
+.snooze-type-now {
   margin: 0;
   font-size: 13px;
   color: var(--purple);
+}
+.snooze-type-now:empty {
+  display: none;
+}
+.snooze-pick:has(input[aria-invalid="true"]) .snooze-type-now {
+  color: var(--red);
 }
 .edit-form .row-error {
   margin: 0;
