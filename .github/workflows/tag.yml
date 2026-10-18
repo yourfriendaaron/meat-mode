@@ -31,7 +31,8 @@ jobs:
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          # A pre-release tag (v0.2.0-rc1) is not the latest release.
+          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v -- - | head -n1)
           if [ -z "$latest" ]; then
             tag=v0.1.0
           elif git merge-base --is-ancestor "$SHA" "$latest"; then

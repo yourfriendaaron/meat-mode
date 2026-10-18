@@ -77,6 +77,19 @@ func (s *Store) CheckSession(token, tag string, now time.Time, ttl time.Duration
 // SessionID is the ID of the session token names, whether or not it exists.
 func SessionID(token string) string { return hex.EncodeToString(hashToken(token)) }
 
+// SessionLive reports whether the session id names is still valid under
+// tag at now. Unlike CheckSession it never renews the session.
+func (s *Store) SessionLive(id, tag string, now time.Time) (bool, error) {
+	key, err := hex.DecodeString(id)
+	if err != nil {
+		return false, nil
+	}
+	var n int
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE id = ? AND tag = ? AND expires_at > ?`,
+		key, tag, now.Unix()).Scan(&n)
+	return n > 0, err
+}
+
 // DeleteSession ends the session for token; an unknown token is not an
 // error.
 func (s *Store) DeleteSession(token string) error {

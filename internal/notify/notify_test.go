@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 
@@ -297,6 +298,21 @@ func TestNtfyRequest(t *testing.T) {
 	if h.Get("Title") != "Water  X-Injected: 1 the plants" || h.Get("X-Injected") != "" ||
 		h.Get("Click") != "https://app.example.com/ ?item=a" || h.Get("Tags") != "a b" {
 		t.Fatalf("control characters reached the headers: %q", h)
+	}
+
+	// ntfy splits the Tags header on commas and rejects it over 512 bytes
+	// (HTTP 400), so a tag with either still arrives: one value, within the
+	// limit, never half a rune.
+	long := "a,b/c/x" + strings.Repeat("\u00e9", 300) // 607 bytes
+	if err := n.Notify(context.Background(), Message{Title: "x", Tag: long}); err != nil {
+		t.Fatal(err)
+	}
+	tags := got.Header.Get("Tags")
+	if strings.Contains(tags, ",") || len(tags) > 512 || !utf8.ValidString(tags) {
+		t.Fatalf("Tags = %q (%d bytes, valid UTF-8 %v)", tags, len(tags), utf8.ValidString(tags))
+	}
+	if want := strings.ReplaceAll(long[:len(tags)], ",", "_"); tags != want {
+		t.Fatalf("Tags = %q, want the tag's first %d bytes", tags, len(tags))
 	}
 }
 

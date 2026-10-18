@@ -73,9 +73,25 @@ func (b *broker) close() {
 	}
 }
 
+// streamAllowed reports whether an open event stream may go on: its session
+// is still valid, or login is off. A stream opened before login was turned
+// on has no session and ends.
+func (s *Server) streamAllowed(r *http.Request) bool {
+	l := s.currentLogin()
+	if l == nil {
+		return true
+	}
+	sess := sessionOf(r)
+	if sess == nil {
+		return false
+	}
+	live, err := s.store.SessionLive(sess.ID, l.tag, s.now())
+	return err == nil && live
+}
+
 // handleEvents streams `event: change` with the current revision on connect
-// and on every change, plus a comment heartbeat. Past maxEventStreams it
-// answers 503.
+// and on every change, plus a comment heartbeat. It ends at the first
+// heartbeat after its session does. Past maxEventStreams it answers 503.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ch, rev, ok := s.events.subscribe()
 	if !ok {
@@ -116,6 +132,9 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-tick.C:
+			if !s.streamAllowed(r) {
+				return
+			}
 			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
 				return
 			}

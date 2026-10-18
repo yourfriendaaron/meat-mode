@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // headerSafe replaces control characters with spaces. Titles come from bead
@@ -19,6 +20,24 @@ func headerSafe(v string) string {
 		}
 		return r
 	}, v)
+}
+
+// tagSafe makes an item key safe as the Tags header. ntfy splits the value
+// on commas, so a key would arrive as several tags, and it rejects over 512
+// bytes with HTTP 400; a repo name may hold commas and be up to 512 bytes
+// itself. Commas become underscores and the value is cut to the limit on a
+// rune boundary.
+func tagSafe(v string) string {
+	const limit = 512
+	v = strings.ReplaceAll(v, ",", "_")
+	if len(v) <= limit {
+		return v
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(v[cut]) {
+		cut--
+	}
+	return v[:cut]
 }
 
 // Ntfy posts messages to an ntfy topic.
@@ -43,7 +62,7 @@ func (n *Ntfy) Notify(ctx context.Context, m Message) error {
 	}
 	set("Priority", "4")
 	if m.Tag != "" {
-		set("Tags", m.Tag)
+		set("Tags", tagSafe(m.Tag))
 	}
 	if n.Token != "" {
 		set("Authorization", "Bearer "+n.Token)

@@ -54,6 +54,14 @@ expect block "beads export"     .beads/issues.jsonl '{"id":"x-1","title":"Water 
 expect block "beads database"   .beads/embeddeddolt/meat/x "x"
 expect block "Dolt remote in beads config" .beads/config.yaml "$(printf 'sync:\n    remote: "file:///srv/beads.git"')"
 expect clean "beads config"     .beads/config.yaml "$(printf '# sync:\n#   remote: git+https://example.com/beads.git\nissue-prefix: x')"
+expect block "allowed email hides nothing" docs/x.md "Write to alex@example.com and $u.person@gm""ail.com"
+expect clean "allowed emails only"         docs/x.md "alex@example.com or sam@example.org"
+expect block "mise.local hides nothing"    src/a.ts  "see mise.local and nas.lo""cal:8123"
+expect clean "mise.local alone"            src/a.ts  "read mise.local for settings"
+expect clean "local config file names"    docs/x.md "copy .env.local, mise.local.toml and .public-safety.local"
+expect block "broken private pattern"      src/a.ts  "const x = 1" "foo("
+expect block "tracked dolt dir"            .dolt/config.json "x"
+expect block "tracked beads credential key" .beads-credential-key "x"
 expect clean "example email"    docs/x.md  "Write to alex@example.com"
 expect clean "noreply email"    docs/x.md  "Co-authored-by: bot@users.noreply.github.com"
 expect clean "doc IP range"     docs/x.md  "Server at 192.0.2.10 and 2001:db8::1"
@@ -83,6 +91,30 @@ push block "beads export"      refs/heads/main .beads/issues.jsonl '{"id":"x-1"}
 push block "Dolt remote"       refs/heads/main .beads/config.yaml "$(printf 'sync:\n    remote: "file:///srv/beads.git"')"
 push clean "branch"            refs/heads/main src/a.ts "export const x = 1"
 push clean "tag"               refs/tags/v1.0.0
+
+# Two commits where the first adds a file the second removes: the tip is
+# clean, so only checking the commits being pushed, not just the tip,
+# catches the first. "first" names the first commit as the remote sha, so
+# only the second, clean commit is new.
+push2() { # push2 block|clean, name, remote sha (none|first), file, content
+  local want=$1 name=$2 pushed=$3 file=$4 content=$5 d sha remote got
+  d=$(mktemp -d)
+  git -C "$d" init -q
+  mkdir -p "$d/$(dirname "$file")"
+  printf '%s\n' "$content" > "$d/$file"
+  git -C "$d" add -f "$file"
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com commit -q --no-verify -m x
+  if [ "$pushed" = first ]; then remote=$(git -C "$d" rev-parse HEAD); else remote=0000000000000000000000000000000000000000; fi
+  git -C "$d" rm -q "$file"
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com commit -q --no-verify -m x
+  sha=$(git -C "$d" rev-parse HEAD)
+  if (cd "$d" && printf 'refs/heads/main %s %s %s\n' "$sha" refs/heads/main "$remote" | "$hook" origin https://example.com/x.git >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: push $name (wanted $want, got $got)"; fi
+}
+push2 block "beads export in history"  none .beads/issues.jsonl '{"id":"x-1"}'
+push2 block "Dolt remote in history"   none .beads/config.yaml "$(printf 'sync:\n    remote: "file:///srv/beads.git"')"
+push2 clean "removal on top of the pushed" first .beads/issues.jsonl '{"id":"x-1"}'
 
 echo "public-safety tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

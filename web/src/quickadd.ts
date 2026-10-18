@@ -31,7 +31,7 @@ export interface QuickAdd {
 }
 
 export interface QuickOptions {
-  /** Whether to read a repeat, which only the personal list takes. Default yes. */
+  /** Whether the repeat words make a rule, which only the personal list takes. They are blanked from the date either way. Default yes. */
   repeat?: boolean;
 }
 
@@ -142,21 +142,28 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   }
 
   // The repeat goes first, and its words are blanked for chrono, which would
-  // read "every monday" as next Monday.
+  // read "every monday" as next Monday. With repeats off the span is still
+  // found and blanked, but makes no rule and no token, so the words stay in
+  // the title and give no date.
   let repeat: RepeatRule | null = null;
   let monthDay: number | undefined;
   let dateText = text;
-  const rm = opts.repeat === false ? null : findRepeat(text);
-  if (rm && !tokens.some((t) => rm.start < t.end && t.start < rm.end)) {
-    repeat = rm.rule;
-    monthDay = rm.monthDay;
-    tokens.push({ kind: "repeat", start: rm.start, end: rm.end, text: rm.text });
+  const takeRepeat = opts.repeat !== false;
+  const rm = findRepeat(text);
+  const rmTaken = !!rm && !tokens.some((t) => rm.start < t.end && t.start < rm.end);
+  if (rmTaken && rm) {
+    if (takeRepeat) {
+      repeat = rm.rule;
+      monthDay = rm.monthDay;
+      tokens.push({ kind: "repeat", start: rm.start, end: rm.end, text: rm.text });
+    }
     dateText = text.slice(0, rm.start) + " ".repeat(rm.end - rm.start) + text.slice(rm.end);
   }
 
-  // "until nov 26" after the repeat, blanked for chrono in the same way.
+  // "until nov 26" after the repeat, blanked for chrono in the same way; with
+  // no repeat rule it makes no until either.
   let until: ReturnType<typeof chrono.parse>[number] | null = null;
-  if (rm && repeat) {
+  if (rmTaken && rm) {
     UNTIL.lastIndex = rm.end;
     for (let m = UNTIL.exec(text); m && !until; m = UNTIL.exec(text)) {
       const from = m.index + m[0].length;
@@ -166,7 +173,7 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
       const end = from + r.text.length;
       if (tokens.some((t) => m.index < t.end && t.start < end)) continue;
       until = r;
-      tokens.push({ kind: "repeat", start: m.index, end, text: text.slice(m.index, end) });
+      if (takeRepeat) tokens.push({ kind: "repeat", start: m.index, end, text: text.slice(m.index, end) });
       dateText = dateText.slice(0, m.index) + " ".repeat(end - m.index) + dateText.slice(end);
     }
   }

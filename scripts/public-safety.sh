@@ -29,11 +29,25 @@ search() { # [-i] regex: matches in the index
   git grep --cached -I "${flags[@]}" -e "$1" -- . "${exclude[@]}" || true
 }
 
+# A "path:line:content" line from search stays only when its content
+# holds a match the allow regex does not take: an allowed token on a line
+# must not hide a real match sitting next to it.
+drop_allowed() { # scan regex, allow regex: reads search lines
+  local re=$1 allow=$2 line content
+  while IFS= read -r line; do
+    content=${line#*:} # path, then line number
+    content=${content#*:}
+    if [ -n "$(printf '%s\n' "$content" | grep -oE "$re" | grep -vE "$allow" || true)" ]; then
+      printf '%s\n' "$line"
+    fi
+  done
+}
+
 scan() { # label, extended regex, [filter regex to drop allowed matches]
   local out
   out=$(search "$2")
   if [ -n "${3:-}" ] && [ -n "$out" ]; then
-    out=$(printf '%s\n' "$out" | grep -v -E -e "$3" || true)
+    out=$(printf '%s\n' "$out" | drop_allowed "$2" "$3" || true)
   fi
   report "$1" "$out"
 }
@@ -47,14 +61,14 @@ scan "Tailnet hostnames:" '[A-Za-z0-9-]+\.ts\.net'
 # inside a longer hex word, as in 2001:db8::fd12:.
 scan "Private IPv6 addresses (unique-local fd00::/8 and link-local fe80::):" \
   '(^|[^0-9a-fA-F:])([fF][dD][0-9a-fA-F]{2}|[fF][eE]80):'
-scan "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([^A-Za-z0-9._-]|$)' '\.env\.local|mise\.local|\.public-safety\.local|\*\.local'
+scan "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([^A-Za-z0-9._-]|$)' '^(env|mise|public-safety)\.local'
 scan "MAC addresses:" '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}'
 scan "Email addresses outside example and noreply domains:" \
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
   '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com|anthropic\.com)'
 
 # Files that must never be tracked, whatever they contain.
-bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|\.envrc|mise\.local\.toml|compose(\.override)?\.ya?ml|docker-compose[^/]*\.ya?ml|\.public-safety\.local|id_rsa|id_ecdsa|id_ed25519|\.netrc|\.npmrc|\.htpasswd|credentials\.json)$|\.(db|sqlite3?|pem|key|p12|pfx|jks|keystore)$|\.(db|sqlite3?)-(wal|shm|journal)$' | grep -v -E '(^|/)\.env\.example$' || true)
+bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|\.envrc|mise\.local\.toml|compose(\.override)?\.ya?ml|docker-compose[^/]*\.ya?ml|\.public-safety\.local|id_rsa|id_ecdsa|id_ed25519|\.netrc|\.npmrc|\.htpasswd|credentials\.json|\.beads-credential-key)$|(^|/)\.dolt/|\.(db|sqlite3?|pem|key|p12|pfx|jks|keystore)$|\.(db|sqlite3?)-(wal|shm|journal)$' | grep -v -E '(^|/)\.env\.example$' || true)
 report "Files that must never be tracked:" "$bad_files"
 
 # The beads issues stay private: only bd's four setup files are tracked, and
@@ -73,6 +87,14 @@ if [ -f "$local_file" ]; then
   local_name=$(basename "$local_file")
   while IFS= read -r pat || [ -n "$pat" ]; do
     case "$pat" in ''|'#'*) continue ;; esac
+    # A pattern grep cannot compile (status 2) matches nothing, so a typo
+    # here would quietly stop the scan; refuse the run instead.
+    st=0
+    grep -E -e "$pat" </dev/null >/dev/null 2>&1 || st=$?
+    if [ "$st" -eq 2 ]; then
+      report "A private pattern in $local_name does not compile:" "$pat"
+      continue
+    fi
     out=$(search -i "$pat")
     report "Private pattern from $local_name matched:" "$out"
   done < "$local_file"
