@@ -15,13 +15,13 @@ test("navigates views and lists", async ({ page, hub }) => {
   await page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Upcoming/ }).click();
   await expect(page.locator("#view-title")).toHaveText("Upcoming");
   await expect(groupLabels(page)).toHaveText([/Tomorrow/, /This week/, /Later/]);
-  await expect(row(page, "Buy seeds").locator(".chip-orange")).toHaveText("Tomorrow 9:00");
-  await expect(row(page, "Plan the garden layout").locator(".chip-purple")).toHaveText("Fri, Oct 23");
+  await expect(row(page, "Buy seeds").locator(".chip-snoozed")).toHaveText("Tomorrow 9:00");
+  await expect(row(page, "Plan the garden layout").locator(".chip-date")).toHaveText("Fri, Oct 23");
 
   await page.getByRole("button", { name: /From agents/ }).click();
   await expect(page.locator("#list .row")).toHaveCount(3);
-  await expect(row(page, "Order compost for the beds").locator(".chip-pink")).toHaveText("New");
-  await expect(row(page, "Approve the new footer text").locator(".chip-cyan")).toHaveText("New reply");
+  await expect(row(page, "Order compost for the beds").locator(".chip-new")).toHaveText("New");
+  await expect(row(page, "Approve the new footer text").locator(".chip-new")).toHaveText("New reply");
   await expect(row(page, "Order compost for the beds").locator(".check-agent")).toHaveCount(1);
 
   await page.getByRole("button", { name: /Everything/ }).click();
@@ -43,7 +43,7 @@ test("opens detail, marks it seen, and saves a note", async ({ page, hub }) => {
   await expect(detail.locator(".note-unread")).toHaveCount(1);
   await expect(detail.getByRole("button", { name: "Won't do" })).toBeVisible();
   await expect.poll(() => hub.requests).toContain("POST /api/items/home%2Fwebsite%2Fwe-1/seen");
-  await expect(row(page, "Approve the new footer text").locator(".chip-cyan")).toHaveCount(0);
+  await expect(row(page, "Approve the new footer text").locator(".chip-new")).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get("item")).toBe("home/website/we-1");
 
   await detail.getByLabel("Add a note").fill("Approved, ship it.");
@@ -283,7 +283,7 @@ test("snooze to a picked time; failed actions show their error", async ({ page, 
     key: "hub/personal/pe-7",
     payload: { until: "2026-10-20T08:30:00.000Z", previous: null },
   });
-  await expect(row(page, "Fix the gate latch").locator(".chip-orange")).toHaveText("Tue, Oct 20");
+  await expect(row(page, "Fix the gate latch").locator(".chip-snoozed")).toHaveText("Tue, Oct 20");
 });
 
 test("snooze to a typed time", async ({ page, hub }) => {

@@ -69,7 +69,7 @@ function preview(
   const chips = [
     `<span class="chip">${esc(qa.title)}</span>`,
     qa.due
-      ? `<span class="chip chip-purple">Due ${esc(when(qa.due, ctx.now()))}</span>`
+      ? `<span class="chip chip-date">Due ${esc(when(qa.due, ctx.now()))}</span>`
       : `<span class="chip">No due date</span>`,
     `<span class="chip chip-list">${esc(list ? repoLabel(list) : "Your own list")}</span>`,
   ];

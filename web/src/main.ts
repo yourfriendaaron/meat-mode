@@ -324,7 +324,7 @@ function renderNav() {
 function renderSync() {
   if (!shellUp) return;
   const st = S.state;
-  const status = st ? syncStatus(st, now()) : { tone: "orange" as const, text: S.loadError ? "Hub unreachable" : "Loading" };
+  const status = st ? syncStatus(st, now()) : { tone: "waiting" as const, text: S.loadError ? "Hub unreachable" : "Loading" };
   const html = `<span class="pill-dot" aria-hidden="true"></span><span>${esc(status.text)}</span>`;
   for (const el of document.querySelectorAll<HTMLElement>(".sync-pill")) {
     el.dataset.tone = status.tone;
@@ -405,8 +405,8 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
     out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
   }
   const att = attention(item, personal, user());
-  if (att === "new") out.push('<span class="chip chip-pink">New</span>');
-  if (att === "reply") out.push('<span class="chip chip-cyan">New reply</span>');
+  if (att === "new") out.push('<span class="chip chip-new">New</span>');
+  if (att === "reply") out.push('<span class="chip chip-new">New reply</span>');
   const prio = priorityChip(item.priority);
   if (prio) out.push(`<span class="chip ${item.priority === 0 ? "chip-urgent" : "chip-high"}">${esc(prio)}</span>`);
   const dc = dateChip(item, n);
@@ -746,7 +746,7 @@ function noteHTML(item: Item, c: Comment, editable: boolean): string {
     editable && !editing
       ? `<span class="note-tools"><button class="link-btn" id="ne-${esc(c.id)}" data-act="note-edit" data-id="${esc(c.id)}" aria-label="Edit note" title="Edit note">${ICON.edit}</button><button class="link-btn" data-act="note-delete" data-id="${esc(c.id)}" aria-label="Delete note" title="Delete note">${ICON.trash}</button></span>`
       : "";
-  return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"><div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-cyan">New</span>' : ""}${tools}</div>${body}</li>`;
+  return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"><div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-new">New</span>' : ""}${tools}</div>${body}</li>`;
 }
 
 function renderDetail() {
@@ -1704,9 +1704,9 @@ function updateQuickAdd() {
   $("#qa-backdrop").scrollLeft = input.scrollLeft;
 
   const chips: string[] = [];
-  if (qa.due) chips.push(`<span class="chip chip-purple">${esc(dueLabel(qa.due, now()))}</span>`);
+  if (qa.due) chips.push(`<span class="chip chip-date">${esc(dueLabel(qa.due, now()))}</span>`);
   if (qa.repeat) chips.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(qa.repeat, now()))}</span>`);
-  if (qa.early) chips.push('<span class="chip chip-red">Ends before it starts</span>');
+  if (qa.early) chips.push('<span class="chip chip-error">Ends before it starts</span>');
   if (qa.list) {
     const r = repos().find((x) => repoKey(x) === qa.list);
     chips.push(`<span class="chip chip-list">${esc(r ? listLabel(r) : qa.list)}</span>`);

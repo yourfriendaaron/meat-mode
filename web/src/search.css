@@ -16,12 +16,12 @@
   /* 16px keeps iOS from zooming the page on focus. */
   font-size: 16px;
   padding: 7px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-line);
   border-radius: var(--radius);
-  background: var(--raise);
+  background: var(--role-raise);
 }
 .search input::placeholder {
-  color: var(--soft);
+  color: var(--role-soft);
 }
 @container app (min-width: 880px) {
   .search input {

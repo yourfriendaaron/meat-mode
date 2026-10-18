@@ -6,27 +6,27 @@
   min-height: 36px;
 }
 .mhead #select-btn[aria-pressed="true"] {
-  border-color: var(--purple);
-  color: var(--purple);
+  border-color: var(--role-action);
+  color: var(--role-action);
 }
 
 /* A row's checkbox in select mode: square, filled when picked. */
 .check.pick {
   border-radius: 5px;
-  border-color: var(--soft);
+  border-color: var(--role-soft);
 }
 .check.pick:hover {
-  border-color: var(--purple);
+  border-color: var(--role-action);
   color: transparent;
 }
 .check.pick.checked {
-  background: var(--purple);
-  border-color: var(--purple);
-  color: var(--on-accent);
+  background: var(--role-action);
+  border-color: var(--role-action);
+  color: var(--role-on-accent);
 }
 .row.is-picked .row-fg {
-  background: var(--pane);
-  box-shadow: inset 3px 0 0 var(--purple);
+  background: var(--role-pane);
+  box-shadow: inset 3px 0 0 var(--role-action);
 }
 
 /* Phone: the bar sits on the tab bar and takes the FAB's place. */
@@ -44,9 +44,9 @@
   align-items: center;
   gap: 8px 12px;
   padding: 10px calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left));
-  background: var(--bg2);
-  border-top: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  background: var(--role-sunk);
+  border-top: 1px solid var(--role-line);
+  box-shadow: var(--role-shadow);
 }
 .bulk-count {
   grid-area: count;
@@ -82,7 +82,7 @@
 .bulkbar .btn:disabled {
   opacity: 0.45;
   cursor: default;
-  border-color: var(--line);
+  border-color: var(--role-line);
 }
 .app.selecting .fab {
   display: none;

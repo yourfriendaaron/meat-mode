@@ -60,7 +60,7 @@ test("edits title, due, details and priority, and Undo puts them back", async ({
   await expect(detail.locator("#d-title")).toHaveText("Call Sam about the weekend");
   await expect(detail.locator(".chip-high")).toHaveCount(0);
   await expect(detail.locator(".why")).toHaveCount(0);
-  await expect(row(page, "Call Sam about the weekend").locator(".chip-green")).toHaveText("14:30");
+  await expect(row(page, "Call Sam about the weekend").locator(".chip-soon")).toHaveText("14:30");
 });
 
 test("the edit form: Escape and Cancel close it, nothing changed posts nothing, a bad date blocks saving, Clear removes the due date", async ({ page, hub }) => {
@@ -100,7 +100,7 @@ test("the edit form: Escape and Cancel close it, nothing changed posts nothing, 
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "edit", key: KEY, payload: { set: { clearDue: true } } });
   expect(Object.keys(hub.posted.at(-1)!.payload.set!)).toEqual(["clearDue"]);
   await expect(hub.find(KEY)!.dueAt).toBeNull();
-  await expect(row(page, "Water the plants").locator(".chip-red, .chip-green, .chip-purple")).toHaveCount(0);
+  await expect(row(page, "Water the plants").locator(".chip-overdue, .chip-soon, .chip-date")).toHaveCount(0);
 });
 
 test("high priority shows a chip on personal and agent items", async ({ page, hub }) => {

@@ -122,13 +122,13 @@ test("Everything adds No date; agents and list views filter", () => {
 });
 
 test("date chips", () => {
-  assert.deepEqual(dateChip(item({ dueAt: t(14, 9, 25) }), now), { text: "35m overdue", tone: "red", snoozed: false });
-  assert.deepEqual(dateChip(item({ dueAt: t(14, 7) }), now), { text: "3h overdue", tone: "red", snoozed: false });
-  assert.deepEqual(dateChip(item({ dueAt: t(12, 9) }), now), { text: "2d overdue", tone: "red", snoozed: false });
-  assert.deepEqual(dateChip(item({ dueAt: t(14, 14, 30) }), now), { text: "14:30", tone: "green", snoozed: false });
-  assert.deepEqual(dateChip(item({ dueAt: t(15, 9) }), now), { text: "Tomorrow 9:00", tone: "purple", snoozed: false });
-  assert.deepEqual(dateChip(item({ dueAt: t(23, 9) }), now), { text: "Fri, Oct 23", tone: "purple", snoozed: false });
-  assert.deepEqual(dateChip(item({ deferUntil: t(15, 9) }), now), { text: "Tomorrow 9:00", tone: "orange", snoozed: true });
+  assert.deepEqual(dateChip(item({ dueAt: t(14, 9, 25) }), now), { text: "35m overdue", tone: "overdue", snoozed: false });
+  assert.deepEqual(dateChip(item({ dueAt: t(14, 7) }), now), { text: "3h overdue", tone: "overdue", snoozed: false });
+  assert.deepEqual(dateChip(item({ dueAt: t(12, 9) }), now), { text: "2d overdue", tone: "overdue", snoozed: false });
+  assert.deepEqual(dateChip(item({ dueAt: t(14, 14, 30) }), now), { text: "14:30", tone: "soon", snoozed: false });
+  assert.deepEqual(dateChip(item({ dueAt: t(15, 9) }), now), { text: "Tomorrow 9:00", tone: "date", snoozed: false });
+  assert.deepEqual(dateChip(item({ dueAt: t(23, 9) }), now), { text: "Fri, Oct 23", tone: "date", snoozed: false });
+  assert.deepEqual(dateChip(item({ deferUntil: t(15, 9) }), now), { text: "Tomorrow 9:00", tone: "snoozed", snoozed: true });
   assert.equal(dateChip(item({}), now), null);
 });
 
@@ -155,11 +155,11 @@ test("New is for agent items never opened; New reply needs a newer comment by so
 test("sync status", () => {
   const online = [{ name: "home", createdAt: t(1, 9), lastSeen: t(14, 9, 59) }];
   const stale = [{ name: "home", createdAt: t(1, 9), lastSeen: t(14, 9, 50) }];
-  assert.deepEqual(syncStatus({ unapplied: 0, bridges: online }, now), { tone: "green", text: "Synced" });
-  assert.deepEqual(syncStatus({ unapplied: 2, bridges: online }, now), { tone: "orange", text: "2 waiting" });
-  assert.deepEqual(syncStatus({ unapplied: 0, bridges: stale }, now), { tone: "orange", text: "Agent machine offline" });
+  assert.deepEqual(syncStatus({ unapplied: 0, bridges: online }, now), { tone: "synced", text: "Synced" });
+  assert.deepEqual(syncStatus({ unapplied: 2, bridges: online }, now), { tone: "waiting", text: "2 waiting" });
+  assert.deepEqual(syncStatus({ unapplied: 0, bridges: stale }, now), { tone: "waiting", text: "Agent machine offline" });
   // No machine paired: only the personal list, which the hub keeps.
-  assert.deepEqual(syncStatus({ unapplied: 0, bridges: [] }, now), { tone: "green", text: "Synced" });
+  assert.deepEqual(syncStatus({ unapplied: 0, bridges: [] }, now), { tone: "synced", text: "Synced" });
 });
 
 test("visible lists: personal first, opted-in only", () => {

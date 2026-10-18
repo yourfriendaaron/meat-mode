@@ -190,7 +190,7 @@ export function openToday(items: Item[], now: Date): number {
 
 export interface DateChip {
   text: string;
-  tone: "red" | "green" | "purple" | "orange";
+  tone: "overdue" | "soon" | "date" | "snoozed";
   snoozed: boolean;
 }
 
@@ -198,11 +198,11 @@ export function dateChip(item: Item, now: Date): DateChip | null {
   if (!isOpen(item)) return null;
   const w = whenOf(item, now);
   if (!w.at) return null;
-  if (w.kind === "snoozed") return { text: fmtWhen(w.at, now), tone: "orange", snoozed: true };
-  if (w.kind === "due" && w.at < now) return { text: fmtOverdue(w.at, now), tone: "red", snoozed: false };
+  if (w.kind === "snoozed") return { text: fmtWhen(w.at, now), tone: "snoozed", snoozed: true };
+  if (w.kind === "due" && w.at < now) return { text: fmtOverdue(w.at, now), tone: "overdue", snoozed: false };
   if (w.kind === "resurfaced") return null;
-  if (sameDay(w.at, now)) return { text: fmtWhen(w.at, now), tone: "green", snoozed: false };
-  return { text: fmtWhen(w.at, now), tone: "purple", snoozed: false };
+  if (sameDay(w.at, now)) return { text: fmtWhen(w.at, now), tone: "soon", snoozed: false };
+  return { text: fmtWhen(w.at, now), tone: "date", snoozed: false };
 }
 
 /** The author name the hub writes for the app's own comments. */
@@ -253,7 +253,7 @@ export function agentNewCount(items: Item[], repos: Repo[], user: string): numbe
 export const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
 export interface SyncStatus {
-  tone: "green" | "orange";
+  tone: "synced" | "waiting";
   text: string;
 }
 
@@ -268,11 +268,11 @@ export const HUB_BRIDGE = "hub";
 export function syncStatus(state: Pick<State, "unapplied" | "bridges">, now: Date): SyncStatus {
   const bridges = state.bridges ?? [];
   // With no machine paired there is only the personal list, which the hub keeps.
-  if (!bridges.length) return { tone: "green", text: "Synced" };
+  if (!bridges.length) return { tone: "synced", text: "Synced" };
   const online = bridges.some((b) => bridgeOnline(b, now));
-  if (!online) return { tone: "orange", text: "Agent machine offline" };
-  if (state.unapplied > 0) return { tone: "orange", text: `${state.unapplied} waiting` };
-  return { tone: "green", text: "Synced" };
+  if (!online) return { tone: "waiting", text: "Agent machine offline" };
+  if (state.unapplied > 0) return { tone: "waiting", text: `${state.unapplied} waiting` };
+  return { tone: "synced", text: "Synced" };
 }
 
 /** Repos shown as lists: personal and opted-in ones, personal first, then by name. */

@@ -1,12 +1,12 @@
 /* Completed and Deleted views. */
 
 .chip-wontdo {
-  color: var(--soft);
-  border-color: var(--line);
+  color: var(--role-soft);
+  border-color: var(--role-line);
 }
 
 .history-note {
-  color: var(--soft);
+  color: var(--role-soft);
   font-size: 13px;
   padding: 16px;
   text-align: center;
