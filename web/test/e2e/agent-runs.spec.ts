@@ -41,7 +41,7 @@ test.describe("desktop", () => {
     await axe(page);
 
     await card(page).getByRole("button", { name: "Ask agent" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: {} });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: {} });
     await expect(card(page)).toHaveAttribute("data-run", "working");
     await expect(card(page).locator(".run-line")).toHaveText("planner · Starting");
     await expect(card(page).getByRole("button", { name: "Stop planner" })).toBeVisible();
@@ -64,12 +64,12 @@ test.describe("desktop", () => {
     const note = sheet(page).getByLabel("Add a note");
     await note.fill("Keep the copyright year.");
     await sheet(page).getByRole("button", { name: "Save note", exact: true }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "note", key: FOOTER, payload: { text: "Keep the copyright year." } });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "note", key: FOOTER, payload: { text: "Keep the copyright year." } });
     await expect(card(page)).not.toHaveAttribute("data-run");
 
     await note.fill("Use the shorter one and ship it.");
     await sheet(page).getByRole("button", { name: "Save and ask agent" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: { text: "Use the shorter one and ship it." } });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: { text: "Use the shorter one and ship it." } });
     await expect(note).toHaveValue("");
     await expect(card(page)).toHaveAttribute("data-run", "working");
   });
@@ -87,7 +87,7 @@ test.describe("desktop", () => {
 
     await sheet(page).getByLabel("Add a note").fill("Oh, and keep the copyright year.");
     await sheet(page).getByRole("button", { name: "Send to planner" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: { text: "Oh, and keep the copyright year." } });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: { text: "Oh, and keep the copyright year." } });
     const queued = sheet(page).locator(".note[data-run=working]");
     await expect(queued).toHaveCount(1);
     await expect(queued).toContainText("Oh, and keep the copyright year.");
@@ -106,14 +106,14 @@ test.describe("desktop", () => {
     hub.setRun(FOOTER, { state: "working", activity: "Shortening the second line" });
     await openApp(page, "/?item=" + encodeURIComponent(FOOTER));
     await card(page).getByRole("button", { name: "Stop planner" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "stop", key: FOOTER, payload: {} });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "stop", key: FOOTER, payload: {} });
     await expect(card(page)).toHaveAttribute("data-run", "stopped");
     await expect(card(page).locator(".run-line")).toHaveText("planner stopped · You stopped it.");
     await expect(card(page).getByRole("button", { name: "Stop planner" })).toHaveCount(0);
     await expect(sheet(page).getByRole("button", { name: "Save and ask agent" })).toBeVisible();
 
     await card(page).getByRole("button", { name: "Retry" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: {} });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: {} });
     await expect(card(page)).toHaveAttribute("data-run", "working");
     await expect(card(page).locator(".run-line")).toHaveText("planner · Starting");
   });
@@ -137,7 +137,7 @@ test.describe("desktop", () => {
     await expect(card(page).getByRole("button")).toHaveCount(0);
     await sheet(page).getByLabel("Add a note").fill("The shorter one.");
     await sheet(page).getByRole("button", { name: "Reply to planner" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: { text: "The shorter one." } });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "ask", key: FOOTER, payload: { text: "The shorter one." } });
     await expect(card(page)).toHaveAttribute("data-run", "working");
   });
 
@@ -186,11 +186,11 @@ test.describe("desktop", () => {
     await expect(bar.getByRole("button", { name: "Undo" })).toBeVisible();
     await axe(page);
     await bar.getByRole("button", { name: "Tell planner" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "ask", key: COMPOST, payload: {} });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "ask", key: COMPOST, payload: {} });
     await expect(bar.getByRole("button", { name: "Stop planner" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Tell planner" })).toHaveCount(0);
     await bar.getByRole("button", { name: "Stop planner" }).click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "stop", key: COMPOST, payload: {} });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "stop", key: COMPOST, payload: {} });
   });
 
   test("Won't do offers Tell too, but not where agents are off", async ({ page, hub }) => {
@@ -232,7 +232,7 @@ test.describe("desktop", () => {
 
     await input.fill("Find a cheaper soil sensor");
     await add.click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "add", bridge: "home", repo: "garden", payload: { title: "Find a cheaper soil sensor", ask: true } });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "add", bridge: "home", repo: "garden", payload: { title: "Find a cheaper soil sensor", ask: true } });
     await agentsView(page);
     await expect(row(page, "Find a cheaper soil sensor")).toHaveAttribute("data-run", "working");
     await expect(row(page, "Find a cheaper soil sensor").locator(".run-line")).toHaveText("agent · Starting");
@@ -243,6 +243,7 @@ test.describe("desktop", () => {
     await expect(add).toHaveText("Add");
     await input.fill("Label the seed trays");
     await add.click();
+    await expect.poll(() => hub.posted.at(-1)?.payload.title).toBe("Label the seed trays");
     const plain = hub.posted.at(-1)!;
     expect(plain).toMatchObject({ kind: "add", repo: "garden", payload: { title: "Label the seed trays" } });
     expect(plain.payload.ask).toBeUndefined();
@@ -270,7 +271,7 @@ test.describe("desktop", () => {
     await expect(page.locator("[data-section=runs]")).toContainText("No agent is working now.");
     await axe(page);
     await sw.click();
-    expect(hub.posted.at(-1)).toMatchObject({ kind: "agents", bridge: "home", repo: "website", payload: { on: true } });
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "agents", bridge: "home", repo: "website", payload: { on: true } });
     await expect(sw).toHaveAttribute("aria-checked", "true");
     await expect(page.locator(".m-repo", { has: sw }).getByRole("status")).toHaveText("Waiting for home");
 
@@ -293,7 +294,7 @@ test.describe("desktop", () => {
     await axe(page);
     await section.getByRole("button", { name: "Stop all" }).click();
     await expect(section).toContainText("No agent is working now.");
-    expect(hub.posted.filter((a) => a.kind === "stop").map((a) => a.key).sort()).toEqual([COMPOST, FOOTER].sort());
+    await expect.poll(() => hub.posted.filter((a) => a.kind === "stop").map((a) => a.key).sort()).toEqual([COMPOST, FOOTER].sort());
   });
 
   test("a push's Reply link opens the item at its note box", async ({ page, hub }) => {
