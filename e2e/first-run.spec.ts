@@ -132,7 +132,7 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
     await profile.getByLabel("Time zone").fill(HUB_ZONE);
     await go("Name and time zone");
     const settings = await page.request.get(`${w.appURL}/api/settings`);
-    expect(await settings.json()).toEqual({ name: "Sam", timeZone: HUB_ZONE });
+    expect(await settings.json()).toEqual({ name: "Sam", timeZone: HUB_ZONE, reminderLead: 0 });
   });
 
   await test.step("install, then turn on reminders and get a test", async () => {
