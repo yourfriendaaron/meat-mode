@@ -32,6 +32,7 @@ import {
 import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput } from "./dates.ts";
 import { completedGroups, deletedGroups, isDeleted } from "./history.ts";
 import { searchGroups } from "./search.ts";
+import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "./bulk.ts";
 import { snoozeOptions, typedSnooze } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
@@ -414,6 +415,10 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
 
 function checkButton(item: Item, agent: boolean): string {
   const open = isOpen(item);
+  if (open && S.selecting) {
+    const on = S.picked.has(item.key);
+    return `<button class="check pick${agent ? " check-agent" : ""}${on ? " checked" : ""}" role="checkbox" aria-checked="${on}" data-act="pick" data-key="${esc(item.key)}" aria-label="${esc(`Select: ${item.title}`)}">${ICON.check}</button>`;
+  }
   const gone = isDeleted(item, personalRepoKeys(repos()));
   const label = open ? `Mark done: ${item.title}` : `${gone ? "Restore" : "Reopen"}: ${item.title}`;
   return `<button class="check${agent ? " check-agent" : ""}${open ? "" : " checked"}" data-act="${open ? "done" : gone ? "restore" : "reopen"}" data-key="${esc(item.key)}" aria-label="${esc(label)}">${ICON.check}</button>`;
@@ -429,7 +434,8 @@ function rowHTML(item: Item, showList: boolean): string {
   const personal = personalRepoKeys(repos());
   const agent = isAgentItem(item, personal);
   const done = !isOpen(item);
-  return `<li class="row${done ? " is-done" : ""}${item.pending ? " is-pending" : ""}" data-key="${esc(item.key)}">
+  const picked = !done && S.selecting && S.picked.has(item.key);
+  return `<li class="row${done ? " is-done" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}" data-key="${esc(item.key)}">
 <div class="under" aria-hidden="true"><span class="u-done">Done</span><span class="u-snooze">Snooze</span></div>
 <div class="row-fg">${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${statusLine(item)}</button>${
     done
@@ -552,6 +558,29 @@ function applySelection() {
     if (key === S.selected) li.setAttribute("aria-current", "true");
     else li.removeAttribute("aria-current");
   }
+}
+
+/** The Select button and, in select mode, the bulk bar. */
+function renderBulk() {
+  const btn = $("#select-btn");
+  btn.hidden = !selectable();
+  btn.setAttribute("aria-pressed", String(S.selecting));
+  $("#app").classList.toggle("selecting", S.selecting);
+  const bar = $("#bulkbar");
+  bar.hidden = !S.selecting;
+  if (!S.selecting) {
+    setHTML(bar, "");
+    return;
+  }
+  const pickable = pickableKeys(currentGroups());
+  const picks = [...S.picked].map(byKey).filter((i): i is Item => Boolean(i));
+  // With nothing picked, the label names what Select all would pick.
+  const label = bulkDismissLabel(picks.length ? picks : pickable.map(byKey).filter((i): i is Item => Boolean(i)), repos());
+  const off = picks.length ? "" : " disabled";
+  setHTML(
+    bar,
+    `<span class="bulk-count" aria-live="polite">${picks.length} selected</span><div class="bulk-acts"><button class="btn btn-small" data-act="bulk-done"${off}>${ICON.check}Done</button><button class="btn btn-small" data-act="bulk-snooze"${off}>${ICON.moon}Snooze…</button><button class="btn btn-small btn-danger" data-act="bulk-dismiss"${off}>${ICON.trash}${esc(label)}</button></div><div class="bulk-more"><button class="btn btn-small btn-ghost" data-act="bulk-all">Select all</button><button class="btn btn-small btn-ghost" data-act="bulk-cancel">Cancel</button></div>`,
+  );
 }
 
 // ---------- render: detail ----------
@@ -914,6 +943,7 @@ const ctx: AppContext = {
 
 function render() {
   if (!shellUp) return;
+  keepSelect();
   renderNav();
   renderSync();
   renderMain();
@@ -922,6 +952,7 @@ function render() {
   renderToast();
   renderTheme();
   applySelection();
+  renderBulk();
   $("#scrim").hidden = !(S.snoozeKeys || (isPhone() && (S.open || S.qaOpen)));
   $("#app").classList.toggle("qa-open", S.qaOpen);
 }
@@ -1176,10 +1207,153 @@ function doSnooze(keys: string[], until: Date) {
   moveSelectionOff(keys);
   for (const a of acts) patchLocal(a.key!, (i) => (i.deferUntil = a.payload.until));
   S.snoozeKeys = null;
-  render();
+  if (keys === bulkSnoozeKeys) {
+    bulkSnoozeKeys = null;
+    endSelect();
+  } else render();
   const label = fmtWhen(until, now());
   const text = acts.length > 1 ? `Snoozed ${acts.length} tasks to ${label}` : `Snoozed to ${label}`;
   void closing(acts, text);
+}
+
+// ---------- select mode ----------
+
+function selectable(): boolean {
+  return Boolean(S.state) && canSelect(S.view, S.query);
+}
+
+/** Ends select mode where it no longer applies, and drops picks that left the list. */
+function keepSelect() {
+  if (!S.selecting) return;
+  if (!selectable()) {
+    S.selecting = false;
+    S.picked = new Set();
+    return;
+  }
+  S.picked = keepPickable(S.picked, pickableKeys(currentGroups()));
+}
+
+function startSelect() {
+  S.selecting = true;
+  S.picked = new Set();
+  render();
+}
+
+/** Renders, putting focus back on the control it was on when the rewrite replaced it. */
+function renderKeepingFocus() {
+  const el = document.activeElement as HTMLElement | null;
+  const act = el?.dataset?.act;
+  const key = el?.dataset?.key;
+  render();
+  if (!act || document.activeElement !== document.body) return;
+  const sel = `[data-act="${CSS.escape(act)}"]` + (key ? `[data-key="${CSS.escape(key)}"]` : "");
+  document.querySelector<HTMLElement>(`#list ${sel}, #bulkbar ${sel}`)?.focus({ preventScroll: true });
+}
+
+/** Leaves select mode; focus left on the bar or a row's checkbox goes back to Select. */
+function endSelect() {
+  S.selecting = false;
+  S.picked = new Set();
+  const lost = document.activeElement?.closest("#bulkbar, .pick");
+  render();
+  if (lost) $<HTMLElement>("#select-btn:not([hidden])")?.focus({ preventScroll: true });
+}
+
+function togglePick(key: string) {
+  const it = byKey(key);
+  if (!it || !isOpen(it)) return;
+  if (!S.picked.delete(key)) S.picked.add(key);
+  renderKeepingFocus();
+}
+
+/** The open picks, in list order. */
+function pickedItems(): Item[] {
+  return pickableKeys(currentGroups())
+    .filter((k) => S.picked.has(k))
+    .map(byKey)
+    .filter((i): i is Item => Boolean(i) && isOpen(i!));
+}
+
+/**
+ * Done on every pick, with one Undo. Plain items close and undo through
+ * closing's reopen; repeating personal items move on as doneRepeating does
+ * and undo through the edit their reply's `was` holds.
+ */
+async function bulkDone() {
+  const its = pickedItems();
+  if (!its.length) return;
+  const keys = its.map((i) => i.key);
+  moveSelectionOff(keys);
+  const repeating = its.filter((i) => i.repeat && canEdit(i));
+  const plain = its.filter((i) => !repeating.includes(i));
+  const t = now().toISOString();
+  for (const i of plain)
+    patchLocal(i.key, (x) => {
+      x.status = "closed";
+      x.closedAt = t;
+      x.closeReason = "Done in Meat Mode";
+    });
+  endSelect();
+  const posted: NewAction[] = [];
+  for (const i of plain) {
+    const a: NewAction = { id: newId(), kind: "done", key: i.key, payload: {} };
+    if (await post(a)) posted.push(a);
+  }
+  const moved: [string, Action][] = [];
+  for (const i of repeating) {
+    const applied = await post({ id: newId(), kind: "done", key: i.key, payload: {} });
+    if (applied) moved.push([i.key, applied]);
+  }
+  await refresh();
+  const edits: NewAction[] = [];
+  for (const [key, applied] of moved) {
+    const u = undoOf(applied, key, newId());
+    const next = byKey(key);
+    // The hub closed it after all, as when its repeat ended meanwhile.
+    if (!u || !next?.dueAt || !isOpen(next)) posted.push({ id: applied.id, kind: "done", key, payload: {} });
+    else edits.push(u);
+  }
+  if (!posted.length && !edits.length) return;
+  const done = its.filter((i) => posted.some((a) => a.key === i.key) || edits.some((a) => a.key === i.key));
+  showToast(bulkToast("Done", done.map((i) => i.title)), async () => {
+    for (const u of edits) patchLocal(u.key!, (i) => applyLocal(i, u));
+    render();
+    for (const u of edits) await post(u);
+    await undoAll(posted);
+  });
+}
+
+/** Delete or Won't do on every pick, with one Undo. */
+function bulkDismiss() {
+  const its = pickedItems();
+  if (!its.length) return;
+  const keys = its.map((i) => i.key);
+  const verb = bulkDismissDone(its, repos());
+  const personal = personalRepoKeys(repos());
+  moveSelectionOff(keys);
+  const t = now().toISOString();
+  for (const k of keys)
+    patchLocal(k, (i) => {
+      i.status = "closed";
+      i.closedAt = t;
+      i.closeReason = DISMISSED;
+    });
+  const openGone = S.open && keys.includes(S.open) && !isAgentItem(byKey(S.open)!, personal);
+  endSelect();
+  if (openGone) closeDetail();
+  void closing(
+    keys.map((key) => ({ id: newId(), kind: "dismiss", key, payload: {} })),
+    bulkToast(verb, its.map((i) => i.title)),
+  );
+}
+
+/** The keys the snooze dialog was opened with from the bar; snoozing them ends select mode. */
+let bulkSnoozeKeys: string[] | null = null;
+function bulkSnooze() {
+  const keys = pickedItems().map((i) => i.key);
+  if (!keys.length) return;
+  openSnooze(keys);
+  bulkSnoozeKeys = S.snoozeKeys;
 }
 
 async function doNote(key: string) {
@@ -1374,6 +1548,8 @@ function showToast(text: string, undo?: () => Promise<void>) {
 function setView(v: View) {
   S.view = v;
   S.selected = null;
+  S.selecting = false;
+  S.picked = new Set();
   if (isPhone()) closeDetail();
   // The pairing token is shown once; leaving Settings ends that showing.
   if (v !== "settings") {
@@ -1642,7 +1818,32 @@ function onClick(e: MouseEvent) {
       setView(btn.dataset.view as View);
       break;
     case "open":
-      openItem(key);
+      // In select mode a tap on a row picks it.
+      if (S.selecting) togglePick(key);
+      else openItem(key);
+      break;
+    case "pick":
+      togglePick(key);
+      break;
+    case "select-mode":
+      if (S.selecting) endSelect();
+      else startSelect();
+      break;
+    case "bulk-done":
+      void bulkDone();
+      break;
+    case "bulk-snooze":
+      bulkSnooze();
+      break;
+    case "bulk-dismiss":
+      bulkDismiss();
+      break;
+    case "bulk-all":
+      S.picked = new Set(pickableKeys(currentGroups()));
+      renderKeepingFocus();
+      break;
+    case "bulk-cancel":
+      endSelect();
       break;
     case "close-detail":
       closeDetail();
@@ -1809,6 +2010,7 @@ function onKey(e: KeyboardEvent) {
       (document.activeElement as HTMLElement).blur();
       render();
     } else if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    else if (S.selecting) endSelect();
     else if (S.open) closeDetail();
     else return;
     e.preventDefault();
@@ -1825,7 +2027,8 @@ function onKey(e: KeyboardEvent) {
       selectBy(-1);
       break;
     case "x":
-      if (S.selected) {
+      if (S.selecting && S.selected) togglePick(S.selected);
+      else if (S.selected) {
         const it = byKey(S.selected);
         if (it && isOpen(it)) doDone(it.key);
         else if (it && isDeleted(it, personalRepoKeys(repos()))) void doRestore(it.key);
@@ -1939,7 +2142,7 @@ function setupSwipe(list: HTMLElement) {
   };
 
   list.addEventListener("pointerdown", (e) => {
-    if (!isPhone() || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (!isPhone() || S.selecting || (e.pointerType === "mouse" && e.button !== 0)) return;
     const fg = (e.target as HTMLElement).closest<HTMLElement>(".row-fg");
     const li = fg?.closest<HTMLElement>(".row");
     if (!fg || !li || li.classList.contains("is-done")) return;
