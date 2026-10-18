@@ -725,7 +725,9 @@ function renderDetail() {
       ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">Done</button>${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">Edit</button>` : ""
         }<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? "Won't do" : "Delete"}</button>`
-      : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>${
+      : isDeleted(item, personalRepoKeys(repos()))
+        ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">Restore</button>`
+        : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">Edit</button>` : ""
         }`
   }</div>`;
@@ -1826,6 +1828,7 @@ function onKey(e: KeyboardEvent) {
       if (S.selected) {
         const it = byKey(S.selected);
         if (it && isOpen(it)) doDone(it.key);
+        else if (it && isDeleted(it, personalRepoKeys(repos()))) void doRestore(it.key);
         else if (it) void doReopen(it.key);
       }
       break;

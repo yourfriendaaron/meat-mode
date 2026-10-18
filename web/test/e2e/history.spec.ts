@@ -43,6 +43,23 @@ test.describe("desktop", () => {
     await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "dismiss", key: "hub/personal/pe-3" });
   });
 
+  test("a deleted item's details offer Restore, and x restores it from the list", async ({ page, hub }) => {
+    await openApp(page);
+    await row(page, "Call Sam about the weekend").locator(".row-body").click();
+    await page.locator("#detail").getByRole("button", { name: "Delete" }).click();
+    await page.locator(".sidebar").getByRole("button", { name: "Deleted" }).click();
+
+    await row(page, "Call Sam about the weekend").locator(".row-body").click();
+    const detail = page.locator("#detail");
+    await expect(detail.getByRole("button", { name: "Restore", exact: true })).toBeVisible();
+    await expect(detail.getByRole("button", { name: "Reopen", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    await page.keyboard.press("x");
+    await expect(page.locator("#toast")).toContainText("Restored: Call Sam about the weekend");
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "reopen", key: "hub/personal/pe-3" });
+  });
+
   test("an agent's Won't do is in Completed with a chip", async ({ page, hub }) => {
     void hub;
     await openApp(page);
