@@ -170,6 +170,28 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await shot(page, "detail");
         });
 
+        test("personal task detail with a checklist", async ({ page, hub }) => {
+          const it = hub.find("hub/personal/pe-1")!;
+          it.priority = 1;
+          it.checklist = [
+            { id: "k1", text: "Fill the watering can", done: true },
+            { id: "k2", text: "Move the fern out of the sun", done: false },
+          ];
+          it.comments = [{ id: "n1", author: "alex-app", text: "Use the rain water.", createdAt: "2026-10-14T08:00:00Z" }];
+          await openApp(page, "/?item=" + encodeURIComponent("hub/personal/pe-1"));
+          await expect(page.locator("#detail h2#d-title")).toHaveText(it.title);
+          await shot(page, "personal-detail");
+        });
+
+        test("edit a personal task", async ({ page, hub }) => {
+          const it = hub.find("hub/personal/pe-1")!;
+          await openApp(page, "/?item=" + encodeURIComponent("hub/personal/pe-1"));
+          await expect(page.locator("#detail h2#d-title")).toHaveText(it.title);
+          await page.locator("#detail").getByRole("button", { name: "Edit", exact: true }).click();
+          await expect(page.locator("#detail").getByLabel("Title")).toBeFocused();
+          await shot(page, "edit");
+        });
+
         test("snooze", async ({ page, hub }) => {
           void hub;
           await openApp(page);
