@@ -89,7 +89,7 @@ func (c *CLI) run(ctx context.Context, dir string, args ...string) ([]byte, erro
 		msg = body.Error
 	}
 	if msg == "" {
-		msg = firstLine(stderr.String())
+		msg = errorLine(stderr.String())
 	}
 	if msg == "" {
 		msg = err.Error()
@@ -110,13 +110,46 @@ func firstLine(s string) string {
 	return ""
 }
 
-// decode reads the JSON value in out, skipping any text bd printed first.
-func decode(out []byte, v any) error {
-	i := bytes.IndexAny(out, "[{")
-	if i < 0 {
-		return fmt.Errorf("bd printed no JSON: %q", firstLine(string(out)))
+// errorLine is the first line of bd's stderr that is not a "Warning:" notice,
+// such as the permissions warning, so the real failure is the one reported.
+func errorLine(s string) string {
+	var rest []string
+	for line := range strings.SplitSeq(s, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "Warning:") {
+			rest = append(rest, line)
+		}
 	}
-	return json.Unmarshal(out[i:], v)
+	if m := firstLine(strings.Join(rest, "\n")); m != "" {
+		return m
+	}
+	return firstLine(s)
+}
+
+// decode reads the JSON value in out, skipping any text bd printed first,
+// such as a permissions warning. A warning may itself hold a "[" or "{", so
+// it tries each candidate start until one parses.
+func decode(out []byte, v any) error {
+	var firstErr error
+	for rest := out; ; {
+		i := bytes.IndexAny(rest, "[{")
+		if i < 0 {
+			break
+		}
+		rest = rest[i:]
+		dec := json.NewDecoder(bytes.NewReader(rest))
+		err := dec.Decode(v)
+		if err == nil {
+			return nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		rest = rest[1:]
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	return fmt.Errorf("bd printed no JSON: %q", firstLine(string(out)))
 }
 
 // Version implements Beads.
