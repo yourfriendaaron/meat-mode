@@ -3,7 +3,7 @@
 // and one delegated handler per event type.
 
 import { ApiError, api, newId, setUnauthorizedHandler } from "./api.ts";
-import type { Action, Item, NewAction, NewBridgeReply, Payload, Repo, Session, State } from "./types.ts";
+import type { Action, Check, Comment, Item, NewAction, NewBridgeReply, Payload, Repo, Session, State } from "./types.ts";
 import {
   DAY_CAPACITY,
   DISMISSED,
@@ -28,9 +28,32 @@ import {
   appAuthor,
   type ViewId,
 } from "./model.ts";
-import { fmtAgo, fmtTime, fmtWhen, toLocalInput } from "./dates.ts";
+import { fmtAgo, fmtWhen, toLocalInput } from "./dates.ts";
 import { snoozeOptions } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
+import {
+  CHECKLIST_MAX,
+  CHECK_MAX,
+  TEXT_MAX,
+  TITLE_MAX,
+  addCheck,
+  applyEdit,
+  canEdit,
+  checkText,
+  checklistChip,
+  diffEdit,
+  draftOf,
+  dueLabel,
+  dueOutcome,
+  editError,
+  priorityChip,
+  priorityOptions,
+  removeCheck,
+  restoreComment,
+  toggleCheck,
+  undoOf,
+  type EditDraft,
+} from "./edit.ts";
 import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } from "./theme.ts";
 import { loginErrorText, needsLogin } from "./login.ts";
 import { esc } from "./html.ts";
@@ -68,6 +91,12 @@ const S = {
   open: null as string | null,
   openSeenAt: null as string | null | undefined,
   drafts: new Map<string, string>(),
+  /** The open edit form of a personal item. */
+  edit: null as { key: string; draft: EditDraft; error: string } | null,
+  /** The note being edited, on a personal item. */
+  noteEdit: null as { key: string; commentId: string; text: string } | null,
+  /** Unsent text of each personal item's add-to-checklist field. */
+  checkDrafts: new Map<string, string>(),
   snoozeKeys: null as string[] | null,
   syncOpen: false,
   syncActions: null as Action[] | null,
@@ -305,6 +334,14 @@ function actionLabel(a: Action): string {
       return a.payload.on ? "Sync on:" : "Sync off:";
     case "snooze":
       return a.payload.until ? `Snooze to ${fmtWhen(new Date(a.payload.until), now())}:` : "Clear snooze on";
+    case "edit":
+      return "Edit";
+    case "note-edit":
+      return "Edit note on";
+    case "note-delete":
+      return "Delete note on";
+    case "note-restore":
+      return "Restore note on";
   }
 }
 
@@ -318,6 +355,8 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   const att = attention(item, personal, user());
   if (att === "new") out.push('<span class="chip chip-pink">New</span>');
   if (att === "reply") out.push('<span class="chip chip-cyan">New reply</span>');
+  const prio = priorityChip(item.priority);
+  if (prio) out.push(`<span class="chip ${item.priority === 0 ? "chip-urgent" : "chip-high"}">${esc(prio)}</span>`);
   const dc = dateChip(item, n);
   if (dc) out.push(`<span class="chip chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>`);
   if (opts.list) {
@@ -328,6 +367,11 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   if (agent && item.createdBy) out.push(`<span class="chip chip-agent">${esc(item.createdBy)}</span>`);
   const notes = item.comments?.length ?? 0;
   if (notes) out.push(`<span class="chip chip-notes" aria-label="${notes} ${notes === 1 ? "note" : "notes"}">${ICON.note}${notes}</span>`);
+  const ck = checklistChip(item.checklist);
+  if (ck) {
+    const [done, all] = ck.split("/");
+    out.push(`<span class="chip chip-checklist" aria-label="Checklist: ${done} of ${all} done">${ICON.check}${ck}</span>`);
+  }
   return out.join("");
 }
 
@@ -467,6 +511,66 @@ function snoozeBlock(prefix: string): string {
     .join("")}</div><div class="snooze-pick"><label for="${prefix}-pick">Pick a time</label><div class="pick-row"><input id="${prefix}-pick" type="datetime-local" min="${toLocalInput(n)}" data-pick><button class="btn" data-act="snooze-pick">Snooze</button></div></div>`;
 }
 
+/** The edit form of a personal item: title, due, details and priority. Values are set after the HTML is written. */
+function editFormHTML(item: Item): string {
+  const e = S.edit!;
+  const d = e.draft;
+  const prio = priorityOptions(item.priority)
+    .map((o) => `<option value="${o.value}"${o.value === d.priority ? " selected" : ""}>${esc(o.label)}</option>`)
+    .join("");
+  return `<form class="edit-form" data-form="edit" aria-labelledby="d-edit-h" novalidate>
+<h3 id="d-edit-h" class="sr">Edit task</h3>
+<label for="edit-title">Title</label><input id="edit-title" type="text" maxlength="${TITLE_MAX}" autocomplete="off" required>
+<label for="edit-due">Due</label><div class="pick-row"><input id="edit-due" type="text" autocomplete="off" enterkeyhint="done" placeholder="tomorrow 9am" aria-describedby="edit-due-now"><button type="button" class="btn" data-act="edit-clear-due">Clear</button></div><p id="edit-due-now" class="edit-due-now" aria-live="polite">${esc(dueText(item, d))}</p>
+<label for="edit-desc">Details</label><textarea id="edit-desc" rows="4" maxlength="${TEXT_MAX}"></textarea>
+<label for="edit-prio">Priority</label><select id="edit-prio">${prio}</select>
+${e.error ? `<p class="row-error" role="alert">${esc(e.error)}</p>` : ""}
+<div class="btn-row"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn" data-act="edit-cancel">Cancel</button></div>
+</form>`;
+}
+
+/** What the due field will save, in words. */
+function dueText(item: Item, d: EditDraft): string {
+  const due = dueOutcome(item, d, now());
+  switch (due.kind) {
+    case "invalid":
+      return "Could not read that date.";
+    case "clear":
+      return "No due date";
+    default:
+      return due.at ? dueLabel(due.at, now()) : "No due date";
+  }
+}
+
+function checklistHTML(item: Item): string {
+  const list = item.checklist ?? [];
+  const rows = list
+    .map(
+      (c, i) =>
+        `<li class="ck${c.done ? " ck-done" : ""}"><input type="checkbox" id="ck-${i}" data-check="${i}"${c.done ? " checked" : ""}><label for="ck-${i}">${esc(c.text)}</label><button class="link-btn ck-remove" data-act="check-remove" data-idx="${i}" aria-label="Remove: ${esc(c.text)}">Remove</button></li>`,
+    )
+    .join("");
+  const count = checklistChip(list);
+  return `<section class="d-section" aria-labelledby="d-check"><h3 id="d-check">Checklist${count ? ` <span class="group-count">${count}</span>` : ""}</h3>${
+    rows ? `<ul class="checklist">${rows}</ul>` : ""
+  }<form class="pick-row" data-form="check-add"><label class="sr" for="check-input">Add to the checklist</label><input id="check-input" type="text" maxlength="${CHECK_MAX}" autocomplete="off" enterkeyhint="done" placeholder="Add an entry"><button type="submit" class="btn">Add</button></form></section>`;
+}
+
+function noteHTML(item: Item, c: Comment, editable: boolean): string {
+  const own = appAuthor(user());
+  const mine = c.author === own;
+  const unread = isUnreadComment(c.createdAt, c.author, S.openSeenAt, user());
+  const editing = editable && S.noteEdit?.key === item.key && S.noteEdit.commentId === c.id;
+  const body = editing
+    ? `<form class="note-edit" data-form="note-edit"><label class="sr" for="note-edit-input">Edit note</label><textarea id="note-edit-input" rows="3" maxlength="${TEXT_MAX}"></textarea><div class="btn-row"><button type="submit" class="btn btn-small btn-primary">Save</button><button type="button" class="btn btn-small" data-act="note-edit-cancel">Cancel</button></div></form>`
+    : `<p>${esc(c.text)}</p>`;
+  const tools =
+    editable && !editing
+      ? `<span class="note-tools"><button class="link-btn" id="ne-${esc(c.id)}" data-act="note-edit" data-id="${esc(c.id)}" aria-label="Edit note">Edit</button><button class="link-btn" data-act="note-delete" data-id="${esc(c.id)}" aria-label="Delete note">Delete</button></span>`
+      : "";
+  return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"><div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-cyan">New</span>' : ""}${tools}</div>${body}</li>`;
+}
+
 function renderDetail() {
   const el = $("#detail");
   const item = byKey(S.open);
@@ -478,37 +582,52 @@ function renderDetail() {
   }
   const personal = personalRepoKeys(repos());
   const agent = isAgentItem(item, personal);
+  const editable = !agent && canEdit(item);
+  const editing = editable && S.edit?.key === item.key;
   const open = isOpen(item);
   const why = item.description
     ? `<div class="why${agent ? " why-agent" : ""}"><div class="why-label">${agent ? `${esc(item.createdBy || "The agent")} asks because` : "Details"}</div><p>${esc(item.description)}</p></div>`
     : "";
-  const own = appAuthor(user());
-  const comments = (item.comments ?? [])
-    .map((c) => {
-      const mine = c.author === own;
-      const unread = isUnreadComment(c.createdAt, c.author, S.openSeenAt, user());
-      return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"><div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-cyan">New</span>' : ""}</div><p>${esc(c.text)}</p></li>`;
-    })
-    .join("");
+  const comments = (item.comments ?? []).map((c) => noteHTML(item, c, editable)).join("");
+  const actions = `<div class="d-actions">${
+    open
+      ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">Done</button>${
+          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">Edit</button>` : ""
+        }<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? "Won't do" : "Delete"}</button>`
+      : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>${
+          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">Edit</button>` : ""
+        }`
+  }</div>`;
   const html = `<div class="detail-inner" role="region" aria-labelledby="d-title">
 <div class="grip" aria-hidden="true"></div>
 <div class="d-head">${checkButton(item, agent)}<h2 id="d-title" class="d-title">${esc(item.title)}</h2><button class="icon-btn" data-act="close-detail" aria-label="Close details">${ICON.close}</button></div>
 <div class="chips d-chips">${chipsFor(item, { list: true })}<code class="bead-id">${esc(item.id)}</code></div>
 ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
-${why}
-<div class="d-actions">${
-    open
-      ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">Done</button><button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? "Won't do" : "Delete"}</button>`
-      : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>`
-  }</div>
+${editing ? editFormHTML(item) : why + actions}
+${editable ? checklistHTML(item) : ""}
 ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
-<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3"></textarea><button class="btn" data-act="note" data-key="${esc(item.key)}">Save note</button></section>
+<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea><button class="btn" data-act="note" data-key="${esc(item.key)}">Save note</button></section>
 </div>`;
   if (setHTML(el, html)) {
     const ta = $<HTMLTextAreaElement>("#note-input", el);
     ta.value = S.drafts.get(item.key) ?? "";
+    const ck = el.querySelector<HTMLInputElement>("#check-input");
+    if (ck) ck.value = S.checkDrafts.get(item.key) ?? "";
+    if (editing) {
+      const d = S.edit!.draft;
+      setValue("#edit-title", d.title);
+      setValue("#edit-due", d.dueText);
+      setValue("#edit-desc", d.description);
+    }
+    if (S.noteEdit?.key === item.key) setValue("#note-edit-input", S.noteEdit.text);
   }
+}
+
+/** Sets a field's value only when it differs, so a rewrite keeps the caret where it was. */
+function setValue(sel: string, value: string) {
+  const f = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel);
+  if (f && f.value !== value) f.value = value;
 }
 
 // ---------- render: overlays ----------
@@ -766,13 +885,13 @@ function patchLocal(key: string, fn: (i: Item) => void) {
   it.error = undefined;
 }
 
-async function post(a: NewAction): Promise<boolean> {
+/** Posts an action; the hub's copy of it, or null when it failed (a toast says why). */
+async function post(a: NewAction): Promise<Action | null> {
   try {
-    await api.postAction(a);
-    return true;
+    return await api.postAction(a);
   } catch (e) {
     showToast(`Could not save: ${(e as Error).message}`);
-    return false;
+    return null;
   }
 }
 
@@ -897,6 +1016,160 @@ async function doNote(key: string) {
   await refresh();
 }
 
+// ---------- editing personal items ----------
+
+function openEdit(key: string) {
+  const it = byKey(key);
+  if (!it || !canEdit(it)) return;
+  S.edit = { key, draft: draftOf(it), error: "" };
+  S.noteEdit = null;
+  render();
+  $<HTMLInputElement>("#edit-title").focus();
+}
+
+/** Closes the edit form and puts focus back on its Edit button. */
+function closeEdit() {
+  S.edit = null;
+  render();
+  document.getElementById("d-edit")?.focus({ preventScroll: true });
+}
+
+/**
+ * Posts an action on a personal item after `change` applied it locally, and
+ * offers Undo with `toast` when the hub's reply says how to undo it.
+ */
+async function postEdit(key: string, a: NewAction, change: (i: Item) => void, toast?: string) {
+  patchLocal(key, change);
+  render();
+  const applied = await post(a);
+  if (applied && toast) {
+    showToast(toast, async () => {
+      const u = undoOf(applied, key, newId());
+      if (!u) return;
+      patchLocal(key, (i) => applyLocal(i, u));
+      render();
+      await post(u);
+      await refresh();
+    });
+  }
+  await refresh();
+}
+
+/** What an action on a personal item does to the local copy before the hub answers. */
+function applyLocal(i: Item, a: NewAction) {
+  const p = a.payload;
+  switch (a.kind) {
+    case "edit":
+      if (p.set) applyEdit(i, p.set);
+      break;
+    case "note-edit":
+      i.comments = (i.comments ?? []).map((c) => (c.id === p.commentId ? { ...c, text: p.text ?? "" } : c));
+      break;
+    case "note-delete":
+      i.comments = (i.comments ?? []).filter((c) => c.id !== p.commentId);
+      break;
+    case "note-restore":
+      if (p.comment) i.comments = restoreComment(i.comments, p.comment);
+      break;
+  }
+}
+
+function saveEdit() {
+  const e = S.edit;
+  const it = byKey(e?.key ?? null);
+  if (!e || !it) return;
+  const err = editError(it, e.draft, now());
+  if (err) {
+    e.error = err;
+    render();
+    const field = /title/i.test(err) ? "#edit-title" : /date/i.test(err) ? "#edit-due" : "#edit-desc";
+    $<HTMLElement>(field).focus();
+    return;
+  }
+  const set = diffEdit(it, e.draft, now());
+  closeEdit();
+  if (!set) return;
+  const a: NewAction = { id: newId(), kind: "edit", key: it.key, payload: { set } };
+  void postEdit(it.key, a, (i) => applyLocal(i, a), "Saved");
+}
+
+function clearDue() {
+  if (!S.edit) return;
+  S.edit.draft.clearDue = true;
+  S.edit.draft.dueText = "";
+  setValue("#edit-due", "");
+  render();
+  $<HTMLInputElement>("#edit-due").focus();
+}
+
+function openNoteEdit(key: string, commentId: string) {
+  const c = byKey(key)?.comments?.find((x) => x.id === commentId);
+  if (!c) return;
+  S.noteEdit = { key, commentId, text: c.text };
+  S.edit = null;
+  render();
+  $<HTMLTextAreaElement>("#note-edit-input").focus();
+}
+
+function closeNoteEdit() {
+  const id = S.noteEdit?.commentId;
+  S.noteEdit = null;
+  render();
+  if (id) document.getElementById(`ne-${id}`)?.focus({ preventScroll: true });
+}
+
+function saveNoteEdit() {
+  const n = S.noteEdit;
+  const c = byKey(n?.key ?? null)?.comments?.find((x) => x.id === n?.commentId);
+  if (!n || !c) return;
+  const text = n.text.trim();
+  if (!text) {
+    $<HTMLTextAreaElement>("#note-edit-input").focus();
+    return;
+  }
+  closeNoteEdit();
+  if (text === c.text) return;
+  const a: NewAction = { id: newId(), kind: "note-edit", key: n.key, payload: { commentId: c.id, text } };
+  void postEdit(n.key, a, (i) => applyLocal(i, a), "Note saved");
+}
+
+function deleteNote(key: string, commentId: string) {
+  if (S.noteEdit?.commentId === commentId) S.noteEdit = null;
+  const a: NewAction = { id: newId(), kind: "note-delete", key, payload: { commentId } };
+  void postEdit(key, a, (i) => applyLocal(i, a), "Note deleted");
+  $<HTMLElement>("#note-input").focus({ preventScroll: true });
+}
+
+/** Posts the whole new checklist; a toast with Undo only when `toast` is given. */
+function setChecklist(key: string, next: Check[], toast?: string) {
+  const a: NewAction = { id: newId(), kind: "edit", key, payload: { set: { checklist: next } } };
+  void postEdit(key, a, (i) => applyLocal(i, a), toast);
+}
+
+function addToChecklist(key: string) {
+  const it = byKey(key);
+  const input = document.querySelector<HTMLInputElement>("#check-input");
+  if (!it || !input) return;
+  const text = checkText(input.value);
+  if (!text) return;
+  if ((it.checklist?.length ?? 0) >= CHECKLIST_MAX) {
+    showToast(`A checklist holds up to ${CHECKLIST_MAX} entries.`);
+    return;
+  }
+  input.value = "";
+  S.checkDrafts.delete(key);
+  setChecklist(key, addCheck(it.checklist, text));
+}
+
+function removeFromChecklist(key: string, index: number) {
+  const it = byKey(key);
+  const entry = it?.checklist?.[index];
+  if (!it || !entry) return;
+  setChecklist(key, removeCheck(it.checklist, index), `Removed: ${entry.text}`);
+  // The button is gone; keep focus in the checklist.
+  $<HTMLElement>("#check-input").focus({ preventScroll: true });
+}
+
 // ---------- toast ----------
 
 let toastSeq = 0;
@@ -930,6 +1203,10 @@ function setView(v: View) {
 function openItem(key: string) {
   const it = byKey(key);
   if (!it) return;
+  if (S.open !== key) {
+    S.edit = null;
+    S.noteEdit = null;
+  }
   S.open = key;
   S.selected = key;
   S.openSeenAt = it.seenAt;
@@ -943,6 +1220,8 @@ function closeDetail() {
   if (!S.open) return;
   const key = S.open;
   S.open = null;
+  S.edit = null;
+  S.noteEdit = null;
   setURL(null);
   render();
   const row = document.querySelector<HTMLElement>(`#list .row[data-key="${CSS.escape(key)}"] .row-body`);
@@ -1029,11 +1308,7 @@ function updateQuickAdd() {
   $("#qa-backdrop").scrollLeft = input.scrollLeft;
 
   const chips: string[] = [];
-  if (qa.due) {
-    const when = fmtWhen(qa.due, now());
-    const full = when.includes(":") ? when : `${when} ${fmtTime(qa.due)}`;
-    chips.push(`<span class="chip chip-purple">Due ${esc(full)}</span>`);
-  }
+  if (qa.due) chips.push(`<span class="chip chip-purple">${esc(dueLabel(qa.due, now()))}</span>`);
   if (qa.list) {
     const r = repos().find((x) => repoKey(x) === qa.list);
     chips.push(`<span class="chip chip-list">${esc(r ? listLabel(r) : qa.list)}</span>`);
@@ -1194,6 +1469,27 @@ function onClick(e: MouseEvent) {
     case "note":
       void doNote(key);
       break;
+    case "edit":
+      openEdit(key);
+      break;
+    case "edit-cancel":
+      closeEdit();
+      break;
+    case "edit-clear-due":
+      clearDue();
+      break;
+    case "note-edit":
+      if (S.open) openNoteEdit(S.open, btn.dataset.id ?? "");
+      break;
+    case "note-edit-cancel":
+      closeNoteEdit();
+      break;
+    case "note-delete":
+      if (S.open) deleteNote(S.open, btn.dataset.id ?? "");
+      break;
+    case "check-remove":
+      if (S.open) removeFromChecklist(S.open, Number(btn.dataset.idx));
+      break;
     case "snooze-all":
       doSnooze(
         pastDue(items(), now()).map((i) => i.key),
@@ -1312,6 +1608,8 @@ function onKey(e: KeyboardEvent) {
       renderSync();
       $<HTMLElement>(".sync-pill:not([hidden])")?.focus();
     } else if (S.qaOpen) closeQuickAdd();
+    else if (S.noteEdit && S.open) closeNoteEdit();
+    else if (S.edit && S.open) closeEdit();
     else if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
     else if (S.open) closeDetail();
     else return;
@@ -1355,10 +1653,29 @@ function onInput(e: Event) {
   const t = e.target as HTMLElement;
   if (t.id === "qa-input") updateQuickAdd();
   else if (t.id === "note-input" && S.open) S.drafts.set(S.open, (t as HTMLTextAreaElement).value);
+  else if (t.id === "check-input" && S.open) S.checkDrafts.set(S.open, (t as HTMLInputElement).value);
+  else if (t.id === "note-edit-input" && S.noteEdit) S.noteEdit.text = (t as HTMLTextAreaElement).value;
+  else if (S.edit && t.closest(".edit-form")) {
+    const d = S.edit.draft;
+    const v = (t as HTMLInputElement).value;
+    if (t.id === "edit-title") d.title = v;
+    else if (t.id === "edit-desc") d.description = v;
+    else if (t.id === "edit-due") {
+      d.dueText = v;
+      const it = byKey(S.edit.key);
+      // Only the line under the field changes while typing a date.
+      if (it) $("#edit-due-now").textContent = dueText(it, d);
+    }
+  }
 }
 
 function onChange(e: Event) {
-  if ((e.target as HTMLElement).id === "qa-list") qaListTouched = true;
+  const t = e.target as HTMLElement;
+  if (t.id === "edit-prio" && S.edit) S.edit.draft.priority = Number((t as HTMLSelectElement).value);
+  else if (t.dataset.check !== undefined && S.open) {
+    const it = byKey(S.open);
+    if (it) setChecklist(it.key, toggleCheck(it.checklist, Number(t.dataset.check)));
+  } else if (t.id === "qa-list") qaListTouched = true;
   else if (themeChoiceChanged(e.target as HTMLElement, "settings-theme")) renderTheme();
   else if (shellUp) extChange(e.target as HTMLElement, ctx);
 }
@@ -1369,6 +1686,9 @@ function onSubmit(e: SubmitEvent) {
   if (form.dataset.form === "login") void submitLogin(form);
   else if (form.id === "qa-form") void submitQuickAdd();
   else if (form.dataset.form === "bridge") void addBridge(form);
+  else if (form.dataset.form === "edit") saveEdit();
+  else if (form.dataset.form === "note-edit") saveNoteEdit();
+  else if (form.dataset.form === "check-add" && S.open) addToChecklist(S.open);
   else if (shellUp) void extSubmit(form, ctx);
 }
 
