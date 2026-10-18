@@ -75,6 +75,22 @@ test("detail opens in a bottom sheet with a scrim", async ({ page, hub }) => {
   await expect(sheet).toBeHidden();
 });
 
+test("the detail head stays in view when the sheet scrolls to the note", async ({ page, hub }) => {
+  void hub;
+  await openApp(page);
+  await row(page, "Order compost for the beds").locator(".row-body").click();
+  const sheet = page.locator("#detail");
+  await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  await sheet.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect.poll(() => sheet.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  const box = (await sheet.boundingBox())!;
+  const close = (await sheet.getByRole("button", { name: "Close details" }).boundingBox())!;
+  expect(close.y).toBeGreaterThanOrEqual(box.y);
+  expect(close.y + close.height).toBeLessThanOrEqual(box.y + box.height);
+  await sheet.getByRole("button", { name: "Close details" }).click();
+  await expect(sheet).toBeHidden();
+});
+
 test("swipe right marks done, swipe left opens snooze", async ({ page, hub }) => {
   await openApp(page);
   await swipe(page, row(page, "Water the plants"), 160, "Done");

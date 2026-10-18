@@ -391,8 +391,11 @@ kbd {
   z-index: 40;
   left: 0;
   right: 0;
-  bottom: 0;
-  padding: 16px calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  /* --kb-* are set by keyboard.ts only while the on-screen keyboard is open. */
+  bottom: var(--kb-inset, 0px);
+  max-height: var(--kb-room, none);
+  overflow-y: auto;
+  padding: 16px calc(16px + var(--safe-right)) calc(16px + var(--kb-safe-bottom, var(--safe-bottom))) calc(16px + var(--safe-left));
   background: var(--pane);
   border-top: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
@@ -718,8 +721,8 @@ kbd {
   z-index: 40;
   left: 0;
   right: 0;
-  bottom: 0;
-  max-height: 88%;
+  bottom: var(--kb-inset, 0px);
+  max-height: min(88%, calc(var(--kb-room, 100%) - 8px));
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--pane);
@@ -753,10 +756,19 @@ kbd {
   background: var(--line);
   align-self: center;
 }
+/* The head stays at the top of the scrolling sheet or pane, so Close stays in
+   reach when the sheet scrolls to the note field. It spans the padding so
+   what scrolls under it is covered edge to edge. */
 .d-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  margin: -10px calc(-18px - var(--safe-right)) 0 calc(-18px - var(--safe-left));
+  padding: 10px calc(18px + var(--safe-right)) 6px calc(18px + var(--safe-left));
+  background: var(--pane);
 }
 .d-head .check {
   margin-top: 4px;
@@ -919,6 +931,7 @@ kbd {
 .dialog-wrap {
   position: fixed;
   inset: 0;
+  bottom: var(--kb-inset, 0px);
   z-index: 50;
   display: flex;
   align-items: flex-end;
@@ -933,7 +946,10 @@ kbd {
   border: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
   box-shadow: var(--shadow);
-  padding: 14px calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  max-height: var(--kb-room, none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px calc(16px + var(--safe-right)) calc(16px + var(--kb-safe-bottom, var(--safe-bottom))) calc(16px + var(--safe-left));
 }
 .dialog-sub {
   margin: -4px 0 10px;
@@ -1250,11 +1266,13 @@ kbd {
   margin: 0;
   padding: 0;
 }
+/* Outcome, then the title with its Settings link under it, so a long title
+   keeps the width and the links line up at phone width. */
 .wiz-summary li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
@@ -1270,8 +1288,12 @@ kbd {
 .wiz-open {
   color: var(--soft);
 }
-.wiz-sum-title {
-  flex: 1;
+.wiz-summary .link-btn {
+  grid-column: 2;
+  justify-self: start;
+  margin-left: -4px;
+  padding-block: 2px;
+  text-align: left;
 }
 .wiz-nav {
   display: flex;
@@ -1414,6 +1436,7 @@ kbd {
   border-bottom: 1px solid var(--line);
 }
 .conn > div {
+  flex: 1;
   min-width: 0;
 }
 .conn p {
@@ -1486,6 +1509,12 @@ kbd {
   .shell {
     display: grid;
     grid-template-columns: 232px minmax(0, 1fr) 380px;
+  }
+  .page-view .shell {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+  .page-view .detail {
+    display: none;
   }
 
   .sidebar {
@@ -1604,6 +1633,8 @@ kbd {
     flex-direction: column;
     gap: 8px;
     position: static;
+    max-height: none;
+    overflow: visible;
     padding: 0 24px 10px;
     background: transparent;
     border: 0;
@@ -1682,6 +1713,9 @@ kbd {
 
   .detail {
     position: static;
+    /* A grid item keeps its z-index even when static: drop the sheet's, or
+       the pane sits above the snooze dialog's scrim. */
+    z-index: auto;
     max-height: none;
     transform: none;
     visibility: visible;
@@ -1698,6 +1732,10 @@ kbd {
   .detail-inner {
     padding: 20px;
   }
+  .d-head {
+    margin: -20px -20px 0;
+    padding: 20px 20px 6px;
+  }
   .detail-empty {
     display: grid;
     place-items: center;
@@ -1711,7 +1749,8 @@ kbd {
     top: auto;
     right: auto;
     left: 12px;
-    bottom: 64px;
+    /* Clear of the sidebar's sync pill and Settings row, which open it. */
+    bottom: 88px;
     width: 340px;
   }
   .dialog-wrap {

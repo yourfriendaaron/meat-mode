@@ -27,7 +27,7 @@ export const GROUP_LABELS: Record<GroupId, string> = {
 };
 
 const VIEW_GROUPS: Record<"today" | "upcoming" | "all", GroupId[]> = {
-  today: ["pastdue", "today", "evening", "done"],
+  today: ["pastdue", "today", "evening", "tomorrow", "week", "later", "nodate", "done"],
   upcoming: ["tomorrow", "week", "later"],
   all: ["pastdue", "today", "evening", "tomorrow", "week", "later", "nodate", "done"],
 };
@@ -70,6 +70,12 @@ export function repoDetail(r: Repo, all: Repo[]): string {
 export function isOpen(item: Item): boolean {
   return item.status !== "closed";
 }
+
+/** Close reason of a dismissed item: "Won't do" on an agent item, "Delete" on a personal one. */
+export const DISMISSED = "Dismissed";
+
+/** Today's agenda groups, which the Today view fills from every list. */
+const AGENDA: GroupId[] = ["pastdue", "today", "evening", "done"];
 
 /** Personal repos, by repo key. */
 export function personalRepoKeys(repos: Repo[]): Set<string> {
@@ -131,20 +137,27 @@ function compare(now: Date) {
     sortKey(a, now) - sortKey(b, now) || a.priority - b.priority || a.title.localeCompare(b.title);
 }
 
-/** Groups for a view, in display order, empty groups dropped. */
+/**
+ * Groups for a view, in display order, empty groups dropped. Today is today's
+ * agenda from every list, then the rest of the personal list. A deleted
+ * personal item shows nowhere.
+ */
 export function buildView(view: ViewId, items: Item[], repos: Repo[], now: Date): Group[] {
   const personal = personalRepoKeys(repos);
-  let pool = items;
+  let pool = items.filter((i) => isOpen(i) || i.closeReason !== DISMISSED || isAgentItem(i, personal));
   let order: GroupId[];
-  if (view === "today" || view === "upcoming" || view === "all") {
+  if (view === "today") {
+    order = VIEW_GROUPS.today;
+    pool = pool.filter((i) => !isAgentItem(i, personal) || AGENDA.includes(groupOf(i, now) ?? "nodate"));
+  } else if (view === "upcoming" || view === "all") {
     order = VIEW_GROUPS[view];
   } else if (view === "agents") {
     order = VIEW_GROUPS.all;
-    pool = items.filter((i) => isAgentItem(i, personal));
+    pool = pool.filter((i) => isAgentItem(i, personal));
   } else {
     const key = view.slice("list:".length);
     order = VIEW_GROUPS.all;
-    pool = items.filter((i) => repoKey(i) === key);
+    pool = pool.filter((i) => repoKey(i) === key);
   }
   const buckets = new Map<GroupId, Item[]>();
   for (const item of pool) {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -247,5 +248,76 @@ func TestCLIRefusesFlagIDs(t *testing.T) {
 	}
 	if _, err := os.Stat(profile); err == nil {
 		t.Error("bd wrote a file named in a value")
+	}
+}
+
+// fakeBD writes a bd stand-in that prints the given stdout and stderr and
+// exits with code, whatever it is asked.
+func fakeBD(t *testing.T, stdout, stderr string, code int) string {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("out", stdout)
+	write("err", stderr)
+	bin := filepath.Join(dir, "bd")
+	script := "#!/bin/sh\ncat '" + dir + "/out'\ncat '" + dir + "/err' >&2\nexit " + strconv.Itoa(code) + "\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+const permWarning = "Warning: /srv/example/.beads has permissions 0755 (recommended: 0700). Run: chmod 700 /srv/example/.beads\n"
+
+const humanList = `[
+  {
+    "id": "tst-abc",
+    "title": "Water the plants",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "created_at": "2026-05-10T10:00:00Z",
+    "updated_at": "2026-05-10T10:00:00Z",
+    "labels": ["human"]
+  }
+]
+`
+
+// TestCLIToleratesPermissionsWarning covers bd 1.3.1, which prints its
+// permissions warning on stderr and exits 0, and a bd that prints it on stdout
+// ahead of the JSON, even with brackets in the warning text.
+func TestCLIToleratesPermissionsWarning(t *testing.T) {
+	cases := map[string]struct{ stdout, stderr string }{
+		"stderr":            {humanList, permWarning + permWarning},
+		"stdout":            {permWarning + humanList, ""},
+		"stdout brackets":   {"Warning: [.beads] mode {0755}, expected 0700\n" + humanList, ""},
+		"stdout and stderr": {permWarning + humanList, permWarning},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			cli := &beads.CLI{Bin: fakeBD(t, c.stdout, c.stderr, 0), Now: func() time.Time {
+				return time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)
+			}}
+			list, err := cli.ListHuman(context.Background(), t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(list) != 1 || list[0].ID != "tst-abc" {
+				t.Fatalf("got %+v", list)
+			}
+		})
+	}
+}
+
+// TestCLIRealFailureStillFails keeps a nonzero exit an error even with a
+// warning beside it.
+func TestCLIRealFailureStillFails(t *testing.T) {
+	cli := &beads.CLI{Bin: fakeBD(t, "", permWarning+"Error: no beads database found\n", 1)}
+	if _, err := cli.ListHuman(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "no beads database found") {
+		t.Fatalf("err = %v", err)
 	}
 }

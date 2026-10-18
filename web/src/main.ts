@@ -6,6 +6,7 @@ import { ApiError, api, newId, setUnauthorizedHandler } from "./api.ts";
 import type { Action, Item, NewAction, NewBridgeReply, Payload, Repo, Session, State } from "./types.ts";
 import {
   DAY_CAPACITY,
+  DISMISSED,
   agentNewCount,
   attention,
   buildView,
@@ -37,6 +38,7 @@ import { machineReposHTML } from "./agents.ts";
 import { remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
+import { trackKeyboard } from "./keyboard.ts";
 import { sectionsHTML } from "./settings/registry.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
@@ -294,7 +296,7 @@ function actionLabel(a: Action): string {
     case "reopen":
       return "Reopen";
     case "dismiss":
-      return "Won't do";
+      return a.bridge === HUB_BRIDGE ? "Delete" : "Won't do";
     case "note":
       return "Note on";
     case "add":
@@ -402,6 +404,8 @@ function renderMain() {
   banner.hidden = !bannerBody;
   // Quick add belongs to the task views, not Settings or setup.
   $("#qa-form").hidden = isPage(S.view);
+  // Settings and setup have no task to show, so desktop drops the detail pane.
+  $("#app").classList.toggle("page-view", isPage(S.view));
   list.hidden = isPage(S.view);
   settings.hidden = S.view !== "settings";
   wizard.hidden = S.view !== "setup";
@@ -494,7 +498,7 @@ ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
 ${why}
 <div class="d-actions">${
     open
-      ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">Done</button>${agent ? `<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">Won't do</button>` : ""}`
+      ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">Done</button><button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? "Won't do" : "Delete"}</button>`
       : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>`
   }</div>
 ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
@@ -834,18 +838,21 @@ function doDone(key: string) {
   void closing([{ id: newId(), kind: "done", key, payload: {} }], `Done: ${it.title}`);
 }
 
+/** Won't do on an agent item; Delete on a personal one, which then shows nowhere. */
 function doDismiss(key: string) {
   const it = byKey(key);
   if (!it || !isOpen(it)) return;
+  const agent = isAgentItem(it, personalRepoKeys(repos()));
   moveSelectionOff([key]);
   const t = now().toISOString();
   patchLocal(key, (i) => {
     i.status = "closed";
     i.closedAt = t;
-    i.closeReason = "Dismissed";
+    i.closeReason = DISMISSED;
   });
-  render();
-  void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `Won't do: ${it.title}`);
+  if (!agent && S.open === key) closeDetail();
+  else render();
+  void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `${agent ? "Won't do" : "Deleted"}: ${it.title}`);
 }
 
 async function doReopen(key: string) {
@@ -1587,6 +1594,7 @@ function boot() {
   document.addEventListener("change", onChange);
   document.addEventListener("submit", onSubmit);
   new ResizeObserver(() => render()).observe(app);
+  trackKeyboard();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void refresh();
   });

@@ -68,15 +68,18 @@ test("closed items show only in Done today when closed today", () => {
   assert.equal(groupOf(item({ status: "closed", closedAt: t(13, 8) }), now), null);
 });
 
-test("Today view: past due, today, this evening, done today, in time order", () => {
+test("Today view: today's agenda from every list, then the rest of the personal list", () => {
   const items = [
     item({ title: "Evening", dueAt: t(14, 19) }),
     item({ title: "Late", dueAt: t(14, 9) }),
     item({ title: "Noon", dueAt: t(14, 12) }),
-    item({ title: "Morning", dueAt: t(14, 11) }),
+    item({ title: "Morning", dueAt: t(14, 11), repo: "garden" }),
     item({ title: "Tomorrow", dueAt: t(15, 9) }),
+    item({ title: "Agent tomorrow", dueAt: t(15, 9), repo: "garden" }),
     item({ title: "Closed", status: "closed", closedAt: t(14, 9) }),
+    item({ title: "Agent closed", status: "closed", closedAt: t(14, 8), repo: "garden" }),
     item({ title: "Undated" }),
+    item({ title: "Agent undated", repo: "garden" }),
   ];
   const groups = buildView("today", items, repos, now);
   assert.deepEqual(
@@ -85,10 +88,24 @@ test("Today view: past due, today, this evening, done today, in time order", () 
       ["Past due", ["Late"]],
       ["Today", ["Morning", "Noon"]],
       ["This evening", ["Evening"]],
-      ["Done today", ["Closed"]],
+      ["Tomorrow", ["Tomorrow"]],
+      ["No date", ["Undated"]],
+      ["Done today", ["Closed", "Agent closed"]],
     ],
   );
   assert.equal(openToday(items, now), 4);
+});
+
+test("a deleted personal item shows nowhere; an agent item's Won't do shows in Done today", () => {
+  const items = [
+    item({ title: "Deleted", status: "closed", closedAt: t(14, 9), closeReason: "Dismissed" }),
+    item({ title: "Won't do", status: "closed", closedAt: t(14, 9), closeReason: "Dismissed", repo: "garden" }),
+  ];
+  for (const view of ["today", "all", "list:home/personal"] as const) {
+    const titles = buildView(view, items, repos, now).flatMap((g) => g.items.map((i) => i.title));
+    assert.ok(!titles.includes("Deleted"), view);
+  }
+  assert.deepEqual(buildView("today", items, repos, now).flatMap((g) => g.items.map((i) => i.title)), ["Won't do"]);
 });
 
 test("Upcoming groups by tomorrow, this week, later", () => {

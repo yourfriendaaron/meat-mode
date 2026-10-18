@@ -131,10 +131,13 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		if !ok || at.After(now) {
 			continue
 		}
-		key := it.Key
-		if key == "" {
-			key = it.ID
+		// link is the item's own key; key is what the fired-once record uses,
+		// which for an added bead is the provisional key.
+		link := it.Key
+		if link == "" {
+			link = it.ID
 		}
+		key := link
 		if s.KeyOf != nil {
 			if key, err = s.KeyOf(ctx, it); err != nil {
 				errs = append(errs, err)
@@ -162,11 +165,11 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		err = s.notifier.Notify(ctx, notify.Message{
 			Title: truncTitle(it.Title),
 			Body:  body,
-			URL:   fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(key)),
-			Tag:   key,
+			URL:   fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(link)),
+			Tag:   link,
 		})
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", key, err))
+			errs = append(errs, fmt.Errorf("%s: %w", link, err))
 		}
 	}
 	return errors.Join(errs...)
