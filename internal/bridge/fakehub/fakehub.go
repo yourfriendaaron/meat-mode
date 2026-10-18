@@ -172,8 +172,15 @@ func (h *Hub) getPersonal(w http.ResponseWriter, r *http.Request, bridge string)
 		return
 	}
 	p := h.personal[i]
-	writeJSON(w, api.Item{Key: "hub/personal/" + r.PathValue("id"), ID: r.PathValue("id"), Title: p.Title, DueAt: p.Due,
-		Status: "open", Priority: 2, CreatedBy: p.Author, Comments: []api.Comment{}})
+	it := api.Item{Key: "hub/personal/" + r.PathValue("id"), ID: r.PathValue("id"), Title: p.Title, DueAt: p.Due,
+		Status: "open", Priority: 2, CreatedBy: p.Author, Comments: []api.Comment{}}
+	if p.Repeat != nil && p.Due != nil {
+		// The hub starts the rule at the due time.
+		rule := *p.Repeat
+		rule.Start = p.Due
+		it.Repeat = &rule
+	}
+	writeJSON(w, it)
 }
 
 // changePersonal keeps each change once by id, as the real hub does.
