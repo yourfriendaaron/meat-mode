@@ -45,6 +45,10 @@ type Bridge struct {
 	// records one (in bridge.json). A nil SaveAgents refuses them.
 	Agents     map[string]bool
 	SaveAgents func(repo string, on bool) error
+	// LoadAgents, when set, rereads the agents map (from bridge.json) before
+	// each repo report and before each ask, so a change made with `meat-mode
+	// bridge agents` while the bridge runs takes effect at once.
+	LoadAgents func() (map[string]bool, error)
 	// Runner runs agents for asks; nil on a bridge that runs none.
 	Runner  *AgentRunner
 	Version string
@@ -334,6 +338,7 @@ func (b *Bridge) syncedNames() []string {
 // rereads each found repo's opt-in line, and reports the repo list when it
 // changed.
 func (b *Bridge) discover(ctx context.Context, rescan bool) error {
+	b.reloadAgents()
 	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.scanEvery() {
 		b.found = Discover(b.Roots, b.Home, b.log())
 		b.scannedAt = b.now()
@@ -364,6 +369,20 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 	}
 	b.reposSent, b.reposAt = wire, b.now()
 	return nil
+}
+
+// reloadAgents rereads the agents map from the config file. A failed read
+// keeps the map the bridge has.
+func (b *Bridge) reloadAgents() {
+	if b.LoadAgents == nil {
+		return
+	}
+	m, err := b.LoadAgents()
+	if err != nil {
+		b.log().Warn("cannot reread the agents switches; keeping the last ones", "err", err)
+		return
+	}
+	b.Agents = m
 }
 
 // syncRepo lists a repo's human items and pushes the full set when any

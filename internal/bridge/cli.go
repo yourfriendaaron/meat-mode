@@ -28,6 +28,7 @@ type Env struct {
 	Executable string  // "": this process's executable
 	LookPath   func(string) (string, error)
 	HTTP       *http.Client
+	Resolver   Resolver  // nil: the system resolver
 	Stdin      io.Reader // nil: no input
 	Stdout     io.Writer
 	Stderr     io.Writer
@@ -61,12 +62,17 @@ func (e Env) executable() (string, error) {
 	return filepath.EvalSymlinks(exe)
 }
 
-func (e Env) hub(c Config) *Hub { return &Hub{URL: c.HubURL, Token: c.Token, HTTP: e.HTTP} }
+// hub returns the client for c's hub. c comes from LoadConfig, which has
+// checked trustedNetworks; a bad value here leaves only the private set.
+func (e Env) hub(c Config) *Hub {
+	allowed, _ := c.Allowed()
+	return &Hub{URL: c.HubURL, Token: c.Token, HTTP: e.HTTP, Allowed: allowed, Resolver: e.Resolver}
+}
 
 // Main runs `meat-mode bridge <command>`.
 func Main(ctx context.Context, args []string, env Env) error {
 	if len(args) == 0 {
-		return errors.New("usage: meat-mode bridge pair|run|status|uninstall")
+		return errors.New("usage: meat-mode bridge pair|run|status|agents|uninstall")
 	}
 	switch args[0] {
 	case "pair":
@@ -75,10 +81,12 @@ func Main(ctx context.Context, args []string, env Env) error {
 		return run(ctx, env)
 	case "status":
 		return status(ctx, env)
+	case "agents":
+		return agentsCommand(args[1:], env)
 	case "uninstall":
 		return uninstall(env)
 	}
-	return fmt.Errorf("unknown bridge command %q; use pair, run, status or uninstall", args[0])
+	return fmt.Errorf("unknown bridge command %q; use pair, run, status, agents or uninstall", args[0])
 }
 
 type multiFlag []string
@@ -158,6 +166,9 @@ func pair(ctx context.Context, args []string, env Env) error {
 		return err
 	}
 	cfg.HubURL, cfg.Token = strings.TrimRight(pos[0], "/"), pos[1]
+	// The trusted networks the hub is checked against are saved, so the
+	// service, which does not get this shell's environment, checks the same.
+	cfg.TrustedNetworks = effective.TrustedNetworks
 	allowInsecure := effective.AllowInsecureHTTP || *insecure
 	if *insecure {
 		cfg.AllowInsecureHTTP = true
@@ -307,7 +318,8 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		SaveSwitch: func(repo string, on bool) error {
 			return SaveSwitch(env.Paths.Config, repo, on)
 		},
-		Agents: cfg.Agents,
+		Agents:     cfg.Agents,
+		LoadAgents: func() (map[string]bool, error) { return LoadAgents(env.Paths.Config) },
 		SaveAgents: func(repo string, on bool) error {
 			return SaveAgents(env.Paths.Config, repo, on)
 		},

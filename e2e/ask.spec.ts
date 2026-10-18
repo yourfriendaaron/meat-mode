@@ -2,7 +2,7 @@
 // the fake agent (internal/bridge/fakeagent) in place of Claude Code, and real
 // bd. The fake does what words in the bead's newest note say, so each test
 // steers it from the note box as a user would. The tests share one world and
-// run in order: the first switches the repo on in Settings.
+// run in order: the first switches the repo on in Settings and its agents on at the machine.
 
 import { test as base, expect, type Page } from "@playwright/test";
 import { hasBd, World, type Captured } from "./world.ts";
@@ -107,7 +107,7 @@ test(JOURNEY, async ({ page, w }) => {
   const k = key(w, PLANTS);
   const chores = w.machine("laptop").repos.chores;
 
-  // 1. Sync the repo and let agents work in it.
+  // 1. Sync the repo in the app and let agents work in it on the machine.
   await page.goto(w.hubURL + "/");
   await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
   const sync = page.getByRole("switch", { name: /^Sync chores / });
@@ -115,8 +115,7 @@ test(JOURNEY, async ({ page, w }) => {
   await expect(agents).toBeDisabled();
   await sync.click();
   await expect(sync).toHaveAttribute("aria-checked", "true");
-  await expect(agents).toBeEnabled();
-  await agents.click();
+  await w.setAgents("laptop", chores, true);
   await expect(agents).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText("Waiting for laptop")).toHaveCount(0);
   ready = true;
