@@ -3,6 +3,14 @@
 .env.*
 !.env.example
 mise.local.toml
+.envrc
+# A deployment's own Compose files (docs/deploy.md copies the example here)
+/compose.yaml
+/compose.yml
+/compose.override.yaml
+/compose.override.yml
+/docker-compose*.yaml
+/docker-compose*.yml
 *.local
 *.local.*
 .public-safety.local
@@ -30,6 +38,11 @@ backups/
 /.beads/issues.jsonl
 
 # Tooling
+*.test
+*.out
+*.prof
+.idea/
+.vscode/
 node_modules/
 dist/
 coverage/
