@@ -14,14 +14,17 @@ const httpTimeout = 20 * time.Second
 
 // FromEnv builds the Web Push registry and the combined notifier from the
 // MEAT_MODE_VAPID_SUBJECT, MEAT_MODE_NTFY_URL, MEAT_MODE_NTFY_TOPIC and
-// MEAT_MODE_NTFY_TOKEN variables. ntfy is on only when its URL is set.
+// MEAT_MODE_NTFY_TOKEN variables. ntfy is on only when its URL is set. App
+// endpoints admit only global addresses until the caller sets Guard from
+// MEAT_MODE_PUSH_ALLOW, which the hub's config parses.
 func FromEnv(dataDir string, db *sql.DB) (*Registry, Notifier, error) {
 	reg, err := NewRegistry(dataDir, db, os.Getenv("MEAT_MODE_VAPID_SUBJECT"))
 	if err != nil {
 		return nil, nil, err
 	}
+	// Pushes follow no redirects and give up sooner than ntfy posts.
+	reg.Client = &http.Client{Timeout: sendTimeout, CheckRedirect: noRedirects}
 	client := &http.Client{Timeout: httpTimeout}
-	reg.Client = client
 	multi := Multi{reg}
 	if u := os.Getenv("MEAT_MODE_NTFY_URL"); u != "" {
 		topic := os.Getenv("MEAT_MODE_NTFY_TOPIC")

@@ -22,6 +22,9 @@ var (
 	ErrNotFound     = errors.New("not found")
 	ErrConflict     = errors.New("conflict")
 	ErrUnauthorized = errors.New("unauthorized")
+	// ErrForbidden is a wrong one-time secret, such as a device's
+	// confirmation code; the hub answers 403, not 401.
+	ErrForbidden = errors.New("forbidden")
 )
 
 // userError carries a plain message for the user and matches one sentinel.
