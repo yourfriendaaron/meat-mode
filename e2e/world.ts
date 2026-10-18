@@ -195,6 +195,8 @@ export interface RepoSpec {
   human: string[];
   /** Titles of beads without the human label. */
   other?: string[];
+  /** Makes a first commit, which agent runs need for their Git worktrees. */
+  commit?: boolean;
 }
 
 /** How World.create sets up the hub. The default is no login and no proxy. */
@@ -226,6 +228,7 @@ export class World {
   /** Bead title to id, for every seeded or added bead. */
   ids = new Map<string, string>();
   private bdHome = "";
+  private fake = "";
   private hubPort = 0;
   private hubVolume = "";
   private hubContainer = "";
@@ -470,6 +473,7 @@ export class World {
       if (s.optedIn) await appendFile(join(dir, ".beads", "config.yaml"), "\nmeat-mode.sync: true\n");
       for (const t of s.human) await this.create(dir, t, "-l", "human");
       for (const t of s.other ?? []) await this.create(dir, t);
+      if (s.commit) await execFileP("git", ["commit", "-q", "--allow-empty", "-m", "Start"], { cwd: dir, env: this.bdEnv() });
       m.repos[s.name] = dir;
     }
     this.machines.set(name, m);
@@ -501,11 +505,26 @@ export class World {
     return m;
   }
 
-  startBridge(name: string): Proc {
+  /**
+   * Builds the fake agent (internal/bridge/fakeagent) once and returns the
+   * bridge environment that runs it in place of Claude Code: stepDelay sets
+   * how far apart its slow steps are, timeout the longest one run may take.
+   */
+  async fakeAgentEnv(stepDelay = "1500ms", timeout = "30s"): Promise<NodeJS.ProcessEnv> {
+    if (!this.fake) {
+      const dir = join(this.tmp, "fakeagent-bin");
+      await execFileP("go", ["build", "-o", dir + "/", "./internal/bridge/fakeagent"], { cwd: repoRoot, env: { ...process.env, CGO_ENABLED: "0" } });
+      this.fake = join(dir, "fakeagent");
+    }
+    return { MEAT_MODE_AGENT_COMMAND: this.fake, MEAT_MODE_AGENT_TIMEOUT: timeout, FAKEAGENT_STEP: stepDelay };
+  }
+
+  /** Starts `meat-mode bridge run` for a machine. extra adds to its environment. */
+  startBridge(name: string, extra: NodeJS.ProcessEnv = {}): Proc {
     const m = this.machine(name);
     if (m.proc?.running) throw new Error(`bridge ${name} is already running`);
     const prev = m.proc?.output ?? "";
-    m.proc = new Proc(`bridge ${name}`, this.bin, ["bridge", "run"], this.bridgeEnv(m));
+    m.proc = new Proc(`bridge ${name}`, this.bin, ["bridge", "run"], { ...this.bridgeEnv(m), ...extra });
     m.proc.output = prev;
     return m.proc;
   }
