@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/store"
 )
 
@@ -24,6 +25,9 @@ type Options struct {
 	// ends; ctx ends when the hub shuts down. cfg is the validated config
 	// Run serves with.
 	OnStart func(ctx context.Context, cfg Config, st *store.Store) error
+
+	// lookup replaces public DNS in the public DNS check, for tests.
+	lookup dnsLookup
 }
 
 // newHTTPServer wraps h with the hub's timeouts. ReadTimeout bounds reading
@@ -86,6 +90,20 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 	// Old logins end before OnStart starts the reminders, so none reach a
 	// device that is logged out.
 	h := NewServer(cfg, st, push)
+	if opts.lookup != nil {
+		h.lookup = opts.lookup
+	}
+	// The public DNS check comes before anything starts that the hub
+	// would have to stop again.
+	switch d := h.runPublicDNSCheck(ctx); d.State {
+	case api.DNSPublic:
+		return publicDNSError(cfg.PublicURL, d)
+	case api.DNSPrivate:
+		slog.Info("public DNS has no public address for MEAT_MODE_PUBLIC_URL", "host", hostOf(cfg.PublicURL))
+	}
+	if h.publicDNS().State != api.DNSSkipped {
+		go h.watchPublicDNS(ctx)
+	}
 	if err := h.endOtherLogins(ctx); err != nil {
 		return err
 	}
