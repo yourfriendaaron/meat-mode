@@ -288,6 +288,18 @@ test("with repeats off, the words stay as they were read before", () => {
   assert.ok(r.title.includes("every"));
 });
 
+test("with repeats off, a repeat phrase gives no date", () => {
+  const r = parseQuickAdd("Standup every monday", now, lists, { repeat: false });
+  assert.equal(r.title, "Standup every monday");
+  assert.equal(r.due, null);
+  assert.equal(r.repeat, null);
+  assert.deepEqual(r.tokens, []);
+  const u = parseQuickAdd("Check the hoses every week until nov 26", now, lists, { repeat: false });
+  assert.equal(u.title, "Check the hoses every week until nov 26");
+  assert.equal(u.due, null);
+  assert.equal(u.repeat, null);
+});
+
 // Times people type in shorthand or by name. Wednesday 14 October 2026, 10:00.
 const times: [string, string, string][] = [
   ["Call Sam 8:30p", "Call Sam", "2026-10-14 20:30"],

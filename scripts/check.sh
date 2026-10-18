@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The full check CI runs, on this machine: run it once before a merge to main
-# or a deploy. Needs bd on PATH for the end-to-end suite, and docker for the
-# screenshot baselines.
+# What CI runs, on this machine: run it once before a merge to main or a
+# deploy. Only gitleaks and the container image build, with its end-to-end
+# run and smoke test, stay in CI. Needs bd on PATH for the end-to-end suite,
+# and docker for the screenshot baselines.
 # E2E_PORT sets the web suite's port, so parallel worktrees don't collide.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -29,6 +30,8 @@ pnpm --dir e2e typecheck
 E2E_REQUIRE_BD=1 pnpm --dir e2e test
 
 step "public safety"
+shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit .githooks/pre-push
+bash tests/public-safety.test.sh
 scripts/public-safety.sh
 
 echo

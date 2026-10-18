@@ -21,7 +21,7 @@ const common = {
   bundle: true,
   minify: !dev,
   sourcemap: dev ? "inline" : false,
-  target: ["es2022", "safari16"],
+  target: ["es2022", "safari16.4"],
   legalComments: "none",
   logLevel: "warning",
 };
