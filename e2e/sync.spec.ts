@@ -23,14 +23,24 @@ const BD_MISSING = "bd is not on PATH: install beads 1.3.x to run the end-to-end
 base.describe.configure({ mode: "serial" });
 if (!process.env.E2E_REQUIRE_BD) base.skip(!hasBd(), BD_MISSING);
 
+const PAIRING = "pairs two bridges through Settings and shows both machines' items";
+
 let world: World | undefined;
 let failed = false;
+/** Set when the first test has paired both bridges; every later test needs it. */
+let paired = false;
 /** desk's repos as bd lists them right after pairing. */
 let deskBefore: Record<string, Issue[]> = {};
 
 const test = base.extend<{ w: World }>({
-  w: async ({}, use) => {
+  w: async ({}, use, info) => {
     if (!world) throw new Error("world not set up");
+    // A test picked out with -g or file:line runs without the ones before it:
+    // no bridge is paired and the list is empty, so say so instead of timing
+    // out on a missing row.
+    if (!paired && info.title !== PAIRING) {
+      throw new Error("these tests build on each other, starting with the pairing test: run the whole of sync.spec.ts");
+    }
     await use(world);
   },
 });
@@ -113,7 +123,7 @@ async function bridgeSeenAfter(w: World, name: string, t: number) {
 
 // ---------- tests ----------
 
-test("pairs two bridges through Settings and shows both machines' items", async ({ page, w }) => {
+test(PAIRING, async ({ page, w }) => {
   await page.goto(w.hubURL + "/");
   await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
   for (const name of ["laptop", "desk"]) {
@@ -142,6 +152,7 @@ test("pairs two bridges through Settings and shows both machines' items", async 
   await expect(page.getByRole("navigation", { name: "Lists" })).toContainText("errands");
   await expect(page.locator(".sidebar .sync-pill")).toHaveText("Synced");
   deskBefore = await deskSnapshot(w);
+  paired = true;
 });
 
 test("quick add with a date and #list creates a bead in that repo", async ({ page, w }) => {
