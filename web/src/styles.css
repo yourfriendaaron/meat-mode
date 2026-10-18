@@ -1691,6 +1691,9 @@ kbd {
 
   .detail {
     position: static;
+    /* A grid item keeps its z-index even when static: drop the sheet's, or
+       the pane sits above the snooze dialog's scrim. */
+    z-index: auto;
     max-height: none;
     transform: none;
     visibility: visible;
