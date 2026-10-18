@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Edit, Item, NewAction, Payload, Repeat, Repo, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Bridge, Edit, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -149,6 +149,8 @@ export class FakeHub {
   seq = 0;
   /** Last checklist id the hub gave out. */
   checkSeq = 0;
+  /** Last run id the fake bridge gave out. */
+  runSeq = 0;
   /** Every request the page made, as "METHOD /path". */
   requests: string[] = [];
   /** When set, GET /api/actions answers 500, as an unreachable hub route would. */
@@ -281,6 +283,55 @@ export class FakeHub {
 
   find(key: string): Item | undefined {
     return this.items.find((i) => i.key === key);
+  }
+
+  /** Switches agents on for a repo, as if the bridge had applied the switch. */
+  allowAgents(repo: string, on = true): void {
+    const r = this.repos.find((x) => x.name === repo && !x.personal);
+    if (!r) throw new Error(`no repo ${repo}`);
+    r.agentsAllowed = on;
+    r.agentsPending = false;
+  }
+
+  /**
+   * What the bridge's run report does to an item: sets its run, keeping the
+   * fields `run` leaves out. A test moves a run between states with it, as
+   * the bridge would: `hub.setRun(key, { state: "waiting" })`.
+   */
+  setRun(key: string, run: Partial<Run> | null): void {
+    const it = this.find(key);
+    if (!it) throw new Error(`no item ${key}`);
+    if (run === null) {
+      it.run = null;
+      return;
+    }
+    const was = it.run;
+    const next: Run = {
+      id: was?.id ?? `run-${++this.runSeq}`,
+      state: "working",
+      agent: was?.agent ?? it.createdBy ?? "agent",
+      startedAt: was?.startedAt ?? this.now(),
+      count: was?.count ?? 1,
+      ...(was ?? {}),
+      ...run,
+    };
+    if (next.state !== "working") {
+      next.queued = 0;
+      next.endedAt ??= this.now();
+    } else next.endedAt = null;
+    if (next.state !== "stopped") delete next.reason;
+    it.run = next;
+  }
+
+  /**
+   * Why the hub refuses an ask on that repo (docs/api.md, Agent runs), or "".
+   * A pending switch counts as where it was switched to.
+   */
+  private askRefusal(bridge: string, repo: string): string {
+    if (bridge === HUB) return "the personal list has no agents";
+    const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
+    if (!r?.agentsAllowed) return `agents are not allowed in repo "${repo}"; switch them on in Settings`;
+    return "";
   }
 
   /** What a bridge does: replay every pending action. */
@@ -618,7 +669,16 @@ export class FakeHub {
       if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
       r.optedIn = Boolean(a.payload.on);
       r.pending = true;
+    } else if (a.kind === "agents") {
+      const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
+      if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
+      r.agentsAllowed = Boolean(a.payload.on);
+      r.agentsPending = true;
     } else if (a.kind === "add") {
+      if (a.payload.ask) {
+        const why = this.askRefusal(bridge, repo);
+        if (why) return this.json(route, 400, { error: why });
+      }
       const r = a.payload.repeat;
       if (r) {
         if (!onHub) return this.json(route, 400, { error: "repeat is for the personal list only" });
@@ -644,10 +704,16 @@ export class FakeHub {
         seenAt: this.now(),
         comments: [],
         pending: !onHub,
+        // With ask, the provisional item shows the run starting at once.
+        ...(a.payload.ask ? { run: { id: `pending-${a.id}`, state: "working" as const, agent: "agent", activity: "Starting", startedAt: this.now(), count: 1 } } : {}),
       });
     } else {
       const it = a.key ? this.find(a.key) : undefined;
       if (!it) return this.json(route, 404, { error: "no such item" });
+      if (a.kind === "ask") {
+        const why = this.askRefusal(it.bridge, it.repo);
+        if (why) return this.json(route, 400, { error: why });
+      }
       before = structuredClone(it);
       bridge = it.bridge;
       repo = it.repo;
@@ -683,6 +749,31 @@ export class FakeHub {
           break;
         case "note":
           (it.comments ??= []).push({ id: onHub ? a.id : `n-${this.seq + 1}`, author: `${this.user}-app`, text: a.payload.text ?? "", createdAt: this.now() });
+          break;
+        case "ask": {
+          // The note goes first, as note does; then the run shows working at
+          // once, or a live run counts the note as queued.
+          const text = a.payload.text?.trim();
+          if (text) (it.comments ??= []).push({ id: `n-${this.seq + 1}`, author: `${this.user}-app`, text, createdAt: this.now() });
+          const was = it.run;
+          if (was?.state === "working") {
+            if (text) was.queued = (was.queued ?? 0) + 1;
+          } else {
+            it.run = {
+              id: `pending-${a.id}`,
+              state: "working",
+              agent: was?.agent || it.createdBy || "agent",
+              activity: "Starting",
+              startedAt: this.now(),
+              count: (was?.count ?? 0) + 1,
+            };
+          }
+          break;
+        }
+        case "stop":
+          if (it.run?.state === "working") {
+            it.run = { ...it.run, state: "stopped", reason: "stopped", endedAt: this.now(), queued: 0 };
+          }
           break;
       }
       it.pending = !onHub;
