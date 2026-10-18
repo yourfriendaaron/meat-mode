@@ -29,6 +29,9 @@ type Hub struct {
 	runPuts  map[string]int
 	queue    map[string][]api.Action // bridge -> actions it was sent
 	results  map[string][]api.ActionResult
+	// atResult is the bridge's run list as it stood when each action's
+	// latest result arrived.
+	atResult map[string][]api.RunReport
 	personal []Personal
 	changes  []Change
 	down     bool
@@ -62,7 +65,8 @@ func New(tokens map[string]string) *Hub {
 	h := &Hub{
 		tokens: tokens, repos: map[string][]api.Repo{}, items: map[string][]api.Item{},
 		itemPuts: map[string]int{}, queue: map[string][]api.Action{}, results: map[string][]api.ActionResult{},
-		runs: map[string][]api.RunReport{}, runPuts: map[string]int{},
+		atResult: map[string][]api.RunReport{},
+		runs:     map[string][]api.RunReport{}, runPuts: map[string]int{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bridge/v1/hello", h.auth(h.hello))
@@ -310,7 +314,16 @@ func (h *Hub) result(w http.ResponseWriter, r *http.Request, bridge string) {
 		return
 	}
 	h.results[id] = append(h.results[id], res)
+	h.atResult[id] = slices.Clone(h.runs[bridge])
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// RunsAtResult returns the bridge's run list as it stood when the action's
+// latest result arrived.
+func (h *Hub) RunsAtResult(id string) []api.RunReport {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.atResult[id])
 }
 
 // Enqueue queues an action for the named bridge. Its Bridge field is left as

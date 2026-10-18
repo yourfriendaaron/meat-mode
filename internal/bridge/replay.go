@@ -81,6 +81,13 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 				b.ask(ctx, a, st, res)
 			}
 		}
+		// The hub drops its own view of an ask or stop once the action is
+		// applied, so it must already hold the run as it now stands.
+		if res.OK && changesRun(a) {
+			if err := b.pushRuns(ctx, true); err != nil {
+				return touched, err
+			}
+		}
 		if err := b.Hub.Result(ctx, a.ID, res); err != nil {
 			return touched, err
 		}
@@ -91,6 +98,11 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 		}
 	}
 	return touched, nil
+}
+
+// changesRun reports whether applying a starts, follows up or stops a run.
+func changesRun(a api.Action) bool {
+	return a.Kind == api.KindAsk || a.Kind == api.KindStop || (a.Kind == api.KindAdd && a.Payload.Ask)
 }
 
 // ErrUnknownRepo is the result for a sync switch on a repo the bridge did
