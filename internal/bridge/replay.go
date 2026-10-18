@@ -84,7 +84,11 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 		// The hub drops its own view of an ask or stop once the action is
 		// applied, so it must already hold the run as it now stands.
 		if res.OK && changesRun(a) {
-			if err := b.pushRuns(ctx, true); err != nil {
+			bead := a.BeadID
+			if a.Kind == api.KindAdd {
+				bead = res.BeadID
+			}
+			if err := b.pushApplied(ctx, a, bead); err != nil {
 				return touched, err
 			}
 		}

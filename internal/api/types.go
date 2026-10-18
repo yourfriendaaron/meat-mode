@@ -176,6 +176,10 @@ type RunReport struct {
 	Repo   string `json:"repo"`
 	BeadID string `json:"beadId"`
 	Run
+	// Applying is the id of the ask or stop the bridge has already applied
+	// to this run but not yet reported the result of, so the hub does not
+	// count it a second time.
+	Applying string `json:"applying,omitempty"`
 }
 
 // Bridge is one paired agent machine.

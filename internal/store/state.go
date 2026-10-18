@@ -168,7 +168,7 @@ func (s *Store) State() (api.State, error) {
 		if !ok {
 			continue
 		}
-		fold(&st.Items[i], a)
+		fold(&st.Items[i], a, s.isApplying(a))
 	}
 	return st, nil
 }
@@ -212,11 +212,23 @@ func provisionalRun(a api.Action) *api.Run {
 	}
 }
 
-// fold applies one pending action to the hub's copy of an item.
-func fold(it *api.Item, a api.Action) {
+// fold applies one pending action to the hub's copy of an item. An action
+// the bridge's run list already holds as applied is in the run it reported,
+// so only its note is folded.
+func fold(it *api.Item, a api.Action, applying bool) {
 	it.Pending = true
 	apply(it, a, provisionalPrefix+a.ID)
-	foldRun(it, a)
+	if !applying {
+		foldRun(it, a)
+	}
+}
+
+// isApplying reports whether a's bridge says in its last run list that it
+// has applied a.
+func (s *Store) isApplying(a api.Action) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.applying[a.Bridge][a.ID]
 }
 
 func (s *Store) eachRow(query string, args []any, fn func(*sql.Rows) error) error {

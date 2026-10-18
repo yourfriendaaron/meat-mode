@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"maps"
 	"strings"
 	"time"
 
@@ -108,10 +109,17 @@ func normaliseRun(r api.Run) api.Run {
 func (s *Store) ReplaceRuns(bridge string, reports []api.RunReport) error {
 	type target struct{ repo, bead string }
 	want := map[target]string{}
+	applying := map[string]bool{}
 	for _, r := range reports {
 		run, err := checkRun(r)
 		if err != nil {
 			return err
+		}
+		if r.Applying != "" {
+			if !validSegment(r.Applying) {
+				return invalidf("the run on %q has a bad applying id", r.BeadID)
+			}
+			applying[r.Applying] = true
 		}
 		t := target{r.Repo, r.BeadID}
 		if _, dup := want[t]; dup {
@@ -166,11 +174,24 @@ func (s *Store) ReplaceRuns(bridge string, reports []api.RunReport) error {
 		}
 		changed = true
 	}
+	if changed {
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	// The applied actions live only in memory: they matter for the moment
+	// between this list and the actions' results.
+	s.mu.Lock()
+	if !maps.Equal(s.applying[bridge], applying) {
+		if s.applying == nil {
+			s.applying = map[string]map[string]bool{}
+		}
+		s.applying[bridge] = applying
+		changed = true
+	}
+	s.mu.Unlock()
 	if !changed {
 		return nil
-	}
-	if err := tx.Commit(); err != nil {
-		return err
 	}
 	s.emit(Change{Kind: "runs", Bridge: bridge})
 	return nil

@@ -219,10 +219,10 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
-| `PUT /bridge/v1/runs` | `[]RunReport`: `{"repo", "beadId", …Run}` for every run the bridge knows, live and the latest settled one per bead | `204`; replaces this bridge's run list. The hub shows each on the item it names (see Agent runs) and ignores one whose item it does not hold. |
+| `PUT /bridge/v1/runs` | `[]RunReport`: `{"repo", "beadId", …Run, "applying"?}` for every run the bridge knows, live and the latest settled one per bead; `applying` is the id of an ask or stop already applied to that run whose result the bridge has not posted yet | `204`; replaces this bridge's run list. The hub shows each on the item it names (see Agent runs) and ignores one whose item it does not hold. |
 | `POST /bridge/v1/personal` | `PersonalTodo` | `201` with `{"key", "id"}` of the new personal item, or `200` with the same for a repeated `id` |
 
-The bridge sends its run list whenever a run changes, at most once a second, and with every full push. It keeps a bead's latest settled run while the bead is in its set.
+The bridge sends its run list whenever a run changes, at most once a second, and with every full push. It also sends it right before the result of an ask or stop, naming that action in `applying`: the hub then shows the action's note but not its effect on the run, which the list already holds. It keeps a bead's latest settled run while the bead is in its set.
 
 The bridge sends the full set per repo whenever any fingerprint in it changed. The set holds every open, in-progress, blocked and deferred item labelled `human`, plus items closed in the last 7 days so the Done section and Undo work.
 

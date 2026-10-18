@@ -193,6 +193,49 @@ func TestAskOnWorkingRunIsAFollowUp(t *testing.T) {
 	}
 }
 
+func TestAppliedAskIsNotCountedTwice(t *testing.T) {
+	s, c := open(t)
+	seedAgents(t, s)
+	key := ItemKey("laptop", "garden", "gd-1")
+	must(t, s.ReplaceRuns("laptop", []api.RunReport{run("gd-1", "r1", api.RunWorking, c.t)}))
+	c.tick()
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAsk, Key: key, Payload: api.Payload{Text: "Only the front bed"}}, "alex-app")
+	must(t, err)
+	var changes int
+	s.Watch(func(ch Change) {
+		if ch.Kind == "runs" {
+			changes++
+		}
+	})
+
+	// The bridge wrote the note to the run and reports it before the result.
+	written := run("gd-1", "r1", api.RunWorking, c.t)
+	written.Queued, written.Applying = 1, id1
+	must(t, s.ReplaceRuns("laptop", []api.RunReport{written}))
+	it := item(t, mustState(t, s), key)
+	if r := it.Run; r.Queued != 1 {
+		t.Fatalf("an applied ask counted again while pending: %+v", r)
+	}
+	if len(it.Comments) != 1 {
+		t.Errorf("the applied ask's note is gone: %+v", it.Comments)
+	}
+
+	// The same list without applying shows the pending ask again, and says so.
+	written.Applying = ""
+	must(t, s.ReplaceRuns("laptop", []api.RunReport{written}))
+	if r := item(t, mustState(t, s), key).Run; r.Queued != 2 {
+		t.Fatalf("a pending ask the bridge has not applied: %+v", r)
+	}
+	if changes != 2 {
+		t.Errorf("runs changes %d, want 2", changes)
+	}
+
+	written.Applying = "a/b"
+	if err := s.ReplaceRuns("laptop", []api.RunReport{written}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("bad applying id: %v", err)
+	}
+}
+
 func TestPendingStop(t *testing.T) {
 	s, c := open(t)
 	seedAgents(t, s)

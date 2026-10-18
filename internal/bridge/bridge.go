@@ -208,7 +208,26 @@ func (b *Bridge) pushRuns(ctx context.Context, force bool) error {
 	if !force && (!b.Runner.Dirty() || b.now().Sub(b.runsAt) < RunsEvery) {
 		return nil
 	}
-	if err := b.Hub.PutRuns(ctx, b.Runner.Reports()); err != nil {
+	return b.putRuns(ctx, b.Runner.Reports())
+}
+
+// pushApplied sends the run list before a's result, naming a on the run of
+// beadID, so the hub does not count a both in that run and as pending.
+func (b *Bridge) pushApplied(ctx context.Context, a api.Action, beadID string) error {
+	if b.Runner == nil {
+		return nil
+	}
+	reports := b.Runner.Reports()
+	for i := range reports {
+		if reports[i].Repo == a.Repo && reports[i].BeadID == beadID {
+			reports[i].Applying = a.ID
+		}
+	}
+	return b.putRuns(ctx, reports)
+}
+
+func (b *Bridge) putRuns(ctx context.Context, reports []api.RunReport) error {
+	if err := b.Hub.PutRuns(ctx, reports); err != nil {
 		b.Runner.MarkDirty()
 		return hubError{err}
 	}

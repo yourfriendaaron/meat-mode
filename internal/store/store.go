@@ -65,7 +65,8 @@ type Store struct {
 
 	mu        sync.Mutex
 	listeners []func(Change)
-	offline   map[string]bool // runs the last State showed offline; see joinRuns
+	offline   map[string]bool            // runs the last State showed offline; see joinRuns
+	applying  map[string]map[string]bool // per bridge, the actions its last run list holds as applied; see ReplaceRuns
 }
 
 // Open checks dataDir is writable, opens (or creates) the database in it,

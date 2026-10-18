@@ -192,7 +192,7 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 	}
 	// The run list reached the hub before the ask's result, so the app never
 	// sees an applied ask with no run.
-	if at := w.hub.RunsAtResult(aid("ask-close")); !slices.ContainsFunc(at, func(r api.RunReport) bool { return r.BeadID == id && r.State == api.RunWorking }) {
+	if at := w.hub.RunsAtResult(aid("ask-close")); !slices.ContainsFunc(at, func(r api.RunReport) bool { return r.BeadID == id && r.State == api.RunWorking && r.Applying == aid("ask-close") }) {
 		t.Errorf("runs when the ask's result arrived = %+v", at)
 	}
 	run := w.waitRun(b, id, settled)
@@ -448,7 +448,7 @@ func TestAgentStop(t *testing.T) {
 	w.hub.Enqueue(us, action("stop", api.KindStop, "garden", id, api.Payload{}))
 	w.tick(b)
 	w.oneOK(aid("stop"))
-	if at := w.hub.RunsAtResult(aid("stop")); !slices.ContainsFunc(at, func(r api.RunReport) bool { return r.BeadID == id && r.State == api.RunStopped }) {
+	if at := w.hub.RunsAtResult(aid("stop")); !slices.ContainsFunc(at, func(r api.RunReport) bool { return r.BeadID == id && r.State == api.RunStopped && r.Applying == aid("stop") }) {
 		t.Errorf("runs when the stop's result arrived = %+v", at)
 	}
 	// Applied once the run ended.
