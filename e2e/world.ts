@@ -499,6 +499,15 @@ export class World {
     return stdout;
   }
 
+  /**
+   * Switches agents on or off for a repo of a paired machine with
+   * `meat-mode bridge agents`, the only way to switch them on. repoDir is
+   * the repo's folder.
+   */
+  async setAgents(name: string, repoDir: string, on: boolean): Promise<string> {
+    return this.run(name, ["bridge", "agents", on ? "on" : "off", repoDir]);
+  }
+
   machine(name: string): Machine {
     const m = this.machines.get(name);
     if (!m) throw new Error(`no machine ${name}`);
