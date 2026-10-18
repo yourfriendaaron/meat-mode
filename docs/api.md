@@ -100,6 +100,22 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
 | `add` | `bridge` + `repo` | `{"title": "…", "due": time or null}` | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |
 | `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list. |
+| `edit` | `key` | `{"set": Edit}` | sets each field `set` names; the hub records the old values as `was` |
+| `note-edit` | `key` | `{"commentId": "…", "text": "…"}` | replaces that comment's text, up to 10000 characters; the hub records the comment as it was in `comment` |
+| `note-delete` | `key` | `{"commentId": "…"}` | removes that comment; the hub records it as `comment` |
+| `note-restore` | `key` | `{"comment": Comment}` | puts a removed comment back in its place by `createdAt`, with its id, author and time |
+
+The last four change personal items only. The hub refuses them on an agent's item with `400`: an agent item's title, dates and priority belong to its agent, so ask for a change in a note.
+
+`Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?}`. A field left out stays as it is.
+
+- `title` follows the `add` rules: trimmed, not empty, up to 1000 characters.
+- `description` is up to 10000 characters; `""` clears it.
+- `due` is a time; `"clearDue": true` removes the due date instead. Sending both is refused.
+- `priority` is 0 (highest) to 4, as in bd. A new personal item has 2. The app shows 0 and 1 as high priority on every item.
+- `checklist` replaces the whole list of `{"id", "text", "done"}`. The hub gives an entry with no `id` a new one and refuses a repeated `id`. `text` is trimmed, not empty, up to 1000 characters; the list holds at most 100 entries. `[]` clears it.
+
+The applied `edit` action carries `was`, an `Edit` with the same fields as `set` holding the values before it (`clearDue: true` for a due date that was not set). Its Undo is an `edit` with `set` = `was`. The Undo of `note-edit` is a `note-edit` back to the text of the `comment` the applied action carries; the Undo of `note-delete` is `note-restore` with the `comment` the applied action carries.
 
 On the personal list (`hub/personal`) every action is applied by the hub when it is posted: the response already has status `applied`, the item never shows `pending`, and an `add` returns the new item's id as `beadId`. A closed personal item leaves the app 7 days after it closed, as a closed bead leaves a bridge's set.
 
@@ -141,6 +157,25 @@ An agent adds a personal to-do with `POST /bridge/v1/personal` and the bridge to
 curl -fsS https://meat-mode.example.com/bridge/v1/personal \
   -H "Authorization: Bearer $MEAT_MODE_TOKEN" -H 'Content-Type: application/json' \
   -d '{"title": "Renew the library card", "due": "2026-03-02T09:00:00Z", "author": "planner"}'
+```
+
+### Agents: changing their personal to-dos
+
+An agent can read and change a personal to-do that its machine's token added, and no other: an item added from another machine, from the app, or moved from a bridge's personal repo answers `404`, the same as an id that does not exist.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /bridge/v1/personal/{id}` | | `200` with the `Item`, including a closed one still shown |
+| `POST /bridge/v1/personal/{id}/actions` | `PersonalChange` | `201` with the applied `Action`, or `200` with the same for a repeated `id` |
+
+Like the add, these calls leave the bridge's last-seen time alone. On a paired machine, `meat-mode edit`, `meat-mode done` and `meat-mode reopen` make them with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
+
+`PersonalChange` is `{"id"?, "kind", "payload", "author"?}`. `kind` is `edit` (payload `{"set": Edit}`), `done`, `reopen`, `dismiss` or `note` (payload `{"text"}`), with the rules of the app's actions above. `id` and `author` work as for `PersonalTodo`.
+
+```sh
+curl -fsS https://meat-mode.example.com/bridge/v1/personal/mm-12/actions \
+  -H "Authorization: Bearer $MEAT_MODE_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"kind": "edit", "payload": {"set": {"due": "2026-03-09T09:00:00Z"}}, "author": "planner"}'
 ```
 
 ### Moving a bridge's personal repo to the hub

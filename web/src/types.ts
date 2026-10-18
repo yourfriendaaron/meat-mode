@@ -25,10 +25,34 @@ export interface Item {
   updatedAt: string;
   closedAt?: string | null;
   comments: Comment[] | null;
+  /** Personal items only. */
+  checklist?: Check[] | null;
   pending?: boolean;
   seenAt?: string | null;
   firstSeen?: string;
   error?: string;
+}
+
+/** One entry of a personal item's checklist. */
+export interface Check {
+  /** Given by the hub when an edit leaves it empty. */
+  id?: string;
+  text: string;
+  done: boolean;
+}
+
+/** What an edit action changes on a personal item. A field left out stays as it is. */
+export interface Edit {
+  title?: string;
+  /** "" clears it. */
+  description?: string;
+  due?: string;
+  /** Removes the due date; never sent with `due`. */
+  clearDue?: boolean;
+  /** 0 (highest) to 4, as bd. */
+  priority?: number;
+  /** Replaces the whole list; [] clears it. */
+  checklist?: Check[];
 }
 
 export interface Repo {
@@ -55,9 +79,29 @@ export interface Payload {
   title?: string;
   due?: string | null;
   on?: boolean;
+  /** edit */
+  set?: Edit;
+  /** edit: the values the fields in `set` held before, filled in by the hub. */
+  was?: Edit;
+  /** note-edit and note-delete. */
+  commentId?: string;
+  /** note-edit and note-delete: the comment as it was, filled in by the hub. note-restore: the comment to put back. */
+  comment?: Comment;
 }
 
-export type ActionKind = "done" | "reopen" | "snooze" | "dismiss" | "note" | "add" | "sync";
+export type ActionKind =
+  | "done"
+  | "reopen"
+  | "snooze"
+  | "dismiss"
+  | "note"
+  | "add"
+  | "sync"
+  // Personal list only.
+  | "edit"
+  | "note-edit"
+  | "note-delete"
+  | "note-restore";
 
 export interface NewAction {
   id: string;

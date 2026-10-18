@@ -126,6 +126,8 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.Handle("GET /bridge/v1/actions", s.bridgeAuth(s.handlePullActions))
 	m.Handle("POST /bridge/v1/actions/{id}/result", s.bridgeAuth(s.handleResult))
 	m.Handle("POST /bridge/v1/personal", s.tokenAuth(s.handleAddPersonal))
+	m.Handle("GET /bridge/v1/personal/{id}", s.tokenAuth(s.handleGetPersonal))
+	m.Handle("POST /bridge/v1/personal/{id}/actions", s.tokenAuth(s.handleChangePersonal))
 
 	m.HandleFunc("GET /healthz", s.handleHealth)
 	staticH := newStatic(static)
@@ -503,4 +505,33 @@ func (s *Server) handleAddPersonal(w http.ResponseWriter, r *http.Request, bridg
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, api.PersonalTodoReply{Key: key, ID: id})
+}
+
+// handleGetPersonal lets an agent read a personal to-do its machine added.
+func (s *Server) handleGetPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
+	it, err := s.store.PersonalItem(bridge, r.PathValue("id"))
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, it)
+}
+
+// handleChangePersonal lets an agent change a personal to-do its machine
+// added.
+func (s *Server) handleChangePersonal(w http.ResponseWriter, r *http.Request, bridge string) {
+	var c api.PersonalChange
+	if !readJSON(w, r, maxBody, &c) {
+		return
+	}
+	a, created, err := s.store.ChangePersonal(bridge, r.PathValue("id"), c)
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, a)
 }

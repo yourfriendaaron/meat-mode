@@ -28,6 +28,7 @@ type Hub struct {
 	queue    map[string][]api.Action // bridge -> actions it was sent
 	results  map[string][]api.ActionResult
 	personal []Personal
+	changes  []Change
 	down     bool
 	timeZone string // what GET /bridge/v1/settings tells the bridge
 	// noSettings answers GET /bridge/v1/settings with 404, as a hub from
@@ -47,6 +48,13 @@ type Personal struct {
 	api.PersonalTodo
 }
 
+// Change is one change an agent posted to a personal to-do.
+type Change struct {
+	Bridge string
+	Item   string // the to-do's id
+	api.PersonalChange
+}
+
 // New starts a fake hub that accepts the given tokens (token -> bridge name).
 func New(tokens map[string]string) *Hub {
 	h := &Hub{
@@ -61,6 +69,8 @@ func New(tokens map[string]string) *Hub {
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
 	mux.HandleFunc("POST /bridge/v1/actions/{id}/result", h.auth(h.result))
 	mux.HandleFunc("POST /bridge/v1/personal", h.auth(h.addPersonal))
+	mux.HandleFunc("GET /bridge/v1/personal/{id}", h.auth(h.getPersonal))
+	mux.HandleFunc("POST /bridge/v1/personal/{id}/actions", h.auth(h.changePersonal))
 	h.Server = httptest.NewServer(mux)
 	return h
 }
@@ -141,6 +151,57 @@ func (h *Hub) addPersonal(w http.ResponseWriter, r *http.Request, bridge string)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(personalReply(len(h.personal) - 1))
+}
+
+// ownTodo returns the index of the personal to-do id that bridge added, or
+// -1, which the hub answers with 404 whatever the reason.
+func (h *Hub) ownTodo(bridge, id string) int {
+	n, err := strconv.Atoi(strings.TrimPrefix(id, "mm-"))
+	if err != nil || !strings.HasPrefix(id, "mm-") || n < 1 || n > len(h.personal) || h.personal[n-1].Bridge != bridge {
+		return -1
+	}
+	return n - 1
+}
+
+func (h *Hub) getPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	i := h.ownTodo(bridge, r.PathValue("id"))
+	if i < 0 {
+		writeErr(w, http.StatusNotFound, "no personal to-do added from this machine")
+		return
+	}
+	p := h.personal[i]
+	writeJSON(w, api.Item{Key: "hub/personal/" + r.PathValue("id"), ID: r.PathValue("id"), Title: p.Title, DueAt: p.Due,
+		Status: "open", Priority: 2, CreatedBy: p.Author, Comments: []api.Comment{}})
+}
+
+// changePersonal keeps each change once by id, as the real hub does.
+func (h *Hub) changePersonal(w http.ResponseWriter, r *http.Request, bridge string) {
+	var c api.PersonalChange
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	id := r.PathValue("id")
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.ownTodo(bridge, id) < 0 {
+		writeErr(w, http.StatusNotFound, "no personal to-do added from this machine")
+		return
+	}
+	a := api.Action{ID: c.ID, Kind: c.Kind, Bridge: "hub", Repo: "personal", BeadID: id, Payload: c.Payload,
+		Author: c.Author, Status: api.StatusApplied}
+	for _, o := range h.changes {
+		if c.ID != "" && o.ID == c.ID {
+			writeJSON(w, a)
+			return
+		}
+	}
+	h.changes = append(h.changes, Change{Bridge: bridge, Item: id, PersonalChange: c})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(a)
 }
 
 func personalReply(i int) api.PersonalTodoReply {
@@ -284,6 +345,13 @@ func (h *Hub) Items(bridge, repo string) ([]api.Item, bool) {
 	defer h.mu.Unlock()
 	it, ok := h.items[bridge+"/"+repo]
 	return slices.Clone(it), ok
+}
+
+// Changes returns the changes to personal to-dos received, in order.
+func (h *Hub) Changes() []Change {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.changes)
 }
 
 // Personals returns the personal to-dos received, in order.

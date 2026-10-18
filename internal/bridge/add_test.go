@@ -23,15 +23,15 @@ func TestAddUsesBridgeConfig(t *testing.T) {
 	if err := Add(context.Background(), args, env); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if got := strings.TrimSpace(out.String()); got != "hub/personal/mm-1" {
-		t.Fatalf("printed %q, want the key", got)
+	if got := strings.TrimSpace(out.String()); got != "mm-1" {
+		t.Fatalf("printed %q, want the id", got)
 	}
 	// Retrying with the same id names the same item and adds nothing.
 	out.Reset()
 	if err := Add(context.Background(), args, env); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(out.String()); got != "hub/personal/mm-1" {
+	if got := strings.TrimSpace(out.String()); got != "mm-1" {
 		t.Fatalf("retry printed %q", got)
 	}
 	ps := hub.Personals()
