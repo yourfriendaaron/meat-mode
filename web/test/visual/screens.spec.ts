@@ -8,6 +8,8 @@
 
 import { test, expect, openApp, wizard, openWizardAt, row } from "../e2e/setup.ts";
 import type { Page } from "@playwright/test";
+import type { RunState } from "../../src/types.ts";
+import type { FakeHub } from "../e2e/fake-hub.ts";
 
 const IPHONE_SAFARI =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
@@ -66,6 +68,40 @@ async function goToSettings(page: Page, size: Size) {
   }
   await expect(page.locator("#view-title")).toHaveText("Settings");
 }
+
+/** The From agents view, where every agent item shows. */
+async function goToAgents(page: Page, size: Size) {
+  const nav = size === "phone" ? page.locator("#tabs") : page.locator("#nav");
+  await nav.getByRole("button", { name: /agents/i }).click();
+  await expect(page.locator("#view-title")).toHaveText("From agents");
+}
+
+/** One agent item in each run state, with agents allowed in both repos. */
+function everyRunState(hub: FakeHub) {
+  hub.allowAgents("website");
+  hub.allowAgents("garden");
+  hub.setRun("home/website/we-1", { state: "working", activity: "Shortening the second line of the footer" });
+  hub.setRun("home/garden/ga-2", { state: "waiting", activity: "Asked which label size to print" });
+  hub.setRun("home/garden/ga-1", { state: "stopped", reason: "usage-limit", detail: "The limit resets at 14:00." });
+  hub.items.push({
+    ...structuredClone(hub.find("home/garden/ga-2")!),
+    key: "home/garden/ga-3",
+    id: "ga-3",
+    title: "Pick a mulch for the paths",
+    status: "closed",
+    closedAt: "2026-10-14T09:00:00Z",
+    closeReason: "Done",
+    run: { id: "run-done", state: "done", agent: "planner", activity: "Ordered bark mulch and closed the task", startedAt: "2026-10-14T08:40:00Z", endedAt: "2026-10-14T09:00:00Z", count: 1 },
+  });
+}
+
+/** What the sheet's run card shows in each state. */
+const SHEET_RUNS: Record<RunState, Parameters<FakeHub["setRun"]>[1]> = {
+  working: { state: "working", activity: "Shortening the second line", queued: 1 },
+  waiting: { state: "waiting", activity: "Asked which wording to use" },
+  done: { state: "done", activity: "Shortened the line and closed the task" },
+  stopped: { state: "stopped", reason: "timeout", detail: "Runs on this machine stop after 30 minutes." },
+};
 
 for (const size of Object.keys(SIZES) as Size[]) {
   for (const theme of ["dark", "light"] as const) {
@@ -227,6 +263,54 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await expect(page.getByLabel("Remind me early")).toBeVisible();
           await expect(page.getByRole("button", { name: "Get calendar link" })).toBeVisible();
           await shot(page, "settings");
+        });
+
+        test("agent runs on list rows", async ({ page, hub }) => {
+          everyRunState(hub);
+          await openApp(page);
+          await goToAgents(page, size);
+          await expect(page.locator("#list .row[data-run]")).toHaveCount(4);
+          await shot(page, "runs-rows");
+        });
+
+        for (const state of Object.keys(SHEET_RUNS) as RunState[]) {
+          test(`agent run ${state} in the sheet`, async ({ page, hub }) => {
+            hub.allowAgents("website");
+            const it = hub.find("home/website/we-1")!;
+            if (state === "working") it.comments!.push({ id: "c4", author: "alex-app", text: "Keep the copyright year.", createdAt: "2026-10-14T09:30:00Z" });
+            hub.setRun(it.key, SHEET_RUNS[state]);
+            await openApp(page, "/?item=" + encodeURIComponent(it.key));
+            await expect(page.locator("#detail .run-card")).toHaveAttribute("data-run", state);
+            await shot(page, `runs-sheet-${state}`);
+          });
+        }
+
+        test("undo bar with Tell", async ({ page, hub }) => {
+          hub.allowAgents("garden");
+          await openApp(page);
+          await row(page, "Order compost for the beds").getByRole("button", { name: "Mark done: Order compost for the beds" }).click();
+          await expect(page.locator("#toast").getByRole("button", { name: "Tell planner" })).toBeVisible();
+          await shot(page, "runs-undo-tell");
+        });
+
+        test("new task with the agent switch", async ({ page, hub }) => {
+          hub.allowAgents("garden");
+          await openApp(page);
+          await page.getByRole("button", { name: "New task" }).first().click();
+          await page.locator("#qa-form input").first().fill("Find a cheaper soil sensor");
+          await page.locator("#qa-list").selectOption("home/garden");
+          await expect(page.locator("#qa-add")).toHaveText("Add and ask agent");
+          await shot(page, "runs-new-task");
+        });
+
+        test("settings with the agents switch", async ({ page, hub }) => {
+          hub.allowAgents("website");
+          hub.setRun("home/website/we-1", { state: "working", activity: "Shortening the second line" });
+          await openApp(page);
+          await goToSettings(page, size);
+          await expect(page.locator("[data-section=runs]")).toContainText("1 agent working");
+          await expect(page.getByRole("button", { name: "Get calendar link" })).toBeVisible();
+          await shot(page, "runs-settings");
         });
 
         test("empty list with the Continue setup banner", async ({ page, hub }) => {
