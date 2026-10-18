@@ -35,3 +35,38 @@ export function installPlatform(): "ios" | "mac-safari" | null {
   }
   return null;
 }
+
+/**
+ * A short, generic name for this browser, such as "Firefox on Linux", for the
+ * Devices list. It carries no version or model, so it identifies nobody.
+ */
+export function browserName(ua = navigator.userAgent): string {
+  const browser = /Edg(e|A|iOS)?\//.test(ua)
+    ? "Edge"
+    : /OPR\/|Opera/.test(ua)
+      ? "Opera"
+      : /Firefox\/|FxiOS\//.test(ua)
+        ? "Firefox"
+        : /SamsungBrowser\//.test(ua)
+          ? "Samsung Internet"
+          : /Chrome\/|Chromium\/|CriOS\//.test(ua)
+            ? "Chrome"
+            : /Safari\//.test(ua)
+              ? "Safari"
+              : "";
+  const os = /Android/.test(ua)
+    ? "Android"
+    : /iPhone|iPad|iPod/.test(ua)
+      ? "iOS"
+      : /Windows/.test(ua)
+        ? "Windows"
+        : /Macintosh|Mac OS X/.test(ua)
+          ? "macOS"
+          : /CrOS/.test(ua)
+            ? "ChromeOS"
+            : /Linux|X11/.test(ua)
+              ? "Linux"
+              : "";
+  if (browser && os) return `${browser} on ${os}`;
+  return browser || os || "Browser";
+}

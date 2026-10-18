@@ -1,6 +1,6 @@
 // Thin client for the hub's app API (docs/api.md).
 
-import type { Action, Bridge, NewAction, NewBridgeReply, Session, SetupInfo, State } from "./types.ts";
+import type { Action, Bridge, Device, NewAction, NewBridgeReply, Session, SetupInfo, State } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -64,7 +64,11 @@ export const api = {
   actions: (limit = 30) => call<Action[]>("GET", `/api/actions?limit=${limit}`),
   seen: (key: string) => call<void>("POST", `/api/items/${encodeURIComponent(key)}/seen`),
   pushKey: () => call<{ publicKey: string }>("GET", "/api/push/key"),
-  pushSubscribe: (sub: PushSubscriptionJSON) => call<void>("POST", "/api/push/subscriptions", sub),
+  /** Registers a push subscription. An `app` one answers `{device}` and waits for its confirmation; a `web` one answers nothing. */
+  pushSubscribe: (sub: PushSubscriptionJSON, kind: "web" | "app" = "web", name = "") =>
+    call<{ device: string } | undefined>("POST", "/api/push/subscriptions", { ...sub, kind, ...(name ? { name } : {}) }),
+  devices: () => call<Device[]>("GET", "/api/devices"),
+  revokeDevice: (id: string) => call<void>("DELETE", `/api/devices/${encodeURIComponent(id)}`),
   bridges: () => call<Bridge[]>("GET", "/api/bridges"),
   addBridge: (name: string) => call<NewBridgeReply>("POST", "/api/bridges", { name }),
   revokeBridge: (name: string) => call<void>("DELETE", `/api/bridges/${encodeURIComponent(name)}`),

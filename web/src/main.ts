@@ -66,12 +66,13 @@ import { loginErrorText, needsLogin } from "./login.ts";
 import { esc } from "./html.ts";
 import { machineReposHTML } from "./agents.ts";
 import { agentName, agentsAllowed, anyAgentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
-import { remindersOn, subscribePush, turnOnReminders } from "./push.ts";
+import { appPushStatus, appStateMessage, initPush, inAndroidApp, remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
 import { trackKeyboard } from "./keyboard.ts";
 import { sectionsHTML } from "./settings/registry.ts";
 import { forgetCalendarLink } from "./settings/calendar.ts";
+import { forgetDevices } from "./settings/devices.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
 /** Completed and Deleted show the closed items the hub keeps for 7 days. */
@@ -961,8 +962,14 @@ function renderSettings() {
   const n = now();
   const bridges = S.state?.bridges ?? [];
   const perm = typeof Notification === "undefined" ? "unsupported" : Notification.permission;
-  const pushHTML =
-    perm === "unsupported"
+  const appPush = appPushStatus();
+  const pushHTML = inAndroidApp()
+    ? appPush?.state === "on"
+      ? '<p>Reminders are on for this phone.</p><button class="btn" data-act="push">Register this phone again</button>'
+      : appStateMessage(appPush?.state)
+        ? `<p class="muted">${esc(appStateMessage(appPush?.state))}</p><button class="btn" data-act="push">Try again</button>`
+        : '<button class="btn btn-primary" data-act="push">Turn on reminders</button>'
+    : perm === "unsupported"
       ? '<p class="muted">This browser does not support reminders.</p>'
       : perm === "granted"
         ? '<p>Reminders are on for this device.</p><button class="btn" data-act="push">Send subscription again</button>'
@@ -1747,6 +1754,7 @@ function setView(v: View) {
   if (v !== "settings") {
     S.newBridge = null;
     forgetCalendarLink();
+    forgetDevices();
   }
   render();
   $("#list").scrollTop = 0;
@@ -1967,6 +1975,7 @@ function closeQuickAdd() {
 
 async function enablePush() {
   S.pushStatus = await turnOnReminders();
+  forgetDevices();
   render();
 }
 
@@ -2607,8 +2616,12 @@ function startApp() {
     }
   });
   connectEvents();
-  resubscribeOnOpen();
-  void initSetup(ctx);
+  // In the Android app the page asks the app about reminders, so learn that before the setup rules read them.
+  void initPush().then(() => {
+    resubscribeOnOpen();
+    render();
+    return initSetup(ctx);
+  });
 }
 
 function boot() {

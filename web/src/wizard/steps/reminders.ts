@@ -1,7 +1,7 @@
 import { call } from "../../api.ts";
 import { isIOS, pushSupport } from "../../device.ts";
 import { esc } from "../../html.ts";
-import { pushEndpoint, remindersOn, subscribePush, turnOnReminders } from "../../push.ts";
+import { appPushStatus, appStateMessage, inAndroidApp, pushEndpoint, remindersOn, subscribePush, turnOnReminders } from "../../push.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
 interface ReminderTest {
@@ -48,7 +48,23 @@ function undoText(): string {
   return "Open the site settings for this address (the icon at the left of the address bar), set Notifications to Allow, then come back.";
 }
 
+function bodyInApp(): string {
+  const stop = appStateMessage(appPushStatus()?.state);
+  if (stop) {
+    return `<p>${esc(stop)}</p>
+<div class="btn-row"><button class="btn" data-act="reminders-recheck">Check again</button></div>`;
+  }
+  if (remindersOn()) {
+    return `<p>Reminders are on for this phone. Send a test to check that they arrive.</p>
+<div class="btn-row"><button class="btn" data-act="reminders-test">Send a test reminder</button></div>`;
+  }
+  return `<p>Meat Mode reminds you when a to-do is due or an agent needs you, even when the app is closed.</p>
+<p>The app will ask to show notifications and, if you have several push apps, which one to use.</p>
+<div class="btn-row"><button class="btn btn-primary" data-act="reminders-enable">Turn on reminders</button></div>`;
+}
+
 function body(): string {
+  if (inAndroidApp()) return bodyInApp();
   const support = pushSupport();
   if (support === "needs-install") {
     return `<p>On an iPhone or iPad, reminders work only once Meat Mode is on the Home Screen. Go back to the install step, add it, open it from the Home Screen icon and come back here.</p>
@@ -96,6 +112,8 @@ registerStep({
         if (remindersOn()) message = await sendTest();
       } else if (act === "reminders-test") {
         message = await sendTest();
+      } else if (act === "reminders-recheck" && inAndroidApp()) {
+        message = await turnOnReminders();
       } else if (act === "reminders-recheck") {
         message = "Notifications are still blocked.";
       }
