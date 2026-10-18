@@ -26,8 +26,9 @@ func Add(ctx context.Context, args []string, env Env) error {
 	note := fs.String("note", "", "a note, added as the first comment")
 	author := fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id := fs.String("id", "", "a UUID for this to-do; adding the same id again changes nothing")
+	every, fromDone := repeatFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--due TIME] [--note TEXT] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--due TIME [--every RULE [--from-done]]] [--note TEXT] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -46,6 +47,13 @@ func Add(ctx context.Context, args []string, env Env) error {
 			return err
 		}
 	}
+	repeat, err := repeatArg(*every, *fromDone)
+	if err != nil {
+		return err
+	}
+	if repeat != nil && *due == "" {
+		return errors.New("--every needs --due, the first time it is due")
+	}
 
 	hub, err := pairedHub(env)
 	if err != nil {
@@ -61,6 +69,12 @@ func Add(ctx context.Context, args []string, env Env) error {
 			return err
 		}
 		t.Due = &d
+		if repeat != nil {
+			if repeat.TimeZone, err = zoneName(loc); err != nil {
+				return err
+			}
+			t.Repeat = repeat
+		}
 	}
 	reply, err := hub.AddPersonal(ctx, t)
 	if err != nil {
@@ -68,6 +82,29 @@ func Add(ctx context.Context, args []string, env Env) error {
 	}
 	fmt.Fprintln(env.Stdout, reply.ID)
 	return nil
+}
+
+// repeatFlags adds the flags that make a to-do repeat.
+func repeatFlags(fs *flag.FlagSet) (every *string, fromDone *bool) {
+	every = fs.String("every", "", "how often it repeats once done: "+everyForms+"; it keeps the due time's time of day in the hub's time zone")
+	fromDone = fs.Bool("from-done", false, "with --every, count the next date from the day it is done instead of from the schedule")
+	return every, fromDone
+}
+
+// repeatArg reads --every and --from-done: nil when it does not repeat.
+// The time zone is left for the caller.
+func repeatArg(every string, fromDone bool) (*api.Repeat, error) {
+	if every == "" {
+		if fromDone {
+			return nil, errors.New("--from-done goes with --every")
+		}
+		return nil, nil
+	}
+	r, err := ParseEvery(every, fromDone)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 // pairedHub is the hub this machine's bridge config pairs it with.

@@ -27,9 +27,11 @@ func personalOnly(kind string) bool {
 }
 
 // checkEdit validates an edit's fields and returns them cleaned up: the
-// title trimmed, checklist texts trimmed and every entry given an id.
+// title trimmed, checklist texts trimmed and every entry given an id, a
+// repeat rule without the start the hub sets.
 func checkEdit(e api.Edit) (api.Edit, error) {
-	if e.Title == nil && e.Description == nil && e.Due == nil && !e.ClearDue && e.Priority == nil && e.Checklist == nil {
+	if e.Title == nil && e.Description == nil && e.Due == nil && !e.ClearDue && e.Priority == nil && e.Checklist == nil &&
+		e.Repeat == nil && !e.ClearRepeat && e.RemindBefore == nil && !e.ClearRemindBefore {
 		return e, invalidf("edit needs at least one field in payload.set")
 	}
 	if e.Title != nil {
@@ -85,6 +87,25 @@ func checkEdit(e api.Edit) (api.Edit, error) {
 		}
 		e.Checklist = &out
 	}
+	if e.Repeat != nil && e.ClearRepeat {
+		return e, invalidf("send either repeat or clearRepeat, not both")
+	}
+	if e.Repeat != nil {
+		if e.ClearDue {
+			return e, invalidf("a repeat needs a due date")
+		}
+		r, err := checkRepeat(*e.Repeat)
+		if err != nil {
+			return e, err
+		}
+		e.Repeat = &r
+	}
+	if e.RemindBefore != nil && e.ClearRemindBefore {
+		return e, invalidf("send either remindBefore or clearRemindBefore, not both")
+	}
+	if e.RemindBefore != nil && (*e.RemindBefore < 0 || *e.RemindBefore > api.MaxLeadMinutes) {
+		return e, invalidf("remindBefore must be 0 to %d minutes", api.MaxLeadMinutes)
+	}
 	return e, nil
 }
 
@@ -112,11 +133,28 @@ func checkRestore(c *api.Comment, now time.Time) (api.Comment, error) {
 }
 
 // applyPersonal applies the kinds that change personal items only, and
-// records in a's payload what they replaced: an edit's old values as Was, a
-// note-edit's or note-delete's comment as it was.
+// done on a repeating item, and records in a's payload what they replaced:
+// an edit's old values and a repeating done's due time and checklist as
+// Was, a note-edit's or note-delete's comment as it was.
 func applyPersonal(it *api.Item, a *api.Action) error {
 	p := &a.Payload
 	switch a.Kind {
+	case api.KindDone:
+		if it.Repeat == nil || it.DueAt == nil || it.Status == "closed" {
+			return nil
+		}
+		// It stays open and moves on to its next date; apply sees Was and
+		// leaves it open.
+		p.Was = &api.Edit{Due: ptr(*it.DueAt), Checklist: ptr(cloneChecklist(it.Checklist))}
+		it.DueAt = ptr(nextDue(*it.Repeat, *it.DueAt, a.CreatedAt))
+		it.DeferUntil = nil
+		if len(it.Checklist) > 0 {
+			cs := slices.Clone(it.Checklist)
+			for i := range cs {
+				cs[i].Done = false
+			}
+			it.Checklist = cs
+		}
 	case api.KindEdit:
 		set, was := p.Set, &api.Edit{}
 		if set.Title != nil {
@@ -138,18 +176,51 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 				it.DueAt = ptr(*set.Due)
 			}
 		}
+		switch {
+		case set.Repeat != nil || set.ClearRepeat || (set.ClearDue && it.Repeat != nil):
+			// Clearing the due date ends the repeat too.
+			if it.Repeat != nil {
+				was.Repeat = ptr(*it.Repeat)
+			} else {
+				was.ClearRepeat = true
+			}
+			it.Repeat = nil
+			if set.Repeat != nil {
+				if it.DueAt == nil {
+					return invalidf("a repeat needs a due date")
+				}
+				r := *set.Repeat
+				r.Start = ptr(*it.DueAt)
+				it.Repeat = &r
+			}
+		case set.Due != nil && it.Repeat != nil && !isOccurrence(*it.Repeat, *it.DueAt):
+			// Moving the due date moves the series. A move to one of its own
+			// dates, such as the Undo of a done, keeps the start, so a
+			// monthly rule from the 31st still returns to it.
+			r := *it.Repeat
+			r.Start = ptr(*it.DueAt)
+			it.Repeat = &r
+		}
 		if set.Priority != nil {
 			was.Priority = ptr(it.Priority)
 			it.Priority = *set.Priority
 		}
 		if set.Checklist != nil {
-			was.Checklist = ptr(slices.Clone(it.Checklist))
-			if *was.Checklist == nil {
-				was.Checklist = &[]api.Check{}
-			}
+			was.Checklist = ptr(cloneChecklist(it.Checklist))
 			it.Checklist = nil
 			if len(*set.Checklist) > 0 {
 				it.Checklist = slices.Clone(*set.Checklist)
+			}
+		}
+		if set.RemindBefore != nil || set.ClearRemindBefore {
+			if it.RemindBefore != nil {
+				was.RemindBefore = ptr(*it.RemindBefore)
+			} else {
+				was.ClearRemindBefore = true
+			}
+			it.RemindBefore = nil
+			if set.RemindBefore != nil {
+				it.RemindBefore = ptr(*set.RemindBefore)
 			}
 		}
 		p.Was = was
@@ -182,6 +253,14 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// cloneChecklist copies a checklist for Was, where none is an empty list.
+func cloneChecklist(cs []api.Check) []api.Check {
+	if cs == nil {
+		return []api.Check{}
+	}
+	return slices.Clone(cs)
+}
 
 // agentAuthor is the author an agent's post carries: its own name, or
 // fallback (the machine's) when it gives none.

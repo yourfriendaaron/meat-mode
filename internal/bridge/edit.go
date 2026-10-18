@@ -12,8 +12,9 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// Edit runs `meat-mode edit`: it changes the title, description, due time
-// or priority of a personal to-do this machine added, and prints its id.
+// Edit runs `meat-mode edit`: it changes the title, description, due time,
+// repeat or priority of a personal to-do this machine added, and prints its
+// id.
 func Edit(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("edit", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -22,9 +23,11 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	due := fs.String("due", "", "the new due time, read as by `meat-mode add`")
 	clearDue := fs.Bool("clear-due", false, "remove the due time")
 	priority := fs.Int("priority", 2, "the new priority, 0 (highest) to 4")
+	every, fromDone := repeatFlags(fs)
+	noRepeat := fs.Bool("no-repeat", false, "stop it repeating")
 	author, id := changeFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--priority N] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--priority N] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -46,6 +49,8 @@ func Edit(ctx context.Context, args []string, env Env) error {
 			set.ClearDue = *clearDue
 		case "priority":
 			set.Priority = priority
+		case "no-repeat":
+			set.ClearRepeat = *noRepeat
 		}
 	})
 	if *due != "" && set.ClearDue {
@@ -62,25 +67,43 @@ func Edit(ctx context.Context, args []string, env Env) error {
 			return err
 		}
 	}
-	if set.Title == nil && set.Description == nil && *due == "" && !set.ClearDue && set.Priority == nil {
+	repeat, err := repeatArg(*every, *fromDone)
+	if err != nil {
+		return err
+	}
+	if repeat != nil && set.ClearRepeat {
+		return errors.New("use --every or --no-repeat, not both")
+	}
+	if repeat != nil && set.ClearDue {
+		return errors.New("--every needs a due time; --clear-due also stops it repeating")
+	}
+	if set.Title == nil && set.Description == nil && *due == "" && !set.ClearDue && set.Priority == nil && repeat == nil && !set.ClearRepeat {
 		fs.Usage()
-		return errors.New("edit needs at least one of --title, --description, --due, --clear-due or --priority")
+		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat or --priority")
 	}
 
 	hub, err := pairedHub(env)
 	if err != nil {
 		return err
 	}
-	if *due != "" {
+	if *due != "" || repeat != nil {
 		loc, err := hubZone(ctx, hub)
 		if err != nil {
 			return err
 		}
-		d, err := ParseDue(*due, loc)
-		if err != nil {
-			return err
+		if *due != "" {
+			d, err := ParseDue(*due, loc)
+			if err != nil {
+				return err
+			}
+			set.Due = &d
 		}
-		set.Due = &d
+		if repeat != nil {
+			if repeat.TimeZone, err = zoneName(loc); err != nil {
+				return err
+			}
+			set.Repeat = repeat
+		}
 	}
 	return change(ctx, hub, env, item, api.PersonalChange{ID: *id, Kind: api.KindEdit,
 		Payload: api.Payload{Set: &set}, Author: *author})

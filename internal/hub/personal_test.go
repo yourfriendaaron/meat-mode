@@ -135,3 +135,34 @@ func TestEditOverHTTP(t *testing.T) {
 		t.Fatalf("the bridge pulled %+v", as)
 	}
 }
+
+// A repeating to-do from an agent or the app stays open when done.
+func TestRepeatOverHTTP(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	due := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+	daily := &api.Repeat{Every: api.EveryDay, TimeZone: "Europe/Paris"}
+	h.expect(h.do("POST", "/bridge/v1/personal", api.PersonalTodo{Title: "Water the plants", Repeat: daily}, h.token), http.StatusBadRequest)
+	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: aid1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+		Payload: api.Payload{Title: "Water the plants", Due: &due, Repeat: daily}}, ""), http.StatusBadRequest)
+
+	w := h.do("POST", "/bridge/v1/personal", api.PersonalTodo{Title: "Water the plants", Due: &due, Repeat: daily}, h.token)
+	h.expect(w, http.StatusCreated)
+	id := decode[api.PersonalTodoReply](t, w).ID
+	w = h.do("POST", "/bridge/v1/personal/"+id+"/actions", api.PersonalChange{Kind: api.KindDone}, h.token)
+	h.expect(w, http.StatusCreated)
+	if !strings.Contains(w.Body.String(), `"was":{"due":"`) {
+		t.Errorf("done %s", w.Body)
+	}
+	it := decode[api.Item](t, h.do("GET", "/bridge/v1/personal/"+id, nil, h.token))
+	if it.Status != "open" || it.Repeat == nil || !it.Repeat.Start.Equal(due) || !it.DueAt.Equal(due.Add(24*time.Hour)) {
+		t.Fatalf("after done %+v", it)
+	}
+
+	w = h.do("POST", "/api/actions", api.NewAction{ID: aid2, Kind: api.KindEdit, Key: it.Key,
+		Payload: api.Payload{Set: &api.Edit{RemindBefore: new(int), ClearRepeat: true}}}, "")
+	h.expect(w, http.StatusCreated)
+	if a := decode[api.Action](t, w); a.Payload.Was == nil || a.Payload.Was.Repeat == nil || !a.Payload.Was.ClearRemindBefore {
+		t.Fatalf("edit %+v", a.Payload.Was)
+	}
+}
