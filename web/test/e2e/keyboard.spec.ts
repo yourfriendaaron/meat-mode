@@ -99,7 +99,7 @@ test("the note field and Save note stay above the keyboard in the detail sheet",
   await expectInVisualViewport(page, sheet);
 });
 
-test("the snooze dialog's time picker stays above the keyboard", async ({ page, hub }) => {
+test("the snooze dialog's time fields stay above the keyboard", async ({ page, hub }) => {
   void hub;
   await openApp(page);
   const r = row(page, "Call Sam about the weekend");
@@ -120,4 +120,10 @@ test("the snooze dialog's time picker stays above the keyboard", async ({ page, 
   await keyboard(page, KEYBOARD);
   await expectInVisualViewport(page, pick);
   await expectInVisualViewport(page, dialog.getByRole("button", { name: "Snooze", exact: true }));
+  const typed = dialog.getByRole("textbox", { name: "Type a time" });
+  await typed.focus();
+  await typed.fill("8p");
+  await expectInVisualViewport(page, typed);
+  await expectInVisualViewport(page, dialog.getByText("Until 20:00"));
+  await expectInVisualViewport(page, dialog.getByRole("button", { name: "Snooze to the typed time" }));
 });
