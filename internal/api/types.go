@@ -24,6 +24,10 @@ type Item struct {
 	ClosedAt    *time.Time `json:"closedAt,omitempty"`
 	Comments    []Comment  `json:"comments"`
 	Checklist   []Check    `json:"checklist,omitempty"` // personal items only
+	Repeat      *Repeat    `json:"repeat,omitempty"`    // personal items only
+	// RemindBefore is how many minutes before the due time an early
+	// reminder comes; nil uses the hub's ReminderLead. Personal items only.
+	RemindBefore *int `json:"remindBefore,omitempty"`
 	// Hub-only fields, never sent by a bridge.
 	Pending   bool       `json:"pending,omitempty"`   // an unapplied action changed this copy
 	SeenAt    *time.Time `json:"seenAt,omitempty"`    // when the user last opened it
@@ -56,6 +60,46 @@ type Edit struct {
 	ClearDue    bool       `json:"clearDue,omitempty"`
 	Priority    *int       `json:"priority,omitempty"` // 0 (highest) to 4, as bd
 	Checklist   *[]Check   `json:"checklist,omitempty"`
+	Repeat      *Repeat    `json:"repeat,omitempty"`
+	ClearRepeat bool       `json:"clearRepeat,omitempty"`
+	// RemindBefore is minutes, 0 to MaxLeadMinutes; ClearRemindBefore goes
+	// back to the hub's ReminderLead.
+	RemindBefore      *int `json:"remindBefore,omitempty"`
+	ClearRemindBefore bool `json:"clearRemindBefore,omitempty"`
+}
+
+// Repeat units.
+const (
+	EveryDay   = "day"
+	EveryWeek  = "week"
+	EveryMonth = "month"
+	EveryYear  = "year"
+)
+
+// MaxRepeatInterval caps Repeat.Interval.
+const MaxRepeatInterval = 100
+
+// MaxLeadMinutes caps a reminder lead time: one week.
+const MaxLeadMinutes = 7 * 24 * 60
+
+// Repeat makes a personal item come back after it is done. The item's due
+// time is the current occurrence; the rule needs one.
+type Repeat struct {
+	Every    string `json:"every"`              // EveryDay, EveryWeek, EveryMonth or EveryYear
+	Interval int    `json:"interval,omitempty"` // every n units, 1 to MaxRepeatInterval; 0 means 1
+	// Weekdays picks the days of a weekly rule, 0 (Sunday) to 6. Empty
+	// means the due date's weekday.
+	Weekdays []int `json:"weekdays,omitempty"`
+	// FromDone counts the next date from the day the item is done instead
+	// of from the schedule.
+	FromDone bool `json:"fromDone,omitempty"`
+	// TimeZone is the IANA zone whose wall-clock time and date the rule
+	// keeps, so 8:30pm stays 8:30pm across daylight saving changes.
+	TimeZone string `json:"timeZone"`
+	// Start is the occurrence the schedule counts from. The hub sets it
+	// from the due time whenever the rule or the due time is set; a client
+	// sends none.
+	Start *time.Time `json:"start,omitempty"`
 }
 
 // Repo is one beads database a bridge found.
@@ -109,9 +153,13 @@ type Payload struct {
 	Text     string     `json:"text,omitempty"`     // note
 	Title    string     `json:"title,omitempty"`    // add
 	Due      *time.Time `json:"due,omitempty"`      // add
+	Repeat   *Repeat    `json:"repeat,omitempty"`   // add, personal list only; needs Due
 	On       *bool      `json:"on,omitempty"`       // sync
 	Set      *Edit      `json:"set,omitempty"`      // edit
-	Was      *Edit      `json:"was,omitempty"`      // edit: the fields set held before, filled in by the hub
+	// Was is filled in by the hub. On edit it holds the fields Set changed,
+	// as they were; on done of a repeating item, the due time and checklist
+	// before it moved on.
+	Was *Edit `json:"was,omitempty"`
 	// note-edit, note-delete and note-restore. note-edit takes Text. The
 	// hub fills in Comment on note-edit and note-delete with the comment as
 	// it was; note-restore takes a removed Comment back.
@@ -194,6 +242,7 @@ type PersonalTodo struct {
 	ID     string     `json:"id,omitempty"` // optional UUID; posting it again changes nothing
 	Title  string     `json:"title"`
 	Due    *time.Time `json:"due,omitempty"`
+	Repeat *Repeat    `json:"repeat,omitempty"` // needs Due
 	Note   string     `json:"note,omitempty"`   // added as the first comment, by Author
 	Author string     `json:"author,omitempty"` // the agent's name; defaults to the token's machine name
 }

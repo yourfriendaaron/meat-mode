@@ -79,11 +79,12 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 
 | Method and path | Body | Response |
 |---|---|---|
-| `GET /api/settings` | | `{"name", "timeZone"}` |
-| `PUT /api/settings` | `{"name"?, "timeZone"?}` | `200` and the new `{"name", "timeZone"}`; `400` when either is refused, and then neither changes |
+| `GET /api/settings` | | `{"name", "timeZone", "reminderLead"}` |
+| `PUT /api/settings` | `{"name"?, "timeZone"?, "reminderLead"?}` | `200` and the new settings; `400` when any field is refused, and then none changes |
 
 - `name` is the name notes the app writes are signed with, as `<name>-app`. It is at most 64 characters with no control characters, and surrounding spaces are dropped. An empty name goes back to `MEAT_MODE_USER` (`user` when that is unset), which is also what `GET` returns while none was chosen. `GET /api/state` and `GET /api/setup` report the same name.
 - `timeZone` is an IANA name such as `Europe/Paris`, `""` until one is chosen. The empty string, `Local` and names the hub does not know are refused. The app prefills its first choice with the first browser's zone.
+- `reminderLead` is how many minutes before an item's due time an early reminder comes, `0` (none, the default) to `10080` (a week). It applies to every item; a personal item can set its own with `remindBefore` (see Reminders).
 - A field left out of `PUT` stays as it is.
 - The app keeps showing times in each device's own zone. The hub's zone is for agents: `meat-mode add` reads `--due 2026-03-02` and `--due "2026-03-02 14:30"` in it, so a to-do added from a server in UTC lands at 9:00 in the user's zone. A `--due` with an offset, such as `2026-03-02T09:00:00Z`, is used as written. While the hub has no zone, `meat-mode add` uses the zone of the machine it runs on.
 
@@ -93,12 +94,12 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 
 | kind | target | payload | effect on the hub's copy (shown at once, `pending: true` until applied) |
 |---|---|---|---|
-| `done` | `key` | `{}` | status `closed`, close reason `Done in Meat Mode` |
+| `done` | `key` | `{}` | status `closed`, close reason `Done in Meat Mode`; a repeating personal item moves to its next date instead (see Repeating to-dos) |
 | `reopen` | `key` | `{}` | status `open` |
 | `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
-| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null}` | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |
+| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat}` (`repeat` on the personal list only) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it |
 | `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list. |
 | `edit` | `key` | `{"set": Edit}` | sets each field `set` names; the hub records the old values as `was` |
 | `note-edit` | `key` | `{"commentId": "…", "text": "…"}` | replaces that comment's text, up to 10000 characters; the hub records the comment as it was in `comment` |
@@ -107,15 +108,59 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 
 The last four change personal items only. The hub refuses them on an agent's item with `400`: an agent item's title, dates and priority belong to its agent, so ask for a change in a note.
 
-`Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?}`. A field left out stays as it is.
+`Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?}`. A field left out stays as it is.
 
 - `title` follows the `add` rules: trimmed, not empty, up to 1000 characters.
 - `description` is up to 10000 characters; `""` clears it.
-- `due` is a time; `"clearDue": true` removes the due date instead. Sending both is refused.
+- `due` is a time; `"clearDue": true` removes the due date instead. Sending both is refused. Clearing the due date of a repeating item also ends its repeat.
 - `priority` is 0 (highest) to 4, as in bd. A new personal item has 2. The app shows 0 and 1 as high priority on every item.
 - `checklist` replaces the whole list of `{"id", "text", "done"}`. The hub gives an entry with no `id` a new one and refuses a repeated `id`. `text` is trimmed, not empty, up to 1000 characters; the list holds at most 100 entries. `[]` clears it.
+- `repeat` sets the item's `Repeat` (see Repeating to-dos); `"clearRepeat": true` ends it. Sending both is refused, and so is a `repeat` on an item that has no due date and gets none in the same edit.
+- `remindBefore` is the item's own lead time in minutes, `0` to `10080`, where `0` means no early reminder; `"clearRemindBefore": true` goes back to the hub's `reminderLead`. Sending both is refused.
 
-The applied `edit` action carries `was`, an `Edit` with the same fields as `set` holding the values before it (`clearDue: true` for a due date that was not set). Its Undo is an `edit` with `set` = `was`. The Undo of `note-edit` is a `note-edit` back to the text of the `comment` the applied action carries; the Undo of `note-delete` is `note-restore` with the `comment` the applied action carries.
+The applied `edit` action carries `was`, an `Edit` with the same fields as `set` holding the values before it (`clearDue: true` for a due date that was not set, `clearRepeat: true` for no repeat, `clearRemindBefore: true` for no lead time of its own; an edit that clears the due date of a repeating item records its `repeat` too). Its Undo is an `edit` with `set` = `was`. The Undo of `note-edit` is a `note-edit` back to the text of the `comment` the applied action carries; the Undo of `note-delete` is `note-restore` with the `comment` the applied action carries.
+
+### Repeating to-dos
+
+A personal item can repeat: "Water the plants every day at 8:30pm". `Repeat` is `{"every", "interval"?, "weekdays"?, "fromDone"?, "timeZone", "start"}`:
+
+- `every` is `day`, `week`, `month` or `year`; `interval` repeats every n of them, `1` (the default) to `100`.
+- `weekdays` picks the days of a weekly rule, `0` (Sunday) to `6`, each once. Left out, a weekly rule keeps the due date's weekday. Only a weekly rule takes it, and not with `fromDone`.
+- `timeZone` is an IANA zone. The rule keeps the due time's wall-clock time and date in it, so 8:30pm stays 8:30pm across daylight saving changes. The app sends the device's zone; `meat-mode add` sends the hub's, or the machine's while the hub has none.
+- `start` is the occurrence the schedule counts from. The hub sets it to the due time whenever the rule or the due time is set, and ignores one a client sends. A monthly rule from the 31st lands on the last day of shorter months and returns to the 31st after them; a yearly rule from 29 February lands on 28 February.
+- A rule needs a due time: the item's current occurrence. Moving the due date moves the series.
+
+`done` on a repeating item keeps it open and moves it on:
+
+- The due time becomes the next occurrence after both the current due time and now, so occurrences missed while it sat overdue are skipped, never stacked. With `fromDone`, it is the done day plus `interval` units, at the rule's time of day.
+- Its snooze is cleared and every checklist entry is unchecked.
+- The applied `done` carries `was`: `{"due", "checklist"}` as they were. Its Undo is an `edit` with `set` = `was`, not a `reopen`; the app tells the two apart by `was`.
+- `dismiss` closes it and ends the series. `reopen` on a closed repeating item opens it at its last due time.
+
+### Reminders
+
+The hub reminds through Web Push, and ntfy when set up, once for each time an item's moment comes:
+
+- At the due time, and at the end of a snooze. A due time after the snooze end takes over once it comes. Closed items never remind.
+- With a lead time (the item's `remindBefore`, else the hub's `reminderLead`) above 0, an early reminder comes that many minutes before the due time, saying how long is left, and the reminder at the due time still comes. A snooze end has no early reminder: the user picked that moment. Changing the lead time never sends again a reminder already sent for the same due time.
+- A repeating item reminds afresh for each occurrence, since each has its own due time.
+
+When the hub could not remind on time, because it was stopped or its checks were failing, the reminders that came due meanwhile are not lost. On its next check, a reminder more than 5 minutes late goes out as itself when it is the only one, saying how long ago it came due; two or more go out as one reminder, "N reminders came due while reminders were off", that opens the app. However late it is, a missed reminder is told once. An item that was already past its moment when the hub first saw it, such as an old bead on a bridge's first sync, never reminds for that moment.
+
+### Calendar feed
+
+The hub can serve the open items with a due date, from every list, as an iCalendar feed that calendar apps subscribe to.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/calendar` | | `{"on": true or false}` |
+| `POST /api/calendar` | `{}` | `{"url"}`: a new feed address, shown once; it replaces the earlier one, which stops working |
+| `DELETE /api/calendar` | | `204`; turns the feed off |
+| `GET /calendar/{token}.ics` | | `200` with `text/calendar`; `404` for any other token or while the feed is off |
+
+- The address is `<MEAT_MODE_PUBLIC_URL>/calendar/<token>.ics`, under 256 characters for Google Calendar. The token in it is the only credential, since calendar apps cannot log in, so the feed needs no login and is outside `/api/`. The hub stores a hash of the token. The Host check applies; the Origin checks do not.
+- Each open dated item is one `VEVENT` at its current due time, 15 minutes long, whose `UID` is the item key, so a calendar keeps one event per item as it changes. A repeating item shows its next occurrence only, because the hub moves it on when it is done. Calendar apps fetch the feed on their own schedule, from every hour to once a day.
+- The event's summary is the item's title and its link opens the item in the app.
 
 On the personal list (`hub/personal`) every action is applied by the hub when it is posted: the response already has status `applied`, the item never shows `pending`, and an `add` returns the new item's id as `beadId`. A closed personal item leaves the app 7 days after it closed, as a closed bead leaves a bridge's set.
 
@@ -145,10 +190,11 @@ The bridge sends the full set per repo whenever any fingerprint in it changed. T
 
 An agent adds a personal to-do with `POST /bridge/v1/personal` and the bridge token of its machine. No bridge needs to run, and the post leaves the bridge's last-seen time alone, so an agent's add never makes a stopped bridge look online. On a paired machine, `meat-mode add` makes this call with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
 
-`PersonalTodo` is `{"id"?, "title", "due"?, "note"?, "author"?}`:
+`PersonalTodo` is `{"id"?, "title", "due"?, "repeat"?, "note"?, "author"?}`:
 
 - `title` is required, up to 1000 characters.
 - `due` is an RFC 3339 time.
+- `repeat` is a `Repeat` (see Repeating to-dos) and needs `due`.
 - `note`, up to 10000 characters, becomes the item's first comment.
 - `author` is the agent's name, shown as the item's creator and the note's author. It defaults to the token's machine name.
 - `id` is a UUID the agent generates. Posting the same `id` again returns the item it added and changes nothing, so an agent can retry safely.
