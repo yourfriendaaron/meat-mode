@@ -138,6 +138,24 @@ func (s *Store) State() (api.State, error) {
 	}
 	shown = append(shown, pending...)
 
+	// An applied note, or ask with a note, keeps showing its comment until
+	// the bridge sends that repo's set again, as an add keeps its item.
+	noted, err := s.queryActions(`SELECT `+actionCols+` FROM actions
+		WHERE kind IN (?, ?) AND status = ? AND applied_at >= ? AND bridge != ? ORDER BY seq`,
+		api.KindNote, api.KindAsk, api.StatusApplied, since, HubBridge)
+	if err != nil {
+		return st, err
+	}
+	for _, a := range noted {
+		synced := repoSynced[a.Bridge+"/"+a.Repo]
+		if synced != nil && a.AppliedAt != nil && !synced.Before(*a.AppliedAt) {
+			continue
+		}
+		if i, ok := index[ItemKey(a.Bridge, a.Repo, a.BeadID)]; ok {
+			apply(&st.Items[i], a, provisionalPrefix+a.ID)
+		}
+	}
+
 	for _, a := range shown {
 		if a.Kind == api.KindAdd {
 			if _, ok := repoSynced[a.Bridge+"/"+a.Repo]; !ok {

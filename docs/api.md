@@ -109,6 +109,8 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 | `note-delete` | `key` | `{"commentId": "…"}` | removes that comment; the hub records it as `comment` |
 | `note-restore` | `key` | `{"comment": Comment}` | puts a removed comment back in its place by `createdAt`, with its id, author and time |
 
+A note, or the note of an ask, keeps showing on the hub's copy after it is applied, until the bridge sends that repo's set again with the bead's own comment.
+
 The last four change personal items only. The hub refuses them on an agent's item with `400`: an agent item's title, dates and priority belong to its agent, so ask for a change in a note.
 
 `Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?}`. A field left out stays as it is.

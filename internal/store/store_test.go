@@ -511,6 +511,35 @@ func TestAddProvisionalLifecycle(t *testing.T) {
 	}
 }
 
+func TestAppliedNoteShowsUntilRepoSyncs(t *testing.T) {
+	s, c := open(t)
+	seed(t, s)
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindNote, Key: "laptop/garden/gd-1",
+		Payload: api.Payload{Text: "Use the blue can."}}, "alex-app")
+	must(t, err)
+
+	// Applied, but the bridge has not sent the repo again: the note stays,
+	// and the item no longer shows pending.
+	c.tick()
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true}))
+	st, _ := s.State()
+	it := item(t, st, "laptop/garden/gd-1")
+	if len(it.Comments) != 1 || it.Comments[0].Text != "Use the blue can." || it.Pending {
+		t.Fatalf("after apply: pending %v comments %+v", it.Pending, it.Comments)
+	}
+
+	// The repo's set arrives with the bead's own comment: shown once.
+	c.tick()
+	must(t, s.ReplaceItems("laptop", "garden", []api.Item{
+		{ID: "gd-1", Title: "Water the plants", Status: "open",
+			Comments: []api.Comment{{ID: "b1", Author: "alex-app", Text: "Use the blue can."}}},
+	}))
+	st, _ = s.State()
+	if it := item(t, st, "laptop/garden/gd-1"); len(it.Comments) != 1 || it.Comments[0].ID != "b1" {
+		t.Fatalf("after sync: %+v", it.Comments)
+	}
+}
+
 func TestAddProvisionalDropsAfterSyncWithoutBead(t *testing.T) {
 	s, c := open(t)
 	seed(t, s)
