@@ -64,6 +64,18 @@ test.describe("desktop", () => {
     expect(hub.posted.find((a) => a.kind === "sync")).toMatchObject({ bridge: "laptop", repo: "projects/garden", payload: { on: true } });
     await axe(page);
 
+    // Agents switch on at the machine: the step shows the command, with no switch for it.
+    hub.applyAll();
+    hub.repos.find((r) => r.name === "projects/garden")!.pending = false;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    const gardenRow = w.region.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync garden (projects/garden)" }) });
+    await expect(gardenRow).toContainText("Agents are off here");
+    await expect(gardenRow.locator("code")).toHaveText("meat-mode bridge agents on projects/garden");
+    await expect(gardenRow.getByRole("switch", { name: /Agents can work/ })).toHaveCount(0);
+    await gardenRow.getByRole("button", { name: "Copy the command for projects/garden" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("meat-mode bridge agents on projects/garden");
+    await axe(page);
+
     await w.next.click();
     await expect(w.heading).toHaveText("Tell your agents");
     const text = page.locator("#wiz-agents-text");
@@ -86,6 +98,56 @@ test.describe("desktop", () => {
     await summary.getByRole("button", { name: "Tell your agents in Settings" }).click();
     await expect(page.locator("#s-agents")).toHaveText("Instructions for agents");
     await expect(page.locator("#set-agents-text")).toContainText('as "laptop"');
+  });
+
+  test("adding a machine asks for the password again in place, and says when it is wrong", async ({ page, hub, baseURL }) => {
+    hub.passwordFresh = false;
+    await openWizardAt(page, hub, "agents");
+    const w = wizard(page);
+    await w.region.getByRole("button", { name: "Yes, add a machine" }).click();
+    await page.getByLabel("Machine name").fill("laptop");
+    await w.region.getByRole("button", { name: "Add machine" }).click();
+    const pw = w.region.getByLabel("Password");
+    await expect(pw).toBeFocused();
+    await expect(w.region).toContainText("Enter your password to add a machine.");
+    await expect(pw).toHaveAttribute("autocomplete", "current-password");
+    expect(hub.bridges.map((b) => b.name)).not.toContain("laptop");
+    await axe(page);
+
+    await pw.fill("not it");
+    await w.region.getByRole("button", { name: "Add machine" }).click();
+    await expect(w.region.getByRole("alert")).toHaveText("Wrong password.");
+    await expect(pw).toHaveValue("");
+    await expect(pw).toBeFocused();
+
+    hub.loginStatus = 429;
+    await pw.fill("still not it");
+    await pw.press("Enter");
+    await expect(w.region.getByRole("alert")).toHaveText("Too many tries. Wait a minute and try again.");
+
+    hub.loginStatus = 0;
+    await pw.fill(hub.password);
+    await pw.press("Enter");
+    await expect(page.locator("#agents-pair-cmd")).toHaveText(`meat-mode bridge pair ${baseURL} test-token`);
+    expect(hub.bridgePosts.at(-1)).toEqual({ name: "laptop", password: hub.password });
+    expect(hub.bridgePosts[0]).toEqual({ name: "laptop" });
+  });
+
+  test("Settings asks for the password again before it adds a machine", async ({ page, hub }) => {
+    hub.passwordFresh = false;
+    await openApp(page);
+    await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+    const section = page.locator("section", { has: page.locator("#s-mach") });
+    await section.getByLabel("Machine name").fill("desk");
+    await section.getByRole("button", { name: "Add machine" }).click();
+    const pw = section.getByLabel("Password");
+    await expect(pw).toBeFocused();
+    await expect(section.getByLabel("Machine name")).toHaveValue("desk");
+    await axe(page);
+    await pw.fill(hub.password);
+    await section.getByRole("button", { name: "Add machine" }).click();
+    await expect(page.locator("#pair-cmd")).toContainText("test-token");
+    await expect(section.getByLabel("Password")).toHaveCount(0);
   });
 
   test("No skips the agent steps", async ({ page, hub }) => {

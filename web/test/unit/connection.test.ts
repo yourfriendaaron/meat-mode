@@ -63,3 +63,23 @@ test("missing push keys fail with the fix", () => {
   assert.equal(c.state, "fail");
   assert.match(c.fix!, /data folder/);
 });
+
+test("a public address in public DNS fails, naming the addresses and what to do", () => {
+  const c = byId(probe({}, { publicDns: { state: "public", addresses: ["192.0.2.10", "2001:db8::10"], checkedAt: HUB_TIME } })).dns;
+  assert.equal(c.state, "fail");
+  assert.match(c.detail, /meat-mode\.example\.com the addresses 192\.0\.2\.10, 2001:db8::10/);
+  assert.match(c.fix!, /turn Funnel off/);
+  assert.match(c.fix!, /remove the public DNS record/);
+  assert.equal(byId(probe()).dns.state, "pass");
+  assert.equal(byId(probe({}, { publicDns: { state: "skipped", checkedAt: HUB_TIME } })).dns.state, "pass");
+  const unchecked = byId(probe({}, { publicDns: { state: "unchecked", checkedAt: null } })).dns;
+  assert.equal(unchecked.state, "info");
+  assert.equal(unchecked.label, "Not checked");
+});
+
+test("the Tailscale identity is an info line either way", () => {
+  const off = byId(probe()).tailscale;
+  assert.equal(off.state, "info");
+  assert.match(off.detail, /no Tailscale identity/);
+  assert.match(byId(probe({}, { tailscaleIdentity: true })).tailscale.detail, /came through Tailscale Serve/);
+});

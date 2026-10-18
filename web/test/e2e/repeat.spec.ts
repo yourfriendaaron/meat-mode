@@ -282,8 +282,8 @@ test.describe("Settings", () => {
     await openSettings(page);
     const section = page.locator("[data-section=calendar]");
     await expect(section.locator("h2")).toHaveText("Calendar");
-    await expect(section).toContainText("Google Calendar and Outlook");
-    await expect(section).toContainText("from the internet");
+    await expect(section).toContainText("Google Calendar and Outlook on the web");
+    await expect(section).toContainText("cannot reach the hub");
     await axe(page);
 
     await section.getByRole("button", { name: "Get calendar link" }).click();

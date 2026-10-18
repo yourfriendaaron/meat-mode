@@ -4,8 +4,8 @@ test.use({ viewport: { width: 1280, height: 800 } });
 
 const password = (page: import("@playwright/test").Page) => page.getByLabel("Password");
 
-test("a hub with a login asks for the password before loading anything", async ({ page, hub }) => {
-  hub.login = true;
+test("a hub with a password asks for it before loading anything", async ({ page, hub }) => {
+  hub.authenticated = false;
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Meat Mode" })).toBeVisible();
   await expect(password(page)).toBeFocused();
@@ -26,7 +26,7 @@ test("a hub with a login asks for the password before loading anything", async (
 });
 
 test("too many tries says to wait", async ({ page, hub }) => {
-  hub.login = true;
+  hub.authenticated = false;
   hub.loginStatus = 429;
   await page.goto("/");
   await password(page).fill("anything");
@@ -35,8 +35,6 @@ test("too many tries says to wait", async ({ page, hub }) => {
 });
 
 test("Log out in Settings returns to the login screen and stays there", async ({ page, hub }) => {
-  hub.login = true;
-  hub.authenticated = true;
   hub.eventRetryMs = 200;
   await page.goto("/");
   await expect(row(page, "Water the plants")).toBeVisible();
@@ -52,8 +50,6 @@ test("Log out in Settings returns to the login screen and stays there", async ({
 });
 
 test("a session that ends mid-use returns to the login screen", async ({ page, hub }) => {
-  hub.login = true;
-  hub.authenticated = true;
   await page.goto("/");
   await expect(row(page, "Water the plants")).toBeVisible();
   hub.authenticated = false;
@@ -64,18 +60,7 @@ test("a session that ends mid-use returns to the login screen", async ({ page, h
   await expect(row(page, "Water the plants")).toBeVisible();
 });
 
-test("a hub without a login shows no Log out", async ({ page, hub }) => {
-  void hub;
-  await page.goto("/");
-  await expect(row(page, "Water the plants")).toBeVisible();
-  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByRole("heading", { name: "Reminders" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Log out" })).toHaveCount(0);
-});
-
 test("an event stream refused for a lost session asks once and shows the login screen", async ({ page, hub }) => {
-  hub.login = true;
-  hub.authenticated = true;
   hub.eventRetryMs = 200;
   await page.goto("/");
   await expect(row(page, "Water the plants")).toBeVisible();

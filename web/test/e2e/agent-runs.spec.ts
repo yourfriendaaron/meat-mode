@@ -161,6 +161,8 @@ test.describe("desktop", () => {
   test("where agents are off, the card says how to turn them on and offers no pink button", async ({ page, hub }) => {
     await openApp(page, "/?item=" + encodeURIComponent(FOOTER));
     await expect(card(page)).toContainText("Agents are off for this list.");
+    await expect(card(page).locator("code")).toHaveText("meat-mode bridge agents on website");
+    await expect(card(page).getByRole("button", { name: "Copy the command for website" })).toBeVisible();
     await expect(sheet(page).locator(".btn-agent")).toHaveCount(0);
     await expect(sheet(page).getByRole("button", { name: "Save note" })).toHaveText("Save note");
     await axe(page);
@@ -251,7 +253,7 @@ test.describe("desktop", () => {
     // A repo with agents off shows the switch disabled with how to turn them on.
     await page.locator("#qa-list").selectOption("home/website");
     await expect(ask).toBeDisabled();
-    await expect(page.locator("#qa-agent")).toContainText("Agents are off for this list. Turn them on in Settings.");
+    await expect(page.locator("#qa-agent")).toContainText("Agents are off for this list. They switch on at its machine.");
   });
 
   test("New task shows no agent switch while no list allows agents", async ({ page, hub }) => {
@@ -260,25 +262,37 @@ test.describe("desktop", () => {
     await expect(page.locator("#qa-agent")).toBeHidden();
   });
 
-  test("Settings: Agents can work here switches per repo, and waits for the machine", async ({ page, hub }) => {
+  test("Settings: agents off shows the command for the machine; agents on can be switched off", async ({ page, hub }) => {
     await openApp(page);
     await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
-    const sw = page.getByRole("switch", { name: "Agents can work in website (website)" });
-    await expect(sw).toHaveAttribute("aria-checked", "false");
+    const website = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync website (website)" }) });
+    await expect(website).toContainText("Agents are off here");
+    await expect(website.locator("code")).toHaveText("meat-mode bridge agents on website");
+    await expect(website.getByRole("switch", { name: /Agents can work/ })).toHaveCount(0);
     await expect(page.locator("[data-section=runs]")).toContainText(
       "Agents start only from your pink taps, one per task, and each run has a time limit set on its machine.",
     );
     await expect(page.locator("[data-section=runs]")).toContainText("No agent is working now.");
     await axe(page);
-    await sw.click();
-    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "agents", bridge: "home", repo: "website", payload: { on: true } });
-    await expect(sw).toHaveAttribute("aria-checked", "true");
-    await expect(page.locator(".m-repo", { has: sw }).getByRole("status")).toHaveText("Waiting for home");
 
-    // A repo that does not sync cannot let agents in.
+    // Switched on at the machine, the repo shows a switch that turns agents off.
+    hub.allowAgents("website");
+    await poke(page);
+    const sw = page.getByRole("switch", { name: "Agents can work in website (website)" });
+    await expect(sw).toHaveAttribute("aria-checked", "true");
+    await expect(website.locator("code")).toHaveCount(0);
+    await sw.click();
+    await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "agents", bridge: "home", repo: "website", payload: { on: false } });
+    await expect(website).toContainText("Agents are off here");
+    await expect(website.getByRole("status")).toHaveText("Waiting for home");
+    expect(hub.posted.filter((a) => a.kind === "agents" && a.payload.on)).toEqual([]);
+
+    // A repo that does not sync says agents are off, with no command.
     hub.repos.find((r) => r.name === "garden")!.optedIn = false;
     await poke(page);
-    await expect(page.getByRole("switch", { name: "Agents can work in garden (garden)" })).toBeDisabled();
+    const garden = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync garden (garden)" }) });
+    await expect(garden).toContainText("Agents are off here");
+    await expect(garden.locator("code")).toHaveCount(0);
   });
 
   test("Settings: Stop all stops every working run", async ({ page, hub }) => {

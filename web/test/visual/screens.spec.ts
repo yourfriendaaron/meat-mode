@@ -251,8 +251,6 @@ for (const size of Object.keys(SIZES) as Size[]) {
         });
 
         test("settings", async ({ page, hub }) => {
-          hub.login = true;
-          hub.authenticated = true;
           hub.setup.password = "app";
           hub.setup.userName = "Alex";
           hub.setup.timeZone = "Europe/Paris";
@@ -325,7 +323,7 @@ for (const size of Object.keys(SIZES) as Size[]) {
         });
 
         test("login", async ({ page, hub }) => {
-          hub.login = true;
+          hub.authenticated = false;
           await page.goto("/");
           await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
           await shot(page, "login");

@@ -6,13 +6,20 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    # The hub belongs on your private network only. Publish its port on
+    # loopback, for Tailscale Serve, a Tailscale Service or a reverse proxy on
+    # this host, or on this host's own tailnet address. Never publish it on
+    # all addresses ("8080:8080" or "0.0.0.0:8080:8080"), and do not reach it
+    # through Tailscale Funnel, Cloudflare Tunnel or a router port forward.
+    # See docs/deploy.md, "Private network only".
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - meat-mode-data:/data
-    # To keep the login hash out of .env, put it alone in a file (the output of
-    # `meat-mode hash-password`, no quotes) and uncomment these lines. Compose
-    # mounts the secret at /run/secrets/<name>.
+    # The hub always has a password: set it in the app with the setup code
+    # from its log, or give it a hash. To keep the hash out of .env, put it
+    # alone in a file (the output of `meat-mode hash-password`, no quotes) and
+    # uncomment these lines. Compose mounts the secret at /run/secrets/<name>.
     # environment:
     #   MEAT_MODE_PASSWORD_HASH_FILE: /run/secrets/meat_mode_password_hash
     # secrets:
