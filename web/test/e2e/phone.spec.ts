@@ -45,7 +45,7 @@ test("tabs switch views; Browse shows lists and settings", async ({ page, hub })
   await tabs.getByRole("button", { name: "Browse" }).click();
   await expect(page.locator("#view-title")).toHaveText("Everything");
   const chips = page.locator("#browse");
-  await expect(chips.getByRole("button")).toHaveText(["Everything", "personal", "garden", "website", "Settings"]);
+  await expect(chips.getByRole("button")).toHaveText(["Everything", "personal", "garden", "website", "Completed", "Deleted", "Settings"]);
   await chips.getByRole("button", { name: "garden" }).click();
   await expect(page.locator("#view-title")).toHaveText("garden");
   await expect(tabs.getByRole("button", { name: "Browse" })).toHaveAttribute("aria-current", "page");

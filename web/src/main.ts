@@ -26,9 +26,12 @@ import {
   tomorrowMorning,
   visibleRepos,
   appAuthor,
+  type Group,
   type ViewId,
 } from "./model.ts";
 import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput } from "./dates.ts";
+import { completedGroups, deletedGroups } from "./history.ts";
+import { searchGroups } from "./search.ts";
 import { snoozeOptions, typedSnooze } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
@@ -69,7 +72,8 @@ import { sectionsHTML } from "./settings/registry.ts";
 import { forgetCalendarLink } from "./settings/calendar.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
-type View = ViewId | "settings" | "setup";
+/** Completed and Deleted show the closed items the hub keeps for 7 days. */
+type View = ViewId | "completed" | "deleted" | "settings" | "setup";
 
 /** Views that show a page in place of the task list. */
 function isPage(v: View): v is "settings" | "setup" {
@@ -91,6 +95,11 @@ const S = {
   offset: 0,
   loadError: "",
   view: "today" as View,
+  /** The search field's text; while it holds a word, the list shows search results in place of the view. */
+  query: "",
+  /** Select mode: rows pick instead of open, and the bulk bar acts on the picks. */
+  selecting: false,
+  picked: new Set<string>(),
   selected: null as string | null,
   open: null as string | null,
   openSeenAt: null as string | null | undefined,
@@ -191,6 +200,8 @@ const ICON = {
   gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
   repeat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V10a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
 };
 
@@ -206,6 +217,10 @@ function viewTitle(v: View): string {
       return "From agents";
     case "all":
       return "Everything";
+    case "completed":
+      return "Completed";
+    case "deleted":
+      return "Deleted";
     case "settings":
       return "Settings";
     case "setup":
@@ -229,8 +244,11 @@ function listLabelHTML(r: Repo): string {
   return esc(repoLabel(r)) + (detail ? `<small class="nav-sub">${esc(detail)}</small>` : "");
 }
 
-function currentGroups() {
+function currentGroups(): Group[] {
   if (isPage(S.view)) return [];
+  if (S.query.trim()) return searchGroups(items(), repos(), S.query, now());
+  if (S.view === "completed") return completedGroups(items(), repos(), now());
+  if (S.view === "deleted") return deletedGroups(items(), repos(), now());
   return buildView(S.view, items(), repos(), now());
 }
 
@@ -240,6 +258,11 @@ function visibleKeys(): string[] {
 }
 
 // ---------- render: chrome ----------
+
+/** Views under the phone's Browse tab. */
+function browsing(v: View): boolean {
+  return v === "all" || v === "completed" || v === "deleted" || v === "settings" || v.startsWith("list:");
+}
 
 function renderNav() {
   const all = items();
@@ -255,7 +278,9 @@ function renderNav() {
     entry("today", "Today", ICON.today, plain(openToday(all, n))) +
       entry("upcoming", "Upcoming", ICON.upcoming, plain(upcoming)) +
       entry("agents", "From agents", ICON.agents, agentNew ? `<span class="badge-new">${agentNew} new</span>` : "") +
-      entry("all", "Everything", ICON.all, plain(everything)),
+      entry("all", "Everything", ICON.all, plain(everything)) +
+      entry("completed", "Completed", ICON.check, "") +
+      entry("deleted", "Deleted", ICON.trash, ""),
   );
 
   const colours = repoColours(repos());
@@ -279,7 +304,7 @@ function renderNav() {
       ["all", "Browse", ICON.all, ""],
     ]
       .map(([v, label, icon, badge]) => {
-        const active = v === "all" ? S.view === "all" || S.view === "settings" || S.view.startsWith("list:") : S.view === v;
+        const active = v === "all" ? browsing(S.view) : S.view === v;
         return `<button class="tab" data-act="view" data-view="${v}"${active ? ' aria-current="page"' : ""}>${icon}<span>${label}</span>${badge}</button>`;
       })
       .join(""),
@@ -411,11 +436,10 @@ function renderMain() {
   main.dataset.view = S.view.startsWith("list:") ? "list" : S.view;
 
   // Browse chips (phone): Everything, each list, Settings.
-  const browsing = S.view === "all" || S.view === "settings" || S.view.startsWith("list:");
   const colours = repoColours(repos());
   setHTML(
     $("#browse"),
-    browsing
+    browsing(S.view)
       ? `<button class="bchip" data-act="view" data-view="all"${S.view === "all" ? ' aria-current="page"' : ""}>Everything</button>` +
           visibleRepos(repos())
             .map((r) => {
@@ -423,6 +447,8 @@ function renderMain() {
               return `<button class="bchip" data-act="view" data-view="${esc(v)}"${S.view === v ? ' aria-current="page"' : ""}><span class="dot c${colours.get(repoKey(r)) ?? 0}" aria-hidden="true"></span>${esc(listLabel(r))}</button>`;
             })
             .join("") +
+          `<button class="bchip" data-act="view" data-view="completed"${S.view === "completed" ? ' aria-current="page"' : ""}>${ICON.check}Completed</button>` +
+          `<button class="bchip" data-act="view" data-view="deleted"${S.view === "deleted" ? ' aria-current="page"' : ""}>${ICON.trash}Deleted</button>` +
           `<button class="bchip" data-act="view" data-view="settings"${S.view === "settings" ? ' aria-current="page"' : ""}>${ICON.gear}Settings</button>`
       : "",
   );
@@ -1921,7 +1947,7 @@ function shell(): string {
   </div>
 </aside>
 <main id="main" class="main">
-  <header class="mhead"><h1 id="view-title">Today</h1><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
+  <header class="mhead"><h1 id="view-title">Today</h1><form id="search-form" class="search" role="search" autocomplete="off"><label class="sr" for="search-input">Search</label><input id="search-input" type="search" enterkeyhint="search" placeholder="Search"></form><button id="select-btn" class="btn btn-small btn-ghost" data-act="select-mode" hidden>Select</button><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
   <div id="browse" class="browse"></div>
   <form id="qa-form" class="qa" autocomplete="off">
     <div class="qa-head"><h2>New task</h2><button type="button" class="icon-btn" data-act="qa-close" aria-label="Close">${ICON.close}</button></div>
@@ -1931,6 +1957,7 @@ function shell(): string {
   <div id="dayload" class="dayload" hidden></div>
   <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>
   <div id="list" class="list"></div>
+  <div id="bulkbar" class="bulkbar" role="toolbar" aria-label="Selected tasks" hidden></div>
   <div id="settings" class="settings" hidden></div>
   <div id="wizard" class="settings wizard-view" hidden></div>
 </main>

@@ -1,6 +1,10 @@
 /* Meat Mode. Dracula Classic by default, Alucard Classic behind the light toggle
    (palettes from draculatheme.com/spec). Layout switches on the app's own width. */
 
+@import "./history.css";
+@import "./search.css";
+@import "./bulk.css";
+
 :root {
   --bg: #282a36;
   --bg2: #21222c;

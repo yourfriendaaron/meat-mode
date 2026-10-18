@@ -32,8 +32,11 @@ const VIEW_GROUPS: Record<"today" | "upcoming" | "all", GroupId[]> = {
   all: ["pastdue", "today", "evening", "tomorrow", "week", "later", "nodate", "done"],
 };
 
+/** Groups the Completed, Deleted and search views add: a close day, the Deleted list, and search results. */
+export type ExtraGroupId = `day-${string}` | "deleted" | "found-open" | "found-done" | "found-deleted";
+
 export interface Group {
-  id: GroupId;
+  id: GroupId | ExtraGroupId;
   label: string;
   items: Item[];
 }
