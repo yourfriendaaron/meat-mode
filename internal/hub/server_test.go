@@ -29,6 +29,11 @@ type fakePush struct {
 	sessions  map[string]string // endpoint to the session that registered it
 	testedURL string
 	dropErr   error // returned by DropSession when set
+	// Devices: tokens maps a device token to its device, and revoked lists
+	// the devices revoked, in order.
+	tokens  map[string]string
+	revoked []string
+	updated map[string]api.PushSubscription // device to its new subscription
 }
 
 func (f *fakePush) PublicKey() string { return "BExampleKey" }

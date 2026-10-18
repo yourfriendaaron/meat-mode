@@ -120,6 +120,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	s.passwordRoutes(m)
 	s.remindersRoutes(m)
 	s.calendarRoutes(m)
+	s.devicesRoutes(m)
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))
@@ -209,6 +210,8 @@ func (s *Server) storeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, store.ErrUnauthorized):
 		writeError(w, http.StatusUnauthorized, "unauthorized")
+	case errors.Is(err, store.ErrForbidden):
+		writeError(w, http.StatusForbidden, err.Error())
 	default:
 		s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 		writeError(w, http.StatusInternalServerError, "the hub hit an internal error; see its log")
@@ -234,6 +237,10 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 	var na api.NewAction
 	if !readJSON(w, r, maxBody, &na) {
+		return
+	}
+	if deviceOf(r) != "" && !deviceKinds[na.Kind] {
+		writeError(w, http.StatusUnauthorized, "a device token posts only ask, done and snooze")
 		return
 	}
 	user, err := s.userName()
@@ -312,6 +319,15 @@ func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 	var sessionID string
 	if sess := sessionOf(r); sess != nil {
 		sessionID = sess.ID
+	}
+	switch sub.Kind {
+	case "", api.DeviceWeb:
+	case api.DeviceApp:
+		s.registerApp(w, r, sessionID, sub)
+		return
+	default:
+		writeError(w, http.StatusBadRequest, `kind must be "web" or "app"`)
+		return
 	}
 	if err := s.push.Subscribe(r.Context(), sessionID, sub); err != nil {
 		s.storeError(w, r, err)

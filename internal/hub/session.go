@@ -117,16 +117,28 @@ func sessionOf(r *http.Request) *store.Session {
 }
 
 // gate lets an /api/ request through only with a valid session while login
-// is on, and returns the request carrying that session. Pages, the bridge
-// API and /healthz are not gated.
+// is on, and returns the request carrying that session. A request with a
+// device token goes through deviceGate instead. Pages, the bridge API and
+// /healthz are not gated.
 func (s *Server) gate(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
 	p := r.URL.Path
+	if !isAPIPath(p) {
+		return r, true
+	}
+	if _, ok := bearerToken(r); ok {
+		// A device request, with login on or off; its cookie is ignored.
+		return s.deviceGate(w, r)
+	}
 	l := s.currentLogin()
-	if l == nil || !isAPIPath(p) {
+	if l == nil {
 		return r, true
 	}
 	switch p {
 	case "/api/session", "/api/login", "/api/logout", "/api/setup/claim":
+		return r, true
+	}
+	if r.Method == http.MethodPost && confirmPath(p) {
+		// The confirmation code is the credential.
 		return r, true
 	}
 	sess, err := s.session(w, r, l)

@@ -82,6 +82,11 @@ func TestFiresOnceWhenDue(t *testing.T) {
 		m.URL != "https://app.example.com/?item=home%2Fchores%2Fch-1" {
 		t.Fatalf("message %+v", m)
 	}
+	// A reminder for one item offers Done and Snooze on that item.
+	if m.Channel != notify.ChannelReminders || m.Key != "home/chores/ch-1" ||
+		len(m.Actions) != 2 || m.Actions[0].Action != notify.ActionDone || m.Actions[1].Action != notify.ActionSnooze {
+		t.Fatalf("channel %q, key %q, actions %+v", m.Channel, m.Key, m.Actions)
+	}
 }
 
 func TestRefiresAfterSnooze(t *testing.T) {
@@ -166,6 +171,9 @@ func TestSeveralMissedRemindersSendOneSummary(t *testing.T) {
 	if m.Title != "5 reminders came due while reminders were off" || m.Body != "Task 0, Task 1, Task 2, and 2 more" ||
 		m.URL != "https://app.example.com/" || m.Tag != MissedTag {
 		t.Fatalf("summary: %+v", m)
+	}
+	if m.Channel != notify.ChannelReminders || len(m.Actions) != 0 {
+		t.Fatalf("summary channel %q, actions %+v; want reminders and none", m.Channel, m.Actions)
 	}
 	var rows int
 	db.QueryRow(`SELECT count(*) FROM reminder_fired`).Scan(&rows)

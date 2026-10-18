@@ -221,10 +221,18 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 				continue
 			}
 		}
+		// Done and Snooze act on the item from the notification; a summary
+		// of several missed reminders drops them.
 		msg := notify.Message{
-			Title: truncTitle(it.Title),
-			URL:   fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(link)),
-			Tag:   link,
+			Title:   truncTitle(it.Title),
+			URL:     fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(link)),
+			Tag:     link,
+			Channel: notify.ChannelReminders,
+			Key:     link,
+			Actions: []notify.Action{
+				{Action: notify.ActionDone, Title: "Done"},
+				{Action: notify.ActionSnooze, Title: "Snooze 1 hour"},
+			},
 		}
 
 		lead := hubLead
@@ -327,10 +335,11 @@ func (s *Scheduler) missed(late []notify.Message) notify.Message {
 		titles = append(titles, m.Title)
 	}
 	return notify.Message{
-		Title: fmt.Sprintf("%d reminders came due while reminders were off", len(late)),
-		Body:  strings.Join(titles, ", "),
-		URL:   s.publicURL + "/",
-		Tag:   MissedTag,
+		Title:   fmt.Sprintf("%d reminders came due while reminders were off", len(late)),
+		Body:    strings.Join(titles, ", "),
+		URL:     s.publicURL + "/",
+		Tag:     MissedTag,
+		Channel: notify.ChannelReminders,
 	}
 }
 

@@ -6,9 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
+
+	"github.com/coder/safedial"
 
 	"github.com/yourfriendaaron/meat-mode/internal/auth"
 )
@@ -31,6 +35,10 @@ type Config struct {
 	// NtfyURL is MEAT_MODE_NTFY_URL. The hub only reports whether it is
 	// set, in the connection check; internal/notify does the sending.
 	NtfyURL string
+	// PushAllow is MEAT_MODE_PUSH_ALLOW: comma-separated host names and
+	// CIDRs of push servers the Android app may register that are not at
+	// global addresses (docs/api.md, Devices). PushAllowList parses it.
+	PushAllow string
 }
 
 // ConfigFromEnv reads Config from the environment.
@@ -45,6 +53,7 @@ func ConfigFromEnv() Config {
 		PasswordHash:     strings.TrimSpace(os.Getenv("MEAT_MODE_PASSWORD_HASH")),
 		PasswordHashFile: os.Getenv("MEAT_MODE_PASSWORD_HASH_FILE"),
 		NtfyURL:          strings.TrimSpace(os.Getenv("MEAT_MODE_NTFY_URL")),
+		PushAllow:        os.Getenv("MEAT_MODE_PUSH_ALLOW"),
 	}
 }
 
@@ -83,6 +92,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("the login password hash is %w", err)
 		}
 	}
+	if _, _, err := c.PushAllowList(); err != nil {
+		return err
+	}
 	if c.PublicURL == "" {
 		return errors.New("MEAT_MODE_PUBLIC_URL is not set: set it to the HTTPS address you open the app at, such as https://meat-mode.example.com")
 	}
@@ -98,6 +110,41 @@ func (c Config) Validate() error {
 	}
 	return fmt.Errorf("MEAT_MODE_PUBLIC_URL %q must start with https:// (plain http:// is accepted for localhost only)", c.PublicURL)
 }
+
+// PushAllowList parses PushAllow into host names, lower case, and CIDRs. A
+// bare address counts as a CIDR of that one address. An entry that is
+// neither a host name nor a CIDR is an error naming it.
+func (c Config) PushAllowList() (hosts []string, cidrs []netip.Prefix, err error) {
+	for e := range strings.SplitSeq(c.PushAllow, ",") {
+		e = strings.TrimSpace(e)
+		switch {
+		case e == "":
+			continue
+		case strings.Contains(e, "/"):
+			p, err := safedial.ParseAllowedPrefix(e)
+			if err != nil {
+				return nil, nil, fmt.Errorf("MEAT_MODE_PUSH_ALLOW entry %q is not a CIDR such as 192.0.2.0/24 or 2001:db8::/32", e)
+			}
+			cidrs = append(cidrs, p.Masked())
+		default:
+			if a, err := netip.ParseAddr(e); err == nil {
+				a = a.Unmap()
+				cidrs = append(cidrs, netip.PrefixFrom(a, a.BitLen()))
+				continue
+			}
+			h := strings.ToLower(strings.TrimSuffix(e, "."))
+			if !hostNameRE.MatchString(h) || len(h) > 253 {
+				return nil, nil, fmt.Errorf("MEAT_MODE_PUSH_ALLOW entry %q is not a host name such as ntfy.example.com or a CIDR such as 192.0.2.0/24; give a host name without a scheme, port or path", e)
+			}
+			hosts = append(hosts, h)
+		}
+	}
+	return hosts, cidrs, nil
+}
+
+// hostNameRE matches a DNS host name: dot-separated labels of letters,
+// digits and inner hyphens, at most 63 characters each.
+var hostNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$`)
 
 func isLoopback(host string) bool {
 	if host == "localhost" {
