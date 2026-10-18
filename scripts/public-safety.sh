@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Refuse to publish personal data, secrets or machine state.
-# Scans the Git index (what the next commit will contain; in CI, the checkout)
-# and, when bd is installed, an export of this repo's beads issues.
+# Scans the Git index (what the next commit will contain; in CI, the checkout).
+# The beads issues are private and never published (see AGENTS.md), so they
+# are not scanned; the index is checked for anything that would publish them.
 # Exit 0 when clean, 1 with a report when something is found.
 #
 # Extra private patterns: .public-safety.local (untracked), one extended regex
@@ -22,24 +23,10 @@ report() { # label, grep output
   printf '\n%s\n%s\n' "$1" "$2"
 }
 
-# Beads issues are published with the repo too: scan an export of them.
-beads_export=""
-if command -v bd >/dev/null 2>&1 && [ -d .beads ]; then
-  beads_export=$(mktemp)
-  trap 'rm -f "$beads_export"' EXIT
-  if ! bd export > "$beads_export" 2>/dev/null; then
-    echo "public-safety: bd export failed; beads issues were not scanned" >&2
-    : > "$beads_export"
-  fi
-fi
-
-search() { # [-i] regex: matches in the index, then in the beads export
+search() { # [-i] regex: matches in the index
   local flags=(-n -E)
   if [ "$1" = "-i" ]; then flags+=(-i); shift; fi
   git grep --cached -I "${flags[@]}" -e "$1" -- . "${exclude[@]}" || true
-  if [ -n "$beads_export" ] && [ -s "$beads_export" ]; then
-    grep "${flags[@]}" -e "$1" "$beads_export" | sed 's/^/beads issues:/' || true
-  fi
 }
 
 scan() { # label, extended regex, [filter regex to drop allowed matches]
@@ -69,6 +56,16 @@ scan "Email addresses outside example and noreply domains:" \
 # Files that must never be tracked, whatever they contain.
 bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|mise\.local\.toml|\.public-safety\.local|id_rsa|id_ecdsa|id_ed25519|\.netrc|\.npmrc|\.htpasswd|credentials\.json)$|\.(db|sqlite3?|pem|key|p12|pfx|jks|keystore)$|\.(db|sqlite3?)-(wal|shm|journal)$' | grep -v -E '(^|/)\.env\.example$' || true)
 report "Files that must never be tracked:" "$bad_files"
+
+# The beads issues stay private: only bd's four setup files are tracked, and
+# the config never names a Dolt remote, which bd writes there and commits on
+# its own when one is added.
+beads_files=$(git ls-files --cached -- .beads | grep -v -x -E '\.beads/(\.gitignore|README\.md|config\.yaml|metadata\.json)' || true)
+report "Beads data must never be tracked:" "$beads_files"
+if git cat-file -e :.beads/config.yaml 2>/dev/null; then
+  remote=$(git show :.beads/config.yaml | grep -n -E '^[[:space:]]*(sync\.)?remote:' | sed 's/^/.beads\/config.yaml:/' || true)
+  report "A Dolt remote in .beads/config.yaml (keep it in the Dolt database only):" "$remote"
+fi
 
 # The operator's own names, hosts and identifiers.
 local_file=${PUBLIC_SAFETY_LOCAL:-$root/.public-safety.local}

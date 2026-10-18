@@ -4,9 +4,9 @@ Meat Mode is a self-hosted to-do app for one person. It shows their personal to-
 
 ## This repo is public from the first commit
 
-Everything tracked here will be published: code, docs, tests, fixtures, commit messages, and the beads issues, which sync to the same Git remote. Write all of it as if a stranger reads it tomorrow.
+Everything tracked here will be published: code, docs, tests, fixtures and commit messages. Write all of it as if a stranger reads it tomorrow. The beads issues are the exception: they are private and never reach the public remote (see Work tracking).
 
-Never put any of these in a tracked file, an issue or a commit message:
+Never put any of these in a tracked file or a commit message:
 
 - **Personal data**: real names, email addresses, phone numbers, street addresses, account IDs, real tasks or notes.
 - **Secrets**: tokens, passwords, API keys, cookies, private keys, or the value of any environment variable.
@@ -24,7 +24,9 @@ How to work within that:
 
 - Run `scripts/setup.sh` once per clone. It points Git at `.githooks/`, whose pre-commit hook runs `scripts/public-safety.sh` and, when installed, `gitleaks`.
 - `scripts/public-safety.sh` scans what is staged for home paths, private and Tailscale IP addresses, tailnet and `.local` hostnames, email addresses outside the allowed example domains, MAC addresses, and files that must never be tracked (`.env`, databases, keys). It also reads `.public-safety.local`, an untracked file of one extended regex per line for the operator's own names and hosts. Add a new private identifier there, never to a tracked file.
-- `tests/public-safety.test.sh` proves the guard catches each class and passes clean code. CI runs the test, the guard and gitleaks on every push and pull request.
+- The guard also refuses tracked beads data: anything in `.beads/` beyond `.gitignore`, `README.md`, `config.yaml` and `metadata.json`, and a Dolt remote in `config.yaml`.
+- The pre-push hook refuses any ref other than a branch or tag (Dolt keeps its data in `refs/dolt/`), Dolt's `__dolt` branches, and pushed commits that track beads data or a Dolt remote.
+- `tests/public-safety.test.sh` proves the guard and the pre-push hook catch each class and pass clean code. CI runs the test, the guard and gitleaks on every push and pull request, and daily checks that the public remote holds no `refs/dolt/` or `__dolt` refs.
 - Never commit with `--no-verify`. When a guard fires, remove the data. Widen a pattern's allowlist only when the operator agrees in that conversation.
 
 ## Checks
@@ -36,4 +38,9 @@ How to work within that:
 
 ## Work tracking
 
-Work is tracked in beads in this repo: `bd ready`, `bd show <id>`, `bd update <id> --claim`, `bd close <id>`. The build epic holds the decisions and the order of work; start there. Issues follow the public rule above.
+Work is tracked in beads in this repo: `bd ready`, `bd show <id>`, `bd update <id> --claim`, `bd close <id>`. The build epic holds the decisions and the order of work; start there.
+
+The issues are private. Their Dolt database is untracked and syncs only to a private Dolt remote the operator sets up outside this repo; it never goes to the public Git remote. Dolt pushes past Git's hooks, so the rules below are what keep it there:
+
+- Before `bd sync` or `bd dolt push`, `bd dolt remote list` must show the private remote. With none set, both adopt the Git `origin` (this public repo) as the Dolt remote and push every issue to it. Never run `bd sync --yes`, and never add a Dolt remote that points at the public repo.
+- `bd dolt remote add` also writes the remote into `.beads/config.yaml` and commits that on its own, as `bd: update sync.remote`. Drop that commit and keep the file as tracked; the remote lives in the Dolt database.
