@@ -53,6 +53,7 @@ func runHub(args []string) error {
 				s.Every = d
 			}
 			s.KeyOf = st.ReminderKey
+			s.Lead = stateItems{st}
 			go s.Run(ctx)
 			return nil
 		},
@@ -66,4 +67,10 @@ type stateItems struct{ st *store.Store }
 func (s stateItems) Items(context.Context) ([]api.Item, error) {
 	state, err := s.st.State()
 	return state.Items, err
+}
+
+// ReminderLead gives the scheduler the lead time kept in the app.
+func (s stateItems) ReminderLead(context.Context) (int, error) {
+	h, err := s.st.Settings()
+	return h.ReminderLead, err
 }

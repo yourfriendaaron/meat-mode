@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -127,23 +128,85 @@ func TestNoRefireAfterRestart(t *testing.T) {
 	}
 }
 
-func TestMissedWhileDownFiresOnceOldIsSilent(t *testing.T) {
+func TestOneMissedReminderSaysHowLate(t *testing.T) {
 	db, c, src, n := setup(t)
 	recent := t0.Add(-3 * time.Hour)
-	old := t0.Add(-8 * 24 * time.Hour)
-	a, b := item(&recent), item(&old)
-	b.Key, b.ID, b.Title = "home/chores/ch-2", "ch-2", "Old thing"
-	src.items = []api.Item{a, b}
+	src.items = []api.Item{item(&recent)}
 	s := sched(t, db, c, src, n)
 	s.Tick(context.Background())
 	s.Tick(context.Background())
-	if len(n.got) != 1 || n.got[0].Title != "Water the plants" {
+	if len(n.got) != 1 || n.got[0].Title != "Water the plants" || n.got[0].Body != "Due 3 hours ago" || n.got[0].Tag != "home/chores/ch-1" {
 		t.Fatalf("got %+v", n.got)
+	}
+}
+
+func TestSeveralMissedRemindersSendOneSummary(t *testing.T) {
+	db, c, src, n := setup(t)
+	var items []api.Item
+	for i, ago := range []time.Duration{3 * time.Hour, 30 * 24 * time.Hour, 10 * time.Minute, 2 * time.Hour, 6 * time.Hour} {
+		at := t0.Add(-ago)
+		it := item(&at)
+		it.Key, it.ID, it.Title = fmt.Sprintf("home/chores/ch-%d", i), fmt.Sprintf("ch-%d", i), fmt.Sprintf("Task %d", i)
+		items = append(items, it)
+	}
+	// One on time, which goes out as itself.
+	onTime := item(tp(t0.Add(-time.Minute)))
+	onTime.Key, onTime.ID, onTime.Title = "home/chores/ch-9", "ch-9", "Sweep the porch"
+	src.items = append(items, onTime)
+	s := sched(t, db, c, src, n)
+	s.Tick(context.Background())
+	s.Tick(context.Background())
+	if len(n.got) != 2 {
+		t.Fatalf("got %+v", n.got)
+	}
+	if m := n.got[0]; m.Title != "Sweep the porch" || m.Body != "Due now" {
+		t.Fatalf("on time: %+v", m)
+	}
+	m := n.got[1]
+	if m.Title != "5 reminders came due while reminders were off" || m.Body != "Task 0, Task 1, Task 2, and 2 more" ||
+		m.URL != "https://app.example.com/" || m.Tag != MissedTag {
+		t.Fatalf("summary: %+v", m)
 	}
 	var rows int
 	db.QueryRow(`SELECT count(*) FROM reminder_fired`).Scan(&rows)
-	if rows != 2 {
+	if rows != 6 {
 		t.Fatalf("recorded %d", rows)
+	}
+}
+
+func TestMissedSnoozeEnd(t *testing.T) {
+	db, c, src, n := setup(t)
+	it := item(nil)
+	it.Status, it.DeferUntil = "deferred", tp(t0.Add(-90*time.Minute))
+	src.items = []api.Item{it}
+	sched(t, db, c, src, n).Tick(context.Background())
+	if len(n.got) != 1 || n.got[0].Body != "Snoozed until 1 hour 30 minutes ago" {
+		t.Fatalf("got %+v", n.got)
+	}
+}
+
+// An item the hub first saw after its moment never reminds for it, however
+// recent; one seen before it reminds however late.
+func TestItemThatArrivedOverdueIsSilent(t *testing.T) {
+	db, c, src, n := setup(t)
+	oldBead := item(tp(t0.Add(-2 * time.Minute)))
+	oldBead.FirstSeen = t0.Add(-time.Minute)
+	known := item(tp(t0.Add(-40 * 24 * time.Hour)))
+	known.Key, known.ID, known.Title = "home/chores/ch-2", "ch-2", "Pay the rent"
+	known.FirstSeen = t0.Add(-41 * 24 * time.Hour)
+	src.items = []api.Item{oldBead, known}
+	s := sched(t, db, c, src, n)
+	s.Tick(context.Background())
+	if len(n.got) != 1 || n.got[0].Title != "Pay the rent" || n.got[0].Body != "Due 40 days ago" {
+		t.Fatalf("got %+v", n.got)
+	}
+	// A later due time on the arrived item reminds as usual.
+	oldBead.DueAt = tp(t0.Add(time.Hour))
+	src.items = []api.Item{oldBead}
+	c.now = t0.Add(time.Hour)
+	s.Tick(context.Background())
+	if len(n.got) != 2 || n.got[1].Body != "Due now" {
+		t.Fatalf("got %+v", n.got)
 	}
 }
 
@@ -223,7 +286,9 @@ func TestLongTitleIsTruncated(t *testing.T) {
 func TestKeyOfSharesOneReminder(t *testing.T) {
 	db, c, src, n := setup(t)
 	s := sched(t, db, c, src, n)
-	s.KeyOf = func(context.Context, api.Item) (string, error) { return "home/chores/pending-1", nil }
+	s.KeyOf = func(_ context.Context, it api.Item) (string, time.Time, error) {
+		return "home/chores/pending-1", it.FirstSeen, nil
+	}
 	// The app's copy carries milliseconds; the bead bd stored does not.
 	early := item(tp(t0.Add(-time.Minute + 250*time.Millisecond)))
 	early.Key, early.ID = "home/chores/pending-1", "pending-1"
@@ -239,7 +304,9 @@ func TestKeyOfSharesOneReminder(t *testing.T) {
 func TestLinkUsesTheItemsOwnKey(t *testing.T) {
 	db, c, src, n := setup(t)
 	s := sched(t, db, c, src, n)
-	s.KeyOf = func(context.Context, api.Item) (string, error) { return "home/chores/pending-1", nil }
+	s.KeyOf = func(_ context.Context, it api.Item) (string, time.Time, error) {
+		return "home/chores/pending-1", it.FirstSeen, nil
+	}
 	// The bridge has reported the added bead; the provisional item is gone.
 	real := item(tp(t0.Add(-time.Minute)))
 	real.Key, real.ID = "home/chores/ch-7", "ch-7"

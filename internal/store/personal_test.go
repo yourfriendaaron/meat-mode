@@ -47,8 +47,8 @@ func TestPersonalListWorksWithNoBridge(t *testing.T) {
 	}
 	key := hubKey(a.BeadID)
 	it := item(t, mustState(t, s), key)
-	if rk, err := s.ReminderKey(context.Background(), it); err != nil || rk != key {
-		t.Errorf("reminder key = %q, %v; want the item's own key", rk, err)
+	if rk, first, err := s.ReminderKey(context.Background(), it); err != nil || rk != key || !first.Equal(it.FirstSeen) {
+		t.Errorf("reminder key = %q, %v, %v; want the item's own key and first-seen time", rk, first, err)
 	}
 	if it.Title != "Water the plants" || it.Status != "open" || it.Pending || it.DueAt == nil || !it.DueAt.Equal(due) || it.CreatedBy != "alex-app" {
 		t.Fatalf("added item %+v", it)
@@ -239,6 +239,9 @@ func TestTransferPersonalMovesEverythingOnce(t *testing.T) {
 	must(t, err)
 	_, err = s.DB().Exec(`INSERT INTO reminder_fired VALUES ('laptop/personal/lp-1', 1)`)
 	must(t, err)
+	_, err = s.DB().Exec(`CREATE TABLE reminder_early (item_key TEXT NOT NULL, due_at INTEGER NOT NULL, PRIMARY KEY (item_key, due_at));
+		INSERT INTO reminder_early VALUES ('laptop/personal/lp-1', 1)`)
+	must(t, err)
 
 	c.tick()
 	must(t, s.TransferPersonal())
@@ -278,9 +281,9 @@ func TestTransferPersonalMovesEverythingOnce(t *testing.T) {
 			t.Errorf("action %s = %s, want %s", a.Kind, a.Status, want)
 		}
 	}
-	keys, err := queryStrings(s.DB(), `SELECT item_key FROM reminder_fired`)
+	keys, err := queryStrings(s.DB(), `SELECT item_key FROM reminder_fired UNION ALL SELECT item_key FROM reminder_early`)
 	must(t, err)
-	if !slices.Equal(keys, []string{hubKey("lp-1")}) {
+	if !slices.Equal(keys, []string{hubKey("lp-1"), hubKey("lp-1")}) {
 		t.Errorf("reminder keys = %v", keys)
 	}
 

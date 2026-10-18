@@ -126,8 +126,8 @@ func migrateFolderNames(tx *sql.Tx, bridge string, existing []string, repos []ap
 // renameRepo moves a repo and everything keyed by it to a new name.
 func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 	oldPrefix, newPrefix := bridge+"/"+from+"/", bridge+"/"+to+"/"
-	var reminders int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'reminder_fired'`).Scan(&reminders); err != nil {
+	tables, err := reminderTablesIn(tx)
+	if err != nil {
 		return err
 	}
 	stmts := []struct {
@@ -140,8 +140,8 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 		{`UPDATE actions SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
 		{`DELETE FROM repos WHERE bridge = ? AND name = ?`, []any{bridge, from}},
 	}
-	if reminders > 0 {
-		keys, err := queryStrings(tx, `SELECT DISTINCT item_key FROM reminder_fired`)
+	for _, table := range tables {
+		keys, err := queryStrings(tx, `SELECT DISTINCT item_key FROM `+table)
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 				stmts = append(stmts, struct {
 					q    string
 					args []any
-				}{`UPDATE reminder_fired SET item_key = ? WHERE item_key = ?`, []any{newPrefix + rest, k}})
+				}{`UPDATE ` + table + ` SET item_key = ? WHERE item_key = ?`, []any{newPrefix + rest, k}})
 			}
 		}
 	}

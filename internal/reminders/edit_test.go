@@ -16,7 +16,7 @@ func TestDueAfterAnEndedSnoozeFires(t *testing.T) {
 	db, c, src, n := setup(t)
 	s := sched(t, db, c, src, n)
 	it := item(nil)
-	it.DeferUntil = tp(t0.Add(-time.Hour))
+	it.DeferUntil = tp(t0.Add(-time.Minute))
 	src.items = []api.Item{it}
 	s.Tick(context.Background())
 	if len(n.got) != 1 || n.got[0].Body != "Snoozed until now" {

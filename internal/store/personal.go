@@ -209,15 +209,19 @@ func importPersonal(tx *sql.Tx, bridge, repo string, items []legacyItem) ([]stri
 	return created, nil
 }
 
-// moveReminders rekeys the reminder scheduler's fired marks, when its table
-// exists.
+// moveReminders rekeys the reminder scheduler's sent marks, in those of its
+// tables that exist.
 func moveReminders(tx *sql.Tx, from, to string) error {
-	var n int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'reminder_fired'`).Scan(&n); err != nil || n == 0 {
+	tables, err := reminderTablesIn(tx)
+	if err != nil {
 		return err
 	}
-	_, err := tx.Exec(`UPDATE OR IGNORE reminder_fired SET item_key = ? WHERE item_key = ?`, to, from)
-	return err
+	for _, table := range tables {
+		if _, err := tx.Exec(`UPDATE OR IGNORE `+table+` SET item_key = ? WHERE item_key = ?`, to, from); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // originOf returns the personal item a bridge's bead was imported as.
