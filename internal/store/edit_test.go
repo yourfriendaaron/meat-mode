@@ -679,3 +679,66 @@ func TestRepeatUntilRefuses(t *testing.T) {
 	edit(t, s, key, api.Edit{Due: &onUntil})
 	edit(t, s, key, api.Edit{Due: &later, ClearRepeat: true})
 }
+
+func TestChangingUntilKeepsTheSeries(t *testing.T) {
+	s, c := open(t)
+	// Every month on the 31st at 9:00 UTC, now due on 30 April.
+	due := time.Date(2026, 1, 31, 9, 0, 0, 0, time.UTC)
+	april := time.Date(2026, 4, 30, 9, 0, 0, 0, time.UTC)
+	may := time.Date(2026, 5, 31, 9, 0, 0, 0, time.UTC)
+	monthly := api.Repeat{Every: api.EveryMonth, TimeZone: "UTC"}
+	key := addRepeating(t, s, "Pay the rent", due, monthly)
+	edit(t, s, key, api.Edit{Due: &april})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(due) {
+		t.Fatalf("start after a move onto the series %v", it.Repeat.Start)
+	}
+	c.t = april.Add(-time.Hour)
+
+	// doneLandsOnThe31st checks that a done from 30 April lands on 31 May,
+	// and puts it back with its Undo.
+	doneLandsOnThe31st := func(step string) {
+		t.Helper()
+		it := item(t, mustState(t, s), key)
+		if !it.DueAt.Equal(april) || !it.Repeat.Start.Equal(due) {
+			t.Fatalf("%s: item %+v, start %v", step, it, it.Repeat.Start)
+		}
+		a := act(t, s, api.KindDone, key, api.Payload{})
+		if it := item(t, mustState(t, s), key); !it.DueAt.Equal(may) {
+			t.Fatalf("%s: done landed on %v", step, it.DueAt)
+		}
+		edit(t, s, key, *a.Payload.Was)
+	}
+
+	ended := monthly
+	ended.Until = "2026-12-31"
+	set := edit(t, s, key, api.Edit{Repeat: &ended})
+	doneLandsOnThe31st("until set")
+	if it := item(t, mustState(t, s), key); it.Repeat.Until != "2026-12-31" {
+		t.Fatalf("until %+v", it.Repeat)
+	}
+	removed := edit(t, s, key, api.Edit{Repeat: &monthly})
+	doneLandsOnThe31st("until removed")
+	// The Undo of each edit keeps the series too.
+	edit(t, s, key, *removed.Payload.Was)
+	doneLandsOnThe31st("removal undone")
+	if it := item(t, mustState(t, s), key); it.Repeat.Until != "2026-12-31" {
+		t.Fatalf("until after the undo %+v", it.Repeat)
+	}
+	edit(t, s, key, *set.Payload.Was)
+	doneLandsOnThe31st("until undone")
+
+	// Any other change to the rule starts it at the due time.
+	bimonthly := ended
+	bimonthly.Interval = 2
+	edit(t, s, key, api.Edit{Repeat: &bimonthly})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(april) {
+		t.Fatalf("start after a new interval %v", it.Repeat.Start)
+	}
+	// So does a new until with the due time moved off the series.
+	off := april.Add(time.Hour)
+	bimonthly.Until = ""
+	edit(t, s, key, api.Edit{Repeat: &bimonthly, Due: &off})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(off) {
+		t.Fatalf("start after a move off the series %v", it.Repeat.Start)
+	}
+}

@@ -77,6 +77,13 @@ func checkUntil(r api.Repeat, due time.Time) error {
 	return nil
 }
 
+// onlyUntilDiffers reports whether two rules that passed checkRepeat are
+// the same schedule, whatever their until and start.
+func onlyUntilDiffers(a, b api.Repeat) bool {
+	return a.Every == b.Every && interval(a) == interval(b) && slices.Equal(a.Weekdays, b.Weekdays) &&
+		a.FromDone == b.FromDone && a.TimeZone == b.TimeZone
+}
+
 // nextDue is when a repeating item is due once it is done at now: the first
 // occurrence after both its due time and now, so missed ones are skipped;
 // with FromDone, the done day plus the interval, at the rule's time of day.

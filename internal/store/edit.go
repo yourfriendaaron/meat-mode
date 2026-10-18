@@ -185,8 +185,9 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 		switch {
 		case set.Repeat != nil || set.ClearRepeat || (set.ClearDue && it.Repeat != nil):
 			// Clearing the due date ends the repeat too.
-			if it.Repeat != nil {
-				was.Repeat = ptr(*it.Repeat)
+			old := it.Repeat
+			if old != nil {
+				was.Repeat = ptr(*old)
 			} else {
 				was.ClearRepeat = true
 			}
@@ -197,6 +198,10 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 				}
 				r := *set.Repeat
 				r.Start = ptr(*it.DueAt)
+				if old != nil && onlyUntilDiffers(*old, r) && isOccurrence(*old, *it.DueAt) {
+					// A new end date never moves the series.
+					r.Start = old.Start
+				}
 				it.Repeat = &r
 			}
 		case set.Due != nil && it.Repeat != nil && !isOccurrence(*it.Repeat, *it.DueAt):
