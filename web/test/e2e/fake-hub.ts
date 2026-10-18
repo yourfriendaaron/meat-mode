@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Item, NewAction, Repo, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Bridge, Edit, Item, NewAction, Payload, Repo, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -69,6 +69,9 @@ export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } 
   };
 }
 
+/** Kinds that change a personal item only (docs/api.md, Edit rules). */
+const EDIT_KINDS: string[] = ["edit", "note-edit", "note-delete", "note-restore"];
+
 interface Stored {
   action: Action;
   before: Item | null; // hub copy before the action, restored on cancel
@@ -81,6 +84,8 @@ export class FakeHub {
   bridges: Bridge[];
   log: Stored[] = [];
   seq = 0;
+  /** Last checklist id the hub gave out. */
+  checkSeq = 0;
   /** Every request the page made, as "METHOD /path". */
   requests: string[] = [];
   /** When set, GET /api/actions answers 500, as an unreachable hub route would. */
@@ -399,6 +404,76 @@ export class FakeHub {
     return this.json(route, 204);
   }
 
+  /**
+   * Applies edit, note-edit, note-delete or note-restore to a personal item
+   * as docs/api.md says, and returns the payload with `was` or `comment`
+   * filled in, or the reason it is refused.
+   */
+  private applyEdit(it: Item, kind: string, p: Payload): Payload | string {
+    if (kind === "edit") {
+      const set = p.set;
+      if (!set) return "edit needs set";
+      if (set.due && set.clearDue) return "due and clearDue together";
+      const was: Edit = {};
+      if (set.title !== undefined) {
+        const t = set.title.trim();
+        if (!t || t.length > 1000) return "title must be 1 to 1000 characters";
+        was.title = it.title;
+        it.title = t;
+      }
+      if (set.description !== undefined) {
+        if (set.description.length > 10000) return "description too long";
+        was.description = it.description ?? "";
+        it.description = set.description;
+      }
+      if (set.due !== undefined || set.clearDue) {
+        if (it.dueAt) was.due = it.dueAt;
+        else was.clearDue = true;
+        it.dueAt = set.clearDue ? null : set.due;
+      }
+      if (set.priority !== undefined) {
+        if (set.priority < 0 || set.priority > 4) return "priority must be 0 to 4";
+        was.priority = it.priority;
+        it.priority = set.priority;
+      }
+      if (set.checklist !== undefined) {
+        const ids = new Set<string>();
+        const next = [];
+        for (const c of set.checklist) {
+          const text = c.text.trim();
+          if (!text || text.length > 1000) return "checklist text must be 1 to 1000 characters";
+          const id = c.id || `k-${++this.checkSeq}`;
+          if (ids.has(id)) return "repeated checklist id";
+          ids.add(id);
+          next.push({ id, text, done: c.done });
+        }
+        if (next.length > 100) return "a checklist holds at most 100 entries";
+        was.checklist = structuredClone(it.checklist ?? []);
+        it.checklist = next;
+      }
+      return { set, was };
+    }
+    const comments = (it.comments ??= []);
+    if (kind === "note-restore") {
+      const c = p.comment;
+      if (!c) return "note-restore needs comment";
+      const at = comments.findIndex((x) => x.createdAt > c.createdAt);
+      comments.splice(at < 0 ? comments.length : at, 0, structuredClone(c));
+      return p;
+    }
+    const idx = comments.findIndex((c) => c.id === p.commentId);
+    if (idx < 0) return "no such comment";
+    const comment = structuredClone(comments[idx]);
+    if (kind === "note-edit") {
+      const text = (p.text ?? "").trim();
+      if (!text || text.length > 10000) return "note must be 1 to 10000 characters";
+      comments[idx].text = text;
+    } else {
+      comments.splice(idx, 1);
+    }
+    return { ...p, comment };
+  }
+
   private postAction(route: Route, a: NewAction) {
     this.posted.push(a);
     const dup = this.log.find((s) => s.action.id === a.id);
@@ -407,9 +482,20 @@ export class FakeHub {
     let repo = a.repo ?? "";
     let beadId = "";
     let before: Item | null = null;
+    let payload: Payload = a.payload;
     // The hub applies an action on its own personal list at once.
     const onHub = (a.bridge ?? a.key?.split("/")[0]) === HUB;
-    if (a.kind === "sync") {
+    if (EDIT_KINDS.includes(a.kind)) {
+      const it = a.key ? this.find(a.key) : undefined;
+      if (!it) return this.json(route, 404, { error: "no such item" });
+      if (!onHub) return this.json(route, 400, { error: "an agent's item changes through a note" });
+      const res = this.applyEdit(it, a.kind, a.payload);
+      if (typeof res === "string") return this.json(route, 400, { error: res });
+      payload = res;
+      bridge = it.bridge;
+      repo = it.repo;
+      beadId = it.id;
+    } else if (a.kind === "sync") {
       const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
       if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
       r.optedIn = Boolean(a.payload.on);
@@ -471,7 +557,7 @@ export class FakeHub {
       bridge,
       repo,
       beadId,
-      payload: a.payload,
+      payload,
       author: `${this.user}-app`,
       status: onHub ? "applied" : "pending",
       createdAt: this.now(),
