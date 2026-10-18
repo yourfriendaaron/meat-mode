@@ -1436,6 +1436,7 @@ kbd {
   border-bottom: 1px solid var(--line);
 }
 .conn > div {
+  flex: 1;
   min-width: 0;
 }
 .conn p {
