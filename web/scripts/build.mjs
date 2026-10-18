@@ -101,7 +101,7 @@ await writeFile(join(out, "manifest.webmanifest"), JSON.stringify(manifest, null
 await writeFile(join(out, "icon.svg"), iconSVG());
 await writeFile(join(out, "icon-192.png"), iconPNG(192, false));
 await writeFile(join(out, "icon-512.png"), iconPNG(512, false));
-await writeFile(join(out, "icon-maskable-512.png"), iconPNG(512, true));
+await writeFile(join(out, "icon-maskable-512.png"), iconPNG(512, true, 0.8));
 await writeFile(join(out, "apple-touch-icon.png"), iconPNG(180, true));
 
 for (const k of ["main", "theme-boot", "styles"]) {
