@@ -15,7 +15,8 @@ import (
 )
 
 // runHub runs the hub with settings from MEAT_MODE_* environment variables:
-// the store and API, Web Push and ntfy, and the reminder scheduler.
+// the store and API, Web Push and ntfy, and the scheduler of reminders and
+// agent pushes.
 func runHub(args []string) error {
 	if len(args) > 0 {
 		return errors.New("hub takes no arguments; it reads MEAT_MODE_* environment variables")
@@ -53,6 +54,13 @@ func runHub(args []string) error {
 			}
 			s.KeyOf = st.ReminderKey
 			s.Lead = stateItems{st}
+			s.ClosedInApp = st.ClosedInApp
+			// A run's end pushes as soon as the bridge reports it.
+			st.Watch(func(c store.Change) {
+				if c.Kind == "runs" {
+					s.Wake()
+				}
+			})
 			go s.Run(ctx)
 			return nil
 		},

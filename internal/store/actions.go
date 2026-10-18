@@ -103,7 +103,7 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 	a = api.Action{ID: na.ID, Kind: na.Kind, Author: author, Status: api.StatusPending, CreatedAt: s.now()}
 	p := na.Payload
 	switch na.Kind {
-	case api.KindDone, api.KindReopen, api.KindDismiss:
+	case api.KindDone, api.KindReopen, api.KindDismiss, api.KindStop:
 		p = api.Payload{}
 	case api.KindSnooze:
 		// No until clears the snooze: Undo of a first snooze.
@@ -124,7 +124,7 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		if utf8.RuneCountInString(title) > MaxTitleLen {
 			return a, false, invalidf("title is longer than %d characters", MaxTitleLen)
 		}
-		add := api.Payload{Title: title, Due: p.Due}
+		add := api.Payload{Title: title, Due: p.Due, Ask: p.Ask}
 		if p.Repeat != nil {
 			if p.Due == nil {
 				return a, false, invalidf("a repeat needs payload.due")
@@ -139,11 +139,20 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 			add.Repeat = &r
 		}
 		p = add
-	case api.KindSync:
+	case api.KindSync, api.KindAgents:
 		if p.On == nil {
-			return a, false, invalidf("sync needs payload.on")
+			return a, false, invalidf("%s needs payload.on", na.Kind)
 		}
 		p = api.Payload{On: p.On}
+	case api.KindAsk:
+		// The note is optional: an ask without one only wakes the agent.
+		if strings.TrimSpace(p.Text) == "" {
+			p.Text = ""
+		}
+		if utf8.RuneCountInString(p.Text) > MaxNoteLen {
+			return a, false, invalidf("note text is longer than %d characters", MaxNoteLen)
+		}
+		p = api.Payload{Text: p.Text}
 	case api.KindEdit:
 		if p.Set == nil {
 			return a, false, invalidf("edit needs payload.set")
@@ -182,7 +191,7 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 	}
 	a.Payload = normalisePayload(p)
 
-	if na.Kind == api.KindAdd || na.Kind == api.KindSync {
+	if na.Kind == api.KindAdd || na.Kind == api.KindSync || na.Kind == api.KindAgents {
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
 			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
 		}
@@ -204,8 +213,17 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		switch {
 		case na.Kind == api.KindSync && isHubRepo(na.Bridge, na.Repo):
 			return a, false, invalidf("the personal list is kept on the hub and always shows")
+		case na.Kind == api.KindAgents && isHubRepo(na.Bridge, na.Repo):
+			return a, false, invalidf(noPersonalAgents)
 		case na.Kind == api.KindAdd && !optedIn:
 			return a, false, invalidf("repo %q is not synced with Meat Mode", na.Repo)
+		case na.Kind == api.KindAdd && a.Payload.Ask:
+			if isHubRepo(na.Bridge, na.Repo) {
+				return a, false, invalidf(noPersonalAgents)
+			}
+			if err := checkAgentsAllowed(tx, na.Bridge, na.Repo); err != nil {
+				return a, false, err
+			}
 		}
 		a.Bridge, a.Repo = na.Bridge, na.Repo
 	} else {
@@ -215,6 +233,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		}
 		if personalOnly(na.Kind) && !isHubRepo(b, r) {
 			return a, false, invalidf("an agent's item is changed by its agent; to ask for a change, add a note")
+		}
+		if na.Kind == api.KindAsk && isHubRepo(b, r) {
+			return a, false, invalidf(noPersonalAgents)
 		}
 		if strings.HasPrefix(id, provisionalPrefix) {
 			return a, false, conflictf("this item is still being created; try again in a moment")
@@ -227,6 +248,11 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		}
 		if n == 0 {
 			return a, false, notFoundf("no item %q", na.Key)
+		}
+		if na.Kind == api.KindAsk {
+			if err := checkAgentsAllowed(tx, b, r); err != nil {
+				return a, false, err
+			}
 		}
 		a.Bridge, a.Repo, a.BeadID = b, r, id
 	}
@@ -263,6 +289,21 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		s.emit(Change{Kind: "items", Bridge: a.Bridge, Repo: a.Repo, NewItems: newItems})
 	}
 	return a, true, nil
+}
+
+// noPersonalAgents refuses an agent on the personal list.
+const noPersonalAgents = "the personal list has no agents"
+
+// checkAgentsAllowed refuses an ask in a repo whose agents switch is off.
+func checkAgentsAllowed(tx *sql.Tx, bridge, repo string) error {
+	ok, err := agentsAllowedTx(tx, bridge, repo)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return invalidf("agents are not allowed in repo %q; switch them on in Settings", repo)
+	}
+	return nil
 }
 
 func normalisePayload(p api.Payload) api.Payload {

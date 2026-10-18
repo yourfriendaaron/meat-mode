@@ -1,6 +1,7 @@
 // Package reminders fires a notification when an item becomes due or a
 // snooze ends, once per (item, fire time), and an early reminder a lead
-// time before the due time, once per (item, due time).
+// time before the due time, once per (item, due time). It also pushes the
+// end of an agent run, once per (item, run, state); see runs.go.
 package reminders
 
 import (
@@ -79,11 +80,19 @@ type Scheduler struct {
 	// the task: the hub maps a bead created by an add to the provisional
 	// item the app showed before. Nil means the item's key and FirstSeen.
 	KeyOf func(context.Context, api.Item) (string, time.Time, error)
+
+	// ClosedInApp, when set, reports whether the user closed the item with
+	// key in the app at or after since; a run end on such an item sends no
+	// push. Nil means never.
+	ClosedInApp func(ctx context.Context, key string, since time.Time) (bool, error)
+
+	wake chan struct{}
 }
 
 // New creates the scheduler and its tables in db: reminder_fired for the
 // reminders at the due time or a snooze end, reminder_early for the early
-// ones, keyed by the due time they came before.
+// ones, keyed by the due time they came before, and run_pushed for the run
+// ends pushed.
 func New(db *sql.DB, src ItemSource, n notify.Notifier, clock Clock, publicURL string) (*Scheduler, error) {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS reminder_fired (
 		item_key TEXT NOT NULL,
@@ -98,10 +107,14 @@ func New(db *sql.DB, src ItemSource, n notify.Notifier, clock Clock, publicURL s
 	if err != nil {
 		return nil, err
 	}
+	if err := createRunTable(db); err != nil {
+		return nil, err
+	}
 	if clock == nil {
 		clock = SystemClock{}
 	}
-	return &Scheduler{db: db, src: src, notifier: n, clock: clock, publicURL: strings.TrimRight(publicURL, "/")}, nil
+	return &Scheduler{db: db, src: src, notifier: n, clock: clock, publicURL: strings.TrimRight(publicURL, "/"),
+		wake: make(chan struct{}, 1)}, nil
 }
 
 // fireTime is when the item should remind: the snooze end if one is set,
@@ -139,16 +152,25 @@ func earlyTime(it api.Item, lead time.Duration) (time.Time, bool) {
 }
 
 // Run checks every Interval until ctx ends. The first check runs at once,
-// which catches reminders that came due while the hub was down.
+// which catches reminders that came due while the hub was down. A Wake
+// checks agent runs in between.
 func (s *Scheduler) Run(ctx context.Context) {
 	for {
 		if err := s.Tick(ctx); err != nil && ctx.Err() == nil {
 			slog.Error("reminder check failed", "err", err)
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-s.clock.After(s.every()):
+		next := s.clock.After(s.every())
+		for waiting := true; waiting; {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.wake:
+				if err := s.CheckRuns(ctx); err != nil && ctx.Err() == nil {
+					slog.Error("agent run check failed", "err", err)
+				}
+			case <-next:
+				waiting = false
+			}
 		}
 	}
 }
@@ -260,6 +282,9 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		if err := s.notifier.Notify(ctx, d.msg); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", d.msg.Tag, err))
 		}
+	}
+	if err := s.checkRuns(ctx, items, now); err != nil {
+		errs = append(errs, err)
 	}
 	switch {
 	case len(late) == 1:

@@ -51,7 +51,7 @@ const DBFile = "meat-mode.db"
 // Change describes one committed change, for listeners such as the SSE
 // broadcaster and the notifier.
 type Change struct {
-	Kind   string // bridges, repos, items, actions, seen
+	Kind   string // bridges, repos, items, actions, seen, runs
 	Bridge string
 	Repo   string
 	// NewItems lists items the hub received for the first time (Kind items).
@@ -65,6 +65,7 @@ type Store struct {
 
 	mu        sync.Mutex
 	listeners []func(Change)
+	offline   map[string]bool // runs the last State showed offline; see joinRuns
 }
 
 // Open checks dataDir is writable, opens (or creates) the database in it,
@@ -145,7 +146,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 7
+const schemaVersion = 8
 
 var migrations = []string{
 	// 1: initial schema.
@@ -259,6 +260,21 @@ ALTER TABLE hub_settings ADD COLUMN reminder_lead INTEGER NOT NULL DEFAULT 0;
 	// the feed is off.
 	`
 ALTER TABLE hub_settings ADD COLUMN calendar_hash BLOB;
+`,
+	// 8: agent runs. agents_allowed is a repo's agents switch as its bridge
+	// reports it. runs holds the run list a bridge last sent, one Run (as
+	// JSON) per bead; a run for a bead the hub does not hold is kept but not
+	// shown.
+	`
+ALTER TABLE repos ADD COLUMN agents_allowed INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE runs (
+	bridge  TEXT NOT NULL REFERENCES bridges(name) ON DELETE CASCADE,
+	repo    TEXT NOT NULL,
+	bead_id TEXT NOT NULL,
+	data    TEXT NOT NULL,
+	PRIMARY KEY (bridge, repo, bead_id)
+);
 `,
 }
 

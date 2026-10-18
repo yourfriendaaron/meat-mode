@@ -126,6 +126,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.Handle("PUT /bridge/v1/items", s.bridgeAuth(s.handlePutItems))
 	m.Handle("GET /bridge/v1/actions", s.bridgeAuth(s.handlePullActions))
 	m.Handle("POST /bridge/v1/actions/{id}/result", s.bridgeAuth(s.handleResult))
+	m.Handle("PUT /bridge/v1/runs", s.bridgeAuth(s.handlePutRuns))
 	m.Handle("POST /bridge/v1/personal", s.tokenAuth(s.handleAddPersonal))
 	m.Handle("GET /bridge/v1/personal/{id}", s.tokenAuth(s.handleGetPersonal))
 	m.Handle("POST /bridge/v1/personal/{id}/actions", s.tokenAuth(s.handleChangePersonal))
@@ -482,6 +483,18 @@ func (s *Server) handleResult(w http.ResponseWriter, r *http.Request, bridge str
 		return
 	}
 	if err := s.store.ReportResult(bridge, r.PathValue("id"), res); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handlePutRuns(w http.ResponseWriter, r *http.Request, bridge string) {
+	var runs []api.RunReport
+	if !readJSON(w, r, maxBody, &runs) {
+		return
+	}
+	if err := s.store.ReplaceRuns(bridge, runs); err != nil {
 		s.storeError(w, r, err)
 		return
 	}
