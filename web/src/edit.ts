@@ -2,10 +2,11 @@
 // and the Undo of the edit actions (docs/api.md, Edit rules). Pure: callers
 // pass `now`.
 
-import type { Action, Check, Comment, Edit, Item, NewAction } from "./types.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Edit, type Item, type NewAction, type RepeatUnit } from "./types.ts";
 import { HUB_BRIDGE } from "./model.ts";
-import { fmtTime, fmtWhen } from "./dates.ts";
+import { fmtWhenAt } from "./dates.ts";
 import { parseQuickAdd } from "./quickadd.ts";
+import { sameRule, type RepeatRule } from "./repeat.ts";
 
 export const TITLE_MAX = 1000;
 export const TEXT_MAX = 10000;
@@ -38,13 +39,12 @@ export function priorityOptions(current: number): { value: number; label: string
 
 /** "Due Fri, Oct 23 9:00": the label quick add shows for a parsed due date. */
 export function dueLabel(d: Date, now: Date): string {
-  const when = fmtWhen(d, now);
-  return `Due ${when.includes(":") ? when : `${when} ${fmtTime(d)}`}`;
+  return `Due ${fmtWhenAt(d, now)}`;
 }
 
 /** A due date typed the way quick add reads one ("tomorrow 9am"); null when it holds none. */
 export function parseDue(text: string, now: Date): Date | null {
-  return parseQuickAdd(text, now, []).due;
+  return parseQuickAdd(text, now, [], { repeat: false }).due;
 }
 
 /** The edit form as typed. `dueText` "" keeps the due date unless `clearDue` is set. */
@@ -54,10 +54,47 @@ export interface EditDraft {
   dueText: string;
   clearDue: boolean;
   priority: number;
+  /** "" for no repeat. */
+  repeat: RepeatUnit | "";
+  /** The repeat's "every n" as typed. */
+  interval: string;
+  /** A weekly repeat's days; none means the due date's day. */
+  weekdays: number[];
+  fromDone: boolean;
+  /** The zone a repeat set from this form keeps: the device's. */
+  timeZone: string;
+  /** Minutes; null uses the hub's reminderLead. */
+  remindBefore: number | null;
 }
 
-export function draftOf(item: Item): EditDraft {
-  return { title: item.title, description: item.description ?? "", dueText: "", clearDue: false, priority: item.priority };
+export function draftOf(item: Item, timeZone = ""): EditDraft {
+  const r = item.repeat;
+  return {
+    title: item.title,
+    description: item.description ?? "",
+    dueText: "",
+    clearDue: false,
+    priority: item.priority,
+    repeat: r?.every ?? "",
+    interval: String(r?.interval || 1),
+    weekdays: [...(r?.weekdays ?? [])],
+    fromDone: !!r?.fromDone,
+    timeZone,
+    remindBefore: item.remindBefore ?? null,
+  };
+}
+
+/** The repeat the form sets, or null for none. Undefined when its interval is not one the hub takes. */
+export function draftRule(d: EditDraft): RepeatRule | null | undefined {
+  if (!d.repeat) return null;
+  const n = Number(d.interval.trim());
+  if (!Number.isInteger(n) || n < 1 || n > MAX_REPEAT_INTERVAL) return undefined;
+  const r: RepeatRule = { every: d.repeat };
+  if (n !== 1) r.interval = n;
+  // The hub takes weekdays on a weekly rule only, and not with fromDone.
+  if (d.repeat === "week" && !d.fromDone && d.weekdays.length) r.weekdays = [...d.weekdays].sort((a, b) => a - b);
+  if (d.fromDone) r.fromDone = true;
+  return r;
 }
 
 /** What the due field will save: a date, none, or the text it could not read. */
@@ -78,7 +115,11 @@ export function editError(item: Item, d: EditDraft, now: Date): string {
   if (!title) return "Add a title.";
   if (title.length > TITLE_MAX) return `Keep the title to ${TITLE_MAX} characters.`;
   if (d.description.length > TEXT_MAX) return `Keep the details to ${TEXT_MAX} characters.`;
-  if (dueOutcome(item, d, now).kind === "invalid") return "Could not read that date. Try something like tomorrow 9am.";
+  const due = dueOutcome(item, d, now);
+  if (due.kind === "invalid") return "Could not read that date. Try something like tomorrow 9am.";
+  const rule = draftRule(d);
+  if (rule === undefined) return `Repeat every 1 to ${MAX_REPEAT_INTERVAL}.`;
+  if (rule && (due.kind === "clear" || (due.kind === "keep" && !due.at))) return "A repeat needs a due date. Add one, or pick Does not repeat.";
   return "";
 }
 
@@ -93,6 +134,14 @@ export function diffEdit(item: Item, d: EditDraft, now: Date): Edit | null {
   if (due.kind === "set" && due.at.getTime() !== had) set.due = due.at.toISOString();
   if (due.kind === "clear" && had !== null) set.clearDue = true;
   if (d.priority !== item.priority) set.priority = d.priority;
+  const rule = draftRule(d);
+  if (rule && !sameRule(rule, item.repeat)) set.repeat = { ...rule, timeZone: d.timeZone };
+  // Clearing the due date ends the repeat on the hub without being asked.
+  if (rule === null && item.repeat && !set.clearDue) set.clearRepeat = true;
+  if (d.remindBefore !== (item.remindBefore ?? null)) {
+    if (d.remindBefore === null) set.clearRemindBefore = true;
+    else set.remindBefore = d.remindBefore;
+  }
   return Object.keys(set).length ? set : null;
 }
 
@@ -101,9 +150,16 @@ export function applyEdit(item: Item, set: Edit): void {
   if (set.title !== undefined) item.title = set.title;
   if (set.description !== undefined) item.description = set.description;
   if (set.due !== undefined) item.dueAt = set.due;
-  if (set.clearDue) item.dueAt = null;
+  if (set.clearDue) {
+    item.dueAt = null;
+    item.repeat = null;
+  }
   if (set.priority !== undefined) item.priority = set.priority;
   if (set.checklist !== undefined) item.checklist = set.checklist.map((c) => ({ ...c }));
+  if (set.repeat !== undefined) item.repeat = { ...set.repeat };
+  if (set.clearRepeat) item.repeat = null;
+  if (set.remindBefore !== undefined) item.remindBefore = set.remindBefore;
+  if (set.clearRemindBefore) item.remindBefore = null;
 }
 
 /** "2/5": done entries out of all, or "" for an empty checklist. */
@@ -144,12 +200,14 @@ export function restoreComment(comments: Comment[] | null, c: Comment): Comment[
 }
 
 /**
- * The action that undoes an applied edit, note-edit or note-delete, from what
- * the hub filled in: null when the reply lacks it. `key` is the item's key.
+ * The action that undoes an applied edit, note-edit or note-delete, or a done
+ * that moved a repeating item on, from what the hub filled in: null when the
+ * reply lacks it. `key` is the item's key.
  */
 export function undoOf(applied: Action, key: string, id: string): NewAction | null {
   const p = applied.payload;
   switch (applied.kind) {
+    case "done":
     case "edit":
       return p.was ? { id, kind: "edit", key, payload: { set: p.was } } : null;
     case "note-edit":

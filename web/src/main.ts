@@ -3,7 +3,7 @@
 // and one delegated handler per event type.
 
 import { ApiError, api, newId, setUnauthorizedHandler } from "./api.ts";
-import type { Action, Check, Comment, Item, NewAction, NewBridgeReply, Payload, Repo, Session, State } from "./types.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type NewBridgeReply, type Payload, type Repo, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
   DISMISSED,
@@ -28,9 +28,12 @@ import {
   appAuthor,
   type ViewId,
 } from "./model.ts";
-import { fmtAgo, fmtWhen, toLocalInput } from "./dates.ts";
+import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput } from "./dates.ts";
 import { snoozeOptions } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
+import { repeatLabel } from "./repeat.ts";
+import { leadSelect, loadLead } from "./lead.ts";
+import { browserZone } from "./profile.ts";
 import {
   CHECKLIST_MAX,
   CHECK_MAX,
@@ -63,6 +66,7 @@ import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
 import { trackKeyboard } from "./keyboard.ts";
 import { sectionsHTML } from "./settings/registry.ts";
+import { forgetCalendarLink } from "./settings/calendar.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
 type View = ViewId | "settings" | "setup";
@@ -187,6 +191,7 @@ const ICON = {
   gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  repeat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V10a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
 };
 
 // ---------- views ----------
@@ -359,6 +364,7 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   if (prio) out.push(`<span class="chip ${item.priority === 0 ? "chip-urgent" : "chip-high"}">${esc(prio)}</span>`);
   const dc = dateChip(item, n);
   if (dc) out.push(`<span class="chip chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>`);
+  if (item.repeat) out.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(item.repeat))}</span>`);
   if (opts.list) {
     const r = repos().find((x) => repoKey(x) === repoKey(item));
     const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
@@ -522,11 +528,50 @@ function editFormHTML(item: Item): string {
 <h3 id="d-edit-h" class="sr">Edit task</h3>
 <label for="edit-title">Title</label><input id="edit-title" type="text" maxlength="${TITLE_MAX}" autocomplete="off" required>
 <label for="edit-due">Due</label><div class="pick-row"><input id="edit-due" type="text" autocomplete="off" enterkeyhint="done" placeholder="tomorrow 9am" aria-describedby="edit-due-now"><button type="button" class="btn" data-act="edit-clear-due">Clear</button></div><p id="edit-due-now" class="edit-due-now" aria-live="polite">${esc(dueText(item, d))}</p>
+${repeatFieldsHTML(d)}
+<label for="edit-lead">Remind me early</label>${leadSelect("edit-lead", d.remindBefore, true)}
 <label for="edit-desc">Details</label><textarea id="edit-desc" rows="4" maxlength="${TEXT_MAX}"></textarea>
 <label for="edit-prio">Priority</label><select id="edit-prio">${prio}</select>
 ${e.error ? `<p class="row-error" role="alert">${esc(e.error)}</p>` : ""}
 <div class="btn-row"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn" data-act="edit-cancel">Cancel</button></div>
 </form>`;
+}
+
+const REPEAT_CHOICES: [EditDraft["repeat"], string][] = [
+  ["", "Does not repeat"],
+  ["day", "Daily"],
+  ["week", "Weekly"],
+  ["month", "Monthly"],
+  ["year", "Yearly"],
+];
+/** Monday first, as people list a week. */
+const WEEK: [number, string][] = [
+  [1, "Mon"],
+  [2, "Tue"],
+  [3, "Wed"],
+  [4, "Thu"],
+  [5, "Fri"],
+  [6, "Sat"],
+  [0, "Sun"],
+];
+
+/** "days" for every 2, "day" for every 1. */
+function unitText(d: EditDraft): string {
+  return d.repeat ? `${d.repeat}${d.interval.trim() === "1" ? "" : "s"}` : "";
+}
+
+/** The edit form's repeat: how often, a weekly rule's days, and whether to count from done. */
+function repeatFieldsHTML(d: EditDraft): string {
+  const pick = REPEAT_CHOICES.map(([v, label]) => `<option value="${v}"${v === d.repeat ? " selected" : ""}>${esc(label)}</option>`).join("");
+  const select = `<label for="edit-repeat">Repeat</label><select id="edit-repeat">${pick}</select>`;
+  if (!d.repeat) return select;
+  const days =
+    d.repeat === "week" && !d.fromDone
+      ? `<fieldset class="weekdays" aria-describedby="edit-wd-hint"><legend>On</legend>${WEEK.map(
+          ([n, name]) => `<label class="wd"><input type="checkbox" id="edit-wd-${n}" data-weekday="${n}"${d.weekdays.includes(n) ? " checked" : ""}>${name}</label>`,
+        ).join("")}</fieldset><p class="muted small" id="edit-wd-hint">With none picked, it repeats on the due date's day.</p>`
+      : "";
+  return `${select}<div class="repeat-opts"><label for="edit-interval">Every</label><div class="pick-row"><input id="edit-interval" type="number" min="1" max="${MAX_REPEAT_INTERVAL}" step="1" inputmode="numeric"><span id="edit-unit">${unitText(d)}</span></div>${days}<label class="check-row"><input type="checkbox" id="edit-from-done"${d.fromDone ? " checked" : ""}>Count the next date from when it is done</label></div>`;
 }
 
 /** What the due field will save, in words. */
@@ -619,6 +664,7 @@ ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snoo
       setValue("#edit-title", d.title);
       setValue("#edit-due", d.dueText);
       setValue("#edit-desc", d.description);
+      setValue("#edit-interval", d.interval);
     }
     if (S.noteEdit?.key === item.key) setValue("#note-edit-input", S.noteEdit.text);
   }
@@ -694,7 +740,7 @@ function renderSettings() {
         })
         .join("")}</ul>`
     : '<p class="muted">No machines yet.</p>';
-  const machinesHTML = `<section class="set-section" aria-labelledby="s-mach"><h2 id="s-mach">Agent machines</h2>${machines}
+  const machinesHTML = `<section class="set-section" aria-labelledby="s-mach"><h2 id="s-mach" tabindex="-1">Agent machines</h2>${machines}
 <form class="add-machine" data-form="bridge"><label for="bridge-name">Machine name</label><div class="pick-row"><input id="bridge-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off"><button class="btn btn-primary" type="submit">Add machine</button></div><p class="muted small">Lowercase letters, digits and dashes.</p>${
       S.bridgeError ? `<p class="row-error" role="alert">${esc(S.bridgeError)}</p>` : ""
     }</form>
@@ -704,15 +750,15 @@ ${
     : ""
 }</section>`;
   const own: [number, string][] = [
-    [10, `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look">Appearance</h2>${themeChoicesHTML("settings-theme")}</section>`],
+    [10, `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look" tabindex="-1">Appearance</h2>${themeChoicesHTML("settings-theme")}</section>`],
     [
       20,
-      `<section class="set-section" aria-labelledby="s-push"><h2 id="s-push">Reminders</h2>${pushHTML}${S.pushStatus ? `<p class="muted small" role="status">${esc(S.pushStatus)}</p>` : ""}</section>`,
+      `<section class="set-section" aria-labelledby="s-push"><h2 id="s-push" tabindex="-1">Reminders</h2>${pushHTML}${S.pushStatus ? `<p class="muted small" role="status">${esc(S.pushStatus)}</p>` : ""}</section>`,
     ],
     [
       30,
       S.auth?.login
-        ? '<section class="set-section" aria-labelledby="s-acct"><h2 id="s-acct">Account</h2><p class="muted">Logging out ends this device\'s session and stops its reminders.</p><button class="btn" data-act="logout">Log out</button></section>'
+        ? '<section class="set-section" aria-labelledby="s-acct"><h2 id="s-acct" tabindex="-1">Account</h2><p class="muted">Logging out ends this device\'s session and stops its reminders.</p><button class="btn" data-act="logout">Log out</button></section>'
         : "",
     ],
     [40, machinesHTML],
@@ -770,11 +816,9 @@ const ctx: AppContext = {
   setView: (v) => setView(v as View),
   openSettings(section) {
     setView("settings");
-    const h = section ? document.getElementById(section) : null;
-    if (h) {
-      h.setAttribute("tabindex", "-1");
-      h.focus();
-    }
+    // Each heading has tabindex -1, so it keeps focus when a section that
+    // loads its own data draws Settings again.
+    document.getElementById(section ?? "")?.focus();
   },
 };
 
@@ -947,6 +991,10 @@ function doDone(key: string) {
   const it = byKey(key);
   if (!it || !isOpen(it)) return;
   moveSelectionOff([key]);
+  if (it.repeat && canEdit(it)) {
+    void doneRepeating(it);
+    return;
+  }
   const t = now().toISOString();
   patchLocal(key, (i) => {
     i.status = "closed";
@@ -955,6 +1003,31 @@ function doDone(key: string) {
   });
   render();
   void closing([{ id: newId(), kind: "done", key, payload: {} }], `Done: ${it.title}`);
+}
+
+/**
+ * Done on a repeating personal item: the hub moves it to its next date and
+ * keeps it open. Its Undo is the edit the reply's `was` holds, not a reopen.
+ */
+async function doneRepeating(it: Item) {
+  const key = it.key;
+  render();
+  const applied = await post({ id: newId(), kind: "done", key, payload: {} });
+  await refresh();
+  if (!applied) return;
+  const u = undoOf(applied, key, newId());
+  const next = byKey(key);
+  if (!u || !next?.dueAt || !isOpen(next)) {
+    // The hub closed it after all, as when its repeat ended meanwhile.
+    showToast(`Done: ${it.title}`, () => undoAll([{ id: applied.id, kind: "done", key, payload: {} }]));
+    return;
+  }
+  showToast(`Done. Next: ${fmtWhenAt(new Date(next.dueAt), now())}`, async () => {
+    patchLocal(key, (i) => applyLocal(i, u));
+    render();
+    await post(u);
+    await refresh();
+  });
 }
 
 /** Won't do on an agent item; Delete on a personal one, which then shows nowhere. */
@@ -1021,8 +1094,10 @@ async function doNote(key: string) {
 function openEdit(key: string) {
   const it = byKey(key);
   if (!it || !canEdit(it)) return;
-  S.edit = { key, draft: draftOf(it), error: "" };
+  S.edit = { key, draft: draftOf(it, browserZone()), error: "" };
   S.noteEdit = null;
+  // The lead time choice names the hub's default.
+  loadLead(ctx);
   render();
   $<HTMLInputElement>("#edit-title").focus();
 }
@@ -1082,7 +1157,7 @@ function saveEdit() {
   if (err) {
     e.error = err;
     render();
-    const field = /title/i.test(err) ? "#edit-title" : /date/i.test(err) ? "#edit-due" : "#edit-desc";
+    const field = /title/i.test(err) ? "#edit-title" : /^Repeat every/.test(err) ? "#edit-interval" : /date/i.test(err) ? "#edit-due" : "#edit-desc";
     $<HTMLElement>(field).focus();
     return;
   }
@@ -1097,6 +1172,8 @@ function clearDue() {
   if (!S.edit) return;
   S.edit.draft.clearDue = true;
   S.edit.draft.dueText = "";
+  // The hub ends the repeat with the due date.
+  S.edit.draft.repeat = "";
   setValue("#edit-due", "");
   render();
   $<HTMLInputElement>("#edit-due").focus();
@@ -1194,7 +1271,10 @@ function setView(v: View) {
   S.selected = null;
   if (isPhone()) closeDetail();
   // The pairing token is shown once; leaving Settings ends that showing.
-  if (v !== "settings") S.newBridge = null;
+  if (v !== "settings") {
+    S.newBridge = null;
+    forgetCalendarLink();
+  }
   render();
   $("#list").scrollTop = 0;
   $("#wizard").scrollTop = 0;
@@ -1264,7 +1344,7 @@ function selectBy(delta: number) {
 
 // ---------- quick add ----------
 
-let qa: QuickAdd = { title: "", due: null, list: null, tokens: [] };
+let qa: QuickAdd = { title: "", due: null, repeat: null, list: null, tokens: [] };
 let qaListTouched = false;
 
 function quickLists() {
@@ -1295,6 +1375,8 @@ function updateQuickAdd() {
   // A stale pick (a list that disappeared) leaves nothing selected; fall
   // back to the default so the picker is never blank.
   if (select.selectedIndex < 0) select.value = defaultList();
+  // Only the personal list repeats; on an agent's list the words stay as typed.
+  if (qa.repeat && !select.value.startsWith(`${HUB_BRIDGE}/`)) qa = parseQuickAdd(input.value, now(), quickLists(), { repeat: false });
 
   // Highlight recognised spans behind the input.
   let html = "";
@@ -1309,6 +1391,7 @@ function updateQuickAdd() {
 
   const chips: string[] = [];
   if (qa.due) chips.push(`<span class="chip chip-purple">${esc(dueLabel(qa.due, now()))}</span>`);
+  if (qa.repeat) chips.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(qa.repeat))}</span>`);
   if (qa.list) {
     const r = repos().find((x) => repoKey(x) === qa.list);
     chips.push(`<span class="chip chip-list">${esc(r ? listLabel(r) : qa.list)}</span>`);
@@ -1337,6 +1420,7 @@ async function submitQuickAdd() {
     repo: listKey.slice(slash + 1),
     payload: { title, due: qa.due ? qa.due.toISOString() : null },
   };
+  if (qa.repeat && qa.due) a.payload.repeat = { ...qa.repeat, timeZone: browserZone() };
   if (await post(a)) {
     input.value = "";
     qaListTouched = false;
@@ -1665,19 +1749,39 @@ function onInput(e: Event) {
       const it = byKey(S.edit.key);
       // Only the line under the field changes while typing a date.
       if (it) $("#edit-due-now").textContent = dueText(it, d);
+    } else if (t.id === "edit-interval") {
+      d.interval = v;
+      $("#edit-unit").textContent = unitText(d);
     }
   }
 }
 
 function onChange(e: Event) {
   const t = e.target as HTMLElement;
-  if (t.id === "edit-prio" && S.edit) S.edit.draft.priority = Number((t as HTMLSelectElement).value);
+  if (S.edit && t.closest(".edit-form")) editChanged(S.edit.draft, t as HTMLInputElement);
   else if (t.dataset.check !== undefined && S.open) {
     const it = byKey(S.open);
     if (it) setChecklist(it.key, toggleCheck(it.checklist, Number(t.dataset.check)));
   } else if (t.id === "qa-list") qaListTouched = true;
   else if (themeChoiceChanged(e.target as HTMLElement, "settings-theme")) renderTheme();
   else if (shellUp) extChange(e.target as HTMLElement, ctx);
+}
+
+/** A select or checkbox of the edit form changed. Fields that show or hide with it redraw. */
+function editChanged(d: EditDraft, t: HTMLInputElement) {
+  if (t.id === "edit-prio") d.priority = Number(t.value);
+  else if (t.id === "edit-lead") d.remindBefore = t.value === "" ? null : Number(t.value);
+  else if (t.id === "edit-repeat") {
+    d.repeat = t.value as EditDraft["repeat"];
+    render();
+  } else if (t.id === "edit-from-done") {
+    d.fromDone = t.checked;
+    render();
+  } else if (t.dataset.weekday !== undefined) {
+    const n = Number(t.dataset.weekday);
+    d.weekdays = t.checked ? [...d.weekdays, n] : d.weekdays.filter((x) => x !== n);
+    render();
+  }
 }
 
 function onSubmit(e: SubmitEvent) {
