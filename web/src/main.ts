@@ -30,7 +30,7 @@ import {
   type ViewId,
 } from "./model.ts";
 import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput } from "./dates.ts";
-import { completedGroups, deletedGroups } from "./history.ts";
+import { completedGroups, deletedGroups, isDeleted } from "./history.ts";
 import { searchGroups } from "./search.ts";
 import { snoozeOptions, typedSnooze } from "./snooze.ts";
 import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
@@ -395,6 +395,7 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
     const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
     out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
   }
+  if (agent && !isOpen(item) && item.closeReason === DISMISSED) out.push('<span class="chip chip-wontdo">Won\'t do</span>');
   if (agent && item.createdBy) out.push(`<span class="chip chip-agent">${esc(item.createdBy)}</span>`);
   const notes = item.comments?.length ?? 0;
   if (notes) out.push(`<span class="chip chip-notes" aria-label="${notes} ${notes === 1 ? "note" : "notes"}">${ICON.note}${notes}</span>`);
@@ -408,8 +409,9 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
 
 function checkButton(item: Item, agent: boolean): string {
   const open = isOpen(item);
-  const label = open ? `Mark done: ${item.title}` : `Reopen: ${item.title}`;
-  return `<button class="check${agent ? " check-agent" : ""}${open ? "" : " checked"}" data-act="${open ? "done" : "reopen"}" data-key="${esc(item.key)}" aria-label="${esc(label)}">${ICON.check}</button>`;
+  const gone = isDeleted(item, personalRepoKeys(repos()));
+  const label = open ? `Mark done: ${item.title}` : `${gone ? "Restore" : "Reopen"}: ${item.title}`;
+  return `<button class="check${agent ? " check-agent" : ""}${open ? "" : " checked"}" data-act="${open ? "done" : gone ? "restore" : "reopen"}" data-key="${esc(item.key)}" aria-label="${esc(label)}">${ICON.check}</button>`;
 }
 
 function statusLine(item: Item): string {
@@ -425,7 +427,11 @@ function rowHTML(item: Item, showList: boolean): string {
   return `<li class="row${done ? " is-done" : ""}${item.pending ? " is-pending" : ""}" data-key="${esc(item.key)}">
 <div class="under" aria-hidden="true"><span class="u-done">Done</span><span class="u-snooze">Snooze</span></div>
 <div class="row-fg">${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${statusLine(item)}</button>${
-    done ? `<button class="btn btn-small" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>` : ""
+    done
+      ? isDeleted(item, personal)
+        ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">Restore</button>`
+        : `<button class="btn btn-small" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>`
+      : ""
   }</div></li>`;
 }
 
@@ -502,7 +508,15 @@ function renderMain() {
   const groups = currentGroups();
   const showList = !S.view.startsWith("list:");
   if (!groups.length) {
-    setHTML(list, `<p class="empty">${S.view === "today" ? "Nothing due today." : "Nothing here."}</p>`);
+    const none =
+      S.view === "today"
+        ? "Nothing due today."
+        : S.view === "completed"
+          ? "Nothing completed in the last 7 days."
+          : S.view === "deleted"
+            ? "Nothing deleted in the last 7 days."
+            : "Nothing here.";
+    setHTML(list, `<p class="empty">${none}</p>`);
     return;
   }
   setHTML(
@@ -517,7 +531,7 @@ function renderMain() {
           .map((i) => rowHTML(i, showList))
           .join("")}</ul></section>`;
       })
-      .join(""),
+      .join("") + (S.view === "deleted" ? '<p class="history-note">Deleted items are removed 7 days after you delete them.</p>' : ""),
   );
 }
 
@@ -1007,6 +1021,8 @@ function inverse(a: NewAction): NewAction | null {
     case "done":
     case "dismiss":
       return { id: newId(), kind: "reopen", key: a.key, payload: {} };
+    case "reopen":
+      return { id: newId(), kind: "dismiss", key: a.key, payload: {} };
     case "snooze":
       return { id: newId(), kind: "snooze", key: a.key, payload: { until: a.payload.previous ?? null, previous: a.payload.until ?? null } };
     default:
@@ -1108,6 +1124,21 @@ function doDismiss(key: string) {
   if (!agent && S.open === key) closeDetail();
   else render();
   void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `${agent ? "Won't do" : "Deleted"}: ${it.title}`);
+}
+
+/** Brings a deleted personal item back; Undo deletes it again. */
+async function doRestore(key: string) {
+  const it = byKey(key);
+  if (!it || isOpen(it)) return;
+  patchLocal(key, (i) => {
+    i.status = "open";
+    i.closedAt = null;
+    i.closeReason = undefined;
+  });
+  render();
+  const a: NewAction = { id: newId(), kind: "reopen", key, payload: {} };
+  if (await post(a)) showToast(`Restored: ${it.title}`, () => undoAll([a]));
+  await refresh();
 }
 
 async function doReopen(key: string) {
@@ -1613,6 +1644,9 @@ function onClick(e: MouseEvent) {
       break;
     case "reopen":
       void doReopen(key);
+      break;
+    case "restore":
+      void doRestore(key);
       break;
     case "note":
       void doNote(key);
