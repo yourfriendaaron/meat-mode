@@ -7,7 +7,8 @@ const groupLabels = (page: import("@playwright/test").Page) => page.locator("#li
 test("navigates views and lists", async ({ page, hub }) => {
   await openApp(page);
   await expect(page.locator("#view-title")).toHaveText("Today");
-  await expect(groupLabels(page)).toHaveText([/Past due/, /^Today/, /This evening/, /Done today/]);
+  await expect(groupLabels(page)).toHaveText([/Past due/, /^Today/, /This evening/, /Tomorrow/, /This week/, /Later/, /Done today/]);
+  await expect(page.locator(".group-tomorrow .row-title")).toHaveText(["Buy seeds"]);
   await expect(page.locator(".dayload")).toContainText("4 open today");
   await expect(page.getByRole("button", { name: /From agents/ })).toContainText("2 new");
 
@@ -162,6 +163,22 @@ test("Won't do and Snooze all are undoable; Done today reopens", async ({ page, 
   await row(page, "Sweep the porch").getByRole("button", { name: "Reopen", exact: true }).click();
   await expect(page.locator(".group-done")).toHaveCount(0);
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "reopen", key: "hub/personal/pe-6" });
+});
+
+test("Delete removes a personal task everywhere and is undoable", async ({ page, hub }) => {
+  await openApp(page);
+  await row(page, "Call Sam about the weekend").locator(".row-body").click();
+  const detail = page.locator("#detail");
+  await expect(detail.getByRole("button", { name: "Won't do" })).toHaveCount(0);
+  await detail.getByRole("button", { name: "Delete" }).click();
+  await expect(detail.getByRole("heading", { name: "Call Sam about the weekend" })).toHaveCount(0);
+  await expect(row(page, "Call Sam about the weekend")).toHaveCount(0);
+  await expect(page.locator("#toast")).toContainText("Deleted: Call Sam about the weekend");
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "dismiss", key: "hub/personal/pe-3" });
+  await page.getByRole("button", { name: /Everything/ }).click();
+  await expect(row(page, "Call Sam about the weekend")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(row(page, "Call Sam about the weekend")).toHaveCount(1);
 });
 
 test("sync pill and popover", async ({ page, hub }) => {
