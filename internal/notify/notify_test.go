@@ -474,17 +474,17 @@ func TestSubscriptionsFollowTheirSession(t *testing.T) {
 	if err := r.Subscribe(ctx, "", newSub(t, srv.URL+"/anon")); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("subscribe without a session: %v, want ErrUnauthorized", err)
 	}
-	session := func(ttl time.Duration) (string, string) {
-		tok, s, err := st.CreateSession("tag", now, ttl)
+	session := func(at time.Time) (string, string) {
+		tok, s, err := st.CreateSession("tag", at)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return tok, s.ID
 	}
-	_, live := session(time.Hour)
-	_, short := session(time.Minute)
-	outTok, out := session(time.Hour)
-	_, dropped := session(time.Hour)
+	_, live := session(now)
+	_, short := session(now.Add(time.Minute - store.SessionIdle)) // a minute from its idle end
+	outTok, out := session(now)
+	_, dropped := session(now)
 	for path, id := range map[string]string{"/live": live, "/short": short, "/out": out, "/dropped": dropped, "/made-up": "00ff"} {
 		if err := r.Subscribe(ctx, id, newSub(t, srv.URL+path)); err != nil {
 			t.Fatal(err)
@@ -566,7 +566,7 @@ func TestTestReminderWithALoginNeedsTheSessionsOwnSubscription(t *testing.T) {
 	ctx := context.Background()
 	var ids []string
 	for range 2 {
-		_, s, err := st.CreateSession("tag", time.Now(), time.Hour)
+		_, s, err := st.CreateSession("tag", time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}

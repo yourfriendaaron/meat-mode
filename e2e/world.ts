@@ -5,6 +5,7 @@
 // run leaves behind.
 
 import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { createServer as createNetServer } from "node:net";
@@ -20,6 +21,31 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const POLL = "200ms";
 export const USER = "alex";
 export const NTFY_TOPIC = "meat-mode-e2e";
+/** The password a World's hub has from its environment unless WorldOptions say otherwise. */
+export const DEFAULT_PASSWORD = "water the plants";
+
+/**
+ * The browser storage state the `page` fixture starts with
+ * (playwright.config.ts), and so do contexts from browser.newContext()
+ * unless they pass their own. World.create writes the session cookie of the
+ * World's own login here, so a test's page opens the app logged in; a World
+ * whose hub has no password, or that sits behind a proxy, writes an empty
+ * state.
+ */
+export const STORAGE_STATE = join(repoRoot, "e2e", "test-results", "storage-state.json");
+
+interface StorageState {
+  cookies: { name: string; value: string; domain: string; path: string; expires: number; httpOnly: boolean; secure: boolean; sameSite: "Lax" }[];
+  origins: never[];
+}
+
+function writeStorageState(state: StorageState): void {
+  mkdirSync(dirname(STORAGE_STATE), { recursive: true });
+  writeFileSync(STORAGE_STATE, JSON.stringify(state));
+}
+
+// A context made before any World needs the file to exist.
+writeStorageState({ cookies: [], origins: [] });
 
 // ---------- cleanup on any exit ----------
 
@@ -199,10 +225,15 @@ export interface RepoSpec {
   commit?: boolean;
 }
 
-/** How World.create sets up the hub. The default is no login and no proxy. */
+/**
+ * How World.create sets up the hub. The default is DEFAULT_PASSWORD in the
+ * hub's environment, logged in, and no proxy.
+ */
 export interface WorldOptions {
-  /** Turns the hub's login on with this password. */
+  /** The hub's password, set in its environment. */
   password?: string;
+  /** Starts the hub with no password, to be claimed with its setup code; the World does not log in. */
+  noPassword?: boolean;
   /**
    * Puts a Caddy container in front of the hub and serves the app at
    * http://<proxyHost>:<port>, a name the hub only knows from
@@ -234,6 +265,10 @@ export class World {
   private hubContainer = "";
   private opts: WorldOptions = {};
   private passwordHash = "";
+  /** The password the World logs in with; "" for a hub with no password. */
+  password = "";
+  /** The World's own session cookie, as name=value; api() sends it. */
+  private session = "";
 
   /** Builds the binary, starts the capture server, the hub and any proxy. */
   static async create(opts: WorldOptions = {}): Promise<World> {
@@ -245,11 +280,16 @@ export class World {
     try {
       await w.build();
       await w.ntfy.start();
-      if (opts.password !== undefined) w.passwordHash = w.hashPassword(opts.password);
+      if (!opts.noPassword) {
+        w.password = opts.password ?? DEFAULT_PASSWORD;
+        w.passwordHash = w.hashPassword(w.password);
+      }
       if (opts.proxyHost) w.proxyPort = await freePort();
       await w.startHub();
       if (opts.proxyHost) await w.startProxy(opts.proxyHost);
       else w.appURL = w.hubURL;
+      if (w.password) await w.logIn(w.password);
+      else writeStorageState({ cookies: [], origins: [] });
     } catch (e) {
       await w.dispose();
       throw e;
@@ -542,8 +582,58 @@ export class World {
     await this.machine(name).proc?.stop();
   }
 
+  /**
+   * Logs the World in with password: api() then sends the session cookie,
+   * and the pages of tests that start afterwards open the app logged in
+   * (STORAGE_STATE).
+   */
+  async logIn(password: string): Promise<void> {
+    const r = await fetch(this.hubURL + "/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (r.status !== 204) throw new Error(`log in: ${r.status} ${await r.text()}`);
+    const cookie = r.headers.getSetCookie()[0]?.split(";")[0] ?? "";
+    const eq = cookie.indexOf("=");
+    if (eq < 0) throw new Error("log in: no session cookie");
+    this.session = cookie;
+    // A World behind a proxy leaves its pages logged out: they open the app
+    // at the proxy's name and log in there themselves.
+    if (this.opts.proxyHost) return writeStorageState({ cookies: [], origins: [] });
+    writeStorageState({
+      cookies: [
+        {
+          name: cookie.slice(0, eq),
+          value: cookie.slice(eq + 1),
+          domain: new URL(this.hubURL).hostname,
+          path: "/",
+          expires: -1,
+          httpOnly: true,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    });
+  }
+
+  /**
+   * Calls the app API as the World's logged-in browser. A request the hub
+   * answers with "reauth" (adding a machine long after the login) is sent
+   * again with the password, as the app does.
+   */
   async api<T>(path: string, init?: RequestInit): Promise<T> {
-    const r = await fetch(this.hubURL + path, init);
+    const send = (body = init?.body) => {
+      const headers = new Headers(init?.headers);
+      if (this.session && !headers.has("cookie")) headers.set("cookie", this.session);
+      return fetch(this.hubURL + path, { ...init, headers, body });
+    };
+    let r = await send();
+    if (r.status === 403 && this.password && typeof init?.body === "string") {
+      const reply = (await r.clone().json().catch(() => ({}))) as { reauth?: boolean };
+      if (reply.reauth) r = await send(JSON.stringify({ ...JSON.parse(init.body), password: this.password }));
+    }
     if (!r.ok) throw new Error(`${init?.method ?? "GET"} ${path}: ${r.status} ${await r.text()}`);
     return (r.status === 204 ? undefined : await r.json()) as T;
   }
@@ -563,6 +653,7 @@ export class World {
       liveVolumes.delete(this.hubVolume);
     }
     await this.ntfy.stop().catch(() => {});
+    writeStorageState({ cookies: [], origins: [] });
     if (this.tmp) await rm(this.tmp, { recursive: true, force: true });
   }
 }

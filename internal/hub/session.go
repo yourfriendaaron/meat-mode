@@ -16,16 +16,23 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/store"
 )
 
-// Login settings (docs/api.md, Login).
+// Login settings (docs/api.md, Login). Session lifetimes are the store's
+// (store.SessionIdle, store.SessionLifetime).
 const (
-	sessionCookie = "meat_mode_session"
-	sessionTTL    = 90 * 24 * time.Hour
-	loginFailures = 5           // failed logins allowed per loginWindow
-	loginWindow   = time.Minute // for the whole hub: a proxy hides client addresses
-	maxLoginBody  = 4 << 10
+	sessionCookie       = "meat_mode_session"        // on a plain http:// hub
+	secureSessionCookie = "__Host-meat_mode_session" // on an https:// hub
+	loginFailures       = 5                          // failed logins allowed per loginWindow
+	loginWindow         = time.Minute                // for the whole hub: a proxy hides client addresses
+	reauthWindow        = 10 * time.Minute           // how recent a password must be to add a machine
+	maxLoginBody        = 4 << 10
 )
 
-// login is the hub's password. A nil *login means the hub has no login.
+// noPassword is the 401 for every /api/ route but setup while the hub has
+// no password.
+const noPassword = "this hub has no password yet: set one with the setup code"
+
+// login is the hub's password. A nil *login means the hub has no password
+// yet.
 type login struct {
 	hash *auth.Hash
 	tag  string // names the hash, so a new password ends the old sessions
@@ -110,31 +117,39 @@ func tooMany(w http.ResponseWriter, wait time.Duration, msg string) {
 
 type sessionKey struct{}
 
-// sessionOf returns the session the gate found for r, or nil (login off).
+// sessionOf returns the session the gate found for r, or nil (a device
+// request, or a route that needs no session).
 func sessionOf(r *http.Request) *store.Session {
 	s, _ := r.Context().Value(sessionKey{}).(*store.Session)
 	return s
 }
 
-// gate lets an /api/ request through only with a valid session while login
-// is on, and returns the request carrying that session. A request with a
-// device token goes through deviceGate instead. Pages, the bridge API and
-// /healthz are not gated.
+// gate lets an /api/ request through only with a valid session, and
+// returns the request carrying that session. A hub with no password serves
+// only its setup routes. A request with a device token goes through
+// deviceGate instead. Pages, the bridge API and /healthz are not gated.
 func (s *Server) gate(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
 	p := r.URL.Path
 	if !isAPIPath(p) {
 		return r, true
 	}
-	if _, ok := bearerToken(r); ok {
-		// A device request, with login on or off; its cookie is ignored.
-		return s.deviceGate(w, r)
+	open := false
+	switch p {
+	case "/api/session", "/api/login", "/api/logout", "/api/setup/claim":
+		open = true
 	}
 	l := s.currentLogin()
 	if l == nil {
-		return r, true
+		if !open {
+			writeError(w, http.StatusUnauthorized, noPassword)
+		}
+		return r, open
 	}
-	switch p {
-	case "/api/session", "/api/login", "/api/logout", "/api/setup/claim":
+	if _, ok := bearerToken(r); ok {
+		// A device request; its cookie is ignored.
+		return s.deviceGate(w, r, l)
+	}
+	if open {
 		return r, true
 	}
 	if r.Method == http.MethodPost && confirmPath(p) {
@@ -153,15 +168,29 @@ func (s *Server) gate(w http.ResponseWriter, r *http.Request) (*http.Request, bo
 	return r.WithContext(context.WithValue(r.Context(), sessionKey{}, sess)), true
 }
 
+// cookieName is the session cookie's name for the scheme of
+// MEAT_MODE_PUBLIC_URL. The __Host- prefix makes the browser refuse it
+// without Secure, with a Domain or off Path=/.
+func (s *Server) cookieName() string {
+	if s.secureCookie() {
+		return secureSessionCookie
+	}
+	return sessionCookie
+}
+
+func (s *Server) secureCookie() bool {
+	return strings.HasPrefix(strings.ToLower(s.cfg.PublicURL), "https://")
+}
+
 // session returns r's valid session under l, or nil, sending the cookie
 // again when its expiry moved.
 func (s *Server) session(w http.ResponseWriter, r *http.Request, l *login) (*store.Session, error) {
-	c, err := r.Cookie(sessionCookie)
+	c, err := r.Cookie(s.cookieName())
 	if err != nil {
 		return nil, nil
 	}
 	now := s.now()
-	sess, err := s.store.CheckSession(c.Value, l.tag, now, sessionTTL)
+	sess, err := s.store.CheckSession(c.Value, l.tag, now)
 	if err != nil || sess == nil {
 		return nil, err
 	}
@@ -177,18 +206,18 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, token string, ttl time.
 		maxAge = -1
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookie,
+		Name:     s.cookieName(),
 		Value:    token,
 		Path:     "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   strings.HasPrefix(strings.ToLower(s.cfg.PublicURL), "https://"),
+		Secure:   s.secureCookie(),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
-	authed := true
+	authed := false
 	l := s.currentLogin()
 	if l != nil {
 		sess, err := s.session(w, r, l)
@@ -204,7 +233,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	l := s.currentLogin()
 	if l == nil {
-		writeError(w, http.StatusNotFound, "this hub has no login")
+		writeError(w, http.StatusNotFound, "this hub has no password yet")
 		return
 	}
 	var body struct {
@@ -229,9 +258,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// startSession logs this browser in under l: a new session and its cookie.
+// startSession logs this browser in under l: a new session, with the
+// password entered now, and its cookie.
 func (s *Server) startSession(w http.ResponseWriter, l *login) error {
-	token, sess, err := s.store.CreateSession(l.tag, s.now(), sessionTTL)
+	token, sess, err := s.store.CreateSession(l.tag, s.now())
 	if err != nil {
 		return err
 	}
@@ -240,7 +270,7 @@ func (s *Server) startSession(w http.ResponseWriter, l *login) error {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(sessionCookie); err == nil {
+	if c, err := r.Cookie(s.cookieName()); err == nil {
 		if err := s.store.DeleteSession(c.Value); err != nil {
 			s.storeError(w, r, err)
 			return
@@ -257,8 +287,8 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// endOtherLogins ends the sessions of any password but the current one, and
-// every session with login off, with their reminders. Run calls it once at
+// endOtherLogins ends the sessions of any password but the current one, or
+// every session while the hub has no password, with their reminders. Run calls it once at
 // start: a hash changed in the environment leaves the old sessions behind.
 func (s *Server) endOtherLogins(ctx context.Context) error {
 	tag := ""
@@ -278,4 +308,44 @@ func (s *Server) endOtherLogins(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// passwordAgain reports whether r's session may go on to a step that needs
+// the password entered recently: it was entered within reauthWindow, or
+// password is right, which counts as entering it now. Otherwise it answers
+// 403 with "reauth": true, or 429 as for login. A wrong password counts
+// with wrong logins.
+func (s *Server) passwordAgain(w http.ResponseWriter, r *http.Request, password string) bool {
+	sess, l := sessionOf(r), s.currentLogin()
+	if sess == nil || l == nil {
+		// The gate lets no request this far without both.
+		writeError(w, http.StatusUnauthorized, "log in first")
+		return false
+	}
+	if s.now().Sub(sess.VerifiedAt) < reauthWindow {
+		return true
+	}
+	if password == "" {
+		reauth(w, "enter your password to add a machine")
+		return false
+	}
+	ok, wait, _ := s.attempt(&s.loginFails, func() (bool, error) { return l.hash.Verify(password), nil })
+	if wait > 0 {
+		tooMany(w, wait, "too many wrong passwords; try again in a minute")
+		return false
+	}
+	if !ok {
+		reauth(w, "wrong password")
+		return false
+	}
+	if err := s.store.VerifySession(sess.ID, s.now()); err != nil {
+		s.storeError(w, r, err)
+		return false
+	}
+	return true
+}
+
+// reauth answers 403 asking for the password again.
+func reauth(w http.ResponseWriter, msg string) {
+	writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "reauth": true})
 }

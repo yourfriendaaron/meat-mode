@@ -34,6 +34,7 @@ type fakePush struct {
 	tokens  map[string]string
 	revoked []string
 	updated map[string]api.PushSubscription // device to its new subscription
+	owner   string                          // the session ID every device belongs to
 }
 
 func (f *fakePush) PublicKey() string { return "BExampleKey" }
@@ -81,11 +82,18 @@ func (f *fakePush) Unsubscribe(_ context.Context, endpoint string) error {
 	return nil
 }
 
+// testPassword is the password of the hub newHarness builds.
+const testPassword = "water the plants"
+
+// harness is a hub with a password and a logged-in browser: do sends that
+// browser's session cookie with every request.
 type harness struct {
-	t     *testing.T
-	srv   *Server
-	push  *fakePush
-	token string
+	t      *testing.T
+	st     *store.Store
+	srv    *Server
+	push   *fakePush
+	token  string
+	cookie string // the logged-in session's token; "" sends no cookie
 }
 
 func newHarness(t *testing.T, static fstest.MapFS, withPush bool) *harness {
@@ -95,7 +103,7 @@ func newHarness(t *testing.T, static fstest.MapFS, withPush bool) *harness {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	h := &harness{t: t}
+	h := &harness{t: t, st: st}
 	var push PushRegistry
 	if withPush {
 		h.push = &fakePush{subs: map[string]api.PushSubscription{}}
@@ -104,13 +112,37 @@ func newHarness(t *testing.T, static fstest.MapFS, withPush bool) *harness {
 	if static == nil {
 		static = fstest.MapFS{}
 	}
-	h.srv = newServer(Config{User: "alex"}, st, push, static)
+	h.srv = newServer(Config{User: "alex", PasswordHash: cheapHash(testPassword)}, st, push, static)
 	t.Cleanup(h.srv.Close)
+	h.cookie = h.login(testPassword)
+	if h.push != nil {
+		h.push.owner = store.SessionID(h.cookie)
+	}
 	return h
 }
 
-// do sends a request and returns the recorder. body may be a string or a
-// value to marshal.
+// login logs a new browser in and returns its session token.
+func (h *harness) login(password string) string {
+	h.t.Helper()
+	keep := h.cookie
+	h.cookie = ""
+	defer func() { h.cookie = keep }()
+	w := h.do("POST", "/api/login", map[string]string{"password": password}, "")
+	if w.Code != http.StatusNoContent {
+		h.t.Fatalf("login: %d %s", w.Code, w.Body)
+	}
+	return responseCookie(h.t, w).Value
+}
+
+// addCookie adds the harness's session cookie to req, if it has one.
+func (h *harness) addCookie(req *http.Request) {
+	if h.cookie != "" {
+		req.AddCookie(&http.Cookie{Name: h.srv.cookieName(), Value: h.cookie})
+	}
+}
+
+// do sends a request with the harness's session cookie and returns the
+// recorder. body may be a string or a value to marshal.
 func (h *harness) do(method, path string, body any, token string) *httptest.ResponseRecorder {
 	h.t.Helper()
 	var r io.Reader
@@ -133,6 +165,7 @@ func (h *harness) do(method, path string, body any, token string) *httptest.Resp
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	h.addCookie(req)
 	w := httptest.NewRecorder()
 	h.srv.ServeHTTP(w, req)
 	return w
@@ -543,6 +576,7 @@ func TestEventsEmitOnChange(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/events", nil)
+	h.addCookie(req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

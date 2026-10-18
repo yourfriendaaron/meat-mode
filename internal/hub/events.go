@@ -74,15 +74,10 @@ func (b *broker) close() {
 }
 
 // streamAllowed reports whether an open event stream may go on: its session
-// is still valid, or login is off. A stream opened before login was turned
-// on has no session and ends.
+// is still valid.
 func (s *Server) streamAllowed(r *http.Request) bool {
-	l := s.currentLogin()
-	if l == nil {
-		return true
-	}
-	sess := sessionOf(r)
-	if sess == nil {
+	l, sess := s.currentLogin(), sessionOf(r)
+	if l == nil || sess == nil {
 		return false
 	}
 	live, err := s.store.SessionLive(sess.ID, l.tag, s.now())

@@ -17,6 +17,9 @@ func guardServer(t *testing.T, cfg Config) *Server {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
+	if cfg.PasswordHash == "" {
+		cfg.PasswordHash = cheapHash(testPassword)
+	}
 	s := newServer(cfg, st, nil, fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}})
 	t.Cleanup(s.Close)
 	return s
@@ -33,6 +36,13 @@ func (g guardReq) send(s *Server) *httptest.ResponseRecorder {
 	}
 	req := httptest.NewRequest(g.method, g.path, strings.NewReader(body))
 	req.Host = g.host
+	// Each request comes from a browser logged in just now, so only the
+	// guard can refuse it.
+	token, _, err := s.store.CreateSession(s.currentLogin().tag, s.now())
+	if err != nil {
+		panic(err)
+	}
+	req.AddCookie(&http.Cookie{Name: s.cookieName(), Value: token})
 	if g.ctype != "" {
 		req.Header.Set("Content-Type", g.ctype)
 	}

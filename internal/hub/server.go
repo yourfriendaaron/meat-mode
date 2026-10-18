@@ -21,7 +21,7 @@ import (
 // PushRegistry keeps Web Push subscriptions. internal/notify provides it.
 type PushRegistry interface {
 	PublicKey() string
-	// Subscribe stores s for the session sessionID ("" when login is off).
+	// Subscribe stores s for the session sessionID.
 	Subscribe(ctx context.Context, sessionID string, s api.PushSubscription) error
 	Unsubscribe(ctx context.Context, endpoint string) error
 	// DropSession removes the subscriptions a session registered.
@@ -376,11 +376,15 @@ func (s *Server) handleListBridges(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, bs)
 }
 
+// handleNewBridge adds a machine. Its token can wake agents, so it needs the
+// password entered within reauthWindow in this session, or in the body
+// (docs/api.md, Login, Password again).
 func (s *Server) handleNewBridge(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name string `json:"name"`
-	}
+	var body api.NewBridge
 	if !readJSON(w, r, maxBody, &body) {
+		return
+	}
+	if !s.passwordAgain(w, r, body.Password) {
 		return
 	}
 	token, err := s.store.CreateBridge(body.Name)

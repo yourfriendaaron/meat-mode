@@ -34,14 +34,10 @@ func runHub(args []string) error {
 				return nil, err
 			}
 			reg.Guard = notify.NewEndpointGuard(hosts, cidrs)
-			// The password can be set in the app while the hub runs.
-			reg.RequireSession = func() bool {
-				if cfg.PasswordHash != "" {
-					return true
-				}
-				h, err := st.Settings()
-				return err != nil || h.PasswordHash != ""
-			}
+			// Every hub has a login: a hub with no password yet serves no
+			// route that registers a device, so every subscription
+			// belongs to a session.
+			reg.RequireSession = func() bool { return true }
 			notifier = n
 			return reg, nil
 		},
