@@ -275,6 +275,16 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
+	look := env.LookPath
+	if look == nil {
+		look = exec.LookPath
+	}
+	if _, err := look(agents.Command[0]); err != nil {
+		// A service written before the agent was installed has a PATH
+		// without it, and every ask would end as failed with no other hint.
+		log.Warn("the agent command is not on this bridge's PATH, so asks will fail; see \"Wake an agent on a task\" in docs/deploy.md",
+			"command", agents.Command[0])
+	}
 	j, err := OpenJournal(env.Paths.State)
 	if err != nil {
 		return nil, fmt.Errorf("open replay journal: %w", err)

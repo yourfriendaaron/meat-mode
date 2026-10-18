@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -256,6 +257,28 @@ func TestRunRefusesPlainHTTP(t *testing.T) {
 		t.Fatalf("with the opt-in: %v", err)
 	}
 	b.Journal.Close()
+}
+
+func TestNewWarnsWhenTheAgentIsNotOnPATH(t *testing.T) {
+	env, _, _ := testEnv(t, fakeBD(t, "1.3.1"))
+	cfg := Config{HubURL: "https://meat-mode.example.com", Token: token}
+	for _, found := range []bool{true, false} {
+		env.LookPath = func(name string) (string, error) {
+			if name == "claude" && !found {
+				return "", exec.ErrNotFound
+			}
+			return "/usr/bin/" + name, nil
+		}
+		var logs bytes.Buffer
+		b, err := New(cfg, env, slog.New(slog.NewTextHandler(&logs, nil)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.Journal.Close()
+		if warned := strings.Contains(logs.String(), "not on this bridge's PATH"); warned == found {
+			t.Errorf("agent found %v: logs %q", found, logs.String())
+		}
+	}
 }
 
 func TestStatus(t *testing.T) {
