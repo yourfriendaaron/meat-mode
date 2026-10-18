@@ -49,6 +49,34 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+  # Screenshot baselines, rendered in the Playwright image that matches
+  # @playwright/test, as `pnpm test:visual` does on any machine.
+  visual:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.0" # keep in step with mise.toml
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:visual
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-results
+          path: web/test-results
+          retention-days: 7
+
   e2e:
     runs-on: ubuntu-latest
     env:

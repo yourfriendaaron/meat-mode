@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The full check CI runs, on this machine: run it once before a merge to main
-# or a deploy. Needs bd on PATH for the end-to-end suite.
+# or a deploy. Needs bd on PATH for the end-to-end suite, and docker for the
+# screenshot baselines.
 # E2E_PORT sets the web suite's port, so parallel worktrees don't collide.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -19,6 +20,9 @@ pnpm --dir web typecheck
 pnpm --dir web build
 pnpm --dir web test
 pnpm --dir web test:e2e
+
+step "visual"
+pnpm --dir web test:visual
 
 step "end to end"
 pnpm --dir e2e typecheck
