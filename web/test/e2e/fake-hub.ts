@@ -409,20 +409,21 @@ export class FakeHub {
    * as docs/api.md says, and returns the payload with `was` or `comment`
    * filled in, or the reason it is refused.
    */
-  private applyEdit(it: Item, kind: string, p: Payload): Payload | string {
+  private applyEdit(it: Item, kind: string, p: Payload): Payload | { status: number; error: string } {
+    const bad = (error: string, status = 400) => ({ status, error });
     if (kind === "edit") {
       const set = p.set;
-      if (!set) return "edit needs set";
-      if (set.due && set.clearDue) return "due and clearDue together";
+      if (!set || !Object.keys(set).length) return bad("edit needs at least one field in payload.set");
+      if (set.due && set.clearDue) return bad("due and clearDue together");
       const was: Edit = {};
       if (set.title !== undefined) {
         const t = set.title.trim();
-        if (!t || t.length > 1000) return "title must be 1 to 1000 characters";
+        if (!t || t.length > 1000) return bad("title must be 1 to 1000 characters");
         was.title = it.title;
         it.title = t;
       }
       if (set.description !== undefined) {
-        if (set.description.length > 10000) return "description too long";
+        if (set.description.length > 10000) return bad("description too long");
         was.description = it.description ?? "";
         it.description = set.description;
       }
@@ -432,7 +433,7 @@ export class FakeHub {
         it.dueAt = set.clearDue ? null : set.due;
       }
       if (set.priority !== undefined) {
-        if (set.priority < 0 || set.priority > 4) return "priority must be 0 to 4";
+        if (set.priority < 0 || set.priority > 4) return bad("priority must be 0 to 4");
         was.priority = it.priority;
         it.priority = set.priority;
       }
@@ -441,13 +442,13 @@ export class FakeHub {
         const next = [];
         for (const c of set.checklist) {
           const text = c.text.trim();
-          if (!text || text.length > 1000) return "checklist text must be 1 to 1000 characters";
+          if (!text || text.length > 1000) return bad("checklist text must be 1 to 1000 characters");
           const id = c.id || `k-${++this.checkSeq}`;
-          if (ids.has(id)) return "repeated checklist id";
+          if (ids.has(id)) return bad("repeated checklist id");
           ids.add(id);
           next.push({ id, text, done: c.done });
         }
-        if (next.length > 100) return "a checklist holds at most 100 entries";
+        if (next.length > 100) return bad("a checklist holds at most 100 entries");
         was.checklist = structuredClone(it.checklist ?? []);
         it.checklist = next;
       }
@@ -456,17 +457,18 @@ export class FakeHub {
     const comments = (it.comments ??= []);
     if (kind === "note-restore") {
       const c = p.comment;
-      if (!c) return "note-restore needs comment";
+      if (!c) return bad("note-restore needs comment");
+      if (comments.some((x) => x.id === c.id)) return bad(`note ${c.id} is already on this item`, 409);
       const at = comments.findIndex((x) => x.createdAt > c.createdAt);
       comments.splice(at < 0 ? comments.length : at, 0, structuredClone(c));
       return p;
     }
     const idx = comments.findIndex((c) => c.id === p.commentId);
-    if (idx < 0) return "no such comment";
+    if (idx < 0) return bad(`no note ${p.commentId} on this item`, 404);
     const comment = structuredClone(comments[idx]);
     if (kind === "note-edit") {
       const text = (p.text ?? "").trim();
-      if (!text || text.length > 10000) return "note must be 1 to 10000 characters";
+      if (!text || text.length > 10000) return bad("note must be 1 to 10000 characters");
       comments[idx].text = text;
     } else {
       comments.splice(idx, 1);
@@ -490,7 +492,7 @@ export class FakeHub {
       if (!it) return this.json(route, 404, { error: "no such item" });
       if (!onHub) return this.json(route, 400, { error: "an agent's item changes through a note" });
       const res = this.applyEdit(it, a.kind, a.payload);
-      if (typeof res === "string") return this.json(route, 400, { error: res });
+      if ("status" in res) return this.json(route, res.status, { error: res.error });
       payload = res;
       bridge = it.bridge;
       repo = it.repo;
