@@ -1,0 +1,278 @@
+/* Agent runs: each state shows on the surface plus one line of text in the
+   state's colour, never as a pill. Working: a point of light runs round the
+   edge (the tracer). Waiting: a still pink edge and tint. Done: green.
+   Stopped: red hatching. A run that just ended flashes once. Reduced motion
+   holds every animation still. docs/design-tokens.md, Agent run states. */
+
+@property --run-ang {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ---------- buttons that wake or stop an agent ----------
+   Two classes each, since this file loads before the plain .btn rules. */
+
+.btn.btn-agent {
+  background: var(--role-agent-action);
+  border-color: var(--role-agent-action);
+  color: var(--role-agent-action-fg);
+  font-weight: 600;
+}
+.btn.btn-agent:hover {
+  border-color: var(--role-agent-action);
+  filter: brightness(1.08);
+}
+.btn.btn-icon {
+  flex: none;
+  width: 36px;
+  padding: 0;
+}
+.btn.btn-small.btn-icon {
+  width: 28px;
+}
+.i-fill {
+  fill: currentColor;
+  stroke: none;
+}
+.switch[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- the surfaces ---------- */
+
+.row.has-run .row-fg,
+.run-card,
+.note[data-run],
+.tab-ic,
+.runs-now {
+  position: relative;
+  isolation: isolate;
+}
+
+/* The tracer: a conic gradient masked to a thin ring, turning. */
+.run-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--run-ang),
+    color-mix(in srgb, var(--role-run-working-edge) 18%, transparent) 0 58%,
+    color-mix(in srgb, var(--role-run-working-edge) 50%, transparent) 72%,
+    var(--role-run-working-edge) 86%,
+    color-mix(in srgb, var(--role-run-working-edge) 18%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(var(--role-fg) 0 0) content-box,
+    linear-gradient(var(--role-fg) 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: run-trace 2.6s linear infinite;
+}
+@keyframes run-trace {
+  to {
+    --run-ang: 360deg;
+  }
+}
+
+[data-run="working"]:is(.run-card, .note, .runs-now),
+.row.has-run[data-run="working"] .row-fg {
+  background-image: linear-gradient(var(--role-run-working-tint), var(--role-run-working-tint));
+}
+.row.has-run[data-run="waiting"] .row-fg,
+.run-card[data-run="waiting"] {
+  background-image: linear-gradient(90deg, var(--role-run-waiting-tint), transparent 80%);
+  box-shadow: inset 4px 0 0 var(--role-run-waiting-edge);
+}
+.row.has-run[data-run="done"] .row-fg,
+.run-card[data-run="done"] {
+  background-image: linear-gradient(var(--role-run-done-tint), var(--role-run-done-tint));
+  box-shadow: inset 4px 0 0 var(--role-run-done-edge);
+}
+.row.has-run[data-run="stopped"] .row-fg,
+.run-card[data-run="stopped"] {
+  background-image: repeating-linear-gradient(-45deg, var(--role-run-stopped-tint) 0 6px, transparent 6px 14px);
+  box-shadow: inset 4px 0 0 var(--role-run-stopped-edge);
+}
+/* The selected or open row keeps its own edge over the run's. */
+.row.has-run.is-selected .row-fg,
+.row.has-run.is-open .row-fg {
+  box-shadow: inset 3px 0 0 var(--role-action);
+}
+
+/* A working row lifts into a card. */
+.row.has-run[data-run="working"] {
+  margin: 6px 8px;
+  border-bottom: 0;
+  border-radius: 12px;
+}
+.row.has-run[data-run="working"] .row-fg {
+  border-radius: inherit;
+}
+
+/* The card in the sheet drops its plain pink edge while a run shows. */
+.run-card[data-run] {
+  border-color: transparent;
+}
+.run-card[data-run="working"] {
+  border-radius: 12px;
+}
+.note[data-run="working"] {
+  border-left-color: transparent;
+  border-radius: 8px;
+}
+
+/* The Agents tab and nav icon. */
+.tab-ic {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 26px;
+  border-radius: 8px;
+  flex: none;
+}
+.nav-item .tab-ic {
+  width: 26px;
+  height: 22px;
+  margin: -2px -4px;
+}
+
+/* A run that just ended flashes once. */
+.run-card[data-arrive],
+.row.has-run[data-arrive] .row-fg {
+  animation: run-settle 1.2s ease-out;
+}
+@keyframes run-settle {
+  from {
+    filter: brightness(1.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-fx {
+    animation: none;
+    background: var(--role-run-working-edge);
+  }
+  .run-card[data-arrive],
+  .row.has-run[data-arrive] .row-fg {
+    animation: none;
+  }
+}
+
+/* ---------- the line of text ---------- */
+
+.run-line {
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  text-align: left;
+}
+.run-line b {
+  font-weight: 600;
+}
+.run-line[data-run="working"] {
+  color: var(--role-run-working-edge);
+}
+.run-line[data-run="waiting"] {
+  color: var(--role-run-waiting-edge);
+}
+.run-line[data-run="done"] {
+  color: var(--role-run-done-edge);
+}
+.run-line[data-run="stopped"] {
+  color: var(--role-stopped);
+}
+.run-idle {
+  color: var(--role-soft);
+}
+
+/* ---------- the card in the sheet and the note box ---------- */
+
+.run-live {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--role-line);
+}
+.run-live .run-line {
+  flex: 1;
+}
+.run-live .btn {
+  flex: none;
+}
+.run-off {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--role-soft);
+}
+.run-off .link-btn {
+  display: inline;
+  padding: 0;
+  color: var(--role-action);
+  text-decoration: underline;
+}
+.compose-row {
+  display: flex;
+  gap: 8px;
+}
+.compose-row .btn-agent {
+  flex: 1;
+  min-width: 0;
+}
+.toast .btn-agent,
+.toast .btn-icon {
+  flex: none;
+}
+
+/* ---------- New task ---------- */
+
+.qa-agent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.qa-agent-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ---------- Settings ---------- */
+
+.m-repo-agents {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-left: 12px;
+  color: var(--role-soft);
+}
+.runs-now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+.runs-text {
+  flex: 1;
+  min-width: 0;
+}
+.runs-list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+.runs-now .btn {
+  flex: none;
+}

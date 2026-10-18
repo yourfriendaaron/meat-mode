@@ -38,9 +38,11 @@ export function pairCommand(origin: string, token: string): string {
 }
 
 /**
- * The repos a machine found, each with its sync switch. A click on a switch
- * reaches main.ts as "sync-switch". idPrefix keeps the switches' ids apart
- * where Settings and the wizard are both in the page.
+ * The repos a machine found, each with its sync switch and, under it, the
+ * switch that lets agents work there (off by default, and only for a repo
+ * that syncs). A click on a switch reaches main.ts as "sync-switch" or
+ * "agents-switch". idPrefix keeps the switches' ids apart where Settings and
+ * the wizard are both in the page.
  */
 export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync-"): string {
   const list = repos.filter((r) => r.bridge === bridge).sort((a, b) => a.name.localeCompare(b.name));
@@ -49,7 +51,11 @@ export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync
     .map((r) => {
       const control = `<button class="switch" role="switch" id="${esc(`${idPrefix}${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
       const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      return `<li class="m-repo"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</li>`;
+      const agentsOn = r.agentsAllowed === true;
+      const agentsId = `${idPrefix}agents-${bridge}/${r.name}`;
+      const agents = `<button class="switch" role="switch" id="${esc(agentsId)}" aria-checked="${agentsOn}" aria-label="Agents can work in ${esc(repoLabel(r))} (${esc(r.name)})" data-act="agents-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"${r.optedIn || agentsOn ? "" : " disabled"}><span class="switch-knob" aria-hidden="true"></span></button>`;
+      const agentsNote = r.agentsPending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
+      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</div><div class="m-repo-agents"><div class="m-repo-name"><div class="small">Agents can work here</div>${agentsNote}</div>${agents}</div></li>`;
     })
     .join("")}</ul>`;
 }

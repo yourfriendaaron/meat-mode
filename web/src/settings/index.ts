@@ -8,4 +8,5 @@ import "./connection.ts";
 import "./lead.ts";
 import "./password.ts";
 import "./profile.ts";
+import "./runs.ts";
 import "./setup.ts";

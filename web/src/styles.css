@@ -4,6 +4,7 @@
 @import "./history.css";
 @import "./search.css";
 @import "./bulk.css";
+@import "./runs.css";
 
 /* ---------- tokens ----------
    The one token block: the three :root rules below. Palette tokens (--palette-*) hold
@@ -1380,10 +1381,15 @@ kbd {
 }
 .m-repo {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+}
+.m-repo-main {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 0;
 }
 .m-repo-name {
   min-width: 0;
@@ -1851,7 +1857,7 @@ kbd {
   .nav-item {
     min-width: 0;
   }
-  .nav-item > span:not(.dot):not(.count):not(.badge-new) {
+  .nav-item > span:not(.dot):not(.count):not(.badge-new):not(.tab-ic):not(.sr) {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;

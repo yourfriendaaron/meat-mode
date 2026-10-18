@@ -1,5 +1,6 @@
-// Agents, part two: which of a machine's beads repos sync. The switches are
-// the ones in Settings; main.ts handles their "sync-switch" clicks.
+// Agents, part two: which of a machine's beads repos sync, and where agents
+// may work. The switches are the ones in Settings; main.ts handles their
+// "sync-switch" and "agents-switch" clicks.
 
 import { agentMachines, machineReposHTML } from "../../agents.ts";
 import { esc } from "../../html.ts";
@@ -26,6 +27,7 @@ registerStep({
       .join("");
     return `<p>Switch on the repos whose tasks you want here. Each machine lists the beads repos it found in its home folder.</p>
 <p class="muted">Only beads labelled <code>human</code> appear, so your agents' own work stays out of your list.</p>
+<p class="muted">Under each repo, Agents can work here lets an agent start on one of its tasks when you tap a pink button. It stays off until you switch it on.</p>
 <ul class="machines">${machines}</ul>`;
   },
 });

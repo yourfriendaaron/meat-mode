@@ -3,7 +3,7 @@
 // and one delegated handler per event type.
 
 import { ApiError, api, newId, setUnauthorizedHandler } from "./api.ts";
-import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type NewBridgeReply, type Payload, type Repo, type Session, type State } from "./types.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type NewBridgeReply, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
   DISMISSED,
@@ -65,6 +65,7 @@ import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } 
 import { loginErrorText, needsLogin } from "./login.ts";
 import { esc } from "./html.ts";
 import { machineReposHTML } from "./agents.ts";
+import { agentName, agentsAllowed, anyAgentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
 import { remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
@@ -85,6 +86,8 @@ interface Toast {
   id: number;
   text: string;
   undo?: () => Promise<void>;
+  /** The agent item just closed, whose agent the bar offers to tell. */
+  tell?: string;
 }
 
 const UNDO_MS = 6000;
@@ -208,7 +211,13 @@ const ICON = {
   edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
   ban: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  spark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+  stop: '<svg class="i-fill" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  reply: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v2"/></svg>',
 };
+
+/** The point of light that runs round a working run's edge; CSS draws it. */
+const TRACER = '<span class="run-fx" aria-hidden="true"></span>';
 
 // ---------- views ----------
 
@@ -278,6 +287,10 @@ function renderNav() {
   const all = items();
   const n = now();
   const agentNew = agentNewCount(all, repos(), user());
+  // While any agent works, its tab icon carries the same light as the run's row.
+  const working = workingItems(all).length;
+  const agentsIcon = working ? `<span class="tab-ic" data-run="working">${TRACER}${ICON.agents}</span>` : ICON.agents;
+  const agentsWorking = working ? `<span class="sr">, ${working === 1 ? "an agent is" : `${working} agents are`} working</span>` : "";
   const upcoming = buildView("upcoming", all, repos(), n).reduce((s, g) => s + g.items.length, 0);
   const everything = all.filter(isOpen).length;
   const entry = (v: View, label: string, icon: string, count: string) =>
@@ -287,7 +300,7 @@ function renderNav() {
     $("#nav"),
     entry("today", "Today", ICON.today, plain(openToday(all, n))) +
       entry("upcoming", "Upcoming", ICON.upcoming, plain(upcoming)) +
-      entry("agents", "From agents", ICON.agents, agentNew ? `<span class="badge-new">${agentNew} new</span>` : "") +
+      entry("agents", "From agents", agentsIcon, agentsWorking + (agentNew ? `<span class="badge-new">${agentNew} new</span>` : "")) +
       entry("all", "Everything", ICON.all, plain(everything)) +
       entry("completed", "Completed", ICON.check, "") +
       entry("deleted", "Deleted", ICON.trash, ""),
@@ -310,7 +323,7 @@ function renderNav() {
     [
       ["today", "Today", ICON.today, ""],
       ["upcoming", "Upcoming", ICON.upcoming, ""],
-      ["agents", "Agents", ICON.agents, agentNew ? `<span class="tab-badge" aria-label="${agentNew} new">${agentNew}</span>` : ""],
+      ["agents", "Agents", agentsIcon, agentsWorking + (agentNew ? `<span class="tab-badge" aria-label="${agentNew} new">${agentNew}</span>` : "")],
       ["all", "Browse", ICON.all, ""],
     ]
       .map(([v, label, icon, badge]) => {
@@ -345,7 +358,7 @@ function renderSync() {
       list
         .map((a) => {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
-          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" ? `${a.repo} on ${a.bridge}` : (item?.title ?? a.beadId ?? "");
+          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : (item?.title ?? a.beadId ?? "");
           const state =
             a.status === "applied" ? (a.bridge === HUB_BRIDGE ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
@@ -441,14 +454,53 @@ function statusLine(item: Item): string {
   return "";
 }
 
+/**
+ * A run's line of text in its state's colour. The state is in the words too,
+ * so the colour and the light are never the only sign of it.
+ */
+function runLineHTML(item: Item, full: boolean): string {
+  if (!item.run) return "";
+  const line = runLine(item.run, full);
+  return `<span class="run-line" data-run="${line.state}"><b>${esc(line.lead)}</b>${line.text ? ` · ${esc(line.text)}` : ""}</span>`;
+}
+
+/** The surface attributes of an element that shows a run's state: data-run, and the flash while a run has just ended. */
+function runAttrs(item: Item): string {
+  if (!item.run) return "";
+  return ` data-run="${item.run.state}"${arrived.has(item.key) ? " data-arrive" : ""}`;
+}
+
+/** Items whose run just ended, so their surfaces flash once. */
+const arrived = new Set<string>();
+/** Each item's run state at the last load, to see a run end. */
+const lastRun = new Map<string, RunState | undefined>();
+
+/** Notes the runs that ended since the last load; their cards flash once. */
+function noteRunEnds(next: Item[]) {
+  const first = lastRun.size === 0;
+  for (const it of next) {
+    const before = lastRun.get(it.key);
+    if (!first && runEnded(before, it.run?.state)) {
+      arrived.add(it.key);
+      setTimeout(() => {
+        arrived.delete(it.key);
+        render();
+      }, 1400);
+    }
+  }
+  lastRun.clear();
+  for (const it of next) lastRun.set(it.key, it.run?.state);
+}
+
 function rowHTML(item: Item, showList: boolean): string {
   const personal = personalRepoKeys(repos());
   const agent = isAgentItem(item, personal);
   const done = !isOpen(item);
   const picked = !done && S.selecting && S.picked.has(item.key);
-  return `<li class="row${done ? " is-done" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}" data-key="${esc(item.key)}">
+  const run = agent && item.run ? item.run : null;
+  return `<li class="row${done ? " is-done" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}${run ? " has-run" : ""}"${run ? runAttrs(item) : ""} data-key="${esc(item.key)}">
 <div class="under" aria-hidden="true"><span class="u-done">Done</span><span class="u-snooze">Snooze</span></div>
-<div class="row-fg">${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${statusLine(item)}</button>${
+<div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
     done
       ? isDeleted(item, personal)
         ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
@@ -734,7 +786,48 @@ function checklistHTML(item: Item): string {
   }<form class="pick-row" data-form="check-add"><label class="sr" for="check-input">Add to the checklist</label><input id="check-input" type="text" maxlength="${CHECK_MAX}" autocomplete="off" enterkeyhint="done" placeholder="Add an entry"><button type="submit" class="btn">${ICON.plus}Add</button></form></section>`;
 }
 
-function noteHTML(item: Item, c: Comment, editable: boolean): string {
+/**
+ * An agent item's card in the sheet: why the agent asks, the run's line in
+ * its state's colour, and the one button that fits the state. Ask agent and
+ * Retry wake the agent; Stop ends a live run. Where agents are off for the
+ * list, the card says so and how to turn them on.
+ */
+function runCardHTML(item: Item, allowed: boolean): string {
+  const who = agentName(item);
+  const run = item.run;
+  const key = esc(item.key);
+  const label = item.description ? `${esc(who)} asks because` : esc(who);
+  const reason = item.description ? `<p>${esc(item.description)}</p>` : "";
+  let line = runLineHTML(item, true);
+  let button = "";
+  if (run?.state === "working") {
+    button = `<button class="btn btn-small btn-danger btn-icon" data-act="stop" data-key="${key}" aria-label="${esc(`Stop ${who}`)}" title="${esc(`Stop ${who}`)}">${ICON.stop}</button>`;
+  } else if (allowed && run?.state === "stopped") {
+    button = `<button class="btn btn-small btn-agent" data-act="ask" data-key="${key}">${ICON.spark}Retry</button>`;
+  } else if (allowed && !run) {
+    line = '<span class="run-line run-idle">The agent reads your latest notes, then acts or replies.</span>';
+    button = `<button class="btn btn-small btn-agent" data-act="ask" data-key="${key}">${ICON.spark}Ask agent</button>`;
+  }
+  const off = allowed
+    ? ""
+    : `<p class="run-off">Agents are off for this list. Turn on Agents can work here for it in Settings, under Agent machines. <button class="link-btn" data-act="agents-settings">Open Settings</button></p>`;
+  const live = line || button ? `<div class="run-live">${line}${button}</div>` : "";
+  return `<div class="why why-agent run-card"${runAttrs(item)}>${run?.state === "working" ? TRACER : ""}<div class="why-label">${label}</div>${reason}${live}${off}</div>`;
+}
+
+/**
+ * The note box's buttons. Where an agent may work, a quiet icon-only save
+ * sits beside one pink button that also wakes the agent: Save and ask agent,
+ * Send to <agent> while it works, Reply to <agent> while it waits.
+ */
+function composeHTML(item: Item, allowed: boolean): string {
+  const key = esc(item.key);
+  if (!allowed) return `<button class="btn" data-act="note" data-key="${key}">${ICON.note}Save note</button>`;
+  const ask = askLabel(item);
+  return `<div class="compose-row"><button class="btn btn-icon" data-act="note" data-key="${key}" aria-label="Save note" title="Save the note without asking the agent">${ICON.note}</button><button class="btn btn-agent" data-act="ask-note" data-key="${key}">${ask.kind === "reply" ? ICON.reply : ICON.spark}${esc(ask.label)}</button></div>`;
+}
+
+function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): string {
   const own = appAuthor(user());
   const mine = c.author === own;
   const unread = isUnreadComment(c.createdAt, c.author, S.openSeenAt, user());
@@ -746,7 +839,9 @@ function noteHTML(item: Item, c: Comment, editable: boolean): string {
     editable && !editing
       ? `<span class="note-tools"><button class="link-btn" id="ne-${esc(c.id)}" data-act="note-edit" data-id="${esc(c.id)}" aria-label="Edit note" title="Edit note">${ICON.edit}</button><button class="link-btn" data-act="note-delete" data-id="${esc(c.id)}" aria-label="Delete note" title="Delete note">${ICON.trash}</button></span>`
       : "";
-  return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"><div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-new">New</span>' : ""}${tools}</div>${body}</li>`;
+  // A follow-up the live run has not read yet carries the running light until it does.
+  const flying = queued ? `<span class="run-line" data-run="working">On its way to ${esc(agentName(item))}</span>` : "";
+  return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"${queued ? ' data-run="working"' : ""}>${queued ? TRACER : ""}<div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-new">New</span>' : ""}${flying}${tools}</div>${body}</li>`;
 }
 
 function renderDetail() {
@@ -763,10 +858,14 @@ function renderDetail() {
   const editable = !agent && canEdit(item);
   const editing = editable && S.edit?.key === item.key;
   const open = isOpen(item);
-  const why = item.description
-    ? `<div class="why${agent ? " why-agent" : ""}"><div class="why-label">${agent ? `${esc(item.createdBy || "The agent")} asks because` : "Details"}</div><p>${esc(item.description)}</p></div>`
-    : "";
-  const comments = (item.comments ?? []).map((c) => noteHTML(item, c, editable)).join("");
+  const allowed = agent && agentsAllowed(item, repos());
+  const why = agent
+    ? runCardHTML(item, allowed)
+    : item.description
+      ? `<div class="why"><div class="why-label">Details</div><p>${esc(item.description)}</p></div>`
+      : "";
+  const queued = queuedComments(item, user());
+  const comments = (item.comments ?? []).map((c) => noteHTML(item, c, editable, queued.has(c.id))).join("");
   const actions = `<div class="d-actions">${
     open
       ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">${ICON.check}Done</button>${
@@ -787,7 +886,7 @@ ${editing ? editFormHTML(item) : why + actions}
 ${editable ? checklistHTML(item) : ""}
 ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
-<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea><button class="btn" data-act="note" data-key="${esc(item.key)}">${ICON.note}Save note</button></section>
+<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea>${composeHTML(item, allowed)}</section>
 </div>`;
   if (setHTML(el, html)) {
     const ta = $<HTMLTextAreaElement>("#note-input", el);
@@ -833,10 +932,18 @@ function renderSnoozeDialog() {
 function renderToast() {
   if (!shellUp) return;
   const t = S.toast;
-  setHTML(
-    $("#toast"),
-    t ? `<div class="toast"><span>${esc(t.text)}</span>${t.undo ? '<button class="btn btn-small toast-undo" data-act="undo">Undo</button>' : ""}</div>` : "",
-  );
+  setHTML($("#toast"), t ? `<div class="toast"><span>${esc(t.text)}</span>${t.undo ? '<button class="btn btn-small toast-undo" data-act="undo">Undo</button>' : ""}${tellHTML(t)}</div>` : "");
+}
+
+/** The undo bar's agent button: Tell <agent>, or a Stop square while the run it started works. */
+function tellHTML(t: Toast): string {
+  const it = t.tell ? byKey(t.tell) : undefined;
+  if (!it) return "";
+  const who = agentName(it);
+  const key = esc(it.key);
+  if (isWorking(it))
+    return `<button class="btn btn-small btn-danger btn-icon" data-act="stop" data-key="${key}" aria-label="${esc(`Stop ${who}`)}" title="${esc(`Stop ${who}`)}">${ICON.stop}</button>`;
+  return `<button class="btn btn-small btn-agent" data-act="tell" data-key="${key}">${ICON.spark}${esc(`Tell ${who}`)}</button>`;
 }
 
 function renderTheme() {
@@ -990,6 +1097,7 @@ async function refresh(): Promise<void> {
   refreshing = (async () => {
     try {
       const st = await api.state();
+      noteRunEnds(st.items ?? []);
       S.state = st;
       S.loadError = "";
       const server = new Date(st.serverTime).getTime();
@@ -1109,10 +1217,10 @@ async function undoAll(posted: NewAction[]) {
 }
 
 /** Post closing actions and offer Undo. */
-async function closing(actions: NewAction[], text: string) {
+async function closing(actions: NewAction[], text: string, tell?: string) {
   const posted: NewAction[] = [];
   for (const a of actions) if (await post(a)) posted.push(a);
-  if (posted.length) showToast(text, () => undoAll(posted));
+  if (posted.length) showToast(text, () => undoAll(posted), tell);
   await refresh();
 }
 
@@ -1142,7 +1250,7 @@ function doDone(key: string) {
     i.closeReason = "Done in Meat Mode";
   });
   render();
-  void closing([{ id: newId(), kind: "done", key, payload: {} }], `Done: ${it.title}`);
+  void closing([{ id: newId(), kind: "done", key, payload: {} }], `Done: ${it.title}`, offersTell(it, repos()) ? key : undefined);
 }
 
 /**
@@ -1184,7 +1292,7 @@ function doDismiss(key: string) {
   });
   if (!agent && S.open === key) closeDetail();
   else render();
-  void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `${agent ? "Won't do" : "Deleted"}: ${it.title}`);
+  void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `${agent ? "Won't do" : "Deleted"}: ${it.title}`, offersTell(it, repos()) ? key : undefined);
 }
 
 /** Brings a deleted personal item back; Undo deletes it again. */
@@ -1387,6 +1495,58 @@ async function doNote(key: string) {
   await refresh();
 }
 
+// ---------- agent runs ----------
+
+/**
+ * Wakes the item's agent. With text, the note goes with the ask: on a live
+ * run it is a follow-up the agent reads at its next step. A follow-up with
+ * no text changes nothing, so the button then only points at the note box.
+ */
+async function doAsk(key: string, withNote: boolean) {
+  const it = byKey(key);
+  if (!it) return;
+  const ta = document.querySelector<HTMLTextAreaElement>("#note-input");
+  const text = withNote ? (ta?.value ?? "").trim() : "";
+  if (withNote && !text && isWorking(it)) {
+    ta?.focus();
+    return;
+  }
+  const who = agentName(it);
+  const follow = isWorking(it);
+  const payload: Payload = text ? { text } : {};
+  if (await post({ id: newId(), kind: "ask", key, payload })) {
+    if (text) {
+      S.drafts.delete(key);
+      if (ta) ta.value = "";
+    }
+    showToast(follow ? `Sent to ${who}` : `Asked ${who}`);
+  }
+  await refresh();
+}
+
+async function doStop(key: string) {
+  const it = byKey(key);
+  if (!it) return;
+  if (await post({ id: newId(), kind: "stop", key, payload: {} })) showToast(`Stopped ${agentName(it)}`);
+  await refresh();
+}
+
+/** Tell <agent> in the undo bar: an ask with no text on the item just closed, so its agent reads why. */
+async function doTell(key: string) {
+  const t = S.toast;
+  await post({ id: newId(), kind: "ask", key, payload: {} });
+  await refresh();
+  // The bar stays a while longer, now with Stop while the run works.
+  if (t && S.toast?.id === t.id) showToast(t.text, t.undo, t.tell);
+}
+
+async function switchAgents(bridge: string, repo: string) {
+  const r = repos().find((x) => x.bridge === bridge && x.name === repo);
+  if (!r) return;
+  await post({ id: newId(), kind: "agents", bridge, repo, payload: { on: !r.agentsAllowed } });
+  await refresh();
+}
+
 // ---------- editing personal items ----------
 
 function openEdit(key: string) {
@@ -1557,10 +1717,10 @@ function removeFromChecklist(key: string, index: number) {
 
 let toastSeq = 0;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-function showToast(text: string, undo?: () => Promise<void>) {
+function showToast(text: string, undo?: () => Promise<void>, tell?: string) {
   clearTimeout(toastTimer);
   const id = ++toastSeq;
-  S.toast = { id, text, undo };
+  S.toast = { id, text, undo, tell };
   renderToast();
   toastTimer = setTimeout(() => {
     if (S.toast?.id === id) {
@@ -1625,6 +1785,7 @@ function setURL(key: string | null) {
   const u = new URL(location.href);
   if (key) u.searchParams.set("item", key);
   else u.searchParams.delete("item");
+  u.searchParams.delete("reply");
   history.replaceState(null, "", u);
 }
 
@@ -1660,6 +1821,38 @@ function selectBy(delta: number) {
 
 let qa: QuickAdd = { title: "", due: null, repeat: null, list: null, tokens: [] };
 let qaListTouched = false;
+/** The New task form's agent switch as the user set it; null is its default, on where agents may work. */
+let qaAsk: boolean | null = null;
+
+/** Whether Add will also wake an agent on the new task. */
+function qaWakes(listKey: string): boolean {
+  const r = repos().find((x) => repoKey(x) === listKey);
+  return !!r && !noAgentReason(r) && (qaAsk ?? true);
+}
+
+/**
+ * The switch "An agent starts on it", shown once any list lets agents work.
+ * On a list where none may, it shows off and disabled with the reason. Add
+ * turns pink when it will wake one.
+ */
+function updateQaAgent(listKey: string) {
+  const box = $("#qa-agent");
+  const add = $("#qa-add");
+  const show = anyAgentsAllowed(repos());
+  box.hidden = !show;
+  const r = repos().find((x) => repoKey(x) === listKey);
+  const reason = noAgentReason(r);
+  const on = show && qaWakes(listKey);
+  setHTML(
+    box,
+    show
+      ? `<div class="qa-agent-text"><span id="qa-ask-label">An agent starts on it</span><span id="qa-ask-why" class="muted small">${esc(reason || `It reads the task in ${r ? repoLabel(r) : "the list"} and replies here.`)}</span></div><button type="button" class="switch" role="switch" id="qa-ask" data-act="qa-ask" aria-checked="${on}" aria-labelledby="qa-ask-label" aria-describedby="qa-ask-why"${reason ? " disabled" : ""}><span class="switch-knob" aria-hidden="true"></span></button>`
+      : "",
+  );
+  add.classList.toggle("btn-agent", on);
+  add.classList.toggle("btn-primary", !on);
+  setHTML(add, on ? `${ICON.spark}Add and ask agent` : `${ICON.plus}Add`);
+}
 
 function quickLists() {
   return visibleRepos(repos()).map((r) => ({ key: repoKey(r), name: repoLabel(r) }));
@@ -1691,6 +1884,8 @@ function updateQuickAdd() {
   if (select.selectedIndex < 0) select.value = defaultList();
   // Only the personal list repeats; on an agent's list the words stay as typed.
   if (qa.repeat && !select.value.startsWith(`${HUB_BRIDGE}/`)) qa = parseQuickAdd(input.value, now(), quickLists(), { repeat: false });
+
+  updateQaAgent(select.value);
 
   // Highlight recognised spans behind the input.
   let html = "";
@@ -1741,10 +1936,13 @@ async function submitQuickAdd() {
     return;
   }
   if (qa.repeat && qa.due) a.payload.repeat = { ...qa.repeat, timeZone: browserZone() };
+  const wakes = qaWakes(listKey);
+  if (wakes) a.payload.ask = true;
   if (await post(a)) {
     input.value = "";
     qaListTouched = false;
-    showToast(`Added: ${title}`);
+    qaAsk = null;
+    showToast(wakes ? `Added and asked an agent: ${title}` : `Added: ${title}`);
     if (isPhone()) closeQuickAdd();
   }
   await refresh();
@@ -1901,6 +2099,24 @@ function onClick(e: MouseEvent) {
     case "note":
       void doNote(key);
       break;
+    case "ask":
+      void doAsk(key, false);
+      break;
+    case "ask-note":
+      void doAsk(key, true);
+      break;
+    case "stop":
+      void doStop(key);
+      break;
+    case "tell":
+      void doTell(key);
+      break;
+    case "agents-settings":
+      ctx.openSettings("s-mach");
+      break;
+    case "agents-switch":
+      void switchAgents(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
+      break;
     case "edit":
       openEdit(key);
       break;
@@ -1970,6 +2186,10 @@ function onClick(e: MouseEvent) {
       break;
     case "qa-close":
       closeQuickAdd();
+      break;
+    case "qa-ask":
+      qaAsk = !qaWakes($<HTMLSelectElement>("#qa-list").value);
+      updateQuickAdd();
       break;
     case "sync":
       S.syncOpen = !S.syncOpen;
@@ -2133,7 +2353,10 @@ function onChange(e: Event) {
   else if (t.dataset.check !== undefined && S.open) {
     const it = byKey(S.open);
     if (it) setChecklist(it.key, toggleCheck(it.checklist, Number(t.dataset.check)));
-  } else if (t.id === "qa-list") qaListTouched = true;
+  } else if (t.id === "qa-list") {
+    qaListTouched = true;
+    updateQaAgent((t as HTMLSelectElement).value);
+  }
   else if (themeChoiceChanged(e.target as HTMLElement, "settings-theme")) renderTheme();
   else if (shellUp) extChange(e.target as HTMLElement, ctx);
 }
@@ -2259,7 +2482,8 @@ function shell(): string {
   <form id="qa-form" class="qa" autocomplete="off">
     <div class="qa-head"><h2>New task</h2><button type="button" class="icon-btn" data-act="qa-close" aria-label="Close">${ICON.close}</button></div>
     <div class="qa-field"><div id="qa-backdrop" class="qa-backdrop" aria-hidden="true"></div><input id="qa-input" type="text" enterkeyhint="done" aria-label="New task" aria-describedby="qa-chips" placeholder="Add a task: Water the plants tomorrow 9am #garden"></div>
-    <div class="qa-meta"><span id="qa-chips" class="chips" aria-live="polite"></span><label class="sr" for="qa-list">List</label><select id="qa-list"></select><button class="btn btn-primary" type="submit">${ICON.plus}Add</button></div>
+    <div class="qa-meta"><span id="qa-chips" class="chips" aria-live="polite"></span><label class="sr" for="qa-list">List</label><select id="qa-list"></select><button id="qa-add" class="btn btn-primary" type="submit">${ICON.plus}Add</button></div>
+    <div id="qa-agent" class="qa-agent" hidden></div>
   </form>
   <div id="dayload" class="dayload" hidden></div>
   <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>
@@ -2369,13 +2593,17 @@ function startApp() {
   $("#qa-input").addEventListener("scroll", () => ($("#qa-backdrop").scrollLeft = $<HTMLInputElement>("#qa-input").scrollLeft));
   setupSwipe($("#list"));
 
-  const want = new URL(location.href).searchParams.get("item");
+  const params = new URL(location.href).searchParams;
+  const want = params.get("item");
+  // A push's Reply opens the item at its note box.
+  const reply = params.get("reply") === "1";
   render();
   void refresh().then(() => {
     if (want && byKey(want)) {
       const it = byKey(want)!;
       if (!isOpen(it)) S.view = "all";
       openItem(want);
+      if (reply) document.querySelector<HTMLTextAreaElement>("#note-input")?.focus();
     }
   });
   connectEvents();
