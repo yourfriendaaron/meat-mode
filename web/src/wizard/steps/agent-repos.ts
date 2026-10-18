@@ -27,7 +27,7 @@ registerStep({
       .join("");
     return `<p>Switch on the repos whose tasks you want here. Each machine lists the beads repos it found in its home folder.</p>
 <p class="muted">Only beads labelled <code>human</code> appear, so your agents' own work stays out of your list.</p>
-<p class="muted">Under each repo, Agents can work here lets an agent start on one of its tasks when you tap a pink button. It stays off until you switch it on.</p>
+<p class="muted">An agent can start on a repo's tasks when you tap a pink button, once Agents are switched on for it at its machine. Each synced repo shows the command to run there.</p>
 <ul class="machines">${machines}</ul>`;
   },
 });
