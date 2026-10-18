@@ -205,11 +205,33 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if err := svc.Install(exe, ServicePath(bd)); err != nil {
+	if err := svc.Install(exe, ServicePath(bd, agentPath(env))); err != nil {
 		return err
 	}
 	fmt.Fprintf(env.Stdout, "Installed and started the user service (%s).\n", svc.File())
 	return nil
+}
+
+// agentPath is the agent command's absolute path as this shell finds it, so
+// the service finds it too; "" when it is not found.
+func agentPath(env Env) string {
+	c, err := AgentConfigFromEnv(os.Getenv)
+	if err != nil {
+		return ""
+	}
+	look := env.LookPath
+	if look == nil {
+		look = exec.LookPath
+	}
+	p, err := look(c.Command[0])
+	if err != nil {
+		return ""
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return ""
+	}
+	return abs
 }
 
 // findBD resolves bd to an absolute path and checks its version.
@@ -249,13 +271,25 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
+	agents, err := AgentConfigFromEnv(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
 	j, err := OpenJournal(env.Paths.State)
 	if err != nil {
 		return nil, fmt.Errorf("open replay journal: %w", err)
 	}
+	bd := &beads.CLI{Bin: cfg.BD}
+	// The runner opens after the journal, whose lock keeps a second bridge
+	// from ending this one's runs as left behind.
+	runner, err := OpenAgentRunner(filepath.Join(env.Paths.State, "agents"), agents, bd, log)
+	if err != nil {
+		j.Close()
+		return nil, fmt.Errorf("open agent journal: %w", err)
+	}
 	return &Bridge{
 		Hub:      env.hub(cfg),
-		Beads:    &beads.CLI{Bin: cfg.BD},
+		Beads:    bd,
 		Journal:  j,
 		Roots:    cfg.ResolveRoots(env.Paths.Home),
 		Home:     env.Paths.Home,
@@ -263,6 +297,11 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		SaveSwitch: func(repo string, on bool) error {
 			return SaveSwitch(env.Paths.Config, repo, on)
 		},
+		Agents: cfg.Agents,
+		SaveAgents: func(repo string, on bool) error {
+			return SaveAgents(env.Paths.Config, repo, on)
+		},
+		Runner:  runner,
 		Version: env.Version,
 		Log:     log,
 		Poll:    poll,
