@@ -20,13 +20,17 @@ func runBridge(args []string) error {
 	return bridge.Main(ctx, args, env)
 }
 
-// runAdd runs `meat-mode add`.
-func runAdd(args []string) error {
+// runPersonal runs `meat-mode add`, `edit`, `done` or `reopen`, which
+// change the personal list with this machine's bridge config.
+func runPersonal(cmd string, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	env, err := bridge.DefaultEnv(version)
 	if err != nil {
 		return err
 	}
-	return bridge.Add(ctx, args, env)
+	run := map[string]func(context.Context, []string, bridge.Env) error{
+		"add": bridge.Add, "edit": bridge.Edit, "done": bridge.Done, "reopen": bridge.Reopen,
+	}[cmd]
+	return run(ctx, args, env)
 }

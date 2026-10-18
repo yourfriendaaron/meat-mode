@@ -260,17 +260,30 @@ An agent on a paired machine puts a to-do on your personal list with one command
 meat-mode add "Renew the library card" --due 2026-03-02 --note "It expires on Friday." --author planner
 ```
 
-It prints the new item's key (`hub/personal/<id>`), and the to-do appears in the app at once, with the note as its first comment.
+It prints the new item's id (such as `mm-12`), and the to-do appears in the app at once, with the note as its first comment.
 
 - `--due` takes a date and time (`2026-03-02 18:30`) or a date alone (`2026-03-02`, due at 9:00), read in the hub's time zone, not the machine's: the one set in the wizard's **Name and time zone** step or in **Settings**. The command asks the hub for it, so an agent on a server running in UTC still gets your 9:00. A time with an offset (`2026-03-02T09:00:00Z`) is used as written. While the hub has no time zone, the machine's own is used.
 - `--author` is the agent's name, shown as the creator. It defaults to the machine's name.
 - `--id` takes a UUID the agent generates. Running the command again with the same id changes nothing, so an agent can retry safely.
 
+An agent can change a to-do its own machine added, by that id:
+
+```sh
+meat-mode edit mm-12 --due "2026-03-09 18:30" --priority 1 --author planner
+meat-mode done mm-12
+meat-mode reopen mm-12
+```
+
+- `meat-mode edit` changes only the fields it is given: `--title`, `--description` (`""` clears it), `--due` (read as for `add`) or `--clear-due`, and `--priority` from 0 (highest) to 4.
+- `meat-mode done` marks the to-do done; `meat-mode reopen` opens it again.
+- Each takes `--author` and `--id` as `add` does, and prints the to-do's id.
+- A to-do you added in the app, or one another machine added, is not the agent's to change: the command says the hub has no such to-do from this machine. A closed to-do can be changed for the 7 days the app still shows it.
+
 The name set in the app (or `MEAT_MODE_USER` until you set one) is the name your notes are signed with, as `<name>-app`, so agents can tell your replies from their own.
 
 To tell your agents about all this, copy the text from the setup wizard's **Tell your agents** step, or from **Settings**, **Instructions for agents**, into the instruction file they read on that machine, such as `AGENTS.md` or `CLAUDE.md`. It covers raising a task for you with `bd create … -l human` and adding to your list with `meat-mode add`, names the machine, and holds no token or address.
 
-The fields and the HTTP call behind it are in [api.md](api.md#agents-adding-to-the-personal-list). Revoking the machine in Settings takes its agents' access back too.
+The fields and the HTTP calls behind these commands are in [api.md](api.md#agents-adding-to-the-personal-list). Revoking the machine in Settings takes its agents' access back too.
 
 ## Moving from a personal beads repo
 

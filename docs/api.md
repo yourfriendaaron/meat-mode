@@ -168,6 +168,8 @@ An agent can read and change a personal to-do that its machine's token added, an
 | `GET /bridge/v1/personal/{id}` | | `200` with the `Item`, including a closed one still shown |
 | `POST /bridge/v1/personal/{id}/actions` | `PersonalChange` | `201` with the applied `Action`, or `200` with the same for a repeated `id` |
 
+Like the add, these calls leave the bridge's last-seen time alone. On a paired machine, `meat-mode edit`, `meat-mode done` and `meat-mode reopen` make them with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
+
 `PersonalChange` is `{"id"?, "kind", "payload", "author"?}`. `kind` is `edit` (payload `{"set": Edit}`), `done`, `reopen`, `dismiss` or `note` (payload `{"text"}`), with the rules of the app's actions above. `id` and `author` work as for `PersonalTodo`.
 
 ```sh
