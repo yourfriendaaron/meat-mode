@@ -114,9 +114,8 @@ base.describe("a hub with no password", () => {
     await expect(alex.getByRole("alert")).toContainText("wrong, expired or already used");
 
     await fill(code.toLowerCase());
-    await expect(alex.getByRole("status").filter({ hasText: "The password is set" })).toHaveText(
-      "The password is set, and this device is logged in.",
-    );
+    // The claim step gives way to the app at once.
+    await expect(alex.getByLabel("Setup code")).toHaveCount(0);
     expect(await w.hubFile("setup-code")).toBeNull();
     // This browser is logged in; a request without its cookie is not.
     expect(await (await alex.request.get(`${w.appURL}/api/session`)).json()).toEqual({ login: true, authenticated: true });

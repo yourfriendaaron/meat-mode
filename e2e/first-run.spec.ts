@@ -99,9 +99,8 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
     await page.getByLabel("New password", { exact: true }).fill(PASSWORD);
     await page.getByLabel("Repeat the password").fill(PASSWORD);
     await page.getByRole("button", { name: "Set password" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "The password is set" })).toHaveText(
-      "The password is set, and this device is logged in.",
-    );
+    // The claim step gives way to the app at once.
+    await expect(page.getByLabel("Setup code")).toHaveCount(0);
     expect(await w.hubFile("setup-code")).toBeNull();
     // The hub now wants a session: a request without one is refused.
     expect((await fetch(`${w.hubURL}/api/state`)).status).toBe(401);
@@ -118,8 +117,8 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
   await test.step("connection check passes", async () => {
     await expect(heading).toHaveText("Connection check");
     const checks = wiz.getByRole("list", { name: "Connection checks" });
-    for (const title of ["Address", "Secure connection", "Live updates", "Clocks", "Reminder keys", "ntfy"]) {
-      await expect(checks.locator(".conn-pass", { hasText: title })).toBeVisible();
+    for (const title of ["Address", "Secure connection", "Live updates", "Clocks", "Reminder keys", "ntfy", "Public DNS"]) {
+      await expect(checks.locator(".conn-pass").filter({ has: page.getByText(title, { exact: true }) })).toBeVisible();
     }
     await expect(checks.locator(".conn-fail")).toHaveCount(0);
     await go("Connection check");
