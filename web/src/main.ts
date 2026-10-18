@@ -62,14 +62,16 @@ import {
   type EditDraft,
 } from "./edit.ts";
 import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } from "./theme.ts";
-import { loginErrorText, needsLogin } from "./login.ts";
+import { gate, loginErrorText } from "./login.ts";
+import { claimHTML, claimScreen } from "./password.ts";
 import { esc } from "./html.ts";
-import { machineReposHTML } from "./agents.ts";
+import { addMachineError, agentsOnHTML, copyFrom, machineReposHTML, reauthFieldHTML } from "./agents.ts";
 import { agentName, agentsAllowed, anyAgentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
 import { appPushStatus, appStateMessage, initPush, inAndroidApp, remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
 import { trackKeyboard } from "./keyboard.ts";
+import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
 import { sectionsHTML } from "./settings/registry.ts";
 import { forgetCalendarLink } from "./settings/calendar.ts";
 import { forgetDevices } from "./settings/devices.ts";
@@ -123,6 +125,9 @@ const S = {
   toast: null as Toast | null,
   newBridge: null as NewBridgeReply | null,
   bridgeError: "",
+  /** The hub asked for the password again before it adds a machine. */
+  bridgeReauth: false,
+  addingBridge: false,
   revoking: null as string | null,
   pushStatus: "",
   copied: false,
@@ -791,7 +796,8 @@ function checklistHTML(item: Item): string {
  * An agent item's card in the sheet: why the agent asks, the run's line in
  * its state's colour, and the one button that fits the state. Ask agent and
  * Retry wake the agent; Stop ends a live run. Where agents are off for the
- * list, the card says so and how to turn them on.
+ * list, the card says so and gives the command that switches them on at the
+ * list's machine, since the app cannot.
  */
 function runCardHTML(item: Item, allowed: boolean): string {
   const who = agentName(item);
@@ -811,7 +817,7 @@ function runCardHTML(item: Item, allowed: boolean): string {
   }
   const off = allowed
     ? ""
-    : `<p class="run-off">Agents are off for this list. Turn on Agents can work here for it in Settings, under Agent machines. <button class="link-btn" data-act="agents-settings">Open Settings</button></p>`;
+    : `<div class="run-off"><p>Agents are off for this list. <button class="link-btn" data-act="agents-settings">Open Settings</button></p>${agentsOnHTML(item.bridge, item.repo, "run-agents-cmd")}</div>`;
   const live = line || button ? `<div class="run-live">${line}${button}</div>` : "";
   return `<div class="why why-agent run-card"${runAttrs(item)}>${run?.state === "working" ? TRACER : ""}<div class="why-label">${label}</div>${reason}${live}${off}</div>`;
 }
@@ -991,9 +997,9 @@ function renderSettings() {
         .join("")}</ul>`
     : '<p class="muted">No machines yet.</p>';
   const machinesHTML = `<section class="set-section" aria-labelledby="s-mach"><h2 id="s-mach" tabindex="-1">Agent machines</h2>${machines}
-<form class="add-machine" data-form="bridge"><label for="bridge-name">Machine name</label><div class="pick-row"><input id="bridge-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off"><button class="btn btn-primary" type="submit">Add machine</button></div><p class="muted small">Lowercase letters, digits and dashes.</p>${
-      S.bridgeError ? `<p class="row-error" role="alert">${esc(S.bridgeError)}</p>` : ""
-    }</form>
+<form class="add-machine" data-form="bridge"><label for="bridge-name">Machine name</label><div class="pick-row"><input id="bridge-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off"><button class="btn btn-primary" type="submit"${S.addingBridge ? " disabled" : ""}>Add machine</button></div><p class="muted small">Lowercase letters, digits and dashes.</p>${
+      S.bridgeReauth ? reauthFieldHTML("bridge") : ""
+    }${S.bridgeError ? `<p class="row-error" role="alert">${esc(S.bridgeError)}</p>` : ""}</form>
 ${
   nb
     ? `<div class="token-box" role="status"><p>Run this on <strong>${esc(nb.name)}</strong>. The token is shown only once.</p><code class="cmd" id="pair-cmd">${esc(cmd)}</code><button class="btn" data-act="copy">${S.copied ? "Copied" : "Copy"}</button><button class="btn" data-act="token-done">Done</button></div>`
@@ -1013,6 +1019,10 @@ ${
     ],
     [40, machinesHTML],
   ];
+  // A public DNS record for the hub's name heads Settings, above every section.
+  loadStatusIfStale(ctx);
+  const warn = publicDnsWarningHTML();
+  if (warn) own.push([0, warn]);
   setHTML(
     $("#settings"),
     [...own, ...sectionsHTML(ctx)]
@@ -1160,8 +1170,7 @@ function connectEvents() {
       const wait = Math.min(30000, 1000 * 2 ** esRetry++);
       void api.session().then(
         (sess) => {
-          if (needsLogin(sess)) showLogin();
-          else esTimer = setTimeout(connectEvents, wait);
+          if (!showGate(sess)) esTimer = setTimeout(connectEvents, wait);
         },
         (e) => {
           if (!(e instanceof ApiError && e.status === 401)) esTimer = setTimeout(connectEvents, wait);
@@ -1549,8 +1558,9 @@ async function doTell(key: string) {
 
 async function switchAgents(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
-  if (!r) return;
-  await post({ id: newId(), kind: "agents", bridge, repo, payload: { on: !r.agentsAllowed } });
+  // The app can only switch agents off; they switch on at the machine (docs/api.md, Agents).
+  if (!r?.agentsAllowed) return;
+  await post({ id: newId(), kind: "agents", bridge, repo, payload: { on: false } });
   await refresh();
 }
 
@@ -1753,6 +1763,7 @@ function setView(v: View) {
   // The pairing token is shown once; leaving Settings ends that showing.
   if (v !== "settings") {
     S.newBridge = null;
+    S.bridgeReauth = false;
     forgetCalendarLink();
     forgetDevices();
   }
@@ -1994,14 +2005,27 @@ async function addBridge(form: HTMLFormElement) {
     render();
     return;
   }
+  if (S.addingBridge) return;
+  const pw = form.querySelector<HTMLInputElement>("input[name=password]");
+  const password = S.bridgeReauth && pw ? pw.value : undefined;
+  S.addingBridge = true;
   try {
-    S.newBridge = await api.addBridge(name);
+    S.newBridge = await api.addBridge(name, password);
     S.bridgeError = "";
+    S.bridgeReauth = false;
     S.copied = false;
   } catch (e) {
-    S.bridgeError = (e as Error).message;
+    ({ error: S.bridgeError, reauth: S.bridgeReauth } = addMachineError(e, password !== undefined));
   }
+  S.addingBridge = false;
   await refresh();
+  if (S.bridgeReauth) {
+    const field = document.querySelector<HTMLInputElement>("#bridge-password");
+    if (field) {
+      field.value = "";
+      field.focus();
+    }
+  }
 }
 
 async function revokeBridge(name: string) {
@@ -2125,6 +2149,9 @@ function onClick(e: MouseEvent) {
       break;
     case "agents-switch":
       void switchAgents(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
+      break;
+    case "agents-on-copy":
+      void copyFrom(btn.dataset.copy ?? "").then(() => showToast("Copied"));
       break;
     case "edit":
       openEdit(key);
@@ -2391,6 +2418,7 @@ function onSubmit(e: SubmitEvent) {
   const form = e.target as HTMLFormElement;
   e.preventDefault();
   if (form.dataset.form === "login") void submitLogin(form);
+  else if (form.dataset.form === "pw-claim" && form.closest(".claim")) void submitClaim(form);
   else if (form.id === "qa-form") void submitQuickAdd();
   else if (form.id === "search-form") (document.activeElement as HTMLElement | null)?.blur();
   else if (form.dataset.form === "bridge") void addBridge(form);
@@ -2527,9 +2555,8 @@ function loginHTML(): string {
 </main>`;
 }
 
-/** Replaces the app with the login screen and stops everything that talks to the hub. */
-function showLogin() {
-  if (!shellUp && $("#app").querySelector(".login")) return;
+/** Stops everything that talks to the hub, for the login or claim screen that replaces the app. */
+function leaveShell() {
   shellUp = false;
   clearTimeout(esTimer);
   es?.close();
@@ -2543,11 +2570,75 @@ function showLogin() {
   S.qaOpen = false;
   S.syncOpen = false;
   S.newBridge = null;
-  S.auth = { login: true, authenticated: false };
+  S.bridgeReauth = false;
   S.loggingIn = false;
   $("#app").className = "app";
+}
+
+/** Replaces the app with the login screen. */
+function showLogin() {
+  if (!shellUp && $("#app").querySelector(".login:not(.claim)")) return;
+  leaveShell();
+  S.auth = { login: true, authenticated: false };
   $("#app").innerHTML = loginHTML();
   $<HTMLInputElement>("#login-password").focus();
+}
+
+/**
+ * The claim step, alone: a hub with no password yet serves nothing else
+ * (docs/api.md, Login). Setting the password logs this browser in and opens
+ * the app.
+ */
+function claimScreenHTML(): string {
+  return `<main class="login claim">
+<div class="login-card claim-card" role="region" aria-labelledby="claim-h">
+  <h1 id="claim-h">Meat Mode</h1>
+  <p>This hub has no password yet. Set one with the hub's setup code to open your list.</p>
+  ${claimHTML("claim")}
+</div>
+</main>`;
+}
+
+/** Draws the claim screen again, keeping what was typed. */
+function drawClaim() {
+  const app = $("#app");
+  const kept = new Map<string, string>();
+  for (const f of app.querySelectorAll<HTMLInputElement>(".claim input[id]")) kept.set(f.id, f.value);
+  app.innerHTML = claimScreenHTML();
+  for (const [id, v] of kept) {
+    const f = document.getElementById(id) as HTMLInputElement | null;
+    if (f) f.value = v;
+  }
+}
+
+function showClaim() {
+  if (!shellUp && $("#app").querySelector(".claim")) return;
+  leaveShell();
+  S.auth = { login: false, authenticated: false };
+  drawClaim();
+  $<HTMLInputElement>("#claim-pw-code").focus();
+}
+
+async function submitClaim(form: HTMLFormElement) {
+  if (!(await claimScreen(form, drawClaim))) return;
+  S.auth = { login: true, authenticated: true };
+  startApp();
+}
+
+/** Shows what the session calls for instead of the app: the claim step or the login screen. */
+function showGate(sess: Session): boolean {
+  const g = gate(sess);
+  if (g === "claim") showClaim();
+  else if (g === "login") showLogin();
+  return g !== null;
+}
+
+/** A 401 means the session ended, or the hub lost its password; ask which. */
+function sessionEnded() {
+  void api.session().then(
+    (sess) => void showGate(sess.login ? { ...sess, authenticated: false } : sess),
+    () => showLogin(),
+  );
 }
 
 async function submitLogin(form: HTMLFormElement) {
@@ -2563,11 +2654,10 @@ async function submitLogin(form: HTMLFormElement) {
     return;
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) {
-      // This hub has no login after all.
+      // This hub has no password yet: it serves only its claim step.
       S.loginError = "";
-      S.auth = { login: false, authenticated: true };
       S.loggingIn = false;
-      startApp();
+      showClaim();
       return;
     }
     S.loginError = e instanceof ApiError ? loginErrorText(e.status, e.message) : loginErrorText(0, (e as Error).message);
@@ -2638,15 +2728,15 @@ function boot() {
     if (document.visibilityState === "visible") void refresh();
   });
   setInterval(render, 30000);
-  setUnauthorizedHandler(showLogin);
+  setUnauthorizedHandler(sessionEnded);
 
-  // Ask whether this hub wants a password before loading anything else. If
-  // the hub cannot be reached, load the app anyway: it shows the error.
+  // Ask whether this hub has a password and this browser is logged in
+  // before loading anything else. If the hub cannot be reached, load the app
+  // anyway: it shows the error.
   void api.session().then(
     (sess) => {
       S.auth = sess;
-      if (needsLogin(sess)) showLogin();
-      else startApp();
+      if (!showGate(sess)) startApp();
     },
     (e) => {
       if (!(e instanceof ApiError && e.status === 401)) startApp();

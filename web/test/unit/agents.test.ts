@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { agentInstructions, agentMachines, installCommand, pickMachine, PLATFORMS } from "../../src/agents.ts";
-import type { Bridge } from "../../src/types.ts";
+import { addMachineError, agentInstructions, agentMachines, agentsOnCommand, installCommand, machineReposHTML, pickMachine, PLATFORMS, waitText } from "../../src/agents.ts";
+import { ApiError, retryAfterSeconds } from "../../src/api.ts";
+import type { Bridge, Repo } from "../../src/types.ts";
 
 test("each install download is a binary the release workflow builds", () => {
   const workflow = readFileSync(new URL("../../../.github/workflows/release.yml", import.meta.url), "utf8");
@@ -44,4 +45,40 @@ test("the hub's own entry is not an agent machine, and the newest machine is pic
   assert.equal(pickMachine(machines, "laptop"), "laptop");
   assert.equal(pickMachine(machines, "gone"), "desk");
   assert.equal(pickMachine([], ""), "");
+});
+
+test("agents switch on at the machine, by the repo's name, quoted for the shell when it needs it", () => {
+  assert.equal(agentsOnCommand("projects/garden"), "meat-mode bridge agents on projects/garden");
+  assert.equal(agentsOnCommand("Sam's notes"), "meat-mode bridge agents on 'Sam'\\''s notes'");
+});
+
+test("a repo with agents off shows the command and no switch; one with agents on shows only a switch that turns them off", () => {
+  const repo = (name: string, over: Partial<Repo>): Repo => ({ bridge: "desk", name, personal: false, optedIn: true, ...over });
+  const html = machineReposHTML([repo("garden", { agentsAllowed: false }), repo("website", { agentsAllowed: true }), repo("notes", { optedIn: false })], "desk");
+  const rows = html.split('<li class="m-repo">').slice(1);
+  const [garden, notes, website] = rows;
+  assert.match(garden, /meat-mode bridge agents on garden/);
+  assert.match(garden, /data-act="agents-on-copy"/);
+  assert.doesNotMatch(garden, /data-act="agents-switch"/);
+  assert.match(website, /aria-checked="true" aria-label="Agents can work in [^"]*" data-act="agents-switch"/);
+  assert.doesNotMatch(website, /bridge agents on/);
+  // A repo that does not sync says agents are off, without the command.
+  assert.match(notes, /Agents are off here/);
+  assert.doesNotMatch(notes, /bridge agents on/);
+});
+
+test("adding a machine asks for the password again on the hub's word, and says why it failed", () => {
+  assert.deepEqual(addMachineError(new ApiError(403, "enter your password to add a machine", true), false), { error: "", reauth: true });
+  assert.deepEqual(addMachineError(new ApiError(403, "wrong password", true), true), { error: "Wrong password.", reauth: true });
+  assert.deepEqual(addMachineError(new ApiError(429, "too many failed logins", false, 60), true), {
+    error: "Too many tries. Wait a minute and try again.",
+    reauth: true,
+  });
+  assert.equal(addMachineError(new ApiError(429, "x", false, 150), true).error, "Too many tries. Wait 3 minutes and try again.");
+  assert.deepEqual(addMachineError(new ApiError(409, "a machine with that name exists"), false), { error: "a machine with that name exists", reauth: false });
+  assert.equal(waitText(0), "a minute");
+  assert.equal(waitText(20), "20 seconds");
+  assert.equal(retryAfterSeconds("30"), 30);
+  assert.equal(retryAfterSeconds(null), 0);
+  assert.equal(retryAfterSeconds(new Date(90_000).toUTCString(), 0), 90);
 });

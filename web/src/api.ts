@@ -4,10 +4,25 @@ import type { Action, Bridge, Device, NewAction, NewBridgeReply, Session, SetupI
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** The hub asks for the password again before it does this (docs/api.md, Password again). */
+  reauth: boolean;
+  /** Seconds from a Retry-After header, or 0 when there was none. */
+  retryAfter: number;
+  constructor(status: number, message: string, reauth = false, retryAfter = 0) {
     super(message);
     this.status = status;
+    this.reauth = reauth;
+    this.retryAfter = retryAfter;
   }
+}
+
+/** The seconds a Retry-After header asks for, given as seconds or as a date; 0 when absent or unreadable. */
+export function retryAfterSeconds(header: string | null, now = Date.now()): number {
+  if (!header) return 0;
+  const n = Number(header);
+  if (Number.isFinite(n)) return Math.max(0, Math.ceil(n));
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? 0 : Math.max(0, Math.ceil((at - now) / 1000));
 }
 
 /** Runs when the hub answers 401 to anything but a login attempt: the session has ended. */
@@ -31,14 +46,16 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
   });
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
+    let reauth = false;
     try {
       const j = await res.json();
       if (j && typeof j.error === "string") msg = j.error;
+      reauth = j?.reauth === true;
     } catch {
       // keep the status line
     }
-    if (res.status === 401 && path !== "/api/login") onUnauthorized();
-    throw new ApiError(res.status, msg);
+    if (res.status === 401 && path !== "/api/login" && path !== "/api/session") onUnauthorized();
+    throw new ApiError(res.status, msg, reauth, retryAfterSeconds(res.headers.get("Retry-After")));
   }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -70,7 +87,9 @@ export const api = {
   devices: () => call<Device[]>("GET", "/api/devices"),
   revokeDevice: (id: string) => call<void>("DELETE", `/api/devices/${encodeURIComponent(id)}`),
   bridges: () => call<Bridge[]>("GET", "/api/bridges"),
-  addBridge: (name: string) => call<NewBridgeReply>("POST", "/api/bridges", { name }),
+  /** Adds a machine. The hub may ask for the password again first (ApiError.reauth); send it as password. */
+  addBridge: (name: string, password?: string) =>
+    call<NewBridgeReply>("POST", "/api/bridges", password === undefined ? { name } : { name, password }),
   revokeBridge: (name: string) => call<void>("DELETE", `/api/bridges/${encodeURIComponent(name)}`),
   setup: () => call<SetupInfo>("GET", "/api/setup"),
   recordSetup: (status: "done" | "dismissed") => call<void>("POST", "/api/setup", { status }),

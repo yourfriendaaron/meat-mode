@@ -64,7 +64,7 @@ test("agents work only on an agent item in a repo that allows them", () => {
 test("New task's switch says why a list takes no agent", () => {
   assert.equal(noAgentReason(repos[0]), "Personal to-dos have no agent.");
   assert.equal(noAgentReason(repos[1]), "");
-  assert.equal(noAgentReason(repos[2]), "Agents are off for this list. Turn them on in Settings.");
+  assert.equal(noAgentReason(repos[2]), "Agents are off for this list. They switch on at its machine.");
   assert.equal(noAgentReason(undefined), "");
 });
 

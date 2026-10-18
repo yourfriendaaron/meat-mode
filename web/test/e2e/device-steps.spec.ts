@@ -160,8 +160,6 @@ test.describe("phone", () => {
 
     test("shows the Home Screen steps and why reminders need them", async ({ page, hub }) => {
       await noPush(page);
-      hub.login = true;
-      hub.authenticated = true;
       await openWizardAt(page, hub, "install", "device");
       const w = wizard(page);
       await expect(w.region).toContainText("reminders work only in the Home Screen app");
@@ -191,7 +189,7 @@ test.describe("phone", () => {
       const w = wizard(page);
       await expect(w.region).toContainText("tap Add to Home Screen");
       await expect(w.region).not.toContainText("Add to Dock");
-      await expect(w.region).not.toContainText("log in again");
+      await expect(w.region).toContainText("log in again");
     });
   });
 });

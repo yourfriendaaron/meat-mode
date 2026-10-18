@@ -145,7 +145,7 @@ test("light theme on phone passes axe", async ({ page, hub }) => {
 });
 
 test("login screen fits the phone in both themes, and Log out is in Settings", async ({ page, hub }) => {
-  hub.login = true;
+  hub.authenticated = false;
   await page.goto("/");
   const pw = page.getByLabel("Password");
   await expect(pw).toBeVisible();
