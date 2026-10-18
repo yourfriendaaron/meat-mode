@@ -244,6 +244,11 @@ function listLabelHTML(r: Repo): string {
   return esc(repoLabel(r)) + (detail ? `<small class="nav-sub">${esc(detail)}</small>` : "");
 }
 
+/** Whether the list shows search results: a word in the search field, on a task view. */
+function searching(): boolean {
+  return !isPage(S.view) && S.query.trim() !== "";
+}
+
 function currentGroups(): Group[] {
   if (isPage(S.view)) return [];
   if (S.query.trim()) return searchGroups(items(), repos(), S.query, now());
@@ -430,8 +435,11 @@ function rowHTML(item: Item, showList: boolean): string {
 }
 
 function renderMain() {
-  setHTML($("#view-title"), esc(viewTitle(S.view)));
-  document.title = `${viewTitle(S.view)} · Meat Mode`;
+  const title = searching() ? "Search" : viewTitle(S.view);
+  setHTML($("#view-title"), esc(title));
+  document.title = `${title} · Meat Mode`;
+  // Search covers the task views, not Settings or setup.
+  $("#search-form").hidden = isPage(S.view);
   const main = $("#main");
   main.dataset.view = S.view.startsWith("list:") ? "list" : S.view;
 
@@ -502,7 +510,7 @@ function renderMain() {
   const groups = currentGroups();
   const showList = !S.view.startsWith("list:");
   if (!groups.length) {
-    setHTML(list, `<p class="empty">${S.view === "today" ? "Nothing due today." : "Nothing here."}</p>`);
+    setHTML(list, `<p class="empty">${searching() ? "No matches." : S.view === "today" ? "Nothing due today." : "Nothing here."}</p>`);
     return;
   }
   setHTML(
@@ -1758,7 +1766,12 @@ function onKey(e: KeyboardEvent) {
     } else if (S.qaOpen) closeQuickAdd();
     else if (S.noteEdit && S.open) closeNoteEdit();
     else if (S.edit && S.open) closeEdit();
-    else if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    else if (document.activeElement?.id === "search-input") {
+      S.query = "";
+      (document.activeElement as HTMLInputElement).value = "";
+      (document.activeElement as HTMLElement).blur();
+      render();
+    } else if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
     else if (S.open) closeDetail();
     else return;
     e.preventDefault();
@@ -1787,6 +1800,10 @@ function onKey(e: KeyboardEvent) {
     case "n":
       openQuickAdd();
       break;
+    case "/":
+      if (isPage(S.view)) return;
+      $("#search-input").focus();
+      break;
     case "Enter":
       if (S.selected && (!active || active === document.body || active.classList.contains("row-body"))) openItem(S.selected);
       else return;
@@ -1799,7 +1816,10 @@ function onKey(e: KeyboardEvent) {
 
 function onInput(e: Event) {
   const t = e.target as HTMLElement;
-  if (t.id === "qa-input") updateQuickAdd();
+  if (t.id === "search-input") {
+    S.query = (t as HTMLInputElement).value;
+    render();
+  } else if (t.id === "qa-input") updateQuickAdd();
   else if (t.dataset.typeTime !== undefined) updateSnoozeType(t as HTMLInputElement);
   else if (t.id === "note-input" && S.open) S.drafts.set(S.open, (t as HTMLTextAreaElement).value);
   else if (t.id === "check-input" && S.open) S.checkDrafts.set(S.open, (t as HTMLInputElement).value);
@@ -1854,6 +1874,7 @@ function onSubmit(e: SubmitEvent) {
   e.preventDefault();
   if (form.dataset.form === "login") void submitLogin(form);
   else if (form.id === "qa-form") void submitQuickAdd();
+  else if (form.id === "search-form") (document.activeElement as HTMLElement | null)?.blur();
   else if (form.dataset.form === "bridge") void addBridge(form);
   else if (form.dataset.form === "edit") saveEdit();
   else if (form.dataset.form === "note-edit") saveNoteEdit();
