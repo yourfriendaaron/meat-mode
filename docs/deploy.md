@@ -260,7 +260,7 @@ Each device you turned reminders on for gets one at an item's due time, and at t
 
 **Missed reminders.** When the hub could not remind on time, because it was stopped or could not run its checks, it catches up on the next check. One reminder that is more than 5 minutes late comes on its own and says how long ago it came due. Two or more come as one, "3 reminders came due while reminders were off", which opens the app. Each missed reminder is told once, however late.
 
-An item that was already past its due time when the hub first saw it, such as an old bead on a repo you just switched on, does not remind for that time.
+An item that was already more than 5 minutes past its due time when the hub first saw it, such as an old bead on a repo you just switched on, does not remind for that time.
 
 ## See your to-dos in a calendar app
 

@@ -185,19 +185,24 @@ func TestMissedSnoozeEnd(t *testing.T) {
 	}
 }
 
-// An item the hub first saw after its moment never reminds for it, however
-// recent; one seen before it reminds however late.
+// An item the hub first saw more than Late after its moment never reminds
+// for it; one seen before it reminds however late, and one seen within Late
+// after it still reminds.
 func TestItemThatArrivedOverdueIsSilent(t *testing.T) {
 	db, c, src, n := setup(t)
-	oldBead := item(tp(t0.Add(-2 * time.Minute)))
+	oldBead := item(tp(t0.Add(-2 * time.Hour)))
 	oldBead.FirstSeen = t0.Add(-time.Minute)
 	known := item(tp(t0.Add(-40 * 24 * time.Hour)))
 	known.Key, known.ID, known.Title = "home/chores/ch-2", "ch-2", "Pay the rent"
 	known.FirstSeen = t0.Add(-41 * 24 * time.Hour)
-	src.items = []api.Item{oldBead, known}
+	slowSync := item(tp(t0.Add(-30 * time.Second)))
+	slowSync.Key, slowSync.ID, slowSync.Title = "home/chores/ch-3", "ch-3", "Water the plants"
+	slowSync.FirstSeen = t0.Add(-10 * time.Second)
+	src.items = []api.Item{oldBead, known, slowSync}
 	s := sched(t, db, c, src, n)
 	s.Tick(context.Background())
-	if len(n.got) != 1 || n.got[0].Title != "Pay the rent" || n.got[0].Body != "Due 40 days ago" {
+	if len(n.got) != 2 || n.got[0].Title != "Water the plants" || n.got[0].Body != "Due now" ||
+		n.got[1].Title != "Pay the rent" || n.got[1].Body != "Due 40 days ago" {
 		t.Fatalf("got %+v", n.got)
 	}
 	// A later due time on the arrived item reminds as usual.
@@ -205,7 +210,7 @@ func TestItemThatArrivedOverdueIsSilent(t *testing.T) {
 	src.items = []api.Item{oldBead}
 	c.now = t0.Add(time.Hour)
 	s.Tick(context.Background())
-	if len(n.got) != 2 || n.got[1].Body != "Due now" {
+	if len(n.got) != 3 || n.got[2].Body != "Due now" {
 		t.Fatalf("got %+v", n.got)
 	}
 }

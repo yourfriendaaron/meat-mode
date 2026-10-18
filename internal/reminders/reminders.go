@@ -25,6 +25,11 @@ const Interval = 30 * time.Second
 // while the hub was stopped or its checks were failing.
 const Late = 5 * time.Minute
 
+// arrivedLate reports whether the hub first saw an item more than Late after
+// the moment at. Within Late it still reminds, so a to-do added moments
+// before it comes due is not lost to a slow sync.
+func arrivedLate(first, at time.Time) bool { return first.Sub(at) > Late }
+
 // MissedTag is the tag of the one reminder that sums up several missed ones.
 const MissedTag = "missed-reminders"
 
@@ -211,7 +216,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 			switch {
 			case err != nil:
 				errs = append(errs, err)
-			case sent && !first.After(at):
+			case sent && !arrivedLate(first, at):
 				m := msg
 				m.Body = "Due in " + span(it.DueAt.Sub(now))
 				out = append(out, due{m, now.Sub(at) > Late})
@@ -227,9 +232,9 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 			errs = append(errs, err)
 			continue
 		}
-		// An item the hub first saw after its moment, such as an old bead
-		// on a bridge's first sync, is recorded silently.
-		if !sent || first.After(at) {
+		// An item the hub first saw more than Late after its moment, such as
+		// an old bead on a bridge's first sync, is recorded silently.
+		if !sent || arrivedLate(first, at) {
 			continue
 		}
 		m, late := msg, now.Sub(at) > Late

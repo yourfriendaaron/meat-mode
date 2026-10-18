@@ -127,7 +127,7 @@ A personal item can repeat: "Water the plants every day at 8:30pm". `Repeat` is 
 - `every` is `day`, `week`, `month` or `year`; `interval` repeats every n of them, `1` (the default) to `100`.
 - `weekdays` picks the days of a weekly rule, `0` (Sunday) to `6`, each once. Left out, a weekly rule keeps the due date's weekday. Only a weekly rule takes it, and not with `fromDone`.
 - `timeZone` is an IANA zone. The rule keeps the due time's wall-clock time and date in it, so 8:30pm stays 8:30pm across daylight saving changes. The app sends the device's zone; `meat-mode add` sends the hub's, or the machine's while the hub has none.
-- `start` is the occurrence the schedule counts from. The hub sets it to the due time whenever the rule or the due time is set, and ignores one a client sends. A monthly rule from the 31st lands on the last day of shorter months and returns to the 31st after them; a yearly rule from 29 February lands on 28 February.
+- `start` is the occurrence the schedule counts from. The hub sets it to the due time whenever the rule is set, and when the due time is set to a time that is not one of the series' own dates; moving the due time onto one of them, as the Undo of a `done` does, keeps it. The hub ignores a `start` a client sends. A monthly rule from the 31st lands on the last day of shorter months and returns to the 31st after them; a yearly rule from 29 February lands on 28 February.
 - A rule needs a due time: the item's current occurrence. Moving the due date moves the series.
 
 `done` on a repeating item keeps it open and moves it on:
@@ -145,7 +145,7 @@ The hub reminds through Web Push, and ntfy when set up, once for each time an it
 - With a lead time (the item's `remindBefore`, else the hub's `reminderLead`) above 0, an early reminder comes that many minutes before the due time, saying how long is left, and the reminder at the due time still comes. A snooze end has no early reminder: the user picked that moment. Changing the lead time never sends again a reminder already sent for the same due time.
 - A repeating item reminds afresh for each occurrence, since each has its own due time.
 
-When the hub could not remind on time, because it was stopped or its checks were failing, the reminders that came due meanwhile are not lost. On its next check, a reminder more than 5 minutes late goes out as itself when it is the only one, saying how long ago it came due; two or more go out as one reminder, "N reminders came due while reminders were off", that opens the app. However late it is, a missed reminder is told once. An item that was already past its moment when the hub first saw it, such as an old bead on a bridge's first sync, never reminds for that moment.
+When the hub could not remind on time, because it was stopped or its checks were failing, the reminders that came due meanwhile are not lost. On its next check, a reminder more than 5 minutes late goes out as itself when it is the only one, saying how long ago it came due; two or more go out as one reminder, "N reminders came due while reminders were off", that opens the app. However late it is, a missed reminder is told once. An item the hub first saw more than 5 minutes after its moment, such as an old bead on a bridge's first sync, never reminds for that moment; one that arrives within 5 minutes still does.
 
 ### Calendar feed
 
