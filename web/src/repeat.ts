@@ -9,6 +9,8 @@ export type RepeatRule = Omit<Repeat, "timeZone" | "start">;
 
 export interface RepeatMatch {
   rule: RepeatRule;
+  /** A monthly repeat's day of the month ("on the 15th"), which sets its first occurrence. */
+  monthDay?: number;
   start: number;
   end: number;
   text: string;
@@ -27,12 +29,18 @@ const PLURAL_LIST = `${PLURAL}(?:${AND}${PLURAL})*`;
 const EVERY = "(?:every|each)";
 const NUMBER = "\\d{1,3}|other";
 /** A time of day or a part of the day, which chrono reads after "every". */
-const TIME = "\\d{1,2}(?::?\\d{2})?\\s*(?:am|pm)|\\d{1,2}:\\d{2}|noon|midnight|morning|afternoon|evening|night";
+const TIME = "\\d{1,2}(?::?\\d{2})?\\s*(?:am|pm)|\\d{1,2}p|\\d{1,2}:?\\d{2}[ap]|\\d{1,2}:\\d{2}|noon|midnight|morning|afternoon|evening|night|lunchtime|after work";
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
 
 /** Each phrase and the rule it means. Where two match at the same place, the first one listed wins. */
-const PATTERNS: { re: RegExp; rule: (m: RegExpExecArray) => RepeatRule }[] = [
+const PATTERNS: { re: RegExp; rule: (m: RegExpExecArray) => RepeatRule; monthDay?: (m: RegExpExecArray) => number }[] = [
+  // every month on the 1st, every 3 months on the 15th, monthly on the 31st
+  {
+    re: new RegExp(`\\b(?:${EVERY}\\s+(?:(${NUMBER})\\s+)?months?|monthly)\\s+on\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\b`, "i"),
+    rule: (m) => rule("month", intervalOf(m[1])),
+    monthDay: (m) => Number(m[2]),
+  },
   // every 2 weeks on mon and thu, every week on friday
   { re: new RegExp(`\\b${EVERY}\\s+(?:(${NUMBER})\\s+)?weeks?\\s+on\\s+(${DAY_LIST})\\b`, "i"), rule: (m) => rule("week", intervalOf(m[1]), daysIn(m[2])) },
   // every weekday, every weekend, on weekdays
@@ -82,7 +90,10 @@ export function findRepeat(text: string): RepeatMatch | null {
     const r = p.rule(m);
     const n = r.interval ?? 1;
     if (!Number.isInteger(n) || n < 1 || n > MAX_REPEAT_INTERVAL) continue;
+    const day = p.monthDay?.(m);
+    if (day !== undefined && (day < 1 || day > 31)) continue;
     best = { rule: r, start: m.index, end: m.index + m[0].length, text: m[0] };
+    if (day !== undefined) best.monthDay = day;
   }
   return best;
 }
@@ -90,8 +101,17 @@ export function findRepeat(text: string): RepeatMatch | null {
 /**
  * The first occurrence of a rule after now, at hours:minutes local time: the
  * first day on or after today, past now, that a weekly rule's weekdays allow.
+ * A monthly rule given a day of the month takes the next such day; a month
+ * without it takes its last day, as the hub does.
  */
-export function firstOccurrence(r: RepeatRule, now: Date, hours: number, minutes: number): Date {
+export function firstOccurrence(r: RepeatRule, now: Date, hours: number, minutes: number, monthDay?: number): Date {
+  if (r.every === "month" && monthDay) {
+    for (let i = 0; ; i++) {
+      const last = new Date(now.getFullYear(), now.getMonth() + i + 1, 0).getDate();
+      const d = new Date(now.getFullYear(), now.getMonth() + i, Math.min(monthDay, last), hours, minutes);
+      if (d > now) return d;
+    }
+  }
   for (let i = 0; i < 8; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, hours, minutes);
     if (d <= now) continue;

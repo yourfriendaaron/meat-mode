@@ -37,9 +37,88 @@ export const TONIGHT_HOUR = 20;
 /** Hour used for a date given without a time. */
 export const DEFAULT_HOUR = 9;
 
+/** Hour used for "morning", where chrono reads 6:00. */
+export const MORNING_HOUR = 9;
+
 const PART_OF_DAY = /\b(morning|noon|midday|afternoon|evening|night|midnight)\b/i;
 const TONIGHT = /\btonight\b/i;
 const LIST_TAG = /(^|\s)#([\p{L}\p{N}_.-]+)/gu;
+
+/** A word's edges, for patterns chrono runs without its own boundary check. */
+const B = "(?<![\\p{L}\\p{N}_])";
+const E = "(?![\\p{L}\\p{N}_])";
+const DAY_WORD = "today|tomorrow|tmrw|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?";
+
+/** Times people name rather than give, with the hour each means. */
+const NAMED: [RegExp, number][] = [
+  // Only "at lunch" or "lunchtime": "Buy lunch stuff" stays a title.
+  [/^(?:(?:at|by)\s+lunch(?:time)?|lunchtime)$/i, 12],
+  [/^(?:by\s+)?(?:eod|end of (?:the )?day)$/i, 17],
+  [/^after work$/i, 18],
+];
+
+/**
+ * "8p", "8:30p", "830a": am and pm by their first letter, which chrono does
+ * not read. A bare hour takes only "p", so "Flat 4a" stays a title.
+ */
+const SHORT_MERIDIEM = new RegExp(`${B}(\\d{1,2})(?::?(\\d{2}))?([ap])${E}`, "iu");
+const shortMeridiem: chrono.Parser = {
+  pattern: () => SHORT_MERIDIEM,
+  extract(_ctx, m) {
+    const h = Number(m[1]);
+    const min = Number(m[2] ?? 0);
+    if (h < 1 || h > 12 || min > 59 || (!m[2] && m[3].toLowerCase() === "a")) return null;
+    const pm = m[3].toLowerCase() === "p";
+    return { hour: (h % 12) + (pm ? 12 : 0), minute: min, meridiem: pm ? 1 : 0 };
+  },
+};
+
+/** "at lunch", "eod", "after work". */
+const NAMED_TIME = new RegExp(`${B}(?:(?:at|by)\\s+lunch(?:time)?|lunchtime|(?:by\\s+)?(?:eod|end of (?:the )?day)|after work)${E}`, "iu");
+const namedTime: chrono.Parser = {
+  pattern: () => NAMED_TIME,
+  extract(_ctx, m) {
+    const text = m[0].replace(/\s+/g, " ");
+    const hit = NAMED.find(([re]) => re.test(text));
+    return hit ? { hour: hit[1], minute: 0 } : null;
+  },
+};
+
+/** "first thing tomorrow", "monday first thing": 9:00 on a day said next to it. */
+const FIRST_THING = new RegExp(
+  `(?<=${B}(?:${DAY_WORD})\\s+)first thing${E}|${B}first thing(?=\\s+(?:on\\s+|next\\s+)?(?:${DAY_WORD})${E})`,
+  "iu",
+);
+const firstThing: chrono.Parser = {
+  pattern: () => FIRST_THING,
+  extract: () => ({ hour: MORNING_HOUR, minute: 0 }),
+};
+
+/** "end of the week", "by end of week": this week's Friday at 9:00, or next week's once it has passed. */
+const END_OF_WEEK = new RegExp(`${B}(?:by\\s+)?(?:the\\s+)?end of (?:the |this )?week${E}`, "iu");
+const endOfWeek: chrono.Parser = {
+  pattern: () => END_OF_WEEK,
+  extract(ctx) {
+    const now = ctx.reference.instant;
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + ((5 - now.getDay() + 7) % 7), MORNING_HOUR, 0);
+    if (d <= now) d.setDate(d.getDate() + 7);
+    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate(), hour: MORNING_HOUR, minute: 0 };
+  },
+};
+
+/** "morning" at 9:00 rather than chrono's 6:00, before chrono moves a time already past to tomorrow. */
+const morningAtNine: chrono.Refiner = {
+  refine(_ctx, results) {
+    for (const r of results) {
+      if (r.start.tags().has("casualReference/morning") && !r.start.isCertain("hour")) r.start.imply("hour", MORNING_HOUR);
+    }
+    return results;
+  },
+};
+
+const parser = chrono.casual.clone();
+parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek);
+parser.refiners.unshift(morningAtNine);
 
 export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts: QuickOptions = {}): QuickAdd {
   const tokens: QuickToken[] = [];
@@ -60,16 +139,18 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   // The repeat goes first, and its words are blanked for chrono, which would
   // read "every monday" as next Monday.
   let repeat: RepeatRule | null = null;
+  let monthDay: number | undefined;
   let dateText = text;
   const rm = opts.repeat === false ? null : findRepeat(text);
   if (rm && !tokens.some((t) => rm.start < t.end && t.start < rm.end)) {
     repeat = rm.rule;
+    monthDay = rm.monthDay;
     tokens.push({ kind: "repeat", start: rm.start, end: rm.end, text: rm.text });
     dateText = text.slice(0, rm.start) + " ".repeat(rm.end - rm.start) + text.slice(rm.end);
   }
 
   let due: Date | null = null;
-  const results = chrono.parse(dateText, now, { forwardDate: true });
+  const results = parser.parse(dateText, now, { forwardDate: true });
   for (const r of results) {
     // Chrono can take in spaces before a match, such as a blanked repeat's.
     const at = r.index + r.text.length - r.text.trimStart().length;
@@ -78,11 +159,11 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
     const start = lead ? lead.index : at;
     const end = r.index + r.text.length;
     if (tokens.some((t) => start < t.end && t.start < end)) continue;
-    due = repeat && !hasDay(r) ? firstOccurrence(repeat, now, ...timeOf(r)) : resolve(r, now);
+    due = repeat && !hasDay(r) ? firstOccurrence(repeat, now, ...timeOf(r), monthDay) : resolve(r, now);
     tokens.push({ kind: "date", start, end, text: text.slice(start, end) });
     break;
   }
-  if (repeat && !due) due = firstOccurrence(repeat, now, DEFAULT_HOUR, 0);
+  if (repeat && !due) due = firstOccurrence(repeat, now, DEFAULT_HOUR, 0, monthDay);
 
   tokens.sort((a, b) => a.start - b.start);
   let title = "";

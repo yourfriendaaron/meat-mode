@@ -34,6 +34,11 @@ test("the first occurrence is the first allowed day past now", () => {
   assert.equal(local(firstOccurrence({ every: "week", weekdays: [3] }, now, 11, 0)), "14 11:00");
   assert.equal(local(firstOccurrence({ every: "week", weekdays: [0, 6] }, now, 9, 0)), "17 9:00");
   assert.equal(local(firstOccurrence({ every: "month" }, now, 8, 0)), "15 8:00");
+  const month = (d: Date) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  assert.equal(month(firstOccurrence({ every: "month" }, now, 9, 0, 1)), "11/1 9:00");
+  assert.equal(month(firstOccurrence({ every: "month" }, now, 11, 0, 14)), "10/14 11:00");
+  assert.equal(month(firstOccurrence({ every: "month" }, now, 9, 0, 14)), "11/14 9:00");
+  assert.equal(month(firstOccurrence({ every: "month" }, new Date(2026, 10, 5), 9, 0, 31)), "11/30 9:00");
 });
 
 test("rules compare by what they repeat, not their zone or start", () => {
