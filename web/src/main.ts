@@ -204,6 +204,10 @@ const ICON = {
   trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
   repeat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V10a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+  select: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12.5l3 3 5-6"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+  ban: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
 };
 
 // ---------- views ----------
@@ -388,6 +392,12 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   const personal = personalRepoKeys(repos());
   const agent = isAgentItem(item, personal);
   const out: string[] = [];
+  // The list comes first, so it starts at the same x on every row.
+  if (opts.list) {
+    const r = repos().find((x) => repoKey(x) === repoKey(item));
+    const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
+    out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
+  }
   const att = attention(item, personal, user());
   if (att === "new") out.push('<span class="chip chip-pink">New</span>');
   if (att === "reply") out.push('<span class="chip chip-cyan">New reply</span>');
@@ -396,11 +406,6 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   const dc = dateChip(item, n);
   if (dc) out.push(`<span class="chip chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>`);
   if (item.repeat) out.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(item.repeat, n))}</span>`);
-  if (opts.list) {
-    const r = repos().find((x) => repoKey(x) === repoKey(item));
-    const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
-    out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
-  }
   if (agent && !isOpen(item) && item.closeReason === DISMISSED) out.push('<span class="chip chip-wontdo">Won\'t do</span>');
   if (agent && item.createdBy) out.push(`<span class="chip chip-agent">${esc(item.createdBy)}</span>`);
   const notes = item.comments?.length ?? 0;
@@ -440,8 +445,8 @@ function rowHTML(item: Item, showList: boolean): string {
 <div class="row-fg">${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${statusLine(item)}</button>${
     done
       ? isDeleted(item, personal)
-        ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">Restore</button>`
-        : `<button class="btn btn-small" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>`
+        ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
+        : `<button class="btn btn-small" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>`
       : ""
   }</div></li>`;
 }
@@ -540,7 +545,7 @@ function renderMain() {
       .map((g) => {
         const extra =
           g.id === "pastdue" && g.items.length > 1
-            ? `<button class="btn btn-small btn-ghost" data-act="snooze-all">Snooze all to tomorrow</button>`
+            ? `<button class="btn btn-small btn-ghost" data-act="snooze-all">${ICON.moon}Snooze all to tomorrow</button>`
             : "";
         return `<section class="group group-${g.id}" aria-labelledby="g-${g.id}"><div class="group-head"><h2 id="g-${g.id}">${esc(g.label)} <span class="group-count">${g.items.length}</span></h2>${extra}</div><ul class="rows">${g.items
           .map((i) => rowHTML(i, showList))
@@ -648,7 +653,7 @@ ${repeatFieldsHTML(item, d)}
 <label for="edit-desc">Details</label><textarea id="edit-desc" rows="4" maxlength="${TEXT_MAX}"></textarea>
 <label for="edit-prio">Priority</label><select id="edit-prio">${prio}</select>
 ${e.error ? `<p class="row-error" role="alert">${esc(e.error)}</p>` : ""}
-<div class="btn-row"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn" data-act="edit-cancel">Cancel</button></div>
+<div class="btn-row"><button type="submit" class="btn btn-primary">${ICON.check}Save</button><button type="button" class="btn" data-act="edit-cancel">Cancel</button></div>
 </form>`;
 }
 
@@ -714,13 +719,13 @@ function checklistHTML(item: Item): string {
   const rows = list
     .map(
       (c, i) =>
-        `<li class="ck${c.done ? " ck-done" : ""}"><input type="checkbox" id="ck-${i}" data-check="${i}"${c.done ? " checked" : ""}><label for="ck-${i}">${esc(c.text)}</label><button class="link-btn ck-remove" data-act="check-remove" data-idx="${i}" aria-label="Remove: ${esc(c.text)}">Remove</button></li>`,
+        `<li class="ck${c.done ? " ck-done" : ""}"><input type="checkbox" id="ck-${i}" data-check="${i}"${c.done ? " checked" : ""}><label for="ck-${i}">${esc(c.text)}</label><button class="link-btn ck-remove" data-act="check-remove" data-idx="${i}" aria-label="Remove: ${esc(c.text)}" title="Remove">${ICON.close}</button></li>`,
     )
     .join("");
   const count = checklistChip(list);
   return `<section class="d-section" aria-labelledby="d-check"><h3 id="d-check">Checklist${count ? ` <span class="group-count">${count}</span>` : ""}</h3>${
     rows ? `<ul class="checklist">${rows}</ul>` : ""
-  }<form class="pick-row" data-form="check-add"><label class="sr" for="check-input">Add to the checklist</label><input id="check-input" type="text" maxlength="${CHECK_MAX}" autocomplete="off" enterkeyhint="done" placeholder="Add an entry"><button type="submit" class="btn">Add</button></form></section>`;
+  }<form class="pick-row" data-form="check-add"><label class="sr" for="check-input">Add to the checklist</label><input id="check-input" type="text" maxlength="${CHECK_MAX}" autocomplete="off" enterkeyhint="done" placeholder="Add an entry"><button type="submit" class="btn">${ICON.plus}Add</button></form></section>`;
 }
 
 function noteHTML(item: Item, c: Comment, editable: boolean): string {
@@ -733,7 +738,7 @@ function noteHTML(item: Item, c: Comment, editable: boolean): string {
     : `<p>${esc(c.text)}</p>`;
   const tools =
     editable && !editing
-      ? `<span class="note-tools"><button class="link-btn" id="ne-${esc(c.id)}" data-act="note-edit" data-id="${esc(c.id)}" aria-label="Edit note">Edit</button><button class="link-btn" data-act="note-delete" data-id="${esc(c.id)}" aria-label="Delete note">Delete</button></span>`
+      ? `<span class="note-tools"><button class="link-btn" id="ne-${esc(c.id)}" data-act="note-edit" data-id="${esc(c.id)}" aria-label="Edit note" title="Edit note">${ICON.edit}</button><button class="link-btn" data-act="note-delete" data-id="${esc(c.id)}" aria-label="Delete note" title="Delete note">${ICON.trash}</button></span>`
       : "";
   return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"><div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-cyan">New</span>' : ""}${tools}</div>${body}</li>`;
 }
@@ -758,13 +763,13 @@ function renderDetail() {
   const comments = (item.comments ?? []).map((c) => noteHTML(item, c, editable)).join("");
   const actions = `<div class="d-actions">${
     open
-      ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">Done</button>${
-          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">Edit</button>` : ""
-        }<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? "Won't do" : "Delete"}</button>`
+      ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">${ICON.check}Done</button>${
+          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
+        }<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? `${ICON.ban}Won't do` : `${ICON.trash}Delete`}</button>`
       : isDeleted(item, personalRepoKeys(repos()))
-        ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">Restore</button>`
-        : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">Reopen</button>${
-          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">Edit</button>` : ""
+        ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
+        : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>${
+          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
         }`
   }</div>`;
   const html = `<div class="detail-inner" role="region" aria-labelledby="d-title">
@@ -776,7 +781,7 @@ ${editing ? editFormHTML(item) : why + actions}
 ${editable ? checklistHTML(item) : ""}
 ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
-<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea><button class="btn" data-act="note" data-key="${esc(item.key)}">Save note</button></section>
+<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea><button class="btn" data-act="note" data-key="${esc(item.key)}">${ICON.note}Save note</button></section>
 </div>`;
   if (setHTML(el, html)) {
     const ta = $<HTMLTextAreaElement>("#note-input", el);
@@ -2243,12 +2248,12 @@ function shell(): string {
   </div>
 </aside>
 <main id="main" class="main">
-  <header class="mhead"><h1 id="view-title">Today</h1><form id="search-form" class="search" role="search" autocomplete="off"><label class="sr" for="search-input">Search</label><input id="search-input" type="search" enterkeyhint="search" placeholder="Search"></form><button id="select-btn" class="btn btn-small btn-ghost" data-act="select-mode" hidden>Select</button><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
+  <header class="mhead"><h1 id="view-title">Today</h1><form id="search-form" class="search" role="search" autocomplete="off"><label class="sr" for="search-input">Search</label><input id="search-input" type="search" enterkeyhint="search" placeholder="Search"></form><button id="select-btn" class="btn btn-small btn-ghost" data-act="select-mode" hidden>${ICON.select}Select</button><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
   <div id="browse" class="browse"></div>
   <form id="qa-form" class="qa" autocomplete="off">
     <div class="qa-head"><h2>New task</h2><button type="button" class="icon-btn" data-act="qa-close" aria-label="Close">${ICON.close}</button></div>
     <div class="qa-field"><div id="qa-backdrop" class="qa-backdrop" aria-hidden="true"></div><input id="qa-input" type="text" enterkeyhint="done" aria-label="New task" aria-describedby="qa-chips" placeholder="Add a task: Water the plants tomorrow 9am #garden"></div>
-    <div class="qa-meta"><span id="qa-chips" class="chips" aria-live="polite"></span><label class="sr" for="qa-list">List</label><select id="qa-list"></select><button class="btn btn-primary" type="submit">Add</button></div>
+    <div class="qa-meta"><span id="qa-chips" class="chips" aria-live="polite"></span><label class="sr" for="qa-list">List</label><select id="qa-list"></select><button class="btn btn-primary" type="submit">${ICON.plus}Add</button></div>
   </form>
   <div id="dayload" class="dayload" hidden></div>
   <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>
