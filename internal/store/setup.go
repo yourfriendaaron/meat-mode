@@ -43,9 +43,6 @@ type HubSettings struct {
 	// PasswordHash is the Argon2id PHC string of a password set in the
 	// app; "" for none. MEAT_MODE_PASSWORD_HASH wins over it.
 	PasswordHash string
-	// TailscaleOnly records that the user keeps the hub on a private
-	// network with no password, so setup stops asking for one.
-	TailscaleOnly bool
 	// SetupCodeExpires is when the current setup code stops working, nil
 	// when none was made. SetupCodeUsed is when it claimed the hub.
 	SetupCodeExpires *time.Time
@@ -57,9 +54,9 @@ func (s *Store) Settings() (HubSettings, error) {
 	var h HubSettings
 	var setupAt sql.NullString
 	var expires, used sql.NullInt64
-	err := s.db.QueryRow(`SELECT setup, setup_at, user_name, time_zone, reminder_lead, password_hash, tailscale_only,
+	err := s.db.QueryRow(`SELECT setup, setup_at, user_name, time_zone, reminder_lead, password_hash,
 		setup_code_expires, setup_code_used FROM hub_settings WHERE id = 1`).Scan(
-		&h.Setup, &setupAt, &h.UserName, &h.TimeZone, &h.ReminderLead, &h.PasswordHash, &h.TailscaleOnly, &expires, &used)
+		&h.Setup, &setupAt, &h.UserName, &h.TimeZone, &h.ReminderLead, &h.PasswordHash, &expires, &used)
 	if err != nil {
 		return h, err
 	}
@@ -190,12 +187,6 @@ func (s *Store) SetPasswordHash(phc string) error {
 		}
 	}
 	return s.setSetting(`password_hash = ?`, phc)
-}
-
-// SetTailscaleOnly records whether the user keeps the hub with no password
-// on a private network.
-func (s *Store) SetTailscaleOnly(on bool) error {
-	return s.setSetting(`tailscale_only = ?`, on)
 }
 
 func (s *Store) setSetting(set string, args ...any) error {

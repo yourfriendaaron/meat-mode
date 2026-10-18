@@ -446,10 +446,10 @@ func TestAppConfirmation(t *testing.T) {
 	if len(ds) != 1 || !ds[0].Confirmed || ds[0].LastPush == nil || !ds[0].LastPush.Equal(a.now) {
 		t.Fatalf("devices %+v", ds)
 	}
-	if got, err := r.DeviceByToken(ctx, token); err != nil || got != id {
+	if got, _, err := r.DeviceByToken(ctx, token); err != nil || got != id {
 		t.Fatalf("token: %q, %v", got, err)
 	}
-	if _, err := r.DeviceByToken(ctx, "mmd_unknown"); !errors.Is(err, store.ErrUnauthorized) {
+	if _, _, err := r.DeviceByToken(ctx, "mmd_unknown"); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("unknown token: %v", err)
 	}
 
@@ -458,7 +458,7 @@ func TestAppConfirmation(t *testing.T) {
 	if err != nil || !renewed || again != id {
 		t.Fatalf("renew: %q, %v, %v", again, renewed, err)
 	}
-	if got, _ := r.DeviceByToken(ctx, token); got != id {
+	if got, _, _ := r.DeviceByToken(ctx, token); got != id {
 		t.Fatal("renewal lost the token")
 	}
 
@@ -695,7 +695,7 @@ func TestDevicesFollowTheirSession(t *testing.T) {
 	// Registered with login off, then login is turned on: dropped.
 	_, offToken := a.confirmed(newAppSub(t, a.endpoint("/off")), "")
 	r.RequireSession = func() bool { return true }
-	if _, err := r.DeviceByToken(ctx, offToken); !errors.Is(err, store.ErrUnauthorized) {
+	if _, _, err := r.DeviceByToken(ctx, offToken); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("token of a device from before the login: %v", err)
 	}
 	if _, _, err := r.RegisterApp(ctx, "", newAppSub(t, a.endpoint("/anon")).PushSubscription); !errors.Is(err, store.ErrUnauthorized) {
@@ -703,7 +703,7 @@ func TestDevicesFollowTheirSession(t *testing.T) {
 	}
 
 	session := func() (string, string) {
-		tok, s, err := st.CreateSession("tag", a.now, time.Hour)
+		tok, s, err := st.CreateSession("tag", a.now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -720,17 +720,17 @@ func TestDevicesFollowTheirSession(t *testing.T) {
 	if err := r.DropSession(ctx, out); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.DeviceByToken(ctx, outToken); !errors.Is(err, store.ErrUnauthorized) {
+	if _, _, err := r.DeviceByToken(ctx, outToken); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("token after logout: %v", err)
 	}
 	// So does a session ending elsewhere, such as a password change.
 	if err := st.DeleteSession(endTok); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.DeviceByToken(ctx, endToken); !errors.Is(err, store.ErrUnauthorized) {
+	if _, _, err := r.DeviceByToken(ctx, endToken); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("token after the session ended: %v", err)
 	}
-	if id, err := r.DeviceByToken(ctx, keptToken); err != nil || id != keptID {
+	if id, _, err := r.DeviceByToken(ctx, keptToken); err != nil || id != keptID {
 		t.Fatalf("live session's device: %q, %v", id, err)
 	}
 	if ds, _ := r.Devices(ctx); len(ds) != 1 || ds[0].ID != keptID {
@@ -746,7 +746,7 @@ func TestDevicesFollowTheirSession(t *testing.T) {
 	if len(a.pushes("/moved")) != 1 || len(a.pushes("/kept")) != 1 {
 		t.Fatalf("pushes moved %d, kept %d; want 1, 1 (the confirmation)", len(a.pushes("/moved")), len(a.pushes("/kept")))
 	}
-	if id, _ := r.DeviceByToken(ctx, keptToken); id != keptID {
+	if id, _, _ := r.DeviceByToken(ctx, keptToken); id != keptID {
 		t.Fatal("the move lost the token")
 	}
 	if err := r.UpdateDevice(ctx, keptID, newAppSub(t, "https://"+private10.String()+"/up").PushSubscription); !errors.Is(err, store.ErrInvalid) {
@@ -757,7 +757,7 @@ func TestDevicesFollowTheirSession(t *testing.T) {
 	if err := r.RevokeDevice(ctx, keptID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.DeviceByToken(ctx, keptToken); !errors.Is(err, store.ErrUnauthorized) {
+	if _, _, err := r.DeviceByToken(ctx, keptToken); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("token after revoke: %v", err)
 	}
 	if err := r.RevokeDevice(ctx, keptID); !errors.Is(err, store.ErrNotFound) {
@@ -773,7 +773,7 @@ func TestAppDevicesExpireWithoutRenewal(t *testing.T) {
 	a := newAppServer(t, r)
 	_, token := a.confirmed(newAppSub(t, a.endpoint("/up")), "")
 	a.now = a.now.Add(SubscriptionTTL)
-	if _, err := r.DeviceByToken(context.Background(), token); !errors.Is(err, store.ErrUnauthorized) {
+	if _, _, err := r.DeviceByToken(context.Background(), token); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("token of a device not renewed for 60 days: %v", err)
 	}
 }

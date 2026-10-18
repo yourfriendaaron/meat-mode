@@ -14,16 +14,17 @@ import (
 // Android app (docs/api.md, Devices). The PushRegistry from internal/notify
 // provides it.
 type DeviceRegistry interface {
-	// RegisterApp stores the app's subscription for the session sessionID
-	// ("" when login is off). renewed reports an endpoint that already
+	// RegisterApp stores the app's subscription for the session sessionID.
+	// renewed reports an endpoint that already
 	// belongs to a confirmed device; otherwise id is a new device awaiting
 	// confirmation.
 	RegisterApp(ctx context.Context, sessionID string, s api.PushSubscription) (id string, renewed bool, err error)
 	// ConfirmDevice trades a confirmation code for the device token.
 	ConfirmDevice(ctx context.Context, id, code string) (token string, err error)
-	// DeviceByToken returns the device a token belongs to, and records that
-	// it was seen; store.ErrUnauthorized when it belongs to none.
-	DeviceByToken(ctx context.Context, token string) (id string, err error)
+	// DeviceByToken returns the device a token belongs to and the session
+	// that registered it, and records that it was seen;
+	// store.ErrUnauthorized when it belongs to none.
+	DeviceByToken(ctx context.Context, token string) (id, sessionID string, err error)
 	// UpdateDevice replaces a device's endpoint and keys and renews it.
 	UpdateDevice(ctx context.Context, id string, s api.PushSubscription) error
 	// RevokeDevice removes a device; store.ErrNotFound for an unknown id.
@@ -83,8 +84,9 @@ func confirmPath(p string) bool {
 
 // deviceGate lets a request with a device token through to the routes the
 // token opens, carrying the device, and answers 401 for anything else. It
-// never looks at a session cookie.
-func (s *Server) deviceGate(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+// never looks at a session cookie. The call counts as use of the session
+// that registered the device under l, so the session's idle end moves.
+func (s *Server) deviceGate(w http.ResponseWriter, r *http.Request, l *login) (*http.Request, bool) {
 	refuse := func(msg string) (*http.Request, bool) {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="meat-mode", error="invalid_token"`)
 		writeError(w, http.StatusUnauthorized, msg)
@@ -98,13 +100,22 @@ func (s *Server) deviceGate(w http.ResponseWriter, r *http.Request) (*http.Reque
 	if !ok || token == "" {
 		return refuse("unknown or revoked device token")
 	}
-	id, err := devs.DeviceByToken(r.Context(), token)
+	id, sessionID, err := devs.DeviceByToken(r.Context(), token)
 	if errors.Is(err, store.ErrUnauthorized) {
 		return refuse("unknown or revoked device token")
 	}
 	if err != nil {
 		s.storeError(w, r, err)
 		return r, false
+	}
+	live, err := s.store.UseSession(sessionID, l.tag, s.now())
+	if err != nil {
+		s.storeError(w, r, err)
+		return r, false
+	}
+	if !live {
+		// The session ended since the registry last pruned its devices.
+		return refuse("unknown or revoked device token")
 	}
 	return r.WithContext(context.WithValue(r.Context(), deviceKey{}, id)), true
 }

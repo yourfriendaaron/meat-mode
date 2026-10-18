@@ -150,7 +150,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 8
+const schemaVersion = 9
 
 var migrations = []string{
 	// 1: initial schema.
@@ -230,8 +230,8 @@ CREATE TABLE sessions (
 CREATE INDEX sessions_expires ON sessions(expires_at);
 `,
 	// 4: hub setup (setup.go), one row. setup is '', 'done' or
-	// 'dismissed'. The setup code is kept only as its SHA-256; its times
-	// are Unix seconds, so expiry compares in SQL.
+	// 'dismissed'; tailscale_only is unused. The setup code is kept only
+	// as its SHA-256; its times are Unix seconds, so expiry compares in SQL.
 	`
 CREATE TABLE hub_settings (
 	id                 INTEGER PRIMARY KEY CHECK (id = 1),
@@ -279,6 +279,14 @@ CREATE TABLE runs (
 	data    TEXT NOT NULL,
 	PRIMARY KEY (bridge, repo, bead_id)
 );
+`,
+	// 9: when the password was last entered in each session, Unix seconds.
+	// Existing sessions get 0, so they enter it again before adding a
+	// machine. Their expiry moves to the 14-day idle and 90-day absolute
+	// limits (SessionIdle, SessionLifetime).
+	`
+ALTER TABLE sessions ADD COLUMN verified_at INTEGER NOT NULL DEFAULT 0;
+UPDATE sessions SET expires_at = MIN(expires_at, renewed_at + 1209600, created_at + 7776000);
 `,
 }
 

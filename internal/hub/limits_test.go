@@ -12,9 +12,10 @@ import (
 )
 
 // openStream opens /api/events on base and returns its lines.
-func openStream(t *testing.T, ctx context.Context, base string) (*http.Response, <-chan string) {
+func openStream(t *testing.T, ctx context.Context, base, cookie string) (*http.Response, <-chan string) {
 	t.Helper()
 	req, _ := http.NewRequestWithContext(ctx, "GET", base+"/api/events", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: cookie})
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -56,14 +57,14 @@ func TestEventStreamsAreCapped(t *testing.T) {
 	defer cancel()
 	var open []*http.Response
 	for range maxEventStreams {
-		resp, lines := openStream(t, ctx, ts.URL)
+		resp, lines := openStream(t, ctx, ts.URL, h.cookie)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("stream %d: status %d", len(open)+1, resp.StatusCode)
 		}
 		waitLine(t, lines, "data:", 3*time.Second)
 		open = append(open, resp)
 	}
-	over, _ := openStream(t, ctx, ts.URL)
+	over, _ := openStream(t, ctx, ts.URL, h.cookie)
 	if over.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("stream past the cap: status %d", over.StatusCode)
 	}
@@ -78,7 +79,7 @@ func TestEventStreamsAreCapped(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	again, _ := openStream(t, ctx, ts.URL)
+	again, _ := openStream(t, ctx, ts.URL, h.cookie)
 	if again.StatusCode != http.StatusOK {
 		t.Fatalf("stream after one closed: status %d", again.StatusCode)
 	}
@@ -105,7 +106,7 @@ func TestReadTimeoutSparesEventStreams(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, lines := openStream(t, ctx, base)
+	_, lines := openStream(t, ctx, base, h.cookie)
 	waitLine(t, lines, "data:", 3*time.Second)
 	time.Sleep(3 * srv.ReadTimeout)
 	h.do("POST", "/api/bridges", map[string]string{"name": "laptop"}, "")

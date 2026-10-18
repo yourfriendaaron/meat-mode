@@ -15,12 +15,13 @@ import (
 
 func TestSetupStatusReportsTheHubSide(t *testing.T) {
 	h := newLoginHarness(t, Config{
-		PublicURL: "https://meat-mode.example.com",
-		NtfyURL:   "https://ntfy.example.com",
+		PublicURL:    "https://meat-mode.example.com",
+		NtfyURL:      "https://ntfy.example.com",
+		PasswordHash: cheapHash("water the plants"),
 	})
-	got := decode[api.SetupStatus](t, h.do("GET", "/api/setup/status", "", ""))
+	got := decode[api.SetupStatus](t, h.do("GET", "/api/setup/status", "", h.login("water the plants").Value))
 	// The harness opens the app as localhost, which is allowed but is not the public address.
-	want := api.SetupStatus{Login: "none", HostMatches: false, PublicURL: "https://meat-mode.example.com", PushKeys: true, Ntfy: true, Time: h.now,
+	want := api.SetupStatus{Login: "environment", HostMatches: false, PublicURL: "https://meat-mode.example.com", PushKeys: true, Ntfy: true, Time: h.now,
 		PublicDNS: api.PublicDNS{State: api.DNSUnchecked}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
@@ -40,9 +41,11 @@ func TestSetupStatusHostMatch(t *testing.T) {
 		{"http://localhost:8080", "localhost:8080", true},
 		{"", "localhost:8080", false},
 	} {
-		h := newLoginHarness(t, Config{PublicURL: c.public, AllowedHosts: "meat-mode.example.com"})
+		h := newLoginHarness(t, Config{PublicURL: c.public, AllowedHosts: "meat-mode.example.com", PasswordHash: cheapHash("water the plants")})
+		cookie := h.login("water the plants")
 		req := httptest.NewRequest("GET", "/api/setup/status", nil)
 		req.Host = c.host
+		req.AddCookie(&http.Cookie{Name: cookie.Name, Value: cookie.Value})
 		w := httptest.NewRecorder()
 		h.srv.ServeHTTP(w, req)
 		if got := decode[api.SetupStatus](t, w).HostMatches; got != c.want {
@@ -53,13 +56,11 @@ func TestSetupStatusHostMatch(t *testing.T) {
 
 func TestSetupStatusLoginSource(t *testing.T) {
 	h := newLoginHarness(t, Config{})
-	if got := decode[api.SetupStatus](t, h.do("GET", "/api/setup/status", "", "")).Login; got != "none" {
-		t.Fatalf("no password: %q", got)
-	}
 	if err := h.st.SetPasswordHash(cheapHash("pw")); err != nil {
 		t.Fatal(err)
 	}
-	if got := decode[api.SetupStatus](t, h.do("GET", "/api/setup/status", "", "")).Login; got != "app" {
+	h.srv = h.server(Config{})
+	if got := decode[api.SetupStatus](t, h.do("GET", "/api/setup/status", "", h.login("pw").Value)).Login; got != "app" {
 		t.Fatalf("password set in the app: %q", got)
 	}
 	h.srv = h.server(Config{PasswordHash: cheapHash("env")})
@@ -85,6 +86,7 @@ func TestTestEventReachesTheEventStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/events", nil)
+	h.addCookie(req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

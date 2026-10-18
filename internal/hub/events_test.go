@@ -91,14 +91,3 @@ func TestEventStreamEndsWithItsSession(t *testing.T) {
 	streamEnds(t, lines)
 	heartbeats(t, kept, 2)
 }
-
-func TestEventStreamEndsWhenLoginTurnsOn(t *testing.T) {
-	h := newLoginHarness(t, Config{})
-	h.srv.heartbeat = 20 * time.Millisecond
-	ts := httptest.NewServer(h.srv)
-	t.Cleanup(ts.Close)
-	lines := openSessionStream(t, ts, "")
-	heartbeats(t, lines, 2)
-	h.srv.setLogin(newLogin(cheapHash("water the plants"), false))
-	streamEnds(t, lines)
-}

@@ -78,7 +78,8 @@ func TestUpgradedHubWithDataIsInUse(t *testing.T) {
 	seed(t, s)
 	// Back to the schema before hub settings existed.
 	_, err = s.DB().Exec(`DROP TABLE hub_settings; DROP TABLE personal_owners;
-		ALTER TABLE repos DROP COLUMN agents_allowed; DROP TABLE runs; PRAGMA user_version = 3`)
+		ALTER TABLE repos DROP COLUMN agents_allowed; DROP TABLE runs;
+		ALTER TABLE sessions DROP COLUMN verified_at; PRAGMA user_version = 3`)
 	must(t, err)
 	must(t, s.Close())
 
@@ -116,22 +117,20 @@ func TestNameAndTimeZone(t *testing.T) {
 	}
 }
 
-func TestPasswordHashAndTailscaleOnly(t *testing.T) {
+func TestPasswordHash(t *testing.T) {
 	s, _ := open(t)
 	if err := s.SetPasswordHash("hunter2"); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("plain password: %v", err)
 	}
 	phc := cheapHash("correct horse battery staple")
 	must(t, s.SetPasswordHash(phc))
-	must(t, s.SetTailscaleOnly(true))
 	h, _ := s.Settings()
-	if h.PasswordHash != phc || !h.TailscaleOnly {
+	if h.PasswordHash != phc {
 		t.Fatalf("settings: %+v", h)
 	}
 	must(t, s.SetPasswordHash(""))
-	must(t, s.SetTailscaleOnly(false))
 	h, _ = s.Settings()
-	if h.PasswordHash != "" || h.TailscaleOnly {
+	if h.PasswordHash != "" {
 		t.Fatalf("after clearing: %+v", h)
 	}
 }
