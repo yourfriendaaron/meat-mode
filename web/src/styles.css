@@ -1509,6 +1509,12 @@ kbd {
     display: grid;
     grid-template-columns: 232px minmax(0, 1fr) 380px;
   }
+  .page-view .shell {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+  .page-view .detail {
+    display: none;
+  }
 
   .sidebar {
     display: flex;

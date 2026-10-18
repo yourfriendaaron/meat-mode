@@ -404,6 +404,8 @@ function renderMain() {
   banner.hidden = !bannerBody;
   // Quick add belongs to the task views, not Settings or setup.
   $("#qa-form").hidden = isPage(S.view);
+  // Settings and setup have no task to show, so desktop drops the detail pane.
+  $("#app").classList.toggle("page-view", isPage(S.view));
   list.hidden = isPage(S.view);
   settings.hidden = S.view !== "settings";
   wizard.hidden = S.view !== "setup";

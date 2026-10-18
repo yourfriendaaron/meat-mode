@@ -349,3 +349,13 @@ test("Settings lists each machine's repos with a sync switch", async ({ page, hu
   expect(hub.posted.at(-1)).toMatchObject({ kind: "sync", bridge: "home", repo: "notes/journal", payload: { on: true } });
   await axe(page);
 });
+
+test("Settings has no detail pane; a task view brings it back", async ({ page, hub }) => {
+  void hub;
+  await openApp(page);
+  await expect(page.locator("#detail")).toBeVisible();
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  await expect(page.locator("#detail")).toBeHidden();
+  await page.getByRole("button", { name: /Everything/ }).click();
+  await expect(page.locator("#detail")).toBeVisible();
+});
