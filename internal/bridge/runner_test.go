@@ -532,3 +532,39 @@ func TestSaveAgentsKeepsOtherSettings(t *testing.T) {
 		t.Errorf("config = %+v", c)
 	}
 }
+
+func TestAgentWorktreeGoesWithTheBead(t *testing.T) {
+	t.Parallel()
+	w, dir, id := agentWorld(t)
+	keep := w.seed(dir, "Feed the cat")
+	b := w.agentBridge(true)
+	w.tick(b)
+	w.ask(b, "ask-1", id, "close")
+	w.ask(b, "ask-2", keep, "reply")
+	w.waitRun(b, id, settled)
+	w.waitRun(b, keep, settled)
+	wt := filepath.Join(w.state, "agents", "worktrees", "garden", id)
+	dirty := filepath.Join(w.state, "agents", "worktrees", "garden", keep)
+	if err := os.WriteFile(filepath.Join(dirty, "draft.txt"), []byte("Water the plants\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Both beads leave the set: the clean worktree and its merged branch
+	// go, the one with a new file stays.
+	b.Runner.Listed("garden", map[string]bool{})
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Errorf("clean worktree still there: %v", err)
+	}
+	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/*"); strings.Contains(out, id) || !strings.Contains(out, keep) {
+		t.Errorf("branches = %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(dirty, "draft.txt")); err != nil {
+		t.Errorf("the worktree with changes was removed: %v", err)
+	}
+	if rs := b.Runner.Reports(); len(rs) != 0 {
+		t.Errorf("runs of beads out of the set are still reported: %+v", rs)
+	}
+	if rec := runOf(b, id); rec.Count != 1 || rec.Session != "" {
+		t.Errorf("record after removal = %+v", rec)
+	}
+}
