@@ -453,7 +453,7 @@ func TestPushRoutes(t *testing.T) {
 
 func TestUnknownAPIRoutesAreJSON404(t *testing.T) {
 	h := newHarness(t, fstest.MapFS{"index.html": {Data: []byte("<p>app</p>")}}, false)
-	for _, p := range []string{"/api/nothing", "/bridge/v2/hello"} {
+	for _, p := range []string{"/api", "/api/nothing", "/bridge/v2/hello"} {
 		w := h.do("GET", p, nil, "")
 		h.expect(w, http.StatusNotFound)
 		if !strings.Contains(w.Header().Get("Content-Type"), "json") {

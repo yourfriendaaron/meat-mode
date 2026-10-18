@@ -3,6 +3,7 @@ package hub
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -258,6 +259,22 @@ func TestLogoutEndsTheSession(t *testing.T) {
 	}
 	if w := h.do("GET", "/api/state", "", other.Value); w.Code != http.StatusOK {
 		t.Errorf("another device after logout: %d, want 200", w.Code)
+	}
+}
+
+func TestLogoutClearsTheCookieWhenRemindersCannotBeDropped(t *testing.T) {
+	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
+	c := h.login("water the plants")
+	h.push.dropErr = errors.New("disk full")
+	w := h.do("POST", "/api/logout", "", c.Value)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("logout: %d %s, want 204", w.Code, w.Body)
+	}
+	if cleared := responseCookie(t, w); cleared.MaxAge >= 0 || cleared.Value != "" {
+		t.Errorf("logout cookie %+v, want it cleared", cleared)
+	}
+	if w := h.do("GET", "/api/state", "", c.Value); w.Code != http.StatusUnauthorized {
+		t.Errorf("state after logout: %d, want 401", w.Code)
 	}
 }
 

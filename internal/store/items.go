@@ -67,7 +67,7 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 	for _, r := range repos {
 		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in) VALUES (?, ?, ?, ?)
 			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in`,
-			bridge, r.Name, r.Personal, r.OptedIn); err != nil {
+			bridge, r.Name, r.Personal && r.Name == PersonalRepo, r.OptedIn); err != nil {
 			return err
 		}
 	}

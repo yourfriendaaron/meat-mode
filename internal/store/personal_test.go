@@ -351,3 +351,64 @@ func TestTransferDropsABeadsRepeat(t *testing.T) {
 		t.Fatalf("done %+v", a)
 	}
 }
+
+// A bridge's repo is the personal list only when it is named personal.
+func TestOnlyTheRepoNamedPersonalIsPersonal(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	must(t, s.ReplaceRepos("laptop", []api.Repo{
+		{Name: "projects/garden", Personal: true, OptedIn: true},
+		{Name: "personal", Personal: true, OptedIn: true},
+	}))
+	rows, err := s.DB().Query(`SELECT name, personal FROM repos WHERE bridge = 'laptop'`)
+	must(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		var personal bool
+		must(t, rows.Scan(&name, &personal))
+		if personal != (name == PersonalRepo) {
+			t.Errorf("repo %s personal = %v", name, personal)
+		}
+	}
+	must(t, rows.Err())
+}
+
+// A retry after the hub died between the add and its note writes the note
+// once; a plain retry adds none.
+func TestAddPersonalRetryRestoresALostNote(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	todo := api.PersonalTodo{ID: id1, Title: "Water the plants", Note: "The fern first"}
+	key, _, err := s.AddPersonal(todo, "laptop")
+	must(t, err)
+	notes := func() int {
+		return len(item(t, mustState(t, s), key).Comments)
+	}
+	if _, _, err := s.AddPersonal(todo, "laptop"); err != nil || notes() != 1 {
+		t.Fatalf("plain retry: %v, %d notes", err, notes())
+	}
+	_, err = s.db.Exec(`DELETE FROM actions WHERE kind = ?`, api.KindNote)
+	must(t, err)
+	_, err = s.db.Exec(`UPDATE items SET data = json_remove(data, '$.comments') WHERE bridge = ?`, HubBridge)
+	must(t, err)
+	if notes() != 0 {
+		t.Fatalf("note still there: %d", notes())
+	}
+	if k, created, err := s.AddPersonal(todo, "laptop"); err != nil || created || k != key || notes() != 1 {
+		t.Fatalf("retry = %q, %v, %v, %d notes", k, created, err, notes())
+	}
+	if _, _, err := s.AddPersonal(todo, "laptop"); err != nil || notes() != 1 {
+		t.Fatalf("second retry: %v, %d notes", err, notes())
+	}
+	// With the note lost and the item gone, a retry still answers.
+	_, err = s.db.Exec(`DELETE FROM actions WHERE kind = ?`, api.KindNote)
+	must(t, err)
+	_, err = s.db.Exec(`DELETE FROM items WHERE bridge = ?`, HubBridge)
+	must(t, err)
+	if k, _, err := s.AddPersonal(todo, "laptop"); err != nil || k != key {
+		t.Fatalf("retry of a deleted item = %q, %v", k, err)
+	}
+}

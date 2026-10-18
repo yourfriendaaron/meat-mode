@@ -9,7 +9,7 @@ import (
 const MaxRepoNameLen = 512
 
 // ValidSegment reports whether s can be one segment of a key: 1 to 128
-// characters, no slash or control character, not "." or "..", and no
+// bytes, no slash or control character, not "." or "..", and no
 // leading "-" (which a command line would read as a flag).
 func ValidSegment(s string) bool {
 	if s == "" || len(s) > 128 || s == "." || s == ".." || s[0] == '-' || !utf8.ValidString(s) {

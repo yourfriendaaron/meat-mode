@@ -301,3 +301,50 @@ func TestPollOverride(t *testing.T) {
 		t.Error("Poll should replace every interval")
 	}
 }
+
+// TestPairDoesNotSaveInsecureEnvOverride keeps a one-time environment opt-in
+// out of the saved config; only the flag, or the file itself, persists it.
+func TestPairDoesNotSaveInsecureEnvOverride(t *testing.T) {
+	t.Setenv("MEAT_MODE_ALLOW_INSECURE_HTTP", "true")
+	t.Setenv("MEAT_MODE_HUB_URL", "")
+	for _, c := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"env only", nil, false},
+		{"flag", []string{"--allow-insecure-http"}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			hub := fakehub.New(map[string]string{token: us})
+			defer hub.Close()
+			env, _, out := testEnv(t, fakeBD(t, "1.3.1"))
+			args := append([]string{"pair", hub.URL, token, "--no-service"}, c.args...)
+			if err := Main(context.Background(), args, env); err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+			saved, err := readConfigFile(env.Paths.Config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if saved.AllowInsecureHTTP != c.want {
+				t.Errorf("saved allowInsecureHTTP = %v, want %v", saved.AllowInsecureHTTP, c.want)
+			}
+		})
+	}
+}
+
+// The service does not inherit the shell, so pair refuses to install one
+// that could only reach the hub with this shell's opt-in to plain HTTP.
+func TestPairRefusesAServiceThatNeedsTheInsecureEnv(t *testing.T) {
+	t.Setenv("MEAT_MODE_ALLOW_INSECURE_HTTP", "true")
+	t.Setenv("MEAT_MODE_HUB_URL", "")
+	env, _, out := testEnv(t, fakeBD(t, "1.3.1"))
+	err := Main(context.Background(), []string{"pair", "http://hub.example.com", token}, env)
+	if err == nil || !strings.Contains(err.Error(), "--allow-insecure-http") {
+		t.Fatalf("pair = %v\n%s", err, out)
+	}
+	if _, err := os.Stat(env.Paths.Config); !os.IsNotExist(err) {
+		t.Errorf("config saved: %v", err)
+	}
+}

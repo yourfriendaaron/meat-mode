@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -121,7 +122,7 @@ func sessionOf(r *http.Request) *store.Session {
 func (s *Server) gate(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
 	p := r.URL.Path
 	l := s.currentLogin()
-	if l == nil || !strings.HasPrefix(p, "/api/") {
+	if l == nil || !isAPIPath(p) {
 		return r, true
 	}
 	switch p {
@@ -233,12 +234,36 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if s.push != nil {
+			// The session is already gone; a subscription left behind is
+			// pruned once its session is seen to have ended.
 			if err := s.push.DropSession(r.Context(), store.SessionID(c.Value)); err != nil {
-				s.storeError(w, r, err)
-				return
+				slog.Warn("could not drop the reminders of a logged-out session", "err", err)
 			}
 		}
 		s.setSessionCookie(w, "", -1)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// endOtherLogins ends the sessions of any password but the current one, and
+// every session with login off, with their reminders. Run calls it once at
+// start: a hash changed in the environment leaves the old sessions behind.
+func (s *Server) endOtherLogins(ctx context.Context) error {
+	tag := ""
+	if l := s.currentLogin(); l != nil {
+		tag = l.tag
+	}
+	ended, err := s.store.EndOtherLogins(tag)
+	if err != nil {
+		return err
+	}
+	if s.push != nil {
+		for _, id := range ended {
+			// The session is already gone, so prune catches what this misses.
+			if err := s.push.DropSession(ctx, id); err != nil {
+				slog.Warn("could not drop the reminders of a logged-out session", "err", err)
+			}
+		}
+	}
+	return nil
 }

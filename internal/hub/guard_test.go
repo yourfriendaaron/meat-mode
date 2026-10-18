@@ -171,3 +171,14 @@ func TestGuardBareBridgePathIsAPage(t *testing.T) {
 		t.Errorf("GET /bridge under a foreign Host = %d, want 421", w.Code)
 	}
 }
+
+func TestGuardBareAPIPathIsAPI(t *testing.T) {
+	s := guardServer(t, Config{})
+	w := guardReq{method: "GET", path: "/api", host: "attacker.example.net"}.send(s)
+	if w.Code != http.StatusMisdirectedRequest || !strings.Contains(w.Header().Get("Content-Type"), "json") {
+		t.Errorf("GET /api under a foreign Host = %d %q, want a JSON 421", w.Code, w.Header().Get("Content-Type"))
+	}
+	if w := (guardReq{method: "GET", path: "/api", host: "localhost", site: "cross-site"}).send(s); w.Code != http.StatusForbidden {
+		t.Errorf("GET /api from another site = %d, want 403", w.Code)
+	}
+}

@@ -38,14 +38,13 @@ func runHub(args []string) error {
 			notifier = n
 			return reg, nil
 		},
-		OnStart: func(ctx context.Context, st *store.Store) error {
-			cfg := hub.ConfigFromEnv()
+		OnStart: func(ctx context.Context, cfg hub.Config, st *store.Store) error {
 			s, err := reminders.New(st.DB(), stateItems{st}, notifier, reminders.SystemClock{}, cfg.PublicURL)
 			if err != nil {
 				return err
 			}
 			if v := os.Getenv("MEAT_MODE_REMINDER_INTERVAL"); v != "" {
-				// Undocumented: end-to-end tests check reminders every second.
+				// End-to-end tests check reminders every second.
 				d, err := time.ParseDuration(v)
 				if err != nil || d <= 0 {
 					return fmt.Errorf("MEAT_MODE_REMINDER_INTERVAL must be a positive duration, not %q", v)
