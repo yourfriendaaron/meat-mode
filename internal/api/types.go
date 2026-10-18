@@ -96,6 +96,9 @@ type Repeat struct {
 	// TimeZone is the IANA zone whose wall-clock time and date the rule
 	// keeps, so 8:30pm stays 8:30pm across daylight saving changes.
 	TimeZone string `json:"timeZone"`
+	// Until is the last date the series may land on, "YYYY-MM-DD" in
+	// TimeZone, inclusive. Empty means it repeats for good.
+	Until string `json:"until,omitempty"`
 	// Start is the occurrence the schedule counts from. The hub sets it
 	// from the due time whenever the rule or the due time is set; a client
 	// sends none.

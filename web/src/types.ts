@@ -84,6 +84,8 @@ export interface Repeat {
   fromDone?: boolean;
   /** IANA zone whose wall-clock time the rule keeps. */
   timeZone: string;
+  /** Last date the series may land on, "YYYY-MM-DD" in timeZone, inclusive. Left out, it repeats for good. */
+  until?: string;
   /** Set by the hub; a client sends none. */
   start?: string;
 }
