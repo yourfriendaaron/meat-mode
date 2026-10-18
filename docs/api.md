@@ -99,7 +99,7 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 | `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
-| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true}` (`repeat` on the personal list only; `ask` only where agents are allowed) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs). |
+| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true}` (`repeat` on the personal list only; `ask` only where agents are allowed) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs), and the provisional item shows a `working` run at once. |
 | `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list. |
 | `ask` | `key` | `{"text"?: "…"}` | wakes an agent on the item (see Agent runs). With `text`, appends it as a note first, as `note` does, in the same action. The item's `run` shows `working` at once; on a live run it counts the note in `queued` instead. |
 | `stop` | `key` | `{}` | ends the item's live run; `run` shows `stopped` with reason `stopped` at once |
@@ -201,7 +201,7 @@ While a run is `working` and its bridge has not been seen for 60 seconds, the hu
 
 #### Agent push
 
-When a run ends the hub sends one notification for it, through Web Push and ntfy as reminders go: `<agent> replied` (`waiting`), `<agent> finished` (`done`) or `<agent> stopped` with the reason in words (`stopped`). It sends one per run end, keyed on the run's `id` and state, never one per agent comment mid-run, and none for a run the user stopped or on an item the user closed. Its link opens the item, and the Reply action opens it at the note box: `/?item=<key>&reply=1`.
+When a run ends the hub sends one notification for it, through Web Push and ntfy as reminders go: `<agent> replied` (`waiting`), `<agent> finished` (`done`) or `<agent> stopped` with the reason in words (`stopped`). It sends one per run end, keyed on the run's `id` and state, never one per agent comment mid-run, and none for a run the user stopped or on an item the user closed (its latest done, dismiss or reopen since the run started is a done or dismiss). A run that ended more than an hour before the hub first sees it sends nothing, so a bridge's first sync does not bring a flood. Its link opens the item, and the Reply action opens it at the note box: `/?item=<key>&reply=1`.
 
 The Web Push payload is `{"title", "body", "url", "tag", "actions"?}`; `actions` is a list of `{"action", "title"}` where `action` is `reply`, `open` or `retry` (`retry` on `stopped` only), and the payload then also carries `"key"`, the item key. The service worker opens `url` for `open` and a tap on the notification, `/?item=<key>&reply=1` for `reply`, and for `retry` posts `{"kind": "ask", "key"}` as a new action. ntfy gets the same title, body and link, with Reply and Open as view actions.
 
