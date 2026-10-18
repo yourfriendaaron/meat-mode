@@ -9,17 +9,19 @@ Your personal list needs only the hub. You can stop after step 2 and use it on i
 
 You run the hub (step 1), then do the rest in the browser: the setup wizard sets the password, your name and time zone, reminders on each device, and pairs your agent machines (step 2).
 
-There are two supported ways to reach the hub, and both need a publicly trusted HTTPS certificate, which browsers require before they allow reminders (Web Push) or installing the app to the home screen:
+The hub can wake coding agents on your machines, so it belongs on your private network only, never on the internet. It always has a password as well. There are two supported ways to reach it, and both need a publicly trusted HTTPS certificate, which browsers require before they allow reminders (Web Push) or installing the app to the home screen:
 
-- **[Tailscale](https://tailscale.com)**, with no login. Who can reach the hub is the whole of its access control: on a tailnet that is your own signed-in devices, not everyone on your Wi-Fi. Tailscale also supplies the certificate. See [Expose it on your tailnet](#expose-it-on-your-tailnet).
-- **A reverse proxy** you already run (Caddy, nginx, Traefik, a NAS's built-in proxy), with a password. The hub asks for it before it shows or accepts anything. See [Behind a reverse proxy](#behind-a-reverse-proxy).
+- **[Tailscale](https://tailscale.com)**: a Tailscale Service, or Tailscale Serve on the hub host, forwarding to the hub on loopback. Only your own signed-in devices reach it, and Tailscale supplies the certificate. See [Expose it on your tailnet](#expose-it-on-your-tailnet).
+- **A reverse proxy on your LAN** (Caddy, nginx, Traefik, a NAS's built-in proxy) that only your home network reaches. See [Behind a reverse proxy](#behind-a-reverse-proxy).
 
-A hub with no password has no login and logs a warning saying so. That is safe only when nothing but you can reach it. Never publish a hub without a password to your LAN or the internet.
+Do not put the hub on the internet. That rules out Tailscale Funnel, Cloudflare Tunnel, a port forward on your router and a reverse proxy that answers from the internet. The hub refuses such requests and checks public DNS for its own name (see [Private network only](#private-network-only)), but those are a safety net, not a way to publish it.
+
+Publish the container's port on `127.0.0.1` (as in `compose.example.yaml`) or on the hub host's own tailnet address, never on all addresses (`0.0.0.0`, which is what a bare `-p 8080:8080` means).
 
 | Setup | Hub address the bridge uses |
 |---|---|
 | Hub and bridge on one machine | `http://127.0.0.1:8080` (plain HTTP is accepted on loopback only) |
-| Hub on another always-on host | its public address: `https://meat-mode.<your tailnet>.ts.net`, or the reverse proxy's `https://` address |
+| Hub on another always-on host | its `MEAT_MODE_PUBLIC_URL`: `https://meat-mode.<your tailnet>.ts.net`, or the LAN reverse proxy's `https://` address |
 
 Either way, your phone and other devices open the app at that same address.
 
@@ -51,7 +53,7 @@ On its first start the hub has no password, so it prints a one-time setup code i
 docker logs meat-mode          # or: docker compose logs meat-mode
 ```
 
-Look for the line `this hub has no password: open the app and set one with this setup code` and its `code=XXXX-XXXX-XXXX`. The same code is in the file `setup-code` in the data volume (`/data` in the container), for hosts such as a NAS where the log is easier to miss. The code works once and lasts an hour. Restart the hub for a new one. Wrong codes are limited hub-wide to 5 a minute, so if claiming keeps saying too many tries, restart the hub or set `MEAT_MODE_PASSWORD_HASH` instead.
+Until you set a password, the hub serves only that setup step: the app shows a form for the setup code and the new password, and nothing else. Look for the line `this hub has no password: open the app and set one with this setup code` and its `code=XXXX-XXXX-XXXX`. The same code is in the file `setup-code` in the data volume (`/data` in the container), for hosts such as a NAS where the log is easier to miss. The code works once and lasts an hour. Restart the hub for a new one. Wrong codes are limited hub-wide to 5 a minute, so if claiming keeps saying too many tries, restart the hub or set `MEAT_MODE_PASSWORD_HASH` instead.
 
 The data volume holds the database and the Web Push keys. Keep it on local storage: SQLite's write-ahead log does not work over NFS or SMB. If you bind-mount a host directory instead of a named volume, make it writable by user id 65532 (`chown 65532:65532 <dir>`); the hub says so and exits if it cannot write.
 
@@ -73,13 +75,18 @@ Then set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub. The hub ref
 
 Certificates are recorded in public Certificate Transparency logs, so the `ts.net` name is publicly visible, though only your tailnet can reach it. Keep anything private out of the Service and host names.
 
-Without a password, this path has no login, so do not also publish the port to your LAN or the internet. You can still set a password in step 2, and setup offers **No password, Tailscale only** to record that you keep the hub on your tailnet without one. To use a reverse proxy instead, or as well, set a password first (next section).
+Use `tailscale serve`, never `tailscale funnel`: Funnel puts the address on the internet. The hub refuses every request Funnel forwards, and refuses to start while public DNS gives its name a public address, which Funnel's names have for a few hours after Funnel is turned off. Open the address and set the password with the setup code (step 2).
 
 ### Behind a reverse proxy
 
-Use this when you already run a reverse proxy with a certificate, or want the app at your own domain. The hub then has a login: one password, one user.
+Use this when you already run a reverse proxy on your LAN, or want the app at your own domain inside your home network. The proxy must answer only on your LAN: the hub refuses a request that a proxy forwards from an internet address.
 
-**1. Set a password** before the proxy forwards to the hub. Until then, anyone who reaches it can read and change your list.
+Your own domain needs two things that keep it off the internet:
+
+- **DNS**: point the name at the proxy's private address, in your LAN's own DNS or in a public record that holds only that private address. The hub checks public DNS for its name, and a public address there stops it at start.
+- **The certificate**: get it with a DNS challenge (Caddy, Traefik, certbot and most NAS proxies support one). An HTTP challenge needs the name reachable from the internet.
+
+**1. Set a password** before the proxy forwards to the hub. Until then the hub serves only its setup step, and anyone who has the setup code could claim it.
 
 Open the app on the hub's loopback address, `http://127.0.0.1:8080`, in a browser on the hub host, or from your own computer through an SSH tunnel:
 
@@ -115,11 +122,11 @@ Start the hub and check the log: it says `login is on, with the password from th
 **4. Set `MEAT_MODE_PUBLIC_URL`** to the proxy's address, `https://meat-mode.example.com`: the address people open, exactly. The proxy must:
 
 - Pass the original `Host` header through. If it rewrites it, add the name the hub receives to `MEAT_MODE_ALLOWED_HOSTS`.
-- Send `X-Forwarded-Proto`.
+- Send `X-Forwarded-Proto`, and `X-Forwarded-For` with the client's address. Inside a container the hub sees only the container network as the peer, so that header is how it tells a LAN request from an internet one.
 - Not buffer responses from `/api/events`, the server-sent event stream that keeps the app current. The hub marks it unbuffered, which nginx honors; the nginx snippet turns buffering off for it as well.
 - Present a certificate that browsers trust, such as Let's Encrypt. Web Push and installing to the home screen do not work with a self-signed one.
 
-**Settings**, **Connection** checks all of this from the browser: that the address matches `MEAT_MODE_PUBLIC_URL` and the hub accepts it, that the page is a secure context, that live updates arrive at once (a buffering proxy holds them back), that the device and hub clocks agree, and that the hub has its reminder keys. Each problem comes with what to change.
+**Settings**, **Connection** checks all of this from the browser: that the address matches `MEAT_MODE_PUBLIC_URL` and the hub accepts it, that public DNS has no public address for the name, that the page is a secure context, that live updates arrive at once (a buffering proxy holds them back), that the device and hub clocks agree, and that the hub has its reminder keys. Each problem comes with what to change.
 
 **Caddy**
 
@@ -129,7 +136,7 @@ meat-mode.example.com {
 }
 ```
 
-Caddy passes `Host` unchanged, sets `X-Forwarded-Proto`, flushes event streams at once, and gets the certificate itself.
+Caddy passes `Host` unchanged, sets `X-Forwarded-Proto` and `X-Forwarded-For`, and flushes event streams at once. Give it a DNS challenge for the certificate (its `tls` directive with a `dns` provider), since the name is not reachable from the internet.
 
 **nginx** (certificate lines are your own, or managed by certbot)
 
@@ -175,7 +182,7 @@ services:
       - traefik.http.services.meat-mode.loadbalancer.server.port=8080
 ```
 
-Traefik passes `Host` by default and does not buffer responses unless you add a buffering middleware. Traefik reaches the container over a shared Docker network, so drop the `ports:` mapping when you use it.
+Traefik passes `Host` and sets `X-Forwarded-For` by default, and does not buffer responses unless you add a buffering middleware. Use a DNS challenge in the certificate resolver. Traefik reaches the container over a shared Docker network, so drop the `ports:` mapping when you use it.
 
 **NAS and other built-in proxies** (Synology reverse proxy, Unraid with Nginx Proxy Manager or SWAG, and similar). Create a host for `meat-mode.example.com` that forwards to the hub's address and port 8080, with a certificate for that name. Then look for: a switch to pass the `Host` header or "preserve host" (on); a "WebSocket" or custom-header section where you can add `X-Forwarded-Proto: https` if the proxy does not send it; and any option named buffering, caching or compression, which must be off for `/api/events`. Nginx Proxy Manager has an Advanced tab that takes the nginx lines above.
 
@@ -183,22 +190,34 @@ Traefik passes `Host` by default and does not buffer responses unless you add a 
 
 **Changing the password.** A password set in the app changes in **Settings**, **Password**; every other device is logged out. A password from the environment changes there: make a new hash, put it in place, and restart the hub. Every device is logged out and asks for the new password. **Settings** has **Log out** for one device, which also stops that device's reminders. Five wrong passwords within a minute lock logins for the whole hub for a short time.
 
+**Sessions** end 14 days after a device last used the hub, and 90 days after it logged in, whichever comes first. Adding a machine needs the password entered within the last 10 minutes; otherwise the app asks for it again in place.
+
 **A login at the proxy as well.** Authelia, basic auth or similar can sit in front of the hub for a second layer. Let `/bridge/` pass through it untouched, because bridges and `meat-mode add` send a bearer token, not a proxy login, and `/calendar/` too if you use the [calendar feed](#see-your-to-dos-in-a-calendar-app), because calendar apps cannot log in. `/healthz` is public.
+
+### Private network only
+
+The hub answers only on a private network, whichever way you reach it:
+
+- **It refuses requests from the internet.** A request that Tailscale Funnel forwards, one whose forwarding headers (`X-Forwarded-For`, `Forwarded`, `X-Real-IP` and the like) name an internet address, or one whose direct peer is an internet address, gets `403`. Private means loopback, the RFC 1918 ranges, the RFC 6598 shared range Tailscale uses, and IPv6 link-local and unique-local addresses. No setting turns this off.
+- **It checks public DNS for its own name**, at start and every hour. If public resolvers give `MEAT_MODE_PUBLIC_URL`'s name an internet address, the hub does not start, and says which addresses and how to fix it: turn Funnel off, or remove the public record. Found later, the address is logged and shown as a warning at the top of **Settings**.
+- **The bridge refuses a public hub.** Pairing and every connection check that the hub's address is private.
+
+If your LAN uses addresses outside those ranges, such as a global IPv6 prefix from your internet provider, list them in `MEAT_MODE_TRUSTED_NETWORKS`, as comma-separated CIDRs of at most `/16` for IPv4 and `/48` for IPv6, for the hub and, at pairing, for the bridge. The details are in [api.md](api.md#private-network-only).
 
 ### Host notes
 
 - **Unraid**: add a container from the image you built (or a registry you push it to), map `/data` to an appdata share on a cache or array disk (not a remote share), and set the variables from `.env.example` in the template.
-- **Synology and other NAS**: use Container Manager with Compose, and either install Tailscale on the NAS for HTTPS or use the NAS's reverse proxy (see above).
+- **Synology and other NAS**: use Container Manager with Compose, and either install Tailscale on the NAS for HTTPS or use the NAS's reverse proxy on your LAN (see above). Leave the NAS's own internet access features (QuickConnect, router port forwarding) off for the hub.
 - **Raspberry Pi**: the image builds for arm64 as is.
 
 ## 2. Set up in the app
 
-Open the app at its address. On a new hub the setup wizard opens by itself and walks through the rest. Skip any step you like: each one is also in **Settings**, and **Settings**, **Setup** has **Run setup again**.
+Open the app at its address. A hub with no password shows only the setup code form: enter the code from the hub's log (see step 1) and the new password, and this browser is logged in. On a new hub the setup wizard then opens by itself and walks through the rest. Skip any step you like: each one is also in **Settings**, and **Settings**, **Setup** has **Run setup again**.
 
 | Step | What it does |
 |---|---|
-| Connection check | Checks the address, the secure connection, live updates, the clocks and the reminder keys, and says what to fix (also **Settings**, **Connection**). |
-| Secure the hub | Sets the password with the setup code from the hub's log (see step 1), and logs this browser in. With a password hash in the environment, it says so and asks for nothing. On a hub kept on Tailscale, **No password, Tailscale only** stops it asking. |
+| Connection check | Checks the address, public DNS for the hub's name, the secure connection, live updates, the clocks and the reminder keys, and says what to fix. It also notes whether the request came through Tailscale Serve (also **Settings**, **Connection**). |
+| Secure the hub | Says where the password comes from: the one you set with the setup code before the app opened, or a hash in the environment. |
 | Name and time zone | Your name and time zone, kept on the hub (also **Settings**, **Name and time zone**). The name starts as `MEAT_MODE_USER` and the time zone as this device's. Agents' dates are read in this zone; see [Let agents add to your personal list](#let-agents-add-to-your-personal-list). |
 | Install the app | Puts Meat Mode on the home screen or dock: an **Install** button when a Chromium browser offers it, and the steps for Safari on an iPhone, iPad or Mac. On an iPhone or iPad, reminders work only in the Home Screen app, so install it there first. |
 | Reminders | Asks this device for permission to notify, then sends a test reminder to this device, and to ntfy when `MEAT_MODE_NTFY_URL` is set. If you block it, the step says how to allow it again. |
@@ -289,7 +308,7 @@ Calendar apps fetch the feed on their own schedule, from every hour to once a da
 
 Anyone with the address can read your to-dos' titles and due times, without a password: calendar apps cannot log in, so the address is the only key. Keep it private. To stop an address working, make a new one in **Settings**, which replaces it, or turn the feed off.
 
-Google Calendar and Outlook (Outlook.com, Outlook on the web and the new Outlook) fetch a subscribed feed from their own servers, not from your device. A hub reachable only on a private network, such as a tailnet, therefore feeds only calendar apps that fetch from your own devices, such as Apple Calendar or Thunderbird, and only while that device is on the network. A hub behind a public reverse proxy works with all of them.
+The feed works only for calendar apps on your own devices, such as Apple Calendar or Thunderbird, and only while that device is on your private network. Google Calendar and Outlook (Outlook.com, Outlook on the web and the new Outlook) fetch a subscribed feed from their own servers on the internet, which cannot reach the hub.
 
 ## Let agents add to your personal list
 
@@ -334,7 +353,16 @@ Only your own asks start an agent. The agent's notes and closes, and your other 
 
 ### Allow agents in a repo
 
-In the app, under **Settings**, **Agent machines**, each synced repo has an **Agents can work here** switch below its sync switch. It starts off. The machine keeps your choice in the `agents` map of its own `bridge.json`, and only takes it for a repo it found itself. No line in a repo can switch agents on. An ask in a repo with agents off still leaves your note, and the run shows stopped with the reason.
+Agents switch on at the agent machine, never from the app, so someone who takes over the hub cannot let agents into more repos. On that machine, run:
+
+```sh
+meat-mode bridge agents on projects/garden    # or the repo's folder, such as . inside it
+meat-mode bridge agents                       # lists the repos it finds, with their switch
+```
+
+`<repo>` is the name the app shows under the repo (`projects/garden`) or the path of its folder. The bridge keeps the switch in the `agents` map of its own `bridge.json`, takes it only for a repo it found itself, and the app shows it within one poll. No line in a repo can switch agents on.
+
+In the app, under **Settings**, **Agent machines**, a synced repo with agents off shows that command, with a **Copy** button. A repo with agents on shows an **Agents can work here** switch, which turns them off; `meat-mode bridge agents off <repo>` does the same on the machine. An ask in a repo with agents off still leaves your note, and the run shows stopped with the reason.
 
 The default agent is Claude Code, run as `claude -p` with `--permission-mode auto` and no permission prompts. **This is not a sandbox.** Auto mode lets the agent run commands as you, in your home folder, with your credentials: in testing it changed the global Git config and deleted a file in the home folder without asking. Its instructions tell it never to send, post, spend, delete or push for you, and to stop and ask in a note when it needs you, but nothing enforces that. Allow agents only in repos where you would let an agent work unattended. Before the agent even starts, the bridge creates a Git worktree of the repo for each task, which runs the repo's own Git hooks, such as `post-checkout`, as you.
 
@@ -377,7 +405,7 @@ A run shows **working** while the agent runs. When it ends, the task shows **don
 - **time limit**, **budget**: the run passed `MEAT_MODE_AGENT_TIMEOUT`, or spent `MEAT_MODE_AGENT_BUDGET_USD`.
 - **run limit**: the task has had its `MEAT_MODE_AGENT_RUNS_PER_TASK` runs.
 - **busy**: `MEAT_MODE_AGENT_CONCURRENT` runs were already live on the machine.
-- **not allowed**: agents are switched off for the repo.
+- **not allowed**: agents are switched off for the repo. Switch them on at its machine with `meat-mode bridge agents on <repo>`.
 - **no reply**: the agent ended without a note or closing the bead.
 - **failed**, **crashed**: the agent command did not start or reported an error, or its process died.
 - **restarted**: the bridge stopped while the agent ran. Stopping the bridge ends its runs; after a crash, the next start ends whatever the old one left running.
