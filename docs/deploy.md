@@ -183,7 +183,7 @@ Traefik passes `Host` by default and does not buffer responses unless you add a 
 
 **Changing the password.** A password set in the app changes in **Settings**, **Password**; every other device is logged out. A password from the environment changes there: make a new hash, put it in place, and restart the hub. Every device is logged out and asks for the new password. **Settings** has **Log out** for one device, which also stops that device's reminders. Five wrong passwords within a minute lock logins for the whole hub for a short time.
 
-**A login at the proxy as well.** Authelia, basic auth or similar can sit in front of the hub for a second layer. Let `/bridge/` pass through it untouched, because bridges and `meat-mode add` send a bearer token, not a proxy login. `/healthz` is public.
+**A login at the proxy as well.** Authelia, basic auth or similar can sit in front of the hub for a second layer. Let `/bridge/` pass through it untouched, because bridges and `meat-mode add` send a bearer token, not a proxy login, and `/calendar/` too if you use the [calendar feed](#see-your-to-dos-in-a-calendar-app), because calendar apps cannot log in. `/healthz` is public.
 
 ### Host notes
 
@@ -251,6 +251,29 @@ meat-mode.sync: true
 ```
 
 Only beads labelled `human` appear. Repos are told apart by their path, so `projects/garden` and `work/garden` both sync; the app shows the folder name, and the path where two names match.
+
+## Reminders
+
+Each device you turned reminders on for gets one at an item's due time, and at the end of a snooze. A repeating to-do reminds for each date it comes round to. Closed items never remind.
+
+**Early reminders.** In **Settings**, choose how long before the due time an early reminder comes, up to a week; it starts off. The early reminder says how long is left, and the reminder at the due time still comes. A to-do on your personal list can have its own lead time, or none, set when you edit it; agents' items use the one in Settings. Changing the lead time never sends an early reminder again for a due time it already reminded about. A snooze end has no early reminder.
+
+**Missed reminders.** When the hub could not remind on time, because it was stopped or could not run its checks, it catches up on the next check. One reminder that is more than 5 minutes late comes on its own and says how long ago it came due. Two or more come as one, "3 reminders came due while reminders were off", which opens the app. Each missed reminder is told once, however late.
+
+An item that was already past its due time when the hub first saw it, such as an old bead on a repo you just switched on, does not remind for that time.
+
+## See your to-dos in a calendar app
+
+The hub can publish your open to-dos that have a due date, from every list, as a calendar feed that calendar apps subscribe to. Each to-do shows as a 15-minute event at its due time, titled with the to-do, with a link that opens it in the app. A repeating to-do shows its next date only. The feed is read-only: changes made in the calendar app do not come back.
+
+1. In **Settings**, turn on the calendar feed. The app shows its address once.
+2. In your calendar app, add a calendar subscription from that address (Apple Calendar calls it a new calendar subscription; Thunderbird, a new calendar on the network).
+
+Calendar apps fetch the feed on their own schedule, from every hour to once a day (Outlook can take longer), so a change can take that long to show.
+
+Anyone with the address can read your to-dos' titles and due times, without a password: calendar apps cannot log in, so the address is the only key. Keep it private. To stop an address working, make a new one in **Settings**, which replaces it, or turn the feed off.
+
+Google Calendar and Outlook (Outlook.com, Outlook on the web and the new Outlook) fetch a subscribed feed from their own servers, not from your device. A hub reachable only on a private network, such as a tailnet, therefore feeds only calendar apps that fetch from your own devices, such as Apple Calendar or Thunderbird, and only while that device is on the network. A hub behind a public reverse proxy works with all of them.
 
 ## Let agents add to your personal list
 
