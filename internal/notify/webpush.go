@@ -359,13 +359,30 @@ func (r *Registry) notifyDevice(ctx context.Context, sessionID, endpoint string,
 	return len(subs) > 0, n > 0, err
 }
 
+// pushPayload is the JSON a service worker receives for m. actions and key
+// are there only when m has actions.
+func pushPayload(m Message) []byte {
+	type payload struct {
+		Title   string   `json:"title"`
+		Body    string   `json:"body"`
+		URL     string   `json:"url"`
+		Tag     string   `json:"tag"`
+		Actions []Action `json:"actions,omitempty"`
+		Key     string   `json:"key,omitempty"`
+	}
+	p := payload{Title: m.Title, Body: m.Body, URL: m.URL, Tag: m.Tag}
+	if len(m.Actions) > 0 {
+		p.Actions, p.Key = m.Actions, m.Key
+	}
+	b, _ := json.Marshal(p)
+	return b
+}
+
 // send pushes m to subs and reports how many the push service accepted. A
 // subscription it removes (gone, or not on a known push service) counts as
 // not delivered without being an error.
 func (r *Registry) send(ctx context.Context, subs []webpush.Subscription, m Message) (int, error) {
-	payload, _ := json.Marshal(map[string]string{
-		"title": m.Title, "body": m.Body, "url": m.URL, "tag": m.Tag,
-	})
+	payload := pushPayload(m)
 	opts := &webpush.Options{
 		Subscriber:      r.subject,
 		VAPIDPublicKey:  r.keys.PublicKey,

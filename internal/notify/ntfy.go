@@ -64,6 +64,9 @@ func (n *Ntfy) Notify(ctx context.Context, m Message) error {
 	if m.Tag != "" {
 		set("Tags", tagSafe(m.Tag))
 	}
+	if a := ntfyActions(m.Actions); a != "" {
+		set("Actions", a)
+	}
 	if n.Token != "" {
 		set("Authorization", "Bearer "+n.Token)
 	}
@@ -81,4 +84,28 @@ func (n *Ntfy) Notify(ctx context.Context, m Message) error {
 		return fmt.Errorf("ntfy: status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// ntfyActions writes a message's buttons as ntfy's Actions header: each one
+// with a URL becomes a view action. Retry has none, since ntfy cannot post
+// an action to the hub as the user, and is left out.
+func ntfyActions(as []Action) string {
+	var out []string
+	for _, a := range as {
+		if a.URL == "" {
+			continue
+		}
+		// ntfy splits on commas and semicolons outside quotes.
+		out = append(out, "view, "+ntfyQuote(a.Title)+", "+ntfyQuote(a.URL)+", clear=true")
+	}
+	return strings.Join(out, "; ")
+}
+
+// ntfyQuote quotes v when it holds a comma, semicolon or quote. ntfy's parser takes
+// a backslash-escaped quote inside quotes.
+func ntfyQuote(v string) string {
+	if !strings.ContainsAny(v, ",;\"'") {
+		return v
+	}
+	return `"` + strings.ReplaceAll(v, `"`, `\"`) + `"`
 }
