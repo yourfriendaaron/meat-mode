@@ -58,7 +58,7 @@ test("quick add reads an end date after the repeat, and holds back one before th
 
   const before = hub.posted.length;
   await input.pressSequentially("Stretch daily until today");
-  await expect(page.locator("#qa-chips .chip-red")).toHaveText("Ends before it starts");
+  await expect(page.locator("#qa-chips .chip-error")).toHaveText("Ends before it starts");
   await input.press("Enter");
   await expect(page.locator("#toast")).toContainText("The end date is before the first date.");
   await expect(input).toHaveValue("Stretch daily until today");

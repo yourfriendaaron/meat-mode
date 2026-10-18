@@ -5,28 +5,36 @@
 @import "./search.css";
 @import "./bulk.css";
 
+/* ---------- tokens ----------
+   The one token block: the three :root rules below. Palette tokens (--palette-*) hold
+   the theme's raw colours. Role tokens (--role-*) say what a colour means and point at
+   the palette. Every other rule uses role tokens only; test/unit/tokens.test.ts fails on
+   a palette token or a literal colour anywhere else. docs/design-tokens.md lists the roles. */
+
 :root {
-  --bg: #282a36;
-  --bg2: #21222c;
-  --raise: #343746;
-  --line: #44475a;
-  --hover: #353747;
-  --fg: #f8f8f2;
-  --dim: #6272a4;
-  --soft: #a9b1d6;
-  --purple: #bd93f9;
-  --pink: #ff79c6;
-  --cyan: #8be9fd;
-  --green: #50fa7b;
-  --orange: #ffb86c;
-  --red: #ff5555;
-  --yellow: #f1fa8c;
-  --on-accent: #282a36;
-  /* Surface for panes and the selected row: darker than --bg in Dracula, white in Alucard,
-     so coloured chip text keeps its contrast on it. */
-  --pane: #21222c;
-  --scrim: rgba(0, 0, 0, 0.55);
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --palette-bg: #282a36;
+  --palette-bg2: #21222c;
+  --palette-raise: #343746;
+  --palette-line: #44475a;
+  --palette-hover: #353747;
+  --palette-fg: #f8f8f2;
+  --palette-dim: #6272a4;
+  --palette-soft: #a9b1d6;
+  --palette-purple: #bd93f9;
+  --palette-pink: #ff79c6;
+  --palette-cyan: #8be9fd;
+  --palette-green: #50fa7b;
+  --palette-orange: #ffb86c;
+  --palette-red: #ff5555;
+  --palette-yellow: #f1fa8c;
+  --palette-on-accent: #282a36;
+  /* Surface for panes and the selected row: darker than --palette-bg in Dracula, white in
+     Alucard, so coloured chip text keeps its contrast on it. */
+  --palette-pane: #21222c;
+  --palette-scrim: rgba(0, 0, 0, 0.55);
+  --palette-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  /* How strongly a tint shows through: more on the dark ground, less on the light one. */
+  --palette-wash: 16%;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --radius: 10px;
@@ -39,26 +47,91 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #fffbeb;
-  --bg2: #f5f0dc;
-  --raise: #ffffff;
-  --line: #e2deca;
-  --hover: #efead3;
-  --fg: #1f1f1f;
-  --dim: #6c664b;
-  --soft: #4a4636;
-  --purple: #644ac9;
-  --pink: #a3144d;
-  --cyan: #036a96;
-  --green: #14710a;
-  --orange: #a34d14;
-  --red: #cb3a2a;
-  --yellow: #846e15;
-  --on-accent: #fffbeb;
-  --pane: #ffffff;
-  --scrim: rgba(31, 31, 31, 0.35);
-  --shadow: 0 10px 30px rgba(60, 50, 20, 0.18);
+  --palette-bg: #fffbeb;
+  --palette-bg2: #f5f0dc;
+  --palette-raise: #ffffff;
+  --palette-line: #e2deca;
+  --palette-hover: #efead3;
+  --palette-fg: #1f1f1f;
+  --palette-dim: #6c664b;
+  --palette-soft: #4a4636;
+  --palette-purple: #644ac9;
+  --palette-pink: #a3144d;
+  --palette-cyan: #036a96;
+  --palette-green: #14710a;
+  --palette-orange: #a34d14;
+  --palette-red: #cb3a2a;
+  --palette-yellow: #846e15;
+  --palette-on-accent: #fffbeb;
+  --palette-pane: #ffffff;
+  --palette-scrim: rgba(31, 31, 31, 0.35);
+  --palette-shadow: 0 10px 30px rgba(60, 50, 20, 0.18);
+  --palette-wash: 10%;
   color-scheme: light;
+}
+
+/* Roles. Both themes share these lines; each resolves against the palette of the theme
+   in force on the root element. */
+:root {
+  /* Surfaces and text. */
+  --role-bg: var(--palette-bg);
+  --role-sunk: var(--palette-bg2);
+  --role-raise: var(--palette-raise);
+  --role-pane: var(--palette-pane);
+  --role-hover: var(--palette-hover);
+  --role-line: var(--palette-line);
+  --role-fg: var(--palette-fg);
+  --role-soft: var(--palette-soft);
+  --role-dim: var(--palette-dim);
+  --role-on-accent: var(--palette-on-accent);
+  --role-scrim: var(--palette-scrim);
+  --role-shadow: var(--palette-shadow);
+
+  /* Who said it. Pink belongs to the agent and nothing else. */
+  --role-agent: var(--palette-pink);
+  --role-agent-action: var(--palette-pink);
+  --role-agent-action-fg: var(--palette-on-accent);
+  --role-you: var(--palette-cyan);
+
+  /* Actions and what is new. */
+  --role-action: var(--palette-purple);
+  --role-focus: var(--palette-purple);
+  --role-new-tint: color-mix(in srgb, var(--palette-purple) 9%, transparent);
+  --role-danger: var(--palette-red);
+
+  /* Time and outcome. */
+  --role-done: var(--palette-green);
+  --role-soon: var(--palette-green);
+  --role-date: var(--palette-purple);
+  --role-due: var(--palette-orange);
+  --role-overdue: var(--palette-red);
+  --role-stopped: var(--palette-red);
+  --role-error: var(--palette-red);
+  --role-priority: var(--palette-yellow);
+  --role-urgent: var(--palette-red);
+
+  /* Agent run states: an edge (and the state's line of text) plus a tint for the surface. */
+  --role-run-working-edge: var(--palette-pink);
+  --role-run-working-tint: color-mix(in srgb, var(--palette-pink) calc(var(--palette-wash) * 0.45), transparent);
+  --role-run-waiting-edge: var(--palette-pink);
+  --role-run-waiting-tint: color-mix(in srgb, var(--palette-pink) calc(var(--palette-wash) * 0.9), transparent);
+  --role-run-done-edge: var(--palette-green);
+  --role-run-done-tint: color-mix(in srgb, var(--palette-green) calc(var(--palette-wash) * 0.6), transparent);
+  --role-run-stopped-edge: var(--palette-red);
+  --role-run-stopped-tint: color-mix(in srgb, var(--palette-red) calc(var(--palette-wash) * 0.9), transparent);
+
+  /* Quick add: what the parser read out of the typed text. */
+  --role-hl-date: color-mix(in srgb, var(--palette-purple) 28%, transparent);
+  --role-hl-list: color-mix(in srgb, var(--palette-cyan) 28%, transparent);
+  --role-hl-repeat: color-mix(in srgb, var(--palette-green) 28%, transparent);
+
+  /* Repo dots: tell lists apart. No pink, so no repo reads as an agent. */
+  --role-repo-0: var(--palette-purple);
+  --role-repo-1: var(--palette-cyan);
+  --role-repo-2: var(--palette-green);
+  --role-repo-3: var(--palette-orange);
+  --role-repo-4: var(--palette-dim);
+  --role-repo-5: var(--palette-yellow);
 }
 
 *,
@@ -75,8 +148,8 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--role-bg);
+  color: var(--role-fg);
   font-family: var(--font);
   font-size: 15px;
   line-height: 1.4;
@@ -100,7 +173,7 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid var(--purple);
+  outline: 2px solid var(--role-focus);
   outline-offset: 2px;
 }
 
@@ -134,7 +207,7 @@ h3 {
 }
 
 .muted {
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .small {
   font-size: 13px;
@@ -159,26 +232,26 @@ kbd {
   min-height: 36px;
   padding: 6px 14px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--raise);
-  color: var(--fg);
+  border: 1px solid var(--role-line);
+  background: var(--role-raise);
+  color: var(--role-fg);
   font-weight: 500;
 }
 .btn:hover {
-  border-color: var(--purple);
+  border-color: var(--role-action);
 }
 .btn-primary {
-  background: var(--purple);
-  border-color: var(--purple);
-  color: var(--on-accent);
+  background: var(--role-action);
+  border-color: var(--role-action);
+  color: var(--role-on-accent);
   font-weight: 600;
 }
 .btn-primary:hover {
   filter: brightness(1.08);
 }
 .btn-danger {
-  border-color: var(--red);
-  color: var(--red);
+  border-color: var(--role-danger);
+  color: var(--role-danger);
   background: transparent;
 }
 .btn-ghost {
@@ -205,12 +278,12 @@ kbd {
   border-radius: 8px;
   border: 0;
   background: transparent;
-  color: var(--soft);
+  color: var(--role-soft);
   flex: none;
 }
 .icon-btn:hover {
-  background: var(--hover);
-  color: var(--fg);
+  background: var(--role-hover);
+  color: var(--role-fg);
 }
 .link-btn {
   display: inline-flex;
@@ -218,12 +291,12 @@ kbd {
   gap: 6px;
   border: 0;
   background: transparent;
-  color: var(--soft);
+  color: var(--role-soft);
   padding: 6px 4px;
   font-size: 13px;
 }
 .link-btn:hover {
-  color: var(--fg);
+  color: var(--role-fg);
 }
 
 /* ---------- app frame (phone first) ---------- */
@@ -277,7 +350,7 @@ kbd {
 }
 
 .empty {
-  color: var(--soft);
+  color: var(--role-soft);
   padding: 32px 16px;
   text-align: center;
 }
@@ -291,22 +364,22 @@ kbd {
   padding: 4px 12px;
   min-height: 30px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-line);
   background: transparent;
   font-size: 13px;
   white-space: nowrap;
 }
 .sync-pill:hover {
-  border-color: var(--purple);
+  border-color: var(--role-action);
 }
 .pill-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--orange);
+  background: var(--role-due);
 }
-.sync-pill[data-tone="green"] .pill-dot {
-  background: var(--green);
+.sync-pill[data-tone="synced"] .pill-dot {
+  background: var(--role-done);
 }
 
 .popover {
@@ -317,10 +390,10 @@ kbd {
   right: 12px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--pane);
-  border: 1px solid var(--line);
+  background: var(--role-pane);
+  border: 1px solid var(--role-line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--role-shadow);
   padding: 12px 14px;
 }
 .pop-head {
@@ -343,21 +416,21 @@ kbd {
   flex-direction: column;
   gap: 2px;
   padding: 8px 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--role-line);
 }
 .act-kind {
   font-weight: 600;
 }
 .act-state {
   font-size: 12px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .act-applied .act-what {
   text-decoration: line-through;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .act-failed .act-state {
-  color: var(--red);
+  color: var(--role-error);
 }
 
 /* ---------- browse chips (phone) ---------- */
@@ -380,14 +453,14 @@ kbd {
   min-height: 32px;
   padding: 4px 12px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-line);
   background: transparent;
   font-size: 13px;
 }
 .bchip[aria-current="page"] {
-  background: var(--purple);
-  border-color: var(--purple);
-  color: var(--on-accent);
+  background: var(--role-action);
+  border-color: var(--role-action);
+  color: var(--role-on-accent);
 }
 
 /* ---------- quick add ---------- */
@@ -408,10 +481,10 @@ kbd {
   max-height: var(--kb-room, none);
   overflow-y: auto;
   padding: 16px calc(16px + var(--safe-right)) calc(16px + var(--kb-safe-bottom, var(--safe-bottom))) calc(16px + var(--safe-left));
-  background: var(--pane);
-  border-top: 1px solid var(--line);
+  background: var(--role-pane);
+  border-top: 1px solid var(--role-line);
   border-radius: 16px 16px 0 0;
-  box-shadow: var(--shadow);
+  box-shadow: var(--role-shadow);
 }
 .qa-head {
   display: flex;
@@ -423,12 +496,12 @@ kbd {
 }
 .qa-field {
   position: relative;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: var(--role-bg);
+  border: 1px solid var(--role-line);
   border-radius: 8px;
 }
 .qa-field:focus-within {
-  border-color: var(--purple);
+  border-color: var(--role-focus);
 }
 .qa-backdrop,
 .qa-field input {
@@ -451,13 +524,13 @@ kbd {
 .qa-backdrop mark {
   color: transparent;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--purple) 28%, transparent);
+  background: var(--role-hl-date);
 }
 .qa-backdrop mark.hl-list {
-  background: color-mix(in srgb, var(--cyan) 28%, transparent);
+  background: var(--role-hl-list);
 }
 .qa-backdrop mark.hl-repeat {
-  background: color-mix(in srgb, var(--green) 28%, transparent);
+  background: var(--role-hl-repeat);
 }
 .qa-field input {
   position: relative;
@@ -466,7 +539,7 @@ kbd {
   outline: none;
 }
 .qa-field input::placeholder {
-  color: var(--soft);
+  color: var(--role-soft);
   opacity: 0.85;
 }
 .qa-meta {
@@ -484,8 +557,8 @@ kbd {
   max-width: 50%;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--raise);
+  border: 1px solid var(--role-line);
+  background: var(--role-raise);
 }
 
 /* ---------- day load ---------- */
@@ -511,10 +584,10 @@ kbd {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .group-pastdue .group-head h2 {
-  color: var(--red);
+  color: var(--role-overdue);
 }
 .group-count {
   font-weight: 500;
@@ -528,7 +601,7 @@ kbd {
 .row {
   position: relative;
   overflow: hidden;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--role-line);
 }
 .row-fg {
   position: relative;
@@ -536,7 +609,7 @@ kbd {
   align-items: flex-start;
   gap: 12px;
   padding: 10px 16px;
-  background: var(--bg);
+  background: var(--role-bg);
   touch-action: pan-y;
   transition: transform 0.18s ease;
 }
@@ -544,12 +617,12 @@ kbd {
   transition: none;
 }
 .row:hover .row-fg {
-  background: var(--hover);
+  background: var(--role-hover);
 }
 .row.is-selected .row-fg,
 .row.is-open .row-fg {
-  background: var(--pane);
-  box-shadow: inset 3px 0 0 var(--purple);
+  background: var(--role-pane);
+  box-shadow: inset 3px 0 0 var(--role-action);
 }
 .under {
   position: absolute;
@@ -559,16 +632,16 @@ kbd {
   justify-content: space-between;
   padding: 0 20px;
   font-weight: 700;
-  color: var(--on-accent);
+  color: var(--role-on-accent);
 }
 .row.swiping .under {
   display: flex;
 }
 .row[data-swipe="done"] .under {
-  background: var(--green);
+  background: var(--role-done);
 }
 .row[data-swipe="snooze"] .under {
-  background: var(--orange);
+  background: var(--role-due);
 }
 .row[data-swipe="done"] .u-snooze,
 .row[data-swipe="snooze"] .u-done {
@@ -587,7 +660,7 @@ kbd {
   padding: 0;
   flex: none;
   border-radius: 50%;
-  border: 2px solid var(--soft);
+  border: 2px solid var(--role-soft);
   background: transparent;
   color: transparent;
   position: relative;
@@ -604,17 +677,17 @@ kbd {
   stroke-width: 3;
 }
 .check:hover {
-  border-color: var(--green);
-  color: var(--green);
+  border-color: var(--role-done);
+  color: var(--role-done);
 }
 .check-agent {
   border-radius: 5px;
-  border-color: var(--pink);
+  border-color: var(--role-agent);
 }
 .check.checked {
-  background: var(--green);
-  border-color: var(--green);
-  color: var(--on-accent);
+  background: var(--role-done);
+  border-color: var(--role-done);
+  color: var(--role-on-accent);
 }
 
 .row-body {
@@ -634,16 +707,16 @@ kbd {
 }
 .row.is-done .row-title {
   text-decoration: line-through;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .row-pending {
   font-size: 12px;
-  color: var(--soft);
+  color: var(--role-soft);
   font-style: italic;
 }
 .row-error {
   font-size: 12px;
-  color: var(--red);
+  color: var(--role-error);
 }
 
 /* ---------- chips ---------- */
@@ -665,48 +738,47 @@ kbd {
   font-size: 12px;
   line-height: 18px;
   white-space: nowrap;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .chip svg {
   width: 12px;
   height: 12px;
 }
-.chip-red {
-  color: var(--red);
+.chip-overdue {
+  color: var(--role-overdue);
 }
-.chip-green {
-  color: var(--green);
+.chip-error {
+  color: var(--role-error);
 }
-.chip-purple {
-  color: var(--purple);
+.chip-soon {
+  color: var(--role-soon);
 }
-.chip-orange {
-  color: var(--orange);
+.chip-date {
+  color: var(--role-date);
 }
-.chip-pink {
-  color: var(--pink);
-  font-weight: 600;
+.chip-snoozed {
+  color: var(--role-due);
 }
-.chip-cyan {
-  color: var(--cyan);
+.chip-new {
+  color: var(--role-action);
   font-weight: 600;
 }
 .chip-repeat {
-  color: var(--soft);
-  border-color: var(--line);
+  color: var(--role-soft);
+  border-color: var(--role-line);
 }
 .chip-list,
 .chip-agent,
 .chip-notes,
 .chip-checklist {
-  border-color: var(--line);
+  border-color: var(--role-line);
 }
 .chip-high {
-  color: var(--yellow);
+  color: var(--role-priority);
   font-weight: 600;
 }
 .chip-urgent {
-  color: var(--red);
+  color: var(--role-urgent);
   font-weight: 700;
 }
 .chip-agent {
@@ -719,27 +791,27 @@ kbd {
   height: 8px;
   border-radius: 50%;
   flex: none;
-  background: var(--purple);
+  background: var(--role-repo-0);
 }
 .dot.c1 {
-  background: var(--cyan);
+  background: var(--role-repo-1);
 }
 .dot.c2 {
-  background: var(--green);
+  background: var(--role-repo-2);
 }
 .dot.c3 {
-  background: var(--orange);
+  background: var(--role-repo-3);
 }
 .dot.c4 {
-  background: var(--pink);
+  background: var(--role-repo-4);
 }
 .dot.c5 {
-  background: var(--yellow);
+  background: var(--role-repo-5);
 }
 .bead-id {
   font-family: var(--mono);
   font-size: 12px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 
 /* ---------- detail (phone: bottom sheet) ---------- */
@@ -753,10 +825,10 @@ kbd {
   max-height: min(88%, calc(var(--kb-room, 100%) - 8px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--pane);
-  border-top: 1px solid var(--line);
+  background: var(--role-pane);
+  border-top: 1px solid var(--role-line);
   border-radius: 16px 16px 0 0;
-  box-shadow: var(--shadow);
+  box-shadow: var(--role-shadow);
   transform: translateY(105%);
   visibility: hidden;
   transition:
@@ -781,7 +853,7 @@ kbd {
   width: 40px;
   height: 4px;
   border-radius: 2px;
-  background: var(--line);
+  background: var(--role-line);
   align-self: center;
 }
 /* The head stays at the top of the scrolling sheet or pane, so Close stays in
@@ -796,7 +868,7 @@ kbd {
   gap: 12px;
   margin: -10px calc(-18px - var(--safe-right)) 0 calc(-18px - var(--safe-left));
   padding: 10px calc(18px + var(--safe-right)) 6px calc(18px + var(--safe-left));
-  background: var(--pane);
+  background: var(--role-pane);
 }
 .d-head .check {
   margin-top: 4px;
@@ -811,20 +883,20 @@ kbd {
   margin: 0;
 }
 .why {
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-line);
   border-radius: var(--radius);
   padding: 10px 12px;
-  background: var(--bg);
+  background: var(--role-bg);
 }
 .why-agent {
-  border-left: 3px solid var(--pink);
+  border-left: 3px solid var(--role-agent);
 }
 .why-label {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--soft);
+  color: var(--role-soft);
   margin-bottom: 4px;
 }
 .why p {
@@ -850,7 +922,7 @@ kbd {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 /* Two even columns and even rows, whatever the labels' lengths. */
 .snooze-grid {
@@ -868,16 +940,16 @@ kbd {
   gap: 1px;
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-line);
   background: transparent;
   text-align: left;
 }
 .snz:hover {
-  border-color: var(--orange);
+  border-color: var(--role-due);
 }
 .snz-hint {
   font-size: 12px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .snooze-pick {
   display: flex;
@@ -896,8 +968,8 @@ kbd {
   min-height: 36px;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
 }
 .notes {
   list-style: none;
@@ -909,25 +981,25 @@ kbd {
 }
 .note {
   padding: 6px 10px;
-  border-left: 3px solid var(--pink);
+  border-left: 3px solid var(--role-agent);
   border-radius: 0 6px 6px 0;
 }
 .note-own {
-  border-left-color: var(--cyan);
+  border-left-color: var(--role-you);
 }
 .note-unread {
-  background: color-mix(in srgb, var(--cyan) 9%, transparent);
+  background: var(--role-new-tint);
 }
 .note-head {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .note-author {
   font-weight: 700;
-  color: var(--fg);
+  color: var(--role-fg);
 }
 .note p {
   margin: 2px 0 0;
@@ -936,7 +1008,7 @@ kbd {
 }
 .note-label {
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .d-section textarea {
   width: 100%;
@@ -944,8 +1016,8 @@ kbd {
   resize: vertical;
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
   font-size: 16px;
 }
 .d-section > .btn {
@@ -972,7 +1044,7 @@ kbd {
 }
 .edit-form label {
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
   margin-top: 4px;
 }
 .edit-form input,
@@ -985,8 +1057,8 @@ kbd {
   min-height: 36px;
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
   font-size: 16px;
 }
 .edit-form textarea,
@@ -1007,7 +1079,7 @@ kbd {
   flex-direction: column;
   gap: 6px;
   padding-left: 12px;
-  border-left: 2px solid var(--line);
+  border-left: 2px solid var(--role-line);
 }
 .repeat-opts .pick-row {
   align-items: center;
@@ -1033,7 +1105,7 @@ kbd {
   width: 100%;
   padding: 0;
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .edit-form .wd,
 .edit-form .check-row {
@@ -1043,7 +1115,7 @@ kbd {
   margin: 0;
   min-height: 36px;
   font-size: 15px;
-  color: var(--fg);
+  color: var(--role-fg);
 }
 .repeat-opts .small {
   margin: 0;
@@ -1052,13 +1124,13 @@ kbd {
 .snooze-type-now {
   margin: 0;
   font-size: 13px;
-  color: var(--purple);
+  color: var(--role-date);
 }
 .snooze-type-now:empty {
   display: none;
 }
 .snooze-pick:has(input[aria-invalid="true"]) .snooze-type-now {
-  color: var(--red);
+  color: var(--role-error);
 }
 .edit-form .row-error {
   margin: 0;
@@ -1084,7 +1156,7 @@ kbd {
   height: 18px;
   margin: 0;
   flex: none;
-  accent-color: var(--purple);
+  accent-color: var(--role-action);
 }
 .ck label {
   flex: 1;
@@ -1093,7 +1165,7 @@ kbd {
   cursor: pointer;
 }
 .ck-done label {
-  color: var(--soft);
+  color: var(--role-soft);
   text-decoration: line-through;
 }
 .note-tools {
@@ -1123,7 +1195,7 @@ kbd {
   position: fixed;
   inset: 0;
   z-index: 35;
-  background: var(--scrim);
+  background: var(--role-scrim);
 }
 .dialog-wrap {
   position: fixed;
@@ -1139,10 +1211,10 @@ kbd {
   pointer-events: auto;
   width: 100%;
   max-width: 440px;
-  background: var(--pane);
-  border: 1px solid var(--line);
+  background: var(--role-pane);
+  border: 1px solid var(--role-line);
   border-radius: 16px 16px 0 0;
-  box-shadow: var(--shadow);
+  box-shadow: var(--role-shadow);
   max-height: var(--kb-room, none);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1175,9 +1247,9 @@ kbd {
   max-width: 100%;
   padding: 8px 8px 8px 14px;
   border-radius: 10px;
-  background: var(--pane);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  background: var(--role-pane);
+  border: 1px solid var(--role-line);
+  box-shadow: var(--role-shadow);
 }
 .toast > span {
   overflow: hidden;
@@ -1186,8 +1258,8 @@ kbd {
   min-width: 0;
 }
 .toast-undo {
-  border-color: var(--purple);
-  color: var(--purple);
+  border-color: var(--role-action);
+  color: var(--role-action);
   background: transparent;
   flex: none;
 }
@@ -1203,9 +1275,9 @@ kbd {
   place-items: center;
   border-radius: 50%;
   border: 0;
-  background: var(--purple);
-  color: var(--on-accent);
-  box-shadow: var(--shadow);
+  background: var(--role-action);
+  color: var(--role-on-accent);
+  box-shadow: var(--role-shadow);
 }
 .fab svg {
   width: 26px;
@@ -1222,8 +1294,8 @@ kbd {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
-  background: var(--bg2);
-  border-top: 1px solid var(--line);
+  background: var(--role-sunk);
+  border-top: 1px solid var(--role-line);
 }
 .tab {
   position: relative;
@@ -1235,7 +1307,7 @@ kbd {
   height: var(--tabbar-h);
   border: 0;
   background: transparent;
-  color: var(--soft);
+  color: var(--role-soft);
   font-size: 11px;
 }
 .tab svg {
@@ -1243,7 +1315,7 @@ kbd {
   height: 22px;
 }
 .tab[aria-current="page"] {
-  color: var(--purple);
+  color: var(--role-action);
   font-weight: 700;
 }
 .tab-badge {
@@ -1254,8 +1326,8 @@ kbd {
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: var(--pink);
-  color: var(--on-accent);
+  background: var(--role-action);
+  color: var(--role-on-accent);
   font-size: 11px;
   font-weight: 700;
   line-height: 18px;
@@ -1274,7 +1346,7 @@ kbd {
   align-items: flex-start;
   gap: 10px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--role-line);
 }
 .set-section h2 {
   font-size: 16px;
@@ -1295,7 +1367,7 @@ kbd {
   gap: 12px;
   flex-wrap: wrap;
   padding: 8px 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--role-line);
 }
 .m-name {
   font-weight: 600;
@@ -1324,8 +1396,8 @@ kbd {
   height: 26px;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--raise);
+  border: 1px solid var(--role-line);
+  background: var(--role-raise);
 }
 .switch-knob {
   position: absolute;
@@ -1334,16 +1406,16 @@ kbd {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--soft);
+  background: var(--role-soft);
   transition: transform 0.15s;
 }
 .switch[aria-checked="true"] {
-  background: var(--green);
-  border-color: var(--green);
+  background: var(--role-done);
+  border-color: var(--role-done);
 }
 .switch[aria-checked="true"] .switch-knob {
   transform: translateX(18px);
-  background: var(--bg);
+  background: var(--role-bg);
 }
 .m-actions {
   display: flex;
@@ -1359,7 +1431,7 @@ kbd {
 }
 .add-machine label {
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .token-box {
   display: flex;
@@ -1368,7 +1440,7 @@ kbd {
   gap: 8px;
   width: 100%;
   padding: 12px;
-  border: 1px solid var(--purple);
+  border: 1px solid var(--role-action);
   border-radius: var(--radius);
 }
 .cmd {
@@ -1378,7 +1450,7 @@ kbd {
   font-size: 13px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: var(--bg2);
+  background: var(--role-sunk);
   overflow-wrap: anywhere;
   user-select: all;
 }
@@ -1393,10 +1465,10 @@ kbd {
   gap: 8px 12px;
   margin: 4px calc(16px + var(--safe-right)) 8px calc(16px + var(--safe-left));
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--purple);
+  border: 1px solid var(--role-line);
+  border-left: 3px solid var(--role-action);
   border-radius: var(--radius);
-  background: var(--raise);
+  background: var(--role-raise);
 }
 .setup-banner[hidden] {
   display: none;
@@ -1432,12 +1504,12 @@ kbd {
 .wiz-bar {
   height: 4px;
   border-radius: 2px;
-  background: var(--line);
+  background: var(--role-line);
   overflow: hidden;
 }
 .wiz-bar-fill {
   height: 100%;
-  background: var(--purple);
+  background: var(--role-action);
 }
 .wiz-step {
   display: flex;
@@ -1471,7 +1543,7 @@ kbd {
   align-items: baseline;
   column-gap: 10px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--role-line);
 }
 .wiz-outcome {
   min-width: 80px;
@@ -1479,11 +1551,11 @@ kbd {
   font-weight: 600;
 }
 .wiz-done {
-  color: var(--green);
+  color: var(--role-done);
 }
 .wiz-skipped,
 .wiz-open {
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .wiz-summary .link-btn {
   grid-column: 2;
@@ -1528,19 +1600,19 @@ kbd {
     counter-increment: wiz;
     padding: 6px 8px;
     border-radius: 6px;
-    color: var(--soft);
+    color: var(--role-soft);
   }
   .wiz-steps li::before {
     content: counter(wiz) ". ";
   }
   .wiz-steps li.current {
-    background: var(--hover);
-    color: var(--fg);
+    background: var(--role-hover);
+    color: var(--role-fg);
     font-weight: 600;
   }
   .wiz-steps li.done::after {
     content: " \2713";
-    color: var(--green);
+    color: var(--role-done);
   }
 }
 
@@ -1556,14 +1628,14 @@ kbd {
 .pw-form label {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .pw-form input:not(.sr) {
   min-height: 40px;
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
 }
 .pw-form .btn {
   align-self: flex-start;
@@ -1575,10 +1647,10 @@ kbd {
 }
 .pw-error {
   font-size: 13px;
-  color: var(--red);
+  color: var(--role-error);
 }
 .pw-ok {
-  color: var(--green);
+  color: var(--role-done);
 }
 .pw-error:focus,
 .pw-ok:focus {
@@ -1606,14 +1678,14 @@ kbd {
 }
 .set-field label {
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .set-field select {
   min-height: 36px;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
 }
 .profile-form {
   display: flex;
@@ -1624,14 +1696,14 @@ kbd {
 }
 .profile-form label {
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .profile-form input {
   min-height: 36px;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
 }
 .profile-form .small {
   margin: 0 0 8px;
@@ -1648,7 +1720,7 @@ kbd {
   display: flex;
   gap: 4px 12px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--role-line);
 }
 .conn > div {
   flex: 1;
@@ -1664,17 +1736,17 @@ kbd {
   font-weight: 600;
 }
 .conn-pass .conn-state {
-  color: var(--green);
+  color: var(--role-done);
 }
 .conn-fail .conn-state,
 .conn-error {
-  color: var(--red);
+  color: var(--role-error);
 }
 .conn-info .conn-state {
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .conn-fix {
-  color: var(--soft);
+  color: var(--role-soft);
 }
 
 /* ---------- setup wizard: device steps ---------- */
@@ -1697,17 +1769,17 @@ kbd {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-line);
   border-radius: var(--radius);
-  background: var(--raise);
+  background: var(--role-raise);
   cursor: pointer;
 }
 .choice:has(input:checked) {
-  border-color: var(--purple);
+  border-color: var(--role-action);
 }
 .choice input {
   margin: 3px 0 0;
-  accent-color: var(--purple);
+  accent-color: var(--role-action);
 }
 .choice-text {
   display: flex;
@@ -1739,8 +1811,8 @@ kbd {
     min-height: 0;
     overflow-y: auto;
     padding: 16px 12px 12px;
-    background: var(--bg2);
-    border-right: 1px solid var(--line);
+    background: var(--role-sunk);
+    border-right: 1px solid var(--role-line);
   }
   .new-task {
     justify-content: flex-start;
@@ -1763,16 +1835,16 @@ kbd {
     border-radius: 8px;
     border: 0;
     background: transparent;
-    color: var(--soft);
+    color: var(--role-soft);
     text-align: left;
   }
   .nav-item:hover {
-    background: var(--hover);
-    color: var(--fg);
+    background: var(--role-hover);
+    color: var(--role-fg);
   }
   .nav-item[aria-current="page"] {
-    background: var(--raise);
-    color: var(--fg);
+    background: var(--role-raise);
+    color: var(--role-fg);
     font-weight: 600;
   }
   .nav-label,
@@ -1792,21 +1864,21 @@ kbd {
     display: block;
     font-size: 11px;
     font-weight: 400;
-    color: var(--soft);
+    color: var(--role-soft);
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .count {
     font-size: 12px;
-    color: var(--soft);
+    color: var(--role-soft);
   }
   .badge-new {
     font-size: 11px;
     font-weight: 700;
     padding: 0 7px;
     border-radius: 999px;
-    background: var(--pink);
-    color: var(--on-accent);
+    background: var(--role-action);
+    color: var(--role-on-accent);
     line-height: 18px;
   }
   .side-h {
@@ -1815,7 +1887,7 @@ kbd {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--soft);
+    color: var(--role-soft);
   }
   .side-foot {
     margin-top: auto;
@@ -1889,26 +1961,26 @@ kbd {
     gap: 12px;
     padding: 2px 24px 8px;
     font-size: 13px;
-    color: var(--soft);
+    color: var(--role-soft);
   }
   .meter {
     flex: 1;
     max-width: 240px;
     height: 6px;
     border-radius: 3px;
-    background: var(--line);
+    background: var(--role-line);
     overflow: hidden;
   }
   .meter-fill {
     height: 100%;
-    background: var(--green);
+    background: var(--role-done);
     border-radius: 3px;
   }
   .dayload.over .meter-fill {
-    background: var(--orange);
+    background: var(--role-due);
   }
   .dl-over {
-    color: var(--orange);
+    color: var(--role-due);
     font-weight: 600;
   }
 
@@ -1936,7 +2008,7 @@ kbd {
     visibility: visible;
     transition: none;
     border-top: 0;
-    border-left: 1px solid var(--line);
+    border-left: 1px solid var(--role-line);
     border-radius: 0;
     box-shadow: none;
     min-height: 0;
@@ -1956,7 +2028,7 @@ kbd {
     place-items: center;
     height: 100%;
     padding: 24px;
-    color: var(--soft);
+    color: var(--role-soft);
     text-align: center;
   }
 
@@ -1997,9 +2069,9 @@ kbd {
   width: 100%;
   max-width: 360px;
   padding: 24px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-line);
   border-radius: var(--radius);
-  background: var(--pane);
+  background: var(--role-pane);
 }
 .login-card h1 {
   font-size: 22px;
@@ -2010,14 +2082,14 @@ kbd {
 .login-card label {
   margin-top: 6px;
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .login-card input[type="password"] {
   min-height: 40px;
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
 }
 .login-card .btn {
   margin-top: 6px;
@@ -2025,7 +2097,7 @@ kbd {
 }
 .login-error {
   font-size: 13px;
-  color: var(--red);
+  color: var(--role-error);
 }
 
 /* ---------- first to-do step ---------- */
@@ -2061,7 +2133,7 @@ kbd {
 }
 .agents-pick label {
   font-size: 13px;
-  color: var(--soft);
+  color: var(--role-soft);
 }
 .agents-pick select {
   align-self: flex-start;
@@ -2069,21 +2141,21 @@ kbd {
   min-height: 36px;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--raise);
+  border: 1px solid var(--role-line);
+  background: var(--role-raise);
 }
 .agents-copy {
   align-self: flex-start;
 }
 .agents-pair:focus {
-  outline: 2px solid var(--purple);
+  outline: 2px solid var(--role-focus);
   outline-offset: 2px;
 }
 .agents-status {
   font-weight: 600;
 }
 .agents-on {
-  color: var(--green);
+  color: var(--role-done);
 }
 .agents-text {
   margin: 0;
