@@ -8,8 +8,10 @@
 // It echoes each stdin message as a user line with isReplay, at its next
 // tool step. Each turn does what words in its messages say. The first
 // message of a run is the bridge's prompt, so for it the words are the
-// newest comment on the bead it names with `bd show <id>`, else the bead's
-// title. Words:
+// newest comment that names one of the words below on the bead it names
+// with `bd show <id>`, else the bead's title. A follow-up the bridge writes
+// as a comment before the fake reads the bead then cannot hide the note
+// that started the run. Words:
 //
 //	reply   write a note with bd comment, then end the turn
 //	close   write a note and close the bead with bd close
@@ -193,7 +195,11 @@ func rateStatus(rejected bool) string {
 	return "allowed"
 }
 
-// beadWords are the bead's newest comment, else its title, in lower case.
+// scriptWords are the words a turn acts on.
+var scriptWords = []string{"reply", "close", "slow", "usage", "budget", "fail", "crash", "hang"}
+
+// beadWords are the bead's newest comment that names a script word, else its
+// title, in lower case.
 func beadWords() string {
 	if bead == "" {
 		return ""
@@ -208,8 +214,14 @@ func beadWords() string {
 	if i := strings.IndexByte(raw, '['); i < 0 || json.Unmarshal([]byte(raw[i:]), &list) != nil || len(list) == 0 {
 		return ""
 	}
-	if c := list[0].Comments; len(c) > 0 {
-		return strings.ToLower(c[len(c)-1].Text)
+	c := list[0].Comments
+	for i := len(c) - 1; i >= 0; i-- {
+		words := strings.ToLower(c[i].Text)
+		for _, w := range scriptWords {
+			if strings.Contains(" "+words+" ", " "+w+" ") {
+				return words
+			}
+		}
 	}
 	return strings.ToLower(list[0].Title)
 }
