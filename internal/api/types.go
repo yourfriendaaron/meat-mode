@@ -23,6 +23,7 @@ type Item struct {
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	ClosedAt    *time.Time `json:"closedAt,omitempty"`
 	Comments    []Comment  `json:"comments"`
+	Checklist   []Check    `json:"checklist,omitempty"` // personal items only
 	// Hub-only fields, never sent by a bridge.
 	Pending   bool       `json:"pending,omitempty"`   // an unapplied action changed this copy
 	SeenAt    *time.Time `json:"seenAt,omitempty"`    // when the user last opened it
@@ -36,6 +37,25 @@ type Comment struct {
 	Author    string    `json:"author"`
 	Text      string    `json:"text"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+// Check is one entry of a personal item's checklist.
+type Check struct {
+	ID   string `json:"id"` // given by the hub when an edit leaves it empty
+	Text string `json:"text"`
+	Done bool   `json:"done"`
+}
+
+// Edit is the change an edit action makes to a personal item. A nil field
+// stays as it is. Checklist replaces the whole list; an empty list clears
+// it.
+type Edit struct {
+	Title       *string    `json:"title,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	Due         *time.Time `json:"due,omitempty"`
+	ClearDue    bool       `json:"clearDue,omitempty"`
+	Priority    *int       `json:"priority,omitempty"` // 0 (highest) to 4, as bd
+	Checklist   *[]Check   `json:"checklist,omitempty"`
 }
 
 // Repo is one beads database a bridge found.
@@ -67,6 +87,11 @@ const (
 	KindNote    = "note"
 	KindAdd     = "add"
 	KindSync    = "sync" // switch a repo's syncing on or off
+	// Personal list only.
+	KindEdit        = "edit"
+	KindNoteEdit    = "note-edit"
+	KindNoteDelete  = "note-delete"
+	KindNoteRestore = "note-restore" // Undo of note-delete
 )
 
 // Action statuses.
@@ -85,6 +110,13 @@ type Payload struct {
 	Title    string     `json:"title,omitempty"`    // add
 	Due      *time.Time `json:"due,omitempty"`      // add
 	On       *bool      `json:"on,omitempty"`       // sync
+	Set      *Edit      `json:"set,omitempty"`      // edit
+	Was      *Edit      `json:"was,omitempty"`      // edit: the fields set held before, filled in by the hub
+	// note-edit, note-delete and note-restore. note-edit takes Text. The
+	// hub fills in Comment on note-edit and note-delete with the comment as
+	// it was; note-restore takes a removed Comment back.
+	CommentID string   `json:"commentId,omitempty"`
+	Comment   *Comment `json:"comment,omitempty"`
 }
 
 // NewAction is what the app posts.
@@ -164,6 +196,15 @@ type PersonalTodo struct {
 	Due    *time.Time `json:"due,omitempty"`
 	Note   string     `json:"note,omitempty"`   // added as the first comment, by Author
 	Author string     `json:"author,omitempty"` // the agent's name; defaults to the token's machine name
+}
+
+// PersonalChange is what an agent posts to change a personal to-do its
+// machine added. Kind is edit, done, reopen, dismiss or note.
+type PersonalChange struct {
+	ID      string  `json:"id,omitempty"` // optional UUID; posting it again changes nothing
+	Kind    string  `json:"kind"`
+	Payload Payload `json:"payload"` // edit: set; note: text
+	Author  string  `json:"author,omitempty"`
 }
 
 // PersonalTodoReply names the personal item an agent added.
