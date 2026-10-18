@@ -149,3 +149,8 @@ func (h *Hub) ChangePersonal(ctx context.Context, id string, c api.PersonalChang
 	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal/"+url.PathEscape(id)+"/actions", c, &a)
 	return a, err
 }
+
+// PutRuns replaces this bridge's run list.
+func (h *Hub) PutRuns(ctx context.Context, runs []api.RunReport) error {
+	return h.do(ctx, http.MethodPut, "/bridge/v1/runs", runs, nil)
+}

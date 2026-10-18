@@ -41,9 +41,15 @@ type Bridge struct {
 	// records one (in bridge.json). A nil SaveSwitch refuses switches.
 	Switches   map[string]bool
 	SaveSwitch func(repo string, on bool) error
-	Version    string
-	Log        *slog.Logger
-	Now        func() time.Time
+	// Agents are the app's agents switches by repo name, and SaveAgents
+	// records one (in bridge.json). A nil SaveAgents refuses them.
+	Agents     map[string]bool
+	SaveAgents func(repo string, on bool) error
+	// Runner runs agents for asks; nil on a bridge that runs none.
+	Runner  *AgentRunner
+	Version string
+	Log     *slog.Logger
+	Now     func() time.Time
 	// Poll, when set, replaces ActionEvery, SyncEvery and ScanEvery. New sets it
 	// from the undocumented MEAT_MODE_BRIDGE_POLL variable (a Go duration),
 	// which the end-to-end tests use to avoid waiting 30 seconds per round.
@@ -61,6 +67,7 @@ type Bridge struct {
 	reposSent  []api.Repo
 	reposAt    time.Time
 	lastFullAt time.Time
+	runsAt     time.Time // when the run list was last sent
 }
 
 type repoState struct {
@@ -127,31 +134,101 @@ func (b *Bridge) CheckBD(ctx context.Context) error {
 }
 
 // Run checks bd, then ticks until ctx ends. Hub errors are logged and backed
-// off; they never stop the bridge.
+// off; they never stop the bridge. Between ticks it sends the run list soon
+// after a run changes. When ctx ends it ends every live agent run first.
 func (b *Bridge) Run(ctx context.Context) error {
 	if err := b.CheckBD(ctx); err != nil {
 		return err
 	}
 	b.log().Info("bridge started", "version", b.Version, "bd", b.bdVersion, "hub", b.Hub.URL)
+	defer b.stopRuns()
+	var changed <-chan struct{}
+	if b.Runner != nil {
+		changed = b.Runner.Changed()
+	}
 	backoff := time.Duration(0)
+	next := time.Now()
 	for {
-		err := b.Tick(ctx, false)
-		wait := b.actionEvery()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
+		if !time.Now().Before(next) {
+			err := b.Tick(ctx, false)
+			wait := b.actionEvery()
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				backoff = min(max(time.Second, backoff*2), MaxBackoff)
+				wait = backoff
+				b.log().Warn("round failed; retrying", "err", err, "retry", wait)
+			} else {
+				backoff = 0
 			}
-			backoff = min(max(time.Second, backoff*2), MaxBackoff)
-			wait = backoff
-			b.log().Warn("round failed; retrying", "err", err, "retry", wait)
-		} else {
-			backoff = 0
+			next = time.Now().Add(wait)
 		}
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-time.After(time.Until(next)):
+		case <-changed:
+			b.flushRuns(ctx)
+		}
+	}
+}
+
+// flushRuns syncs the repos a run end changed and sends the run list, at
+// most once per RunsEvery. Errors wait for the next tick.
+func (b *Bridge) flushRuns(ctx context.Context) {
+	if wait := RunsEvery - b.now().Sub(b.runsAt); wait > 0 {
+		select {
+		case <-ctx.Done():
+			return
 		case <-time.After(wait):
 		}
+	}
+	if b.name == "" {
+		return // not connected; the next tick sends everything
+	}
+	for _, name := range b.Runner.TakeTouched() {
+		if st := b.repos[name]; st != nil && st.Synced() {
+			if err := b.syncRepo(ctx, st); err != nil {
+				b.log().Warn("sync failed", "repo", name, "err", err)
+			}
+		}
+	}
+	if err := b.pushRuns(ctx, false); err != nil {
+		b.log().Warn("cannot send the run list; retrying with the next round", "err", err)
+	}
+}
+
+// pushRuns sends the run list when it changed and RunsEvery has passed, or
+// always when force is set.
+func (b *Bridge) pushRuns(ctx context.Context, force bool) error {
+	if b.Runner == nil {
+		return nil
+	}
+	if !force && (!b.Runner.Dirty() || b.now().Sub(b.runsAt) < RunsEvery) {
+		return nil
+	}
+	if err := b.Hub.PutRuns(ctx, b.Runner.Reports()); err != nil {
+		b.Runner.MarkDirty()
+		return hubError{err}
+	}
+	b.runsAt = b.now()
+	return nil
+}
+
+// stopRuns ends every live run for a stopping bridge and reports them.
+func (b *Bridge) stopRuns() {
+	if b.Runner == nil {
+		return
+	}
+	b.Runner.Shutdown()
+	if b.name == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := b.pushRuns(ctx, true); err != nil {
+		b.log().Warn("cannot report the runs ended by the stop", "err", err)
 	}
 }
 
@@ -183,6 +260,11 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if b.now().Sub(b.lastFullAt) >= b.syncEvery() {
 		full = true
 	}
+	if b.Runner != nil {
+		for _, name := range b.Runner.TakeTouched() {
+			touched[name] = true
+		}
+	}
 	for _, name := range b.syncedNames() {
 		if !full && !touched[name] {
 			continue
@@ -197,7 +279,7 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if full {
 		b.lastFullAt = b.now()
 	}
-	return nil
+	return b.hubErr(b.pushRuns(ctx, full))
 }
 
 // hubErr makes the next tick say hello again after a hub failure, so the hub
@@ -252,7 +334,7 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		}
 		st.Repo = *r
 		next[r.Name] = st
-		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced()})
+		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced(), AgentsAllowed: b.Agents[r.Name]})
 	}
 	b.repos = next
 	if slices.Equal(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {
@@ -312,6 +394,13 @@ func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
 		return hubError{err}
 	}
 	st.fps, st.items, st.pushed, st.primed = fps, items, b.now(), true
+	if b.Runner != nil {
+		ids := make(map[string]bool, len(fps))
+		for id := range fps {
+			ids[id] = true
+		}
+		b.Runner.Listed(st.Name, ids)
+	}
 	return nil
 }
 

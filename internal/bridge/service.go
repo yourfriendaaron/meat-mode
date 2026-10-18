@@ -51,12 +51,15 @@ func NewService(goos, home string, run Runner) (Service, error) {
 	return nil, fmt.Errorf("installing a service is not supported on %s; run `meat-mode bridge run` from your own service manager", goos)
 }
 
-// ServicePath returns the PATH a service runs with: the directory of bd
-// first, then the system directories.
-func ServicePath(bd string) string {
+// ServicePath returns the PATH a service runs with: the directories of bd
+// and the other tools given (such as the agent command) first, then the
+// system directories.
+func ServicePath(tools ...string) string {
 	dirs := []string{}
-	if bd != "" && filepath.IsAbs(bd) {
-		dirs = append(dirs, filepath.Dir(bd))
+	for _, t := range tools {
+		if t != "" && filepath.IsAbs(t) && !slices.Contains(dirs, filepath.Dir(t)) {
+			dirs = append(dirs, filepath.Dir(t))
+		}
 	}
 	for _, d := range []string{"/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"} {
 		if !slices.Contains(dirs, d) {

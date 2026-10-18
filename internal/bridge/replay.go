@@ -42,18 +42,25 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 			continue
 		}
 		st := b.repos[a.Repo]
+		if b.Runner != nil {
+			b.Runner.NoteAuthor(a.Author)
+		}
 		var res api.ActionResult
 		if !actionIDPattern.MatchString(a.ID) {
 			// The journal keys on the id; the hub only ever mints UUIDs.
 			b.log().Warn("ignoring an action without a valid id", "kind", a.Kind, "repo", a.Repo)
 			continue
-		} else if a.Kind == api.KindSync {
+		} else if a.Kind == api.KindSync || a.Kind == api.KindAgents {
 			if res, err = b.applySwitch(ctx, a, st); err != nil {
 				return touched, err
 			}
 			if res.OK {
 				touched[a.Repo] = true
 			}
+		} else if a.Kind == api.KindStop {
+			res = b.stop(a)
+		} else if a.Kind == api.KindAsk && b.Runner == nil {
+			res = api.ActionResult{Error: "this bridge does not run agents"}
 		} else if st == nil || !st.Synced() {
 			res = api.ActionResult{Error: ErrNotSynced}
 		} else if ok, lerr := b.known(ctx, st, a, listed); lerr != nil || !ok {
@@ -69,6 +76,9 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 			touched[a.Repo] = true
 			if ids := listed[a.Repo]; ids != nil && res.BeadID != "" {
 				ids[res.BeadID] = true
+			}
+			if res.OK {
+				b.ask(ctx, a, st, res)
 			}
 		}
 		if err := b.Hub.Result(ctx, a.ID, res); err != nil {
@@ -87,26 +97,30 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 // not find.
 const ErrUnknownRepo = "unknown repo"
 
-// applySwitch saves a sync switch from the app and reports the new repo
-// list at once. It takes switches only for repos this bridge found itself,
-// looked up by name, so the app cannot point it anywhere else.
+// applySwitch saves a sync or agents switch from the app and reports the new
+// repo list at once. It takes switches only for repos this bridge found
+// itself, looked up by name, so the app cannot point it anywhere else.
 func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (api.ActionResult, error) {
+	kind, save, switches := "sync", b.SaveSwitch, &b.Switches
+	if a.Kind == api.KindAgents {
+		kind, save, switches = "agents", b.SaveAgents, &b.Agents
+	}
 	switch {
 	case st == nil:
 		return api.ActionResult{Error: ErrUnknownRepo}, nil
 	case a.Payload.On == nil:
-		return api.ActionResult{Error: "sync switch has no position"}, nil
-	case b.SaveSwitch == nil:
-		return api.ActionResult{Error: "this bridge cannot save sync switches"}, nil
+		return api.ActionResult{Error: kind + " switch has no position"}, nil
+	case save == nil:
+		return api.ActionResult{Error: "this bridge cannot save " + kind + " switches"}, nil
 	}
 	on := *a.Payload.On
-	if err := b.SaveSwitch(a.Repo, on); err != nil {
-		return fail(fmt.Errorf("save the sync switch: %w", err)), nil
+	if err := save(a.Repo, on); err != nil {
+		return fail(fmt.Errorf("save the %s switch: %w", kind, err)), nil
 	}
-	if b.Switches == nil {
-		b.Switches = map[string]bool{}
+	if *switches == nil {
+		*switches = map[string]bool{}
 	}
-	b.Switches[a.Repo] = on
+	(*switches)[a.Repo] = on
 	// Report the repo list before the result, so the app never shows the old
 	// position between the two.
 	if err := b.discover(ctx, false); err != nil {
@@ -200,9 +214,12 @@ func (b *Bridge) runBD(ctx context.Context, a api.Action, r Repo, resumed bool, 
 		}
 	case api.KindSnooze:
 		err = b.Beads.Defer(ctx, r.Dir, a.BeadID, a.Payload.Until, actor)
-	case api.KindNote:
+	case api.KindNote, api.KindAsk:
 		text := a.Payload.Text
 		if strings.TrimSpace(text) == "" {
+			if a.Kind == api.KindAsk {
+				return api.ActionResult{OK: true} // an ask without a note
+			}
 			return fail(errors.New("note is empty"))
 		}
 		if resumed {
@@ -288,4 +305,46 @@ func fail(err error) api.ActionResult {
 
 func newIssue(a api.Action, title, actor string) beads.NewIssue {
 	return beads.NewIssue{Title: title, Due: a.Payload.Due, ActionID: a.ID, Actor: actor}
+}
+
+// stop applies a stop: it ends the item's live run and is applied once the
+// run has ended. With no live run it changes nothing.
+func (b *Bridge) stop(a api.Action) api.ActionResult {
+	if a.BeadID == "" {
+		return fail(errors.New("action has no bead id"))
+	}
+	if b.Runner != nil {
+		b.Runner.Stop(a.Repo, a.BeadID)
+	}
+	return api.ActionResult{OK: true}
+}
+
+// ask hands an applied ask, or an add with ask, to the runner, once its note
+// is on the bead. No other action ever starts a run.
+func (b *Bridge) ask(ctx context.Context, a api.Action, st *repoState, res api.ActionResult) {
+	if b.Runner == nil {
+		return
+	}
+	actor := a.Author
+	if actor == "" {
+		actor = defaultActor
+	}
+	req := askRequest{ActionID: a.ID, Repo: st.Repo, Author: actor, Allowed: b.Agents[a.Repo]}
+	switch {
+	case a.Kind == api.KindAsk:
+		req.BeadID = a.BeadID
+		if strings.TrimSpace(a.Payload.Text) != "" {
+			req.Text = a.Payload.Text
+		}
+		if it, ok := st.items[a.BeadID]; ok {
+			req.Creator = it.CreatedBy
+		} else if i, err := b.Beads.Show(ctx, st.Dir, a.BeadID); err == nil {
+			req.Creator = i.CreatedBy
+		}
+	case a.Kind == api.KindAdd && a.Payload.Ask && res.BeadID != "":
+		req.BeadID, req.Creator = res.BeadID, actor
+	default:
+		return
+	}
+	b.Runner.Ask(req)
 }

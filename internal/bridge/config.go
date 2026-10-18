@@ -29,6 +29,9 @@ type Config struct {
 	// Sync holds the sync switches set in the app, by repo name. A switch
 	// overrides the repo's own meat-mode.sync line.
 	Sync map[string]bool `json:"sync,omitempty"`
+	// Agents holds the agents switches set in the app, by repo name. Agents
+	// run only in a repo switched on here; no repo file can do it.
+	Agents map[string]bool `json:"agents,omitempty"`
 }
 
 // Paths are where the bridge keeps its files.
@@ -113,14 +116,24 @@ func readConfigFile(path string) (Config, error) {
 // SaveSwitch records one repo's sync switch in the config file at path. It
 // rereads the file so environment overrides are never written back.
 func SaveSwitch(path, repo string, on bool) error {
+	return saveSwitch(path, func(c *Config) *map[string]bool { return &c.Sync }, repo, on)
+}
+
+// SaveAgents records one repo's agents switch in the config file at path.
+func SaveAgents(path, repo string, on bool) error {
+	return saveSwitch(path, func(c *Config) *map[string]bool { return &c.Agents }, repo, on)
+}
+
+func saveSwitch(path string, field func(*Config) *map[string]bool, repo string, on bool) error {
 	c, err := readConfigFile(path)
 	if err != nil {
 		return err
 	}
-	if c.Sync == nil {
-		c.Sync = map[string]bool{}
+	m := field(&c)
+	if *m == nil {
+		*m = map[string]bool{}
 	}
-	c.Sync[repo] = on
+	(*m)[repo] = on
 	return c.Save(path)
 }
 
