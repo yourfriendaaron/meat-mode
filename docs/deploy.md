@@ -262,6 +262,22 @@ Each device you turned reminders on for gets one at an item's due time, and at t
 
 An item that was already more than 5 minutes past its due time when the hub first saw it, such as an old bead on a repo you just switched on, does not remind for that time.
 
+**Done and Snooze.** A reminder for one item has **Done** and **Snooze 1 hour** buttons that act without opening the app. A reminder that gathers several missed ones has none. ntfy shows the reminder without these buttons.
+
+### Your own push server for the Android app
+
+The Android app gets its pushes through UnifiedPush, from a distributor such as ntfy, or through Google's push service when no distributor is installed. The hub sends only to push servers at public addresses, so a registration cannot point it at something inside your network. To use a push server that is not on the public internet, such as your own ntfy on the tailnet or the LAN, name it in `MEAT_MODE_PUSH_ALLOW` and restart the hub:
+
+```sh
+MEAT_MODE_PUSH_ALLOW=ntfy.example.com,192.0.2.0/24
+```
+
+- A host name admits exactly that host, whatever it resolves to; `ntfy.example.com` does not admit `push.ntfy.example.com`. Give the name only: no `https://`, port or path.
+- A CIDR, such as `192.0.2.0/24` or `2001:db8::/32`, admits any push server whose address is inside it. A bare address admits that one address.
+- An entry that is neither stops the hub at start with a message naming it.
+
+The push server still needs `https://`. Pushes follow no redirects and time out after 10 seconds. Settings lists each browser and phone that gets reminders and can revoke any of them.
+
 ## See your to-dos in a calendar app
 
 The hub can publish your open to-dos that have a due date, from every list, as a calendar feed that calendar apps subscribe to. Each to-do shows as a 15-minute event at its due time, titled with the to-do, with a link that opens it in the app. A repeating to-do shows its next date only. The feed is read-only: changes made in the calendar app do not come back.
