@@ -310,6 +310,74 @@ To tell your agents about all this, copy the text from the setup wizard's **Tell
 
 The fields and the HTTP calls behind these commands are in [api.md](api.md#agents-adding-to-the-personal-list). Revoking the machine in Settings takes its agents' access back too.
 
+## Wake an agent on a task
+
+With agents allowed in a repo, one tap on an item asks an agent to take it on. The bridge writes your note to the bead, then starts the agent on that machine. The agent reads the bead and its notes, then does the work and closes the bead, or replies with a note, and the app tells you either way. A note you send while it works goes to the same run, which reads it at its next step. One task never has two agents.
+
+Only your own asks start an agent. The agent's notes and closes, and your other taps (notes, Done, Won't do), never do.
+
+### Allow agents in a repo
+
+In the app, under **Settings**, below its machine, each synced repo has an **Agents** switch. It starts off. The machine keeps your choice in the `agents` map of its own `bridge.json`, and only takes it for a repo it found itself. No line in a repo can switch agents on. An ask in a repo with agents off still leaves your note, and the run shows stopped with the reason.
+
+The default agent is Claude Code, run as `claude -p` with `--permission-mode auto` and no permission prompts. **This is not a sandbox.** Auto mode lets the agent run commands as you, in your home folder, with your credentials: in testing it changed the global Git config and deleted a file in the home folder without asking. Its instructions tell it never to send, post, spend, delete or push for you, and to stop and ask in a note when it needs you, but nothing enforces that. Allow agents only in repos where you would let an agent work unattended.
+
+The agent machine needs:
+
+- Claude Code installed and signed in, with `claude` on your `PATH` when you run `meat-mode bridge pair`, so the service finds it (pair again after installing it).
+- A Git repo with at least one commit: each task's agent works in its own Git worktree.
+
+### Settings
+
+The bridge reads these variables (see `.env.example`):
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `MEAT_MODE_AGENT_COMMAND` | `claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages --permission-mode auto --permission-prompts none` | The agent command, split on spaces, with no shell. |
+| `MEAT_MODE_AGENT_NAME` | `agent` | The name shown for the agent. A task an agent created shows its creator's name instead. |
+| `MEAT_MODE_AGENT_TIMEOUT` | `30m` | The longest one run may take. |
+| `MEAT_MODE_AGENT_BUDGET_USD` | `2` | The most one run may spend, passed to the agent as `--max-budget-usd`. |
+| `MEAT_MODE_AGENT_RUNS_PER_TASK` | `10` | How many runs one task may have, ever. Nothing resets the count. |
+| `MEAT_MODE_AGENT_CONCURRENT` | `2` | How many runs may be live at once on the machine. |
+
+The bridge service does not read your shell's environment. To set these on Linux, run `systemctl --user edit meat-mode-bridge`, add the lines below, and restart the service:
+
+```ini
+[Service]
+Environment=MEAT_MODE_AGENT_BUDGET_USD=1
+Environment=MEAT_MODE_AGENT_TIMEOUT=15m
+```
+
+The service runs with a short `PATH`: the folders of `bd` and of the agent command, then the system folders. If the agent's work needs other tools, such as `go` or `pnpm`, add an `Environment=PATH=…` line the same way. On macOS, add the variables to the `EnvironmentVariables` of `~/Library/LaunchAgents/com.github.yourfriendaaron.meat-mode.bridge.plist` and restart it; pairing again rewrites that file.
+
+Another agent command must speak Claude Code's stream-json protocol on its standard input and output (user messages in; `system`, `assistant`, `user` and `result` lines out, with `session_id`), echo each message it reads as a `user` line with `isReplay`, and accept `--max-budget-usd <dollars>` and `--resume <session id>`, which the bridge adds.
+
+### How a run ends
+
+A run shows **working** while the agent runs. When it ends, the task shows **done** if the agent closed the bead, **waiting** on you if it wrote a note, or **stopped** with a reason:
+
+- **stopped**: you stopped it. Stop ends the agent and everything it started.
+- **usage limit**: the agent's account hit its usage limit; the detail says when it resets.
+- **time limit**, **budget**: the run passed `MEAT_MODE_AGENT_TIMEOUT`, or spent `MEAT_MODE_AGENT_BUDGET_USD`.
+- **run limit**: the task has had its `MEAT_MODE_AGENT_RUNS_PER_TASK` runs.
+- **busy**: `MEAT_MODE_AGENT_CONCURRENT` runs were already live on the machine.
+- **not allowed**: agents are switched off for the repo.
+- **no reply**: the agent ended without a note or closing the bead.
+- **failed**, **crashed**: the agent command did not start or reported an error, or its process died.
+- **restarted**: the bridge stopped while the agent ran. Stopping the bridge ends its runs; after a crash, the next start ends whatever the old one left running.
+
+Asking again on a task continues the agent's earlier conversation on it.
+
+### Where runs live
+
+Each task's runs share a Git worktree on the branch `meat-mode/<bead id>`, in the bridge's state folder (`~/.local/state/meat-mode/agents/` on Linux, `~/Library/Application Support/meat-mode/agents/` on macOS), not in your repo:
+
+- `worktrees/<repo>/<bead id>/`: the worktree. The agent is told never to push, so merge or push its commits yourself.
+- `logs/<repo>/<bead id>/<run id>.jsonl`: the raw stream of each run, with what the agent wrote on its error output next to it in `<run id>.stderr`.
+- `runs.json`: each task's session id, run count and latest run. To look at a finished conversation yourself, run `claude --resume <session id>` inside the worktree.
+
+When a task leaves the synced set (7 days after it closed, or when it is deleted or loses its `human` label), the bridge removes its worktree if Git calls it clean, and its branch if it has no unmerged commits. A worktree with changes or untracked files, and a branch with unmerged commits, stay for you.
+
 ## Moving from a personal beads repo
 
 If a bridge was paired with `--personal`, the hub moves that repo's items into its own personal list, once each, with their dates, status, notes and recently closed items. It happens when you update the hub. Any taps still waiting for that machine are applied on the hub.
