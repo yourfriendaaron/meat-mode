@@ -5,6 +5,7 @@
 import "./agents.ts";
 import "./calendar.ts";
 import "./connection.ts";
+import "./devices.ts";
 import "./lead.ts";
 import "./password.ts";
 import "./profile.ts";

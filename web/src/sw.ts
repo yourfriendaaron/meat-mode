@@ -3,8 +3,10 @@
 // Every push shows a notification, since browsers revoke subscriptions that
 // receive silent pushes.
 
+import { actionBody, isPostedAction, type ButtonAction } from "./sw-actions.ts";
+
 interface PushAction {
-  action: "reply" | "open" | "retry";
+  action: "reply" | "open" | "retry" | "done" | "snooze";
   title: string;
 }
 
@@ -71,14 +73,14 @@ function newId(): string {
   return crypto.randomUUID();
 }
 
-/** Retry on a stopped run's push: a new ask on the item, posted as the app posts it. */
-async function retry(key: string): Promise<boolean> {
+/** A notification button that acts: Retry asks again on the item, Done and Snooze (an hour) change it, posted as the app posts them. */
+async function post(action: ButtonAction, key: string): Promise<boolean> {
   try {
     const res = await fetch("/api/actions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ id: newId(), kind: "ask", key, payload: {} }),
+      body: JSON.stringify(actionBody(action, key, newId(), new Date())),
     });
     return res.ok;
   } catch {
@@ -90,9 +92,9 @@ sw.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const key: string = e.notification.data?.key || "";
   const action: string = e.action || "";
-  if (action === "retry" && key) {
+  if (isPostedAction(action) && key) {
     // When the hub refuses, open the item so its card says why.
-    e.waitUntil(retry(key).then((ok) => (ok ? undefined : open(`/?item=${encodeURIComponent(key)}`))));
+    e.waitUntil(post(action, key).then((ok) => (ok ? undefined : open(`/?item=${encodeURIComponent(key)}`))));
     return;
   }
   const url = action === "reply" && key ? `/?item=${encodeURIComponent(key)}&reply=1` : e.notification.data?.url || "/";

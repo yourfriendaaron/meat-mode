@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Edit, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Bridge, Device, Edit, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -186,6 +186,10 @@ export class FakeHub {
   calendarLinks = 0;
   /** Push subscriptions the app registered, and the test reminders it asked for. */
   pushSubscriptions = 0;
+  /** The devices GET /api/devices lists; a push registration adds one. */
+  devices: Device[] = [];
+  /** Every body POSTed to /api/push/subscriptions. */
+  pushPosts: { endpoint: string; kind?: string; name?: string }[] = [];
   reminderTests = 0;
   /** Endpoints of the push subscriptions the app registered. */
   pushEndpoints = new Set<string>();
@@ -488,8 +492,16 @@ export class FakeHub {
     if (method === "GET" && path === "/api/push/key") return this.json(route, 200, { publicKey: "BExampleKeyOnlyForTests" });
     if (path === "/api/push/subscriptions") {
       if (method === "POST") {
+        const body = req.postDataJSON() as { endpoint: string; kind?: string; name?: string };
         this.pushSubscriptions++;
-        this.pushEndpoints.add((req.postDataJSON() as { endpoint: string }).endpoint);
+        this.pushEndpoints.add(body.endpoint);
+        this.pushPosts.push(body);
+        const kind = body.kind === "app" ? "app" : "web";
+        const id = String(this.devices.length + 1).padStart(32, "0");
+        const at = this.now();
+        this.devices.unshift({ id, name: body.name || (kind === "app" ? "Android app" : "Browser"), kind, confirmed: kind === "web", createdAt: at, lastSeen: at, lastPush: null });
+        // An app registration waits for its confirmation (docs/api.md, Devices).
+        if (kind === "app") return this.json(route, 202, { device: id });
       }
       return this.json(route, 204);
     }
@@ -506,6 +518,13 @@ export class FakeHub {
         return this.json(route, 200, { push: "expired", ntfy });
       }
       return this.json(route, 200, { push: known ? "sent" : "none", ntfy });
+    }
+    if (method === "GET" && path === "/api/devices") return this.json(route, 200, this.devices);
+    m = path.match(/^\/api\/devices\/([0-9a-f]{32})$/);
+    if (method === "DELETE" && m) {
+      if (!this.devices.some((d) => d.id === m![1])) return this.json(route, 404, { error: "no such device" });
+      this.devices = this.devices.filter((d) => d.id !== m![1]);
+      return this.json(route, 204);
     }
     if (method === "GET" && path === "/api/bridges") return this.json(route, 200, this.bridges);
     if (method === "POST" && path === "/api/bridges") {
