@@ -28,3 +28,18 @@
     font-size: 14px;
   }
 }
+/* On a phone the field takes its own row under the title, so a long title and the header buttons keep theirs. */
+@container app (max-width: 879.98px) {
+  .mhead {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .mhead h1 {
+    margin-right: auto;
+  }
+  .search {
+    order: 1;
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

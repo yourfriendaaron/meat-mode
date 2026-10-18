@@ -1550,6 +1550,11 @@ function setView(v: View) {
   S.selected = null;
   S.selecting = false;
   S.picked = new Set();
+  // Picking a task view shows that view, so it ends a search; Settings keeps it for the way back.
+  if (!isPage(v) && S.query) {
+    S.query = "";
+    $<HTMLInputElement>("#search-input").value = "";
+  }
   if (isPhone()) closeDetail();
   // The pairing token is shown once; leaving Settings ends that showing.
   if (v !== "settings") {

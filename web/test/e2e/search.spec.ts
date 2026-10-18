@@ -70,3 +70,38 @@ test.describe("phone", () => {
     expect(box!.width).toBeGreaterThan(100);
   });
 });
+
+test("picking a view from the sidebar ends the search", async ({ page, hub }) => {
+  await openApp(page);
+  await page.locator("#search-input").fill("porch");
+  await page.locator(".sidebar").getByRole("button", { name: "Deleted" }).click();
+  await expect(page.locator("#view-title")).toHaveText("Deleted");
+  await expect(page.locator("#search-input")).toHaveValue("");
+  await expect(page.locator("#list .empty")).toHaveText("Nothing deleted in the last 7 days.");
+});
+
+test("a deleted item found by search offers Restore", async ({ page, hub }) => {
+  await openApp(page);
+  await row(page, "Call Sam about the weekend").locator(".row-body").click();
+  await page.locator("#detail").getByRole("button", { name: "Delete" }).click();
+  await page.locator("#search-input").fill("call sam");
+  await expect(page.locator("#list .group-head h2")).toHaveText([/Deleted/]);
+  await row(page, "Call Sam about the weekend").getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(page.locator("#toast")).toContainText("Restored: Call Sam about the weekend");
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "reopen", key: "hub/personal/pe-3" });
+  await expect(page.locator("#list .group-head h2")).toHaveText([/Open/]);
+});
+
+test("search results can be picked and marked done together", async ({ page, hub }) => {
+  await openApp(page);
+  await page.locator("#search-input").fill("the");
+  await page.locator("#select-btn").click();
+  await row(page, "Water the plants").getByRole("checkbox").click();
+  await row(page, "Fix the gate latch").getByRole("checkbox").click();
+  await expect(page.locator("#bulkbar")).toContainText("2 selected");
+  await page.locator("#bulkbar").getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.locator("#toast")).toContainText("Done: 2 tasks");
+  await expect.poll(() => hub.posted.slice(-2).map((a) => a.kind)).toEqual(["done", "done"]);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => hub.posted.slice(-2).map((a) => a.kind)).toEqual(["reopen", "reopen"]);
+});
