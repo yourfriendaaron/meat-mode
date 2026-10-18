@@ -133,6 +133,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 			if err != nil {
 				return a, false, err
 			}
+			if err := checkUntil(r, *p.Due); err != nil {
+				return a, false, err
+			}
 			add.Repeat = &r
 		}
 		p = add

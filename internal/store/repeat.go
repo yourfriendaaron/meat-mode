@@ -8,7 +8,8 @@ import (
 )
 
 // checkRepeat validates a repeat rule and returns it cleaned up: weekdays
-// sorted, and no start, because the hub sets that from the due time.
+// sorted, and no start, because the hub sets that from the due time. Its
+// until is checked against the due time by checkUntil.
 func checkRepeat(r api.Repeat) (api.Repeat, error) {
 	switch r.Every {
 	case api.EveryDay, api.EveryWeek, api.EveryMonth, api.EveryYear:
@@ -42,8 +43,38 @@ func checkRepeat(r api.Repeat) (api.Repeat, error) {
 	if err := checkTimeZone(r.TimeZone); err != nil {
 		return r, invalidf("repeat: %v", err)
 	}
+	if r.Until != "" {
+		if _, ok := untilDay(r); !ok {
+			return r, invalidf("repeat.until must be a date, YYYY-MM-DD")
+		}
+	}
 	r.Start = nil
 	return r, nil
+}
+
+// untilDay is the day number of r's until, and false when it has none or
+// it is not a date.
+func untilDay(r api.Repeat) (int, bool) {
+	d, err := time.Parse(time.DateOnly, r.Until)
+	if err != nil || d.Format(time.DateOnly) != r.Until {
+		return 0, false
+	}
+	return dayNumber(d.Date()), true
+}
+
+// afterUntil reports whether t falls on a date after r's until, in r's
+// zone: past the series' last occurrence.
+func afterUntil(r api.Repeat, t time.Time) bool {
+	until, ok := untilDay(r)
+	return ok && dayNumber(t.In(ruleZone(r)).Date()) > until
+}
+
+// checkUntil refuses a rule whose until is before the date of its due time.
+func checkUntil(r api.Repeat, due time.Time) error {
+	if afterUntil(r, due) {
+		return invalidf("the repeat's end date, %s, is before the due date", r.Until)
+	}
+	return nil
 }
 
 // nextDue is when a repeating item is due once it is done at now: the first
@@ -125,11 +156,17 @@ func nextAfter(r api.Repeat, t time.Time) time.Time {
 
 // ruleStart is r's zone and its start in that zone.
 func ruleStart(r api.Repeat) (*time.Location, time.Time) {
+	loc := ruleZone(r)
+	return loc, r.Start.In(loc)
+}
+
+// ruleZone is r's zone, which checkRepeat has made sure is known.
+func ruleZone(r api.Repeat) *time.Location {
 	loc, err := time.LoadLocation(r.TimeZone)
 	if err != nil {
-		loc = time.UTC
+		return time.UTC
 	}
-	return loc, r.Start.In(loc)
+	return loc
 }
 
 func interval(r api.Repeat) int {
