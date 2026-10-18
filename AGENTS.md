@@ -23,7 +23,7 @@ How to work within that:
 ## Guards
 
 - Run `scripts/setup.sh` once per clone. It points Git at `.githooks/`, whose pre-commit hook runs `scripts/public-safety.sh` and, when installed, `gitleaks`.
-- `scripts/public-safety.sh` scans what is staged for home paths, private and Tailscale IP addresses, tailnet and `.local` hostnames, email addresses outside the allowed example domains, MAC addresses, and files that must never be tracked (`.env`, databases, keys). It also reads `.public-safety.local`, an untracked file of one extended regex per line for the operator's own names and hosts. Add a new private identifier there, never to a tracked file.
+- `scripts/public-safety.sh` scans what is staged for home paths, private and Tailscale IP addresses, tailnet and `.local` hostnames, email addresses outside the allowed example domains, MAC addresses, and files that must never be tracked (`.env`, `.envrc`, a deployment's `compose.yaml`, databases, keys). It also reads `.public-safety.local`, an untracked file of one extended regex per line for the operator's own names and hosts. Add a new private identifier there, never to a tracked file.
 - The guard also refuses tracked beads data: anything in `.beads/` beyond `.gitignore`, `README.md`, `config.yaml` and `metadata.json`, and a Dolt remote in `config.yaml`.
 - The pre-push hook refuses any ref other than a branch or tag (Dolt keeps its data in `refs/dolt/`), Dolt's `__dolt` branches, and pushed commits that track beads data or a Dolt remote.
 - `tests/public-safety.test.sh` proves the guard and the pre-push hook catch each class and pass clean code. CI runs the test, the guard and gitleaks on every push and pull request, and daily checks that the public remote holds no `refs/dolt/` or `__dolt` refs.
