@@ -1,0 +1,60 @@
+name: tag
+
+# Gives every push to main that passes CI the next patch version, and releases
+# it. A tag pushed with the workflow token starts no other workflow, so this
+# calls release.yml itself. A tag pushed by hand (say v0.2.0) still releases
+# through release.yml, and numbering carries on from it.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pick the next version
+        id: next
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            tag=v0.1.0
+          elif git merge-base --is-ancestor "$SHA" "$latest"; then
+            echo "$SHA is already in $latest; nothing to tag."
+            exit 0
+          else
+            IFS=. read -r major minor patch <<<"${latest#v}"
+            tag="v$major.$minor.$((patch + 1))"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$SHA" >/dev/null
+          echo "Tagged $SHA as $tag."
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}

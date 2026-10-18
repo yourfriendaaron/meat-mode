@@ -1,10 +1,17 @@
 name: release
 
 # Builds the meat-mode binary for each platform when a version tag is pushed,
-# and attaches the binaries and checksums to a GitHub release.
+# or when tag.yml calls it with the tag it made, and attaches the binaries and
+# checksums to a GitHub release.
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: the version tag to release
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,9 +19,12 @@ permissions:
 jobs:
   binaries:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
@@ -33,11 +43,11 @@ jobs:
           mkdir dist
           for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -trimpath \
-              -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
+              -ldflags "-s -w -X main.version=${TAG}" \
               -o "dist/meat-mode-${t%/*}-${t#*/}" ./cmd/meat-mode
           done
           (cd dist && sha256sum meat-mode-* > SHA256SUMS)
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --verify-tag --generate-notes
