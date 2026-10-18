@@ -140,10 +140,11 @@ func (s *Scheduler) runMessage(it api.Item) notify.Message {
 	agent = truncTitle(agent)
 	link := fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(it.Key))
 	m := notify.Message{
-		Body: truncTitle(it.Title),
-		URL:  link,
-		Tag:  runTag(it.Key),
-		Key:  it.Key,
+		Body:    truncTitle(it.Title),
+		URL:     link,
+		Tag:     runTag(it.Key),
+		Key:     it.Key,
+		Channel: notify.ChannelAgents,
 		Actions: []notify.Action{
 			{Action: notify.ActionReply, Title: "Reply", URL: link + "&reply=1"},
 			{Action: notify.ActionOpen, Title: "Open", URL: link},

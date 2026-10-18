@@ -63,7 +63,7 @@ func TestRunEndsPushOnce(t *testing.T) {
 			t.Fatalf("%s: %d pushes", tc.state, len(n.got))
 		}
 		m := n.got[0]
-		if m.Title != tc.title || m.Body != tc.body || m.URL != link || m.Key != runKey || m.Tag != runTag(runKey) {
+		if m.Title != tc.title || m.Body != tc.body || m.URL != link || m.Key != runKey || m.Tag != runTag(runKey) || m.Channel != notify.ChannelAgents {
 			t.Errorf("%s: message %+v", tc.state, m)
 		}
 		if got := actionNames(m); len(got) != len(tc.actions) || got[0] != tc.actions[0] || got[len(got)-1] != tc.actions[len(tc.actions)-1] {
