@@ -10,10 +10,10 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// reminderTables are the reminder scheduler's records of reminders sent,
-// keyed by item_key. The scheduler creates them, so a store used without
-// one may lack them.
-var reminderTables = []string{"reminder_fired", "reminder_early"}
+// reminderTables are the reminder scheduler's records of reminders and
+// agent pushes sent, keyed by item_key. The scheduler creates them, so a
+// store used without one may lack them.
+var reminderTables = []string{"reminder_fired", "reminder_early", "run_pushed"}
 
 // reminderTablesIn lists the reminder tables that exist.
 func reminderTablesIn(tx *sql.Tx) ([]string, error) {
