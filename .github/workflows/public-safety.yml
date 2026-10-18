@@ -3,6 +3,8 @@ name: public-safety
 on:
   push:
   pull_request:
+  schedule:
+    - cron: "17 6 * * *"
 
 permissions:
   contents: read
@@ -16,7 +18,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Shellcheck
-        run: shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit
+        run: shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit .githooks/pre-push
       - name: Guard tests
         run: bash tests/public-safety.test.sh
       - name: Scan tracked files
@@ -25,3 +27,12 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: No beads data on the remote
+        # Dolt pushes its data as refs/dolt/* and __dolt branches, past every
+        # Git hook. The beads issues are private, so none may exist here.
+        run: |
+          refs=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" | awk '{print $2}' | grep -E '^refs/(dolt/|heads/__dolt)' || true)
+          if [ -n "$refs" ]; then
+            printf 'Beads data was pushed to this public repo:\n%s\nDelete these refs (see AGENTS.md).\n' "$refs"
+            exit 1
+          fi
