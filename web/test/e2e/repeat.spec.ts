@@ -20,7 +20,7 @@ test("quick add reads a repeat on the personal list and shows it", async ({ page
   await expect(page.locator("#qa-backdrop mark")).toHaveText(["every day", "at 8:30pm"]);
   await input.press("Enter");
   await expect(input).toHaveValue("");
-  expect(hub.posted.at(-1)).toMatchObject({
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "add",
     bridge: "hub",
     repo: "personal",
@@ -33,7 +33,7 @@ test("quick add reads a repeat on the personal list and shows it", async ({ page
   await expect(page.locator("#qa-chips .chip").first()).toHaveText("Due Tomorrow 9:00");
   await expect(page.locator("#qa-chips .chip-repeat")).toHaveText("Every week on Mon, Thu");
   await input.press("Enter");
-  expect(hub.posted.at(-1)!.payload).toEqual({
+  await expect.poll(() => hub.posted.at(-1)?.payload).toEqual({
     title: "Take out the bins",
     due: "2026-10-15T09:00:00.000Z",
     repeat: { every: "week", weekdays: [1, 4], timeZone: "UTC" },
