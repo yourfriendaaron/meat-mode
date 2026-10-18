@@ -1,7 +1,9 @@
 /* Select mode and the bulk action bar. */
 
+/* As tall as the search field and the sync pill beside it. */
 .mhead #select-btn {
   flex: none;
+  min-height: 36px;
 }
 .mhead #select-btn[aria-pressed="true"] {
   border-color: var(--purple);
@@ -57,15 +59,17 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
+/* Phone: three even tiles, each with its icon over its label. */
 .bulk-acts .btn {
-  min-height: 40px;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 48px;
   min-width: 0;
-  padding-inline: 6px;
+  padding: 4px 6px;
   line-height: 1.2;
   text-align: center;
 }
 .bulk-acts .btn svg {
-  display: none;
   width: 16px;
   height: 16px;
   flex: none;
@@ -84,11 +88,11 @@
   display: none;
 }
 .app.selecting .list {
-  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 132px);
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 148px);
 }
 /* A toast in select mode, such as a failed save, clears the bar. */
 .app.selecting .toast-region {
-  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 124px);
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 140px);
 }
 
 /* Desktop: the bar is one row under the list. */
@@ -105,11 +109,10 @@
     display: flex;
   }
   .bulk-acts .btn {
+    flex-direction: row;
+    gap: 6px;
     min-height: 32px;
-    padding-inline: 12px;
-  }
-  .bulk-acts .btn svg {
-    display: block;
+    padding: 3px 12px;
   }
   .bulk-more {
     margin-left: auto;
