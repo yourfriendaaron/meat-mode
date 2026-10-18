@@ -124,7 +124,18 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		if utf8.RuneCountInString(title) > MaxTitleLen {
 			return a, false, invalidf("title is longer than %d characters", MaxTitleLen)
 		}
-		p = api.Payload{Title: title, Due: p.Due}
+		add := api.Payload{Title: title, Due: p.Due}
+		if p.Repeat != nil {
+			if p.Due == nil {
+				return a, false, invalidf("a repeat needs payload.due")
+			}
+			r, err := checkRepeat(*p.Repeat)
+			if err != nil {
+				return a, false, err
+			}
+			add.Repeat = &r
+		}
+		p = add
 	case api.KindSync:
 		if p.On == nil {
 			return a, false, invalidf("sync needs payload.on")
@@ -171,6 +182,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 	if na.Kind == api.KindAdd || na.Kind == api.KindSync {
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
 			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
+		}
+		if a.Payload.Repeat != nil && !isHubRepo(na.Bridge, na.Repo) {
+			return a, false, invalidf("only the personal list takes a repeat")
 		}
 		// A bridge's own personal repo only feeds the personal list.
 		var optedIn bool

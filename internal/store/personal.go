@@ -86,6 +86,10 @@ func freeHubID(tx *sql.Tx, want string) (string, error) {
 func apply(it *api.Item, a api.Action, commentID string) {
 	switch a.Kind {
 	case api.KindDone, api.KindDismiss:
+		if a.Payload.Was != nil {
+			// A repeating personal item moved on to its next date instead.
+			break
+		}
 		it.Status = "closed"
 		it.CloseReason = ReasonDone
 		if a.Kind == api.KindDismiss {
@@ -131,6 +135,10 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 			DueAt:     a.Payload.Due,
 			CreatedAt: a.CreatedAt,
 			UpdatedAt: a.CreatedAt,
+		}
+		if r := a.Payload.Repeat; r != nil && a.Payload.Due != nil {
+			it.Repeat = ptr(*r)
+			it.Repeat.Start = ptr(*a.Payload.Due)
 		}
 		if err := putHubItem(tx, it, a.CreatedAt, nil); err != nil {
 			return nil, err
@@ -422,7 +430,7 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge string) (key string, crea
 		return "", false, invalidf("note is longer than %d characters", MaxNoteLen)
 	}
 	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo,
-		Payload: api.Payload{Title: t.Title, Due: t.Due}}, author, func(tx *sql.Tx, a api.Action) error {
+		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat}}, author, func(tx *sql.Tx, a api.Action) error {
 		return recordOwner(tx, a.BeadID, bridge)
 	})
 	if err != nil {

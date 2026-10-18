@@ -316,3 +316,216 @@ func TestImportedPersonalItemsHaveNoOwner(t *testing.T) {
 		t.Fatalf("imported item: %v", err)
 	}
 }
+
+func addRepeating(t *testing.T, s *Store, title string, due time.Time, r api.Repeat) string {
+	t.Helper()
+	a, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo,
+		Payload: api.Payload{Title: title, Due: &due, Repeat: &r}}, "alex-app")
+	must(t, err)
+	return hubKey(a.BeadID)
+}
+
+func act(t *testing.T, s *Store, kind, key string, p api.Payload) api.Action {
+	t.Helper()
+	a, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: kind, Key: key, Payload: p}, "alex-app")
+	must(t, err)
+	return a
+}
+
+func TestDoneMovesARepeatingItemOn(t *testing.T) {
+	s, c := open(t)
+	// Every month on the 31st at 9:00 in Paris, sent with a start the hub
+	// ignores.
+	due := time.Date(2026, 1, 31, 8, 0, 0, 0, time.UTC)
+	bogus := due.Add(-time.Hour)
+	key := addRepeating(t, s, "Pay the rent", due, api.Repeat{Every: api.EveryMonth, TimeZone: "Europe/Paris", Start: &bogus})
+	it := item(t, mustState(t, s), key)
+	if it.Repeat == nil || it.Repeat.Start == nil || !it.Repeat.Start.Equal(due) || it.Repeat.Every != api.EveryMonth {
+		t.Fatalf("added %+v", it.Repeat)
+	}
+	until := c.t.Add(time.Hour)
+	act(t, s, api.KindSnooze, key, api.Payload{Until: &until})
+	edit(t, s, key, api.Edit{Checklist: &[]api.Check{{ID: "c1", Text: "Transfer", Done: true}, {ID: "c2", Text: "File the receipt"}}})
+
+	// Done a month late: February's date is skipped, not stacked.
+	c.tick()
+	a := act(t, s, api.KindDone, key, api.Payload{})
+	it = item(t, mustState(t, s), key)
+	march := time.Date(2026, 3, 31, 7, 0, 0, 0, time.UTC) // 9:00 in Paris, summer time
+	if it.Status != "open" || it.ClosedAt != nil || it.CloseReason != "" || !it.DueAt.Equal(march) || it.DeferUntil != nil ||
+		it.Checklist[0].Done || it.Checklist[1].Done || !it.UpdatedAt.Equal(c.t) || !it.Repeat.Start.Equal(due) {
+		t.Fatalf("after done %+v", it)
+	}
+	w := a.Payload.Was
+	if a.Status != api.StatusApplied || w == nil || !w.Due.Equal(due) || w.Checklist == nil || !(*w.Checklist)[0].Done ||
+		w.Title != nil || w.Repeat != nil {
+		t.Fatalf("done = %+v, was %+v", a, w)
+	}
+	stored, err := s.Action(a.ID)
+	must(t, err)
+	if b1, b2 := mustJSON(t, stored.Payload), mustJSON(t, a.Payload); b1 != b2 {
+		t.Errorf("stored payload %s, returned %s", b1, b2)
+	}
+
+	// The next done lands on 30 April, and its Undo, an edit back to it,
+	// keeps the start, so May returns to the 31st.
+	c.t = time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+	act(t, s, api.KindDone, key, api.Payload{})
+	c.tick()
+	a = act(t, s, api.KindDone, key, api.Payload{})
+	april := time.Date(2026, 4, 30, 7, 0, 0, 0, time.UTC)
+	if w := a.Payload.Was; !w.Due.Equal(april) {
+		t.Fatalf("second done's was %+v", w)
+	}
+	undo := edit(t, s, key, *a.Payload.Was)
+	it = item(t, mustState(t, s), key)
+	if !it.DueAt.Equal(april) || !it.Repeat.Start.Equal(due) || undo.Payload.Was.Repeat != nil {
+		t.Fatalf("after undo %+v, start %v", it, it.Repeat.Start)
+	}
+	act(t, s, api.KindDone, key, api.Payload{})
+	if it := item(t, mustState(t, s), key); !it.DueAt.Equal(time.Date(2026, 5, 31, 7, 0, 0, 0, time.UTC)) {
+		t.Fatalf("after April %v", it.DueAt)
+	}
+
+	// Moving the due date off the series moves the series.
+	moved := time.Date(2026, 6, 10, 7, 0, 0, 0, time.UTC)
+	edit(t, s, key, api.Edit{Due: &moved})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(moved) {
+		t.Fatalf("start after a move %v", it.Repeat.Start)
+	}
+
+	// Dismiss ends the series; reopen picks it up at its last due time.
+	a = act(t, s, api.KindDismiss, key, api.Payload{})
+	it = item(t, mustState(t, s), key)
+	if it.Status != "closed" || it.CloseReason != ReasonDismissed || !it.DueAt.Equal(moved) || a.Payload.Was != nil {
+		t.Fatalf("after dismiss %+v", it)
+	}
+	act(t, s, api.KindReopen, key, api.Payload{})
+	it = item(t, mustState(t, s), key)
+	if it.Status != "open" || !it.DueAt.Equal(moved) || it.Repeat == nil {
+		t.Fatalf("after reopen %+v", it)
+	}
+
+	// An item that does not repeat still closes.
+	plain := hubKey(addPersonal(t, s, id1, "Water the plants", &due).BeadID)
+	if a := act(t, s, api.KindDone, plain, api.Payload{}); a.Payload.Was != nil {
+		t.Fatalf("plain done %+v", a)
+	}
+	if it := item(t, mustState(t, s), plain); it.Status != "closed" || it.CloseReason != ReasonDone {
+		t.Fatalf("plain item after done %+v", it)
+	}
+}
+
+func TestEditRepeatAndRemindBefore(t *testing.T) {
+	s, c := open(t)
+	due := c.t.Add(3 * time.Hour)
+	key := hubKey(addPersonal(t, s, id1, "Water the plants", &due).BeadID)
+
+	// A repeat starts at the due time; the client's start is ignored.
+	bogus := due.Add(-48 * time.Hour)
+	daily := api.Repeat{Every: api.EveryDay, TimeZone: "America/New_York", Start: &bogus}
+	a := edit(t, s, key, api.Edit{Repeat: &daily, RemindBefore: ptr(15)})
+	it := item(t, mustState(t, s), key)
+	if it.Repeat == nil || !it.Repeat.Start.Equal(due) || it.RemindBefore == nil || *it.RemindBefore != 15 {
+		t.Fatalf("after setting %+v, %+v", it.Repeat, it.RemindBefore)
+	}
+	if w := a.Payload.Was; !w.ClearRepeat || w.Repeat != nil || !w.ClearRemindBefore || w.RemindBefore != nil || w.Due != nil {
+		t.Fatalf("was %+v", w)
+	}
+	if a.Payload.Set.Repeat.Start != nil {
+		t.Errorf("set kept the client's start")
+	}
+	undo := edit(t, s, key, *a.Payload.Was)
+	if it := item(t, mustState(t, s), key); it.Repeat != nil || it.RemindBefore != nil {
+		t.Fatalf("after undo %+v", it)
+	}
+	if w := undo.Payload.Was; w.Repeat == nil || !w.Repeat.Start.Equal(due) || *w.RemindBefore != 15 {
+		t.Fatalf("undo's was %+v", w)
+	}
+
+	// A repeat and a due time in one edit start at the new due time.
+	later := due.Add(24 * time.Hour)
+	edit(t, s, key, api.Edit{Due: &later, Repeat: &daily, RemindBefore: ptr(0)})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(later) || *it.RemindBefore != 0 {
+		t.Fatalf("repeat with due %+v", it)
+	}
+
+	// Clearing the due date ends the repeat and records it for Undo.
+	a = edit(t, s, key, api.Edit{ClearDue: true, ClearRemindBefore: true})
+	if it := item(t, mustState(t, s), key); it.DueAt != nil || it.Repeat != nil || it.RemindBefore != nil {
+		t.Fatalf("after clearing the due %+v", it)
+	}
+	if w := a.Payload.Was; !w.Due.Equal(later) || w.Repeat == nil || w.Repeat.Every != api.EveryDay || w.ClearRepeat || *w.RemindBefore != 0 {
+		t.Fatalf("was after clearing the due %+v", w)
+	}
+	edit(t, s, key, *a.Payload.Was)
+	if it := item(t, mustState(t, s), key); !it.DueAt.Equal(later) || it.Repeat == nil || !it.Repeat.Start.Equal(later) {
+		t.Fatalf("after undoing the clear %+v", it)
+	}
+
+	// A repeat needs a due time, now or in the same edit.
+	none := hubKey(addPersonal(t, s, id2, "Call Sam", nil).BeadID)
+	_, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindEdit, Key: none,
+		Payload: api.Payload{Set: &api.Edit{Repeat: &daily}}}, "alex-app")
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("repeat with no due: %v", err)
+	}
+	edit(t, s, none, api.Edit{Due: &due, Repeat: &daily})
+
+	now := time.Now()
+	for name, set := range map[string]api.Edit{
+		"repeat and clearRepeat":             {Repeat: &daily, ClearRepeat: true},
+		"repeat and clearDue":                {Repeat: &daily, ClearDue: true},
+		"bad repeat":                         {Repeat: &api.Repeat{Every: "fortnight", TimeZone: "UTC"}, Due: &now},
+		"remindBefore and clearRemindBefore": {RemindBefore: ptr(5), ClearRemindBefore: true},
+		"remindBefore negative":              {RemindBefore: ptr(-1)},
+		"remindBefore over a week":           {RemindBefore: ptr(api.MaxLeadMinutes + 1)},
+	} {
+		_, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindEdit, Key: key,
+			Payload: api.Payload{Set: &set}}, "alex-app")
+		if !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: %v, want invalid", name, err)
+		}
+	}
+	edit(t, s, key, api.Edit{RemindBefore: ptr(api.MaxLeadMinutes)})
+	edit(t, s, key, api.Edit{ClearRepeat: true})
+}
+
+func TestAddWithRepeat(t *testing.T) {
+	s, c := open(t)
+	seed(t, s)
+	due := c.t.Add(time.Hour)
+	daily := api.Repeat{Every: api.EveryDay, TimeZone: "UTC"}
+	for name, na := range map[string]api.NewAction{
+		"no due":       {Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo, Payload: api.Payload{Title: "Water the plants", Repeat: &daily}},
+		"bad rule":     {Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo, Payload: api.Payload{Title: "Water the plants", Due: &due, Repeat: &api.Repeat{Every: api.EveryDay}}},
+		"agent's repo": {Kind: api.KindAdd, Bridge: "laptop", Repo: "garden", Payload: api.Payload{Title: "Water the plants", Due: &due, Repeat: &daily}},
+	} {
+		na.ID = uuid.NewString()
+		if _, _, err := s.AppendAction(na, "alex-app"); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: %v, want invalid", name, err)
+		}
+	}
+
+	// An agent's to-do repeats too, and its done moves it on.
+	_, err := s.CreateBridge("desk")
+	must(t, err)
+	key, _, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Take the bins out", Due: &due, Repeat: &daily}, "desk")
+	must(t, err)
+	_, _, id, _ := SplitKey(key)
+	it, err := s.PersonalItem("desk", id)
+	must(t, err)
+	if it.Repeat == nil || !it.Repeat.Start.Equal(due) {
+		t.Fatalf("agent's repeat %+v", it.Repeat)
+	}
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Take the bins out", Repeat: &daily}, "desk"); !errors.Is(err, ErrInvalid) {
+		t.Errorf("agent's repeat with no due: %v", err)
+	}
+	a, _, err := s.ChangePersonal("desk", id, api.PersonalChange{Kind: api.KindDone})
+	must(t, err)
+	it, err = s.PersonalItem("desk", id)
+	must(t, err)
+	if it.Status != "open" || !it.DueAt.Equal(due.Add(24*time.Hour)) || a.Payload.Was == nil || !a.Payload.Was.Due.Equal(due) {
+		t.Fatalf("agent's done %+v, item %+v", a, it)
+	}
+}
