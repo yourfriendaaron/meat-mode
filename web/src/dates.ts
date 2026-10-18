@@ -36,6 +36,26 @@ export function fmtDay(d: Date): string {
   return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
+/** "Nov 26", with the year when it is not now's: "Nov 26, 2027". */
+export function fmtDate(d: Date, now: Date): string {
+  const out = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return d.getFullYear() === now.getFullYear() ? out : `${out}, ${d.getFullYear()}`;
+}
+
+/** A local date as "YYYY-MM-DD". */
+export function ymd(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** The local start of a "YYYY-MM-DD" date, or null when it is not a real one. */
+export function fromYmd(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return ymd(d) === s ? d : null;
+}
+
 /** A short label for a moment relative to now: "14:30", "Tomorrow 9:00", "Fri, Oct 23". */
 export function fmtWhen(d: Date, now: Date): string {
   if (sameDay(d, now)) return fmtTime(d);

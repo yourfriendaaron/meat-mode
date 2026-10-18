@@ -224,6 +224,64 @@ test("the repeat and the date are separate tokens, in order", () => {
   assert.equal(r.list, "home/personal");
 });
 
+// End dates (docs/api.md, Repeating to-dos: until). Wednesday 14 October 2026, 10:00.
+const untils: [string, string, object, string][] = [
+  ["Water the plants every sunday until nov 26", "Water the plants", { every: "week", weekdays: [0], until: "2026-11-26" }, "2026-10-18 09:00"],
+  ["Water the plants every sunday ending nov 26", "Water the plants", { every: "week", weekdays: [0], until: "2026-11-26" }, "2026-10-18 09:00"],
+  ["Water the plants every day at 8pm until 26 November", "Water the plants", { every: "day", until: "2026-11-26" }, "2026-10-14 20:00"],
+  ["Water the plants every day until nov 26 at 8pm", "Water the plants", { every: "day", until: "2026-11-26" }, "2026-10-14 20:00"],
+  ["Water the plants every day until 2027-01-31 #personal", "Water the plants", { every: "day", until: "2027-01-31" }, "2026-10-15 09:00"],
+  // A date with no year is the next one on or after the first occurrence.
+  ["Pay rent every month on the 1st until oct 1", "Pay rent", { every: "month", until: "2027-10-01" }, "2026-11-01 09:00"],
+  ["Water the plants every day until oct 14", "Water the plants", { every: "day", until: "2027-10-14" }, "2026-10-15 09:00"],
+  ["Water the plants every day at 8pm until oct 14", "Water the plants", { every: "day", until: "2026-10-14" }, "2026-10-14 20:00"],
+  // A relative date counts from now.
+  ["Stretch daily until friday", "Stretch", { every: "day", until: "2026-10-16" }, "2026-10-15 09:00"],
+  ["Stretch daily until tomorrow", "Stretch", { every: "day", until: "2026-10-15" }, "2026-10-15 09:00"],
+];
+
+for (const [text, title, repeat, due] of untils) {
+  test(`until: ${text}`, () => {
+    const r = parseQuickAdd(text, now, lists);
+    assert.equal(r.title, title);
+    assert.deepEqual(r.repeat, repeat);
+    assert.equal(local(r.due), due);
+    assert.equal(r.early, undefined);
+    for (const t of r.tokens) assert.equal(text.slice(t.start, t.end), t.text);
+  });
+}
+
+test("the end date is part of the repeat's token", () => {
+  const r = parseQuickAdd("Water the plants every sunday at 8pm until nov 26", now, lists);
+  assert.deepEqual(r.tokens.map((t) => [t.kind, t.text]), [
+    ["repeat", "every sunday"],
+    ["date", "at 8pm"],
+    ["repeat", "until nov 26"],
+  ]);
+});
+
+test("an end date before the first occurrence is not sent", () => {
+  for (const text of ["Stretch daily until today", "Water the plants every day until 2026-10-01", "Pay rent every month on the 1st until oct 20 2026"]) {
+    const r = parseQuickAdd(text, now, lists);
+    assert.equal(r.early, true, text);
+    assert.equal(r.repeat?.until, undefined, text);
+    assert.ok(!r.title.includes("until"), text);
+  }
+});
+
+test("until stays in the title without a repeat, or without a date after it", () => {
+  const one = parseQuickAdd("Wait until friday to call Sam", now, lists);
+  assert.equal(one.repeat, null);
+  assert.equal(one.title, "Wait until to call Sam");
+  const time = parseQuickAdd("Work every day until 5pm", now, lists);
+  assert.deepEqual(time.repeat, { every: "day" });
+  assert.equal(time.title, "Work until");
+  const plain = parseQuickAdd("Read every day until the book ends", now, lists);
+  assert.deepEqual(plain.repeat, { every: "day" });
+  assert.equal(plain.title, "Read until the book ends");
+  assert.equal(parseQuickAdd("Check the hoses every week until nov 26", now, lists, { repeat: false }).repeat, null);
+});
+
 test("with repeats off, the words stay as they were read before", () => {
   const r = parseQuickAdd("Check the hoses every week", now, lists, { repeat: false });
   assert.equal(r.repeat, null);

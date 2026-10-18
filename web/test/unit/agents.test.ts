@@ -26,6 +26,8 @@ test("the instructions name the user and the machine, and say how to raise and a
   assert.match(text, /--clear-due/);
   assert.match(text, /--every makes it repeat/);
   assert.match(text, /--no-repeat/);
+  assert.match(text, /--until 2026-11-26 ends the repeat/);
+  assert.match(text, /--no-until/);
   assert.doesNotMatch(text, /https?:\/\//);
   assert.match(agentInstructions(" ", "desk"), /^## Tasks for the user\n/);
 });

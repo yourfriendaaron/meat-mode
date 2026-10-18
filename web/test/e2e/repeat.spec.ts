@@ -40,6 +40,31 @@ test("quick add reads a repeat on the personal list and shows it", async ({ page
   });
 });
 
+test("quick add reads an end date after the repeat, and holds back one before the first date", async ({ page, hub }) => {
+  await openApp(page);
+  const input = page.getByRole("textbox", { name: "New task" });
+  await input.click();
+  await input.pressSequentially("Water the ferns every sunday until nov 26");
+  await expect(page.locator("#qa-chips .chip")).toHaveText(["Due Sun, Oct 18 9:00", "Every week on Sun until Nov 26"]);
+  await expect(page.locator("#qa-backdrop mark")).toHaveText(["every sunday", "until nov 26"]);
+  await input.press("Enter");
+  await expect(input).toHaveValue("");
+  expect(hub.posted.at(-1)!.payload).toEqual({
+    title: "Water the ferns",
+    due: "2026-10-18T09:00:00.000Z",
+    repeat: { every: "week", weekdays: [0], until: "2026-11-26", timeZone: "UTC" },
+  });
+  await expect(row(page, "Water the ferns").locator(".chip-repeat")).toHaveText("Every week on Sun until Nov 26");
+
+  const before = hub.posted.length;
+  await input.pressSequentially("Stretch daily until today");
+  await expect(page.locator("#qa-chips .chip-red")).toHaveText("Ends before it starts");
+  await input.press("Enter");
+  await expect(page.locator("#toast")).toContainText("The end date is before the first date.");
+  await expect(input).toHaveValue("Stretch daily until today");
+  expect(hub.posted.length).toBe(before);
+});
+
 test("quick add leaves repeat words alone on an agent's list", async ({ page, hub }) => {
   await openApp(page);
   const input = page.getByRole("textbox", { name: "New task" });
@@ -116,6 +141,61 @@ test("the edit form sets, changes and ends a repeat", async ({ page, hub }) => {
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toMatchObject({ repeat: { every: "week", interval: 2, fromDone: true } });
   await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every 2 weeks after done");
+});
+
+test("the edit form sets and clears a repeat's end date", async ({ page, hub }) => {
+  hub.find(KEY)!.repeat = { every: "day", timeZone: "UTC", start: hub.find(KEY)!.dueAt! };
+  await openApp(page);
+  const detail = await openDetail(page, "Water the plants");
+  const edit = detail.getByRole("button", { name: "Edit", exact: true });
+  await edit.click();
+  const ends = detail.getByLabel("Ends");
+  await expect(ends).toHaveValue("");
+
+  // The due date is 14 October: an end before it is refused here.
+  await ends.fill("2026-10-01");
+  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(detail.getByRole("alert")).toHaveText("End the repeat on or after its due date.");
+  await expect(ends).toBeFocused();
+
+  await ends.fill("2026-11-26");
+  await axe(page);
+  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ repeat: { every: "day", until: "2026-11-26", timeZone: "UTC" } });
+  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every day until Nov 26");
+  expect(hub.find(KEY)!.repeat).toMatchObject({ every: "day", until: "2026-11-26" });
+
+  await edit.click();
+  await expect(ends).toHaveValue("2026-11-26");
+  await detail.getByRole("button", { name: "No end date" }).click();
+  await expect(ends).toHaveValue("");
+  await expect(ends).toBeFocused();
+  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ repeat: { every: "day", timeZone: "UTC" } });
+  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every day");
+  expect(hub.find(KEY)!.repeat!.until).toBeUndefined();
+
+  // Undo puts the end date back with the whole repeat.
+  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toMatchObject({ repeat: { every: "day", until: "2026-11-26" } });
+  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every day until Nov 26");
+
+  // With no repeat there is no end date to set.
+  await edit.click();
+  await detail.getByLabel("Repeat", { exact: true }).selectOption({ label: "Does not repeat" });
+  await expect(ends).toHaveCount(0);
+});
+
+test("Done after a repeat's last date closes the item, and Undo reopens it", async ({ page, hub }) => {
+  const it = hub.find(KEY)!;
+  it.repeat = { every: "day", until: "2026-10-14", timeZone: "UTC", start: it.dueAt! };
+  await openApp(page);
+  await row(page, "Water the plants").getByRole("button", { name: "Mark done: Water the plants" }).click();
+  await expect(page.locator("#toast")).toContainText("Done: Water the plants");
+  expect(hub.find(KEY)).toMatchObject({ status: "closed", repeat: { until: "2026-10-14" } });
+  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => hub.posted.map((a) => a.kind)).toEqual(["done", "reopen"]);
+  await expect(row(page, "Water the plants").locator(".chip-repeat")).toHaveText("Every day until Oct 14");
 });
 
 test("a repeat needs a due date, and clearing the due date ends it", async ({ page, hub }) => {
@@ -259,6 +339,8 @@ test.describe("phone", () => {
     await detail.getByRole("button", { name: "Edit", exact: true }).click();
     await detail.getByLabel("Repeat", { exact: true }).selectOption({ label: "Weekly" });
     await expect(detail.getByRole("checkbox", { name: "Sun" })).toBeVisible();
+    await detail.getByLabel("Ends").fill("2026-11-26");
+    await expect(detail.getByRole("button", { name: "No end date" })).toBeVisible();
     await expect(detail.getByLabel("Remind me early").locator("option:checked")).toHaveText("45 minutes before");
     const [scroll, inner] = await page.evaluate(() => {
       const el = document.querySelector("#detail .detail-inner")!;

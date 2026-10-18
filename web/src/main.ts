@@ -29,7 +29,7 @@ import {
   type Group,
   type ViewId,
 } from "./model.ts";
-import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput } from "./dates.ts";
+import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput, ymd } from "./dates.ts";
 import { completedGroups, deletedGroups, isDeleted } from "./history.ts";
 import { searchGroups } from "./search.ts";
 import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "./bulk.ts";
@@ -395,7 +395,7 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   if (prio) out.push(`<span class="chip ${item.priority === 0 ? "chip-urgent" : "chip-high"}">${esc(prio)}</span>`);
   const dc = dateChip(item, n);
   if (dc) out.push(`<span class="chip chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>`);
-  if (item.repeat) out.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(item.repeat))}</span>`);
+  if (item.repeat) out.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(item.repeat, n))}</span>`);
   if (opts.list) {
     const r = repos().find((x) => repoKey(x) === repoKey(item));
     const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
@@ -643,7 +643,7 @@ function editFormHTML(item: Item): string {
 <h3 id="d-edit-h" class="sr">Edit task</h3>
 <label for="edit-title">Title</label><input id="edit-title" type="text" maxlength="${TITLE_MAX}" autocomplete="off" required>
 <label for="edit-due">Due</label><div class="pick-row"><input id="edit-due" type="text" autocomplete="off" enterkeyhint="done" placeholder="tomorrow 9am" aria-describedby="edit-due-now"><button type="button" class="btn" data-act="edit-clear-due">Clear</button></div><p id="edit-due-now" class="edit-due-now" aria-live="polite">${esc(dueText(item, d))}</p>
-${repeatFieldsHTML(d)}
+${repeatFieldsHTML(item, d)}
 <label for="edit-lead">Remind me early</label>${leadSelect("edit-lead", d.remindBefore, true)}
 <label for="edit-desc">Details</label><textarea id="edit-desc" rows="4" maxlength="${TEXT_MAX}"></textarea>
 <label for="edit-prio">Priority</label><select id="edit-prio">${prio}</select>
@@ -675,8 +675,8 @@ function unitText(d: EditDraft): string {
   return d.repeat ? `${d.repeat}${d.interval.trim() === "1" ? "" : "s"}` : "";
 }
 
-/** The edit form's repeat: how often, a weekly rule's days, and whether to count from done. */
-function repeatFieldsHTML(d: EditDraft): string {
+/** The edit form's repeat: how often, a weekly rule's days, whether to count from done, and its end date. */
+function repeatFieldsHTML(item: Item, d: EditDraft): string {
   const pick = REPEAT_CHOICES.map(([v, label]) => `<option value="${v}"${v === d.repeat ? " selected" : ""}>${esc(label)}</option>`).join("");
   const select = `<label for="edit-repeat">Repeat</label><select id="edit-repeat">${pick}</select>`;
   if (!d.repeat) return select;
@@ -686,7 +686,14 @@ function repeatFieldsHTML(d: EditDraft): string {
           ([n, name]) => `<label class="wd"><input type="checkbox" id="edit-wd-${n}" data-weekday="${n}"${d.weekdays.includes(n) ? " checked" : ""}>${name}</label>`,
         ).join("")}</fieldset><p class="muted small" id="edit-wd-hint">With none picked, it repeats on the due date's day.</p>`
       : "";
-  return `${select}<div class="repeat-opts"><label for="edit-interval">Every</label><div class="pick-row"><input id="edit-interval" type="number" min="1" max="${MAX_REPEAT_INTERVAL}" step="1" inputmode="numeric"><span id="edit-unit">${unitText(d)}</span></div>${days}<label class="check-row"><input type="checkbox" id="edit-from-done"${d.fromDone ? " checked" : ""}>Count the next date from when it is done</label></div>`;
+  return `${select}<div class="repeat-opts"><label for="edit-interval">Every</label><div class="pick-row"><input id="edit-interval" type="number" min="1" max="${MAX_REPEAT_INTERVAL}" step="1" inputmode="numeric"><span id="edit-unit">${unitText(d)}</span></div>${days}<label class="check-row"><input type="checkbox" id="edit-from-done"${d.fromDone ? " checked" : ""}>Count the next date from when it is done</label>${untilFieldHTML(item, d)}</div>`;
+}
+
+/** A repeat's optional end date; empty, it repeats for good. */
+function untilFieldHTML(item: Item, d: EditDraft): string {
+  const due = dueOutcome(item, d, now());
+  const min = due.kind === "set" || (due.kind === "keep" && due.at) ? ` min="${ymd(due.at!)}"` : "";
+  return `<label for="edit-until">Ends</label><div class="pick-row until-row"><input id="edit-until" type="date"${min} aria-describedby="edit-until-hint"><button type="button" class="btn" data-act="edit-clear-until">No end date</button></div><p class="muted small" id="edit-until-hint">The last date it may land on. With none, it repeats for good.</p>`;
 }
 
 /** What the due field will save, in words. */
@@ -782,6 +789,7 @@ ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snoo
       setValue("#edit-due", d.dueText);
       setValue("#edit-desc", d.description);
       setValue("#edit-interval", d.interval);
+      setValue("#edit-until", d.until);
     }
     if (S.noteEdit?.key === item.key) setValue("#note-edit-input", S.noteEdit.text);
   }
@@ -1436,7 +1444,15 @@ function saveEdit() {
   if (err) {
     e.error = err;
     render();
-    const field = /title/i.test(err) ? "#edit-title" : /^Repeat every/.test(err) ? "#edit-interval" : /date/i.test(err) ? "#edit-due" : "#edit-desc";
+    const field = /title/i.test(err)
+      ? "#edit-title"
+      : /^Repeat every/.test(err)
+        ? "#edit-interval"
+        : /^End the repeat/.test(err)
+          ? "#edit-until"
+          : /date/i.test(err)
+            ? "#edit-due"
+            : "#edit-desc";
     $<HTMLElement>(field).focus();
     return;
   }
@@ -1678,7 +1694,8 @@ function updateQuickAdd() {
 
   const chips: string[] = [];
   if (qa.due) chips.push(`<span class="chip chip-purple">${esc(dueLabel(qa.due, now()))}</span>`);
-  if (qa.repeat) chips.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(qa.repeat))}</span>`);
+  if (qa.repeat) chips.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(qa.repeat, now()))}</span>`);
+  if (qa.early) chips.push('<span class="chip chip-red">Ends before it starts</span>');
   if (qa.list) {
     const r = repos().find((x) => repoKey(x) === qa.list);
     chips.push(`<span class="chip chip-list">${esc(r ? listLabel(r) : qa.list)}</span>`);
@@ -1707,6 +1724,11 @@ async function submitQuickAdd() {
     repo: listKey.slice(slash + 1),
     payload: { title, due: qa.due ? qa.due.toISOString() : null },
   };
+  if (qa.early) {
+    showToast("The end date is before the first date.");
+    input.focus();
+    return;
+  }
   if (qa.repeat && qa.due) a.payload.repeat = { ...qa.repeat, timeZone: browserZone() };
   if (await post(a)) {
     input.value = "";
@@ -1876,6 +1898,13 @@ function onClick(e: MouseEvent) {
       break;
     case "edit-clear-due":
       clearDue();
+      break;
+    case "edit-clear-until":
+      if (S.edit) {
+        S.edit.draft.until = "";
+        setValue("#edit-until", "");
+        $<HTMLInputElement>("#edit-until").focus();
+      }
       break;
     case "note-edit":
       if (S.open) openNoteEdit(S.open, btn.dataset.id ?? "");
@@ -2083,7 +2112,7 @@ function onInput(e: Event) {
     } else if (t.id === "edit-interval") {
       d.interval = v;
       $("#edit-unit").textContent = unitText(d);
-    }
+    } else if (t.id === "edit-until") d.until = v;
   }
 }
 

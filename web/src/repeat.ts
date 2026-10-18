@@ -3,6 +3,7 @@
 // Pure: callers pass `now`.
 
 import { MAX_REPEAT_INTERVAL, type Repeat, type RepeatUnit } from "./types.ts";
+import { fmtDate, fromYmd } from "./dates.ts";
 
 /** What a repeat says, before the device's zone is added to it. */
 export type RepeatRule = Omit<Repeat, "timeZone" | "start">;
@@ -131,8 +132,8 @@ function weekOrder(days: number[]): number[] {
   return [...days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
 }
 
-/** "Every day", "Every 2 weeks on Mon, Thu", "Every weekday", "Every month after done". */
-export function repeatLabel(r: RepeatRule): string {
+/** "Every day", "Every 2 weeks on Mon, Thu", "Every weekday", "Every month after done", "Every week on Sun until Nov 26". */
+export function repeatLabel(r: RepeatRule, now: Date): string {
   const n = r.interval && r.interval > 1 ? r.interval : 1;
   const days = r.every === "week" && !r.fromDone ? weekOrder(r.weekdays ?? []) : [];
   let out: string;
@@ -141,12 +142,14 @@ export function repeatLabel(r: RepeatRule): string {
     out = n === 1 ? `Every ${r.every}` : `Every ${n} ${r.every}s`;
     if (days.length) out += ` on ${days.map((d) => DAY_NAMES[d]).join(", ")}`;
   }
-  return r.fromDone ? `${out} after done` : out;
+  if (r.fromDone) out += " after done";
+  const until = r.until ? fromYmd(r.until) : null;
+  return until ? `${out} until ${fmtDate(until, now)}` : out;
 }
 
-/** Whether two rules repeat the same way, whatever their zone and start. */
+/** Whether two rules repeat the same way and end on the same date, whatever their zone and start. */
 export function sameRule(a: RepeatRule | null | undefined, b: RepeatRule | null | undefined): boolean {
   if (!a || !b) return !a && !b;
   const days = (r: RepeatRule) => (r.every === "week" && !r.fromDone ? [...(r.weekdays ?? [])].sort().join() : "");
-  return a.every === b.every && (a.interval || 1) === (b.interval || 1) && days(a) === days(b) && !!a.fromDone === !!b.fromDone;
+  return a.every === b.every && (a.interval || 1) === (b.interval || 1) && days(a) === days(b) && !!a.fromDone === !!b.fromDone && (a.until ?? "") === (b.until ?? "");
 }

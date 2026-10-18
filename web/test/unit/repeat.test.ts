@@ -21,8 +21,14 @@ test("a repeat in plain words", () => {
     [{ every: "year" }, "Every year"],
     [{ every: "day", interval: 3, fromDone: true }, "Every 3 days after done"],
     [{ every: "week", interval: 1 }, "Every week"],
+    [{ every: "week", weekdays: [0], until: "2026-11-26" }, "Every week on Sun until Nov 26"],
+    [{ every: "day", interval: 3, fromDone: true, until: "2026-12-31" }, "Every 3 days after done until Dec 31"],
+    // The year shows only outside this one.
+    [{ every: "month", until: "2027-03-01" }, "Every month until Mar 1, 2027"],
+    // A date that is not a real one is left out rather than shown wrong.
+    [{ every: "day", until: "2026-02-30" }, "Every day"],
   ];
-  for (const [r, want] of cases) assert.equal(repeatLabel(r), want);
+  for (const [r, want] of cases) assert.equal(repeatLabel(r, now), want);
 });
 
 test("the first occurrence is the first allowed day past now", () => {
@@ -49,6 +55,9 @@ test("rules compare by what they repeat, not their zone or start", () => {
   assert.ok(!sameRule({ every: "day" }, { every: "day", interval: 2 }));
   assert.ok(!sameRule({ every: "week", weekdays: [1] }, { every: "week" }));
   assert.ok(!sameRule({ every: "day" }, { every: "day", fromDone: true }));
+  assert.ok(sameRule({ every: "day", until: "2026-11-26" }, { every: "day", until: "2026-11-26" }));
+  assert.ok(!sameRule({ every: "day", until: "2026-11-26" }, { every: "day" }));
+  assert.ok(!sameRule({ every: "day", until: "2026-11-26" }, { every: "day", until: "2026-11-27" }));
 });
 
 test("lead times read as people say them", () => {

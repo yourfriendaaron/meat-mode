@@ -3,6 +3,7 @@
 
 import * as chrono from "chrono-node/en";
 import { findRepeat, firstOccurrence, type RepeatRule } from "./repeat.ts";
+import { startOfDay, ymd } from "./dates.ts";
 
 export interface QuickList {
   /** Repo key, `<bridge>/<repo>`. */
@@ -23,6 +24,8 @@ export interface QuickAdd {
   due: Date | null;
   /** Set only with `due`, which is then its first occurrence. */
   repeat: RepeatRule | null;
+  /** Set when the repeat's end date falls before its first occurrence; the rule then holds no `until`. */
+  early?: true;
   list: string | null;
   tokens: QuickToken[];
 }
@@ -43,6 +46,8 @@ export const MORNING_HOUR = 9;
 const PART_OF_DAY = /\b(morning|noon|midday|afternoon|evening|night|midnight)\b/i;
 const TONIGHT = /\btonight\b/i;
 const LIST_TAG = /(^|\s)#([\p{L}\p{N}_.-]+)/gu;
+/** The words that end a repeat ("every sunday until nov 26"), before its date. */
+const UNTIL = /\b(?:until|ending)\s+/gi;
 
 /** A word's edges, for patterns chrono runs without its own boundary check. */
 const B = "(?<![\\p{L}\\p{N}_])";
@@ -149,6 +154,23 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
     dateText = text.slice(0, rm.start) + " ".repeat(rm.end - rm.start) + text.slice(rm.end);
   }
 
+  // "until nov 26" after the repeat, blanked for chrono in the same way.
+  let until: ReturnType<typeof chrono.parse>[number] | null = null;
+  if (rm && repeat) {
+    UNTIL.lastIndex = rm.end;
+    for (let m = UNTIL.exec(text); m && !until; m = UNTIL.exec(text)) {
+      const from = m.index + m[0].length;
+      const r = dateOnly(parser.parse(text.slice(from), now, { forwardDate: true })[0], now);
+      // Only a date that follows the word and names its day: "until 5pm" is no end.
+      if (!r || r.index !== 0 || !hasDay(r)) continue;
+      const end = from + r.text.length;
+      if (tokens.some((t) => m.index < t.end && t.start < end)) continue;
+      until = r;
+      tokens.push({ kind: "repeat", start: m.index, end, text: text.slice(m.index, end) });
+      dateText = dateText.slice(0, m.index) + " ".repeat(end - m.index) + dateText.slice(end);
+    }
+  }
+
   let due: Date | null = null;
   const results = parser.parse(dateText, now, { forwardDate: true });
   for (const r of results) {
@@ -164,6 +186,12 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
     break;
   }
   if (repeat && !due) due = firstOccurrence(repeat, now, DEFAULT_HOUR, 0, monthDay);
+  let early: true | undefined;
+  if (repeat && due && until) {
+    const last = untilDate(until, due);
+    if (last < ymd(due)) early = true;
+    else repeat = { ...repeat, until: last };
+  }
 
   tokens.sort((a, b) => a.start - b.start);
   let title = "";
@@ -174,7 +202,42 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   }
   title += text.slice(pos);
   title = title.replace(/\s+/g, " ").trim();
-  return { title, due, repeat, list, tokens };
+  const out: QuickAdd = { title, due, repeat, list, tokens };
+  if (early) out.early = early;
+  return out;
+}
+
+/**
+ * A date read with a time ("nov 26 at 8pm") cut to its shortest start that
+ * names the same day without one, so the time is left for the due date.
+ */
+function dateOnly(r: ReturnType<typeof chrono.parse>[number] | undefined, now: Date): ReturnType<typeof chrono.parse>[number] | undefined {
+  if (!r || !r.start.isCertain("hour")) return r;
+  const words = [...r.text.matchAll(/\S+/g)];
+  for (const w of words.slice(0, -1)) {
+    const head = r.text.slice(0, w.index + w[0].length);
+    const h = parser.parse(head, now, { forwardDate: true })[0];
+    if (h && h.index === 0 && h.text === head && hasDay(h) && !h.start.isCertain("hour")) return h;
+  }
+  return r;
+}
+
+/**
+ * A repeat's end date as "YYYY-MM-DD". A date given without a year ("nov 26")
+ * is the next one on or after the first occurrence, `due`; a relative one
+ * ("in 3 weeks", "friday") counts from now as chrono read it.
+ */
+function untilDate(r: ReturnType<typeof chrono.parse>[number], due: Date): string {
+  const d = r.start.date();
+  if (r.start.isCertain("year") || !r.start.isCertain("month")) return ymd(d);
+  const month = d.getMonth();
+  const day = d.getDate();
+  const from = startOfDay(due);
+  for (let y = from.getFullYear(); ; y++) {
+    const at = new Date(y, month, day);
+    // 29 February lands only in a leap year.
+    if (at.getMonth() === month && at >= from) return ymd(at);
+  }
 }
 
 /** Whether a date names its day ("friday", "tomorrow", "Oct 20") rather than only a time. */
