@@ -20,6 +20,10 @@ test("the instructions name the user and the machine, and say how to raise and a
   assert.match(text, /paired with it as "desk"/);
   assert.match(text, /bd create "[^"]+" -l human/);
   assert.match(text, /meat-mode add "[^"]+"/);
+  assert.match(text, /meat-mode edit mm-12 --due/);
+  assert.match(text, /meat-mode done mm-12/);
+  assert.match(text, /meat-mode reopen mm-12/);
+  assert.match(text, /--clear-due/);
   assert.doesNotMatch(text, /https?:\/\//);
   assert.match(agentInstructions(" ", "desk"), /^## Tasks for the user\n/);
 });
