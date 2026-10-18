@@ -67,6 +67,10 @@ func (s *Store) State() (api.State, error) {
 		return st, err
 	}
 
+	if err := s.joinRuns(st.Items, index, st.Bridges, st.ServerTime); err != nil {
+		return st, err
+	}
+
 	// The latest settled-or-pending action on each item decides its error.
 	if err := s.eachRow(`SELECT a.bridge, a.repo, a.bead_id, a.error FROM actions a
 		JOIN (SELECT MAX(seq) AS m FROM actions WHERE status != ? AND bead_id != ''
@@ -91,14 +95,22 @@ func (s *Store) State() (api.State, error) {
 		return st, err
 	}
 	st.Unapplied = len(pending)
-	// The latest pending sync switch on a repo shows where it was switched to.
+	// The latest pending sync or agents switch on a repo shows where it was
+	// switched to.
 	repoAt := map[string]int{}
 	for i, r := range st.Repos {
 		repoAt[r.Bridge+"/"+r.Name] = i
 	}
 	for _, a := range pending {
-		if i, ok := repoAt[a.Bridge+"/"+a.Repo]; ok && a.Kind == api.KindSync && a.Payload.On != nil {
+		i, ok := repoAt[a.Bridge+"/"+a.Repo]
+		if !ok || a.Payload.On == nil {
+			continue
+		}
+		switch a.Kind {
+		case api.KindSync:
 			st.Repos[i].OptedIn, st.Repos[i].Pending = *a.Payload.On, true
+		case api.KindAgents:
+			st.Repos[i].AgentsAllowed, st.Repos[i].AgentsPending = *a.Payload.On, true
 		}
 	}
 
@@ -162,6 +174,23 @@ func provisional(a api.Action) api.Item {
 		Comments:  []api.Comment{},
 		Pending:   true,
 		FirstSeen: a.CreatedAt,
+		Run:       provisionalRun(a),
+	}
+}
+
+// provisionalRun is the run an add with ask shows until the bridge reports
+// the bead and its run.
+func provisionalRun(a api.Action) *api.Run {
+	if !a.Payload.Ask {
+		return nil
+	}
+	return &api.Run{
+		ID:        provisionalPrefix + a.ID,
+		State:     api.RunWorking,
+		Agent:     "agent",
+		Activity:  startingActivity,
+		StartedAt: a.CreatedAt,
+		Count:     1,
 	}
 }
 
@@ -169,6 +198,7 @@ func provisional(a api.Action) api.Item {
 func fold(it *api.Item, a api.Action) {
 	it.Pending = true
 	apply(it, a, provisionalPrefix+a.ID)
+	foldRun(it, a)
 }
 
 func (s *Store) eachRow(query string, args []any, fn func(*sql.Rows) error) error {

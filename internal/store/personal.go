@@ -82,9 +82,11 @@ func freeHubID(tx *sql.Tx, want string) (string, error) {
 }
 
 // apply changes an item the way an action would change its bead. A note's
-// comment takes commentID.
+// comment, or an ask's, takes commentID. A stop changes no bead.
 func apply(it *api.Item, a api.Action, commentID string) {
 	switch a.Kind {
+	case api.KindStop:
+		return
 	case api.KindDone, api.KindDismiss:
 		if a.Payload.Was != nil {
 			// A repeating personal item moved on to its next date instead.
@@ -103,7 +105,10 @@ func apply(it *api.Item, a api.Action, commentID string) {
 		it.ClosedAt = nil
 	case api.KindSnooze:
 		it.DeferUntil = a.Payload.Until
-	case api.KindNote:
+	case api.KindNote, api.KindAsk:
+		if a.Payload.Text == "" {
+			break
+		}
 		it.Comments = append(append([]api.Comment{}, it.Comments...), api.Comment{
 			ID:        commentID,
 			Author:    a.Author,

@@ -65,9 +65,10 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		return err
 	}
 	for _, r := range repos {
-		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in) VALUES (?, ?, ?, ?)
-			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in`,
-			bridge, r.Name, r.Personal && r.Name == PersonalRepo, r.OptedIn); err != nil {
+		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in,
+				agents_allowed = excluded.agents_allowed`,
+			bridge, r.Name, r.Personal && r.Name == PersonalRepo, r.OptedIn, r.AgentsAllowed); err != nil {
 			return err
 		}
 	}
@@ -134,9 +135,10 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 		q    string
 		args []any
 	}{
-		{`INSERT INTO repos (bridge, name, personal, opted_in, synced_at)
-			SELECT bridge, ?, personal, opted_in, synced_at FROM repos WHERE bridge = ? AND name = ?`, []any{to, bridge, from}},
+		{`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, synced_at)
+			SELECT bridge, ?, personal, opted_in, agents_allowed, synced_at FROM repos WHERE bridge = ? AND name = ?`, []any{to, bridge, from}},
 		{`UPDATE items SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
+		{`UPDATE runs SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
 		{`UPDATE actions SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
 		{`DELETE FROM repos WHERE bridge = ? AND name = ?`, []any{bridge, from}},
 	}
@@ -165,7 +167,7 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 // Repos lists the repos of active bridges.
 func (s *Store) Repos() ([]api.Repo, error) {
 	// A bridge's own personal repo is only a source for the personal list.
-	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in FROM repos r
+	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in, r.agents_allowed FROM repos r
 		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
 		WHERE r.personal = 0 OR r.bridge = ? ORDER BY r.bridge, r.name`, HubBridge)
 	if err != nil {
@@ -175,7 +177,7 @@ func (s *Store) Repos() ([]api.Repo, error) {
 	out := []api.Repo{}
 	for rows.Next() {
 		var r api.Repo
-		if err := rows.Scan(&r.Bridge, &r.Name, &r.Personal, &r.OptedIn); err != nil {
+		if err := rows.Scan(&r.Bridge, &r.Name, &r.Personal, &r.OptedIn, &r.AgentsAllowed); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -203,7 +205,7 @@ func (s *Store) ReplaceItems(bridge, repo string, items []api.Item) error {
 		seen[it.ID] = true
 		// Hub-only fields never come from a bridge.
 		it.Key, it.Bridge, it.Repo = "", "", ""
-		it.Pending, it.SeenAt, it.Error, it.FirstSeen = false, nil, "", time.Time{}
+		it.Pending, it.SeenAt, it.Error, it.FirstSeen, it.Run = false, nil, "", time.Time{}, nil
 		it.Title = truncRunes(it.Title, maxTitleLen)
 		it.Description = truncRunes(it.Description, maxDescriptionLen)
 		for j := range it.Comments {
