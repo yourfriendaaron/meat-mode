@@ -22,8 +22,8 @@ func main() {
 		err = runHub(os.Args[2:])
 	case "bridge":
 		err = runBridge(os.Args[2:])
-	case "add":
-		err = runAdd(os.Args[2:])
+	case "add", "edit", "done", "reopen":
+		err = runPersonal(os.Args[1], os.Args[2:])
 	case "hash-password":
 		err = runHashPassword(os.Args[2:])
 	case "version", "--version":
@@ -46,7 +46,12 @@ func usage() {
   meat-mode bridge status             show config, repos and hub reachability
   meat-mode bridge uninstall          remove the user service and config
   meat-mode add "<title>" [--due TIME] [--note TEXT] [--author NAME] [--id UUID]
-                                      add a to-do to the personal list with this machine's bridge config
+                                      add a to-do to the personal list with this machine's bridge config;
+                                      prints its id
+  meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--priority N]
+                                      change a to-do this machine added
+  meat-mode done <id>                 mark a to-do this machine added as done
+  meat-mode reopen <id>               open a to-do this machine added again
   meat-mode hash-password             print the hash of a login password for MEAT_MODE_PASSWORD_HASH
   meat-mode version`)
 }

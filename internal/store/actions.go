@@ -76,6 +76,13 @@ func (s *Store) Action(id string) (api.Action, error) {
 // at once and logged as applied. If an action with the same id exists, it
 // returns that one unchanged and created is false.
 func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, created bool, err error) {
+	return s.appendAction(na, author, nil)
+}
+
+// appendAction is AppendAction. after, when set, runs in the same
+// transaction once a new action is stored and applied; a repeated id skips
+// it.
+func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx, api.Action) error) (a api.Action, created bool, err error) {
 	if !ValidActionID(na.ID) {
 		return a, false, invalidf("action id must be a UUID")
 	}
@@ -123,6 +130,37 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 			return a, false, invalidf("sync needs payload.on")
 		}
 		p = api.Payload{On: p.On}
+	case api.KindEdit:
+		if p.Set == nil {
+			return a, false, invalidf("edit needs payload.set")
+		}
+		set, err := checkEdit(*p.Set)
+		if err != nil {
+			return a, false, err
+		}
+		p = api.Payload{Set: &set}
+	case api.KindNoteEdit:
+		if strings.TrimSpace(p.CommentID) == "" {
+			return a, false, invalidf("note-edit needs payload.commentId")
+		}
+		if strings.TrimSpace(p.Text) == "" {
+			return a, false, invalidf("note-edit needs payload.text")
+		}
+		if utf8.RuneCountInString(p.Text) > MaxNoteLen {
+			return a, false, invalidf("note text is longer than %d characters", MaxNoteLen)
+		}
+		p = api.Payload{CommentID: p.CommentID, Text: p.Text}
+	case api.KindNoteDelete:
+		if strings.TrimSpace(p.CommentID) == "" {
+			return a, false, invalidf("note-delete needs payload.commentId")
+		}
+		p = api.Payload{CommentID: p.CommentID}
+	case api.KindNoteRestore:
+		c, err := checkRestore(p.Comment, a.CreatedAt)
+		if err != nil {
+			return a, false, err
+		}
+		p = api.Payload{Comment: &c}
 	case "":
 		return a, false, invalidf("action needs a kind")
 	default:
@@ -158,6 +196,9 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 		if !ok {
 			return a, false, invalidf("%s needs the item key", na.Kind)
 		}
+		if personalOnly(na.Kind) && !isHubRepo(b, r) {
+			return a, false, invalidf("an agent's item is changed by its agent; to ask for a change, add a note")
+		}
 		if strings.HasPrefix(id, provisionalPrefix) {
 			return a, false, conflictf("this item is still being created; try again in a moment")
 		}
@@ -192,6 +233,11 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 			return a, false, err
 		}
 	}
+	if after != nil {
+		if err := after(tx, a); err != nil {
+			return a, false, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return a, false, err
 	}
@@ -203,7 +249,11 @@ func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, cre
 }
 
 func normalisePayload(p api.Payload) api.Payload {
-	for _, t := range []**time.Time{&p.Until, &p.Previous, &p.Due} {
+	times := []**time.Time{&p.Until, &p.Previous, &p.Due}
+	if p.Set != nil {
+		times = append(times, &p.Set.Due)
+	}
+	for _, t := range times {
 		if *t != nil {
 			u := (*t).UTC()
 			*t = &u

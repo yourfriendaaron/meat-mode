@@ -17,7 +17,8 @@ import (
 const defaultDueHour = 9
 
 // Add runs `meat-mode add`: it puts a to-do on the hub's personal list with
-// the hub URL and token of this machine's bridge config, and prints its key.
+// the hub URL and token of this machine's bridge config, and prints its id
+// for `meat-mode edit`, `done` and `reopen`.
 func Add(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -46,17 +47,10 @@ func Add(ctx context.Context, args []string, env Env) error {
 		}
 	}
 
-	cfg, err := LoadConfig(env.Paths.Config)
+	hub, err := pairedHub(env)
 	if err != nil {
 		return err
 	}
-	if cfg.HubURL == "" || cfg.Token == "" {
-		return errors.New("this machine is not paired with a hub; run `meat-mode bridge pair <url> <token>` first")
-	}
-	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
-		return err
-	}
-	hub := env.hub(cfg)
 	if *due != "" {
 		loc, err := hubZone(ctx, hub)
 		if err != nil {
@@ -72,8 +66,23 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(env.Stdout, reply.Key)
+	fmt.Fprintln(env.Stdout, reply.ID)
 	return nil
+}
+
+// pairedHub is the hub this machine's bridge config pairs it with.
+func pairedHub(env Env) (*Hub, error) {
+	cfg, err := LoadConfig(env.Paths.Config)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.HubURL == "" || cfg.Token == "" {
+		return nil, errors.New("this machine is not paired with a hub; run `meat-mode bridge pair <url> <token>` first")
+	}
+	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
+		return nil, err
+	}
+	return env.hub(cfg), nil
 }
 
 // hubZone is the hub's time zone, which reads a date or time without one:

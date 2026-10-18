@@ -13,7 +13,7 @@ Status: v1 in progress, not released yet.
 
 ## How it works
 
-- **Hub**: one container (`meat-mode hub`) on an always-on host. It keeps your personal to-do list itself, a copy of your agents' items in SQLite and an append-only log of what you tapped. It sends reminders through Web Push (and optionally ntfy) and serves the app. Your personal list works with no agent machine at all, and your agents can add to it with `meat-mode add` on any machine with a bridge.
+- **Hub**: one container (`meat-mode hub`) on an always-on host. It keeps your personal to-do list itself, a copy of your agents' items in SQLite and an append-only log of what you tapped. It sends reminders through Web Push (and optionally ntfy) and serves the app. Your personal list works with no agent machine at all, and your agents can add to it with `meat-mode add` on any machine with a bridge, then change what they added with `meat-mode edit` and `meat-mode done`.
 - **Bridge**: the same program (`meat-mode bridge`) as a user service on the machine where your beads repos live. It finds the beads repos in your home folder, dials out to the hub, sends up beads labelled `human` from the repos you switch on in Settings, and replays your taps into beads with `bd`.
 
 Reach it through Tailscale, or behind your own HTTPS reverse proxy with a password. The API between the parts: [docs/api.md](docs/api.md). Why it is built this way: [docs/decisions](docs/decisions).

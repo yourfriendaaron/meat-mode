@@ -135,3 +135,17 @@ func (h *Hub) AddPersonal(ctx context.Context, t api.PersonalTodo) (api.Personal
 	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal", t, &r)
 	return r, err
 }
+
+// PersonalItem reads a personal to-do this machine's token added.
+func (h *Hub) PersonalItem(ctx context.Context, id string) (api.Item, error) {
+	var it api.Item
+	err := h.do(ctx, http.MethodGet, "/bridge/v1/personal/"+url.PathEscape(id), nil, &it)
+	return it, err
+}
+
+// ChangePersonal changes a personal to-do this machine's token added.
+func (h *Hub) ChangePersonal(ctx context.Context, id string, c api.PersonalChange) (api.Action, error) {
+	var a api.Action
+	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal/"+url.PathEscape(id)+"/actions", c, &a)
+	return a, err
+}
