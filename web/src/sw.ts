@@ -113,11 +113,13 @@ async function open(url: string): Promise<void> {
   const wins = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
   for (const w of wins) {
     if (new URL(w.url).origin !== sw.location.origin) continue;
-    if (w.url !== href && w.navigate) {
+    if (w.url !== href) {
+      // An uncontrolled window cannot be sent to the item; open one that is.
+      if (!w.navigate) continue;
       try {
         await w.navigate(href);
       } catch {
-        // uncontrolled client: focus it anyway
+        continue;
       }
     }
     await w.focus();

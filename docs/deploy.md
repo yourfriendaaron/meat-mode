@@ -312,7 +312,7 @@ The fields and the HTTP calls behind these commands are in [api.md](api.md#agent
 
 ## Wake an agent on a task
 
-With agents allowed in a repo, one tap on an item asks an agent to take it on. The bridge writes your note to the bead, then starts the agent on that machine. The agent reads the bead and its notes, then does the work and closes the bead, or replies with a note, and the app tells you either way. A note you send while it works goes to the same run, which reads it at its next step. One task never has two agents.
+With agents allowed in a repo, one tap on an item asks an agent to take it on. The bridge writes your note to the bead, then starts the agent on that machine. The agent reads the bead and its notes, then does the work and closes the bead, or replies with a note, and the app tells you either way. A note you send to the agent while it works (**Send to** in the app) goes to the same run, which reads it at its next step; a plain **Save note** stays on the bead for later. One task never has two agents.
 
 Only your own asks start an agent. The agent's notes and closes, and your other taps (notes, Done, Won't do), never do.
 
@@ -320,7 +320,7 @@ Only your own asks start an agent. The agent's notes and closes, and your other 
 
 In the app, under **Settings**, **Agent machines**, each synced repo has an **Agents can work here** switch below its sync switch. It starts off. The machine keeps your choice in the `agents` map of its own `bridge.json`, and only takes it for a repo it found itself. No line in a repo can switch agents on. An ask in a repo with agents off still leaves your note, and the run shows stopped with the reason.
 
-The default agent is Claude Code, run as `claude -p` with `--permission-mode auto` and no permission prompts. **This is not a sandbox.** Auto mode lets the agent run commands as you, in your home folder, with your credentials: in testing it changed the global Git config and deleted a file in the home folder without asking. Its instructions tell it never to send, post, spend, delete or push for you, and to stop and ask in a note when it needs you, but nothing enforces that. Allow agents only in repos where you would let an agent work unattended.
+The default agent is Claude Code, run as `claude -p` with `--permission-mode auto` and no permission prompts. **This is not a sandbox.** Auto mode lets the agent run commands as you, in your home folder, with your credentials: in testing it changed the global Git config and deleted a file in the home folder without asking. Its instructions tell it never to send, post, spend, delete or push for you, and to stop and ask in a note when it needs you, but nothing enforces that. Allow agents only in repos where you would let an agent work unattended. Before the agent even starts, the bridge creates a Git worktree of the repo for each task, which runs the repo's own Git hooks, such as `post-checkout`, as you.
 
 The agent machine needs:
 

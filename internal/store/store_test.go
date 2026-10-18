@@ -565,6 +565,13 @@ func TestAddResultNeedsBeadID(t *testing.T) {
 	if err := s.ReportResult("laptop", id1, api.ActionResult{OK: true}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("err = %v", err)
 	}
+	// The reserved provisional prefix is not a created bead either.
+	if err := s.ReportResult("laptop", id1, api.ActionResult{OK: true, BeadID: "pending-x"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("err = %v", err)
+	}
+	if a, err := s.Action(id1); err != nil || a.Status != api.StatusPending || a.BeadID == "pending-x" {
+		t.Fatalf("action after the refusals = %+v, %v", a, err)
+	}
 }
 
 func TestRevokedBridgeLeavesState(t *testing.T) {

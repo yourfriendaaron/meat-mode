@@ -2,7 +2,9 @@ package reminders
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -21,6 +23,15 @@ const RunLate = time.Hour
 // RunTagPrefix starts the tag of an agent push, so a run's end replaces the
 // item's earlier one but not its reminder.
 const RunTagPrefix = "agent:"
+
+// runTag is the tag of an item's agent pushes: the prefix plus the first 16
+// hex characters of the key's SHA-256. A key can fill most of Web Push's
+// 4 KiB payload on its own, so the tag stays short; it is stable per item,
+// so a later end still replaces an earlier one.
+func runTag(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return RunTagPrefix + hex.EncodeToString(sum[:8])
+}
 
 // reasonWords says why a run stopped, after "<agent> stopped: ".
 var reasonWords = map[string]string{
@@ -131,7 +142,7 @@ func (s *Scheduler) runMessage(it api.Item) notify.Message {
 	m := notify.Message{
 		Body: truncTitle(it.Title),
 		URL:  link,
-		Tag:  RunTagPrefix + it.Key,
+		Tag:  runTag(it.Key),
 		Key:  it.Key,
 		Actions: []notify.Action{
 			{Action: notify.ActionReply, Title: "Reply", URL: link + "&reply=1"},

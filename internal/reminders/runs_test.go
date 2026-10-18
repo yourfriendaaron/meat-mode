@@ -2,6 +2,7 @@ package reminders
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestRunEndsPushOnce(t *testing.T) {
 			t.Fatalf("%s: %d pushes", tc.state, len(n.got))
 		}
 		m := n.got[0]
-		if m.Title != tc.title || m.Body != tc.body || m.URL != link || m.Key != runKey || m.Tag != "agent:"+runKey {
+		if m.Title != tc.title || m.Body != tc.body || m.URL != link || m.Key != runKey || m.Tag != runTag(runKey) {
 			t.Errorf("%s: message %+v", tc.state, m)
 		}
 		if got := actionNames(m); len(got) != len(tc.actions) || got[0] != tc.actions[0] || got[len(got)-1] != tc.actions[len(tc.actions)-1] {
@@ -71,6 +72,19 @@ func TestRunEndsPushOnce(t *testing.T) {
 		if m.Actions[0].URL != link+"&reply=1" || m.Actions[1].URL != link {
 			t.Errorf("%s: action links %+v", tc.state, m.Actions)
 		}
+	}
+}
+
+func TestRunTagIsShortAndStable(t *testing.T) {
+	a, b := runTag(runKey), runTag("laptop/garden/gd-2")
+	if !strings.HasPrefix(a, RunTagPrefix) || len(a) > len(RunTagPrefix)+16 {
+		t.Fatalf("tag %q is not the prefix plus a short hash", a)
+	}
+	if a == b {
+		t.Fatalf("two keys share the tag %q", a)
+	}
+	if runTag(runKey) != a {
+		t.Fatalf("the key's tag changed between calls")
 	}
 }
 
