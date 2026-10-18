@@ -258,11 +258,13 @@ An agent on a paired machine puts a to-do on your personal list with one command
 
 ```sh
 meat-mode add "Renew the library card" --due 2026-03-02 --note "It expires on Friday." --author planner
+meat-mode add "Water the plants" --due "2026-03-02 20:30" --every day
 ```
 
 It prints the new item's id (such as `mm-12`), and the to-do appears in the app at once, with the note as its first comment.
 
 - `--due` takes a date and time (`2026-03-02 18:30`) or a date alone (`2026-03-02`, due at 9:00), read in the hub's time zone, not the machine's: the one set in the wizard's **Name and time zone** step or in **Settings**. The command asks the hub for it, so an agent on a server running in UTC still gets your 9:00. A time with an offset (`2026-03-02T09:00:00Z`) is used as written. While the hub has no time zone, the machine's own is used.
+- `--every` makes the to-do repeat, and needs `--due`, its first date. It takes `day`, `week`, `month` or `year`, a number of them (`"3 days"`, `"2 weeks"`), `weekday` for Monday to Friday, days of the week (`mon,thu`), or both (`"2 weeks on mon,thu"`). When the to-do is done it stays on the list and moves to its next date, at the same time of day in the hub's time zone. `--from-done` counts the next date from the day it is done instead: `--every "3 days" --from-done` comes back 3 days after each done.
 - `--author` is the agent's name, shown as the creator. It defaults to the machine's name.
 - `--id` takes a UUID the agent generates. Running the command again with the same id changes nothing, so an agent can retry safely.
 
@@ -274,8 +276,8 @@ meat-mode done mm-12
 meat-mode reopen mm-12
 ```
 
-- `meat-mode edit` changes only the fields it is given: `--title`, `--description` (`""` clears it), `--due` (read as for `add`) or `--clear-due`, and `--priority` from 0 (highest) to 4.
-- `meat-mode done` marks the to-do done; `meat-mode reopen` opens it again.
+- `meat-mode edit` changes only the fields it is given: `--title`, `--description` (`""` clears it), `--due` (read as for `add`) or `--clear-due`, `--every` (with `--from-done`, read as for `add`) or `--no-repeat`, and `--priority` from 0 (highest) to 4. `--every` needs a due date, already set or given with `--due`; `--clear-due` also stops a to-do repeating.
+- `meat-mode done` marks the to-do done, or moves a repeating one to its next date; `meat-mode reopen` opens it again.
 - Each takes `--author` and `--id` as `add` does, and prints the to-do's id.
 - A to-do you added in the app, or one another machine added, is not the agent's to change: the command says the hub has no such to-do from this machine. A closed to-do can be changed for the 7 days the app still shows it.
 
