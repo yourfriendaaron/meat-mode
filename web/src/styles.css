@@ -756,10 +756,19 @@ kbd {
   background: var(--line);
   align-self: center;
 }
+/* The head stays at the top of the scrolling sheet or pane, so Close stays in
+   reach when the sheet scrolls to the note field. It spans the padding so
+   what scrolls under it is covered edge to edge. */
 .d-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  margin: -10px calc(-18px - var(--safe-right)) 0 calc(-18px - var(--safe-left));
+  padding: 10px calc(18px + var(--safe-right)) 6px calc(18px + var(--safe-left));
+  background: var(--pane);
 }
 .d-head .check {
   margin-top: 4px;
@@ -1715,6 +1724,10 @@ kbd {
   }
   .detail-inner {
     padding: 20px;
+  }
+  .d-head {
+    margin: -20px -20px 0;
+    padding: 20px 20px 6px;
   }
   .detail-empty {
     display: grid;
