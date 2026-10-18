@@ -1,0 +1,12 @@
+# Build outputs and machine-local files
+.gradle/
+.kotlin/
+build/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+.idea/
+*.iml
+captures/
