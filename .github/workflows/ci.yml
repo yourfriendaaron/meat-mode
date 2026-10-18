@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l cmd internal web/embed.go | tee /dev/stderr)"
       - run: go vet ./...
       - run: go test ./...
       - name: Cross-build the bridge

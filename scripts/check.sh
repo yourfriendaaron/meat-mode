@@ -10,6 +10,11 @@ cd "$(git rev-parse --show-toplevel)"
 step() { printf '\n== %s\n' "$*"; }
 
 step "go"
+unformatted=$(gofmt -l cmd internal web/embed.go)
+if [ -n "$unformatted" ]; then
+  printf 'gofmt: these files need formatting:\n%s\n' "$unformatted" >&2
+  exit 1
+fi
 go vet ./...
 go test ./...
 for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
