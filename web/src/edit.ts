@@ -4,7 +4,7 @@
 
 import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Edit, type Item, type NewAction, type RepeatUnit } from "./types.ts";
 import { HUB_BRIDGE } from "./model.ts";
-import { fmtWhenAt } from "./dates.ts";
+import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
 import { parseQuickAdd } from "./quickadd.ts";
 import { sameRule, type RepeatRule } from "./repeat.ts";
 
@@ -61,6 +61,8 @@ export interface EditDraft {
   /** A weekly repeat's days; none means the due date's day. */
   weekdays: number[];
   fromDone: boolean;
+  /** The repeat's last date, "YYYY-MM-DD"; "" repeats for good. */
+  until: string;
   /** The zone a repeat set from this form keeps: the device's. */
   timeZone: string;
   /** Minutes; null uses the hub's reminderLead. */
@@ -79,6 +81,7 @@ export function draftOf(item: Item, timeZone = ""): EditDraft {
     interval: String(r?.interval || 1),
     weekdays: [...(r?.weekdays ?? [])],
     fromDone: !!r?.fromDone,
+    until: r?.until ?? "",
     timeZone,
     remindBefore: item.remindBefore ?? null,
   };
@@ -94,6 +97,7 @@ export function draftRule(d: EditDraft): RepeatRule | null | undefined {
   // The hub takes weekdays on a weekly rule only, and not with fromDone.
   if (d.repeat === "week" && !d.fromDone && d.weekdays.length) r.weekdays = [...d.weekdays].sort((a, b) => a - b);
   if (d.fromDone) r.fromDone = true;
+  if (d.until) r.until = d.until;
   return r;
 }
 
@@ -120,6 +124,8 @@ export function editError(item: Item, d: EditDraft, now: Date): string {
   const rule = draftRule(d);
   if (rule === undefined) return `Repeat every 1 to ${MAX_REPEAT_INTERVAL}.`;
   if (rule && (due.kind === "clear" || (due.kind === "keep" && !due.at))) return "A repeat needs a due date. Add one, or pick Does not repeat.";
+  if (rule?.until && !fromYmd(rule.until)) return "End the repeat on a real date, or pick No end date.";
+  if (rule?.until && (due.kind === "set" || due.kind === "keep") && due.at && rule.until < ymd(due.at)) return "End the repeat on or after its due date.";
   return "";
 }
 

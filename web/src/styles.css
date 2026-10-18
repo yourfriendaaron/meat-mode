@@ -994,6 +994,9 @@ kbd {
 .repeat-opts .pick-row input {
   flex: 0 0 88px;
 }
+.repeat-opts .until-row input {
+  flex: 1;
+}
 .weekdays {
   display: flex;
   flex-wrap: wrap;

@@ -87,7 +87,13 @@ function repeatError(r: Repeat): string {
   } catch {
     return `unknown repeat time zone "${r.timeZone}"`;
   }
+  if (r.until !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(r.until)) return "repeat until must be a date, YYYY-MM-DD";
   return "";
+}
+
+/** Whether a rule's end date falls before the date of a due time. The fake hub counts in UTC. */
+function endsBefore(r: Repeat, due: string): boolean {
+  return !!r.until && r.until < due.slice(0, 10);
 }
 
 /** The hub's copy of a repeat: the client's rule with `start` at the due time. */
@@ -506,6 +512,9 @@ export class FakeHub {
         if (why) return bad(why);
         if (set.clearDue || !(set.due ?? it.dueAt)) return bad("a repeat needs a due date");
       }
+      const rule = set.repeat ?? (set.clearRepeat ? null : it.repeat);
+      const at = set.due ?? it.dueAt;
+      if (rule && at && !set.clearDue && endsBefore(rule, at)) return bad("repeat until is before the due date");
       const was: Edit = {};
       if (set.title !== undefined) {
         const t = set.title.trim();
@@ -616,6 +625,7 @@ export class FakeHub {
         if (!a.payload.due) return this.json(route, 400, { error: "a repeat needs a due date" });
         const why = repeatError(r);
         if (why) return this.json(route, 400, { error: why });
+        if (endsBefore(r, a.payload.due)) return this.json(route, 400, { error: "repeat until is before the due date" });
       }
       beadId = onHub ? `mm-${this.seq + 1}` : `pending-${a.id}`;
       this.items.push({
@@ -644,8 +654,9 @@ export class FakeHub {
       beadId = it.id;
       switch (a.kind) {
         case "done":
-          if (it.repeat && it.dueAt && onHub) {
-            // A repeating item moves on and stays open (docs/api.md, Repeating to-dos).
+          // A repeating item moves on and stays open (docs/api.md, Repeating to-dos),
+          // until its next date falls after the rule's end.
+          if (it.repeat && it.dueAt && onHub && !endsBefore(it.repeat, nextDue(it.repeat, it.dueAt, NOW))) {
             payload = { ...a.payload, was: { due: it.dueAt, checklist: structuredClone(it.checklist ?? []) } };
             it.dueAt = nextDue(it.repeat, it.dueAt, NOW);
             it.deferUntil = null;

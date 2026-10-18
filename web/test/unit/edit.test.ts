@@ -213,6 +213,31 @@ test("a repeat needs a due date and an interval from 1 to 100", () => {
   assert.equal(editError(item(), { ...d, interval: "100" }, now), "");
 });
 
+test("an end date resends the whole repeat with it, and clearing it resends the repeat without", () => {
+  const it = item({ repeat: { every: "week", weekdays: [0], timeZone: "UTC", start: due } });
+  const d = draftOf(it, "UTC");
+  assert.equal(d.until, "");
+  assert.deepEqual(diffEdit(it, { ...d, until: "2026-11-26" }, now), { repeat: { every: "week", weekdays: [0], until: "2026-11-26", timeZone: "UTC" } });
+  const ends = item({ repeat: { every: "week", weekdays: [0], until: "2026-11-26", timeZone: "UTC", start: due } });
+  const e = draftOf(ends, "UTC");
+  assert.equal(e.until, "2026-11-26");
+  assert.equal(diffEdit(ends, e, now), null);
+  assert.deepEqual(diffEdit(ends, { ...e, until: "" }, now), { repeat: { every: "week", weekdays: [0], timeZone: "UTC" } });
+  // An end date left in the form goes nowhere once the repeat is off.
+  assert.deepEqual(diffEdit(ends, { ...e, repeat: "" }, now), { clearRepeat: true });
+});
+
+test("an end date must be a real date on or after the due date", () => {
+  const it = item({ repeat: daily });
+  const d = draftOf(it, "UTC");
+  // The due date is Thursday 15 October.
+  assert.equal(editError(it, { ...d, until: "2026-10-15" }, now), "");
+  assert.match(editError(it, { ...d, until: "2026-10-14" }, now), /^End the repeat on or after its due date/);
+  assert.match(editError(it, { ...d, until: "2026-02-30" }, now), /^End the repeat on a real date/);
+  assert.equal(editError(it, { ...d, until: "2026-10-14", dueText: "today 8pm" }, now), "");
+  assert.equal(editError(it, { ...d, until: "2026-10-01", repeat: "" }, now), "");
+});
+
 test("the lead time sends remindBefore, or clearRemindBefore for the default", () => {
   const it = item();
   assert.deepEqual(diffEdit(it, { ...draftOf(it), remindBefore: 30 }, now), { remindBefore: 30 });
