@@ -14,5 +14,5 @@
     "skipLibCheck": true,
     "noUnusedLocals": true
   },
-  "include": ["src", "test", "playwright.config.ts"]
+  "include": ["src", "test", "playwright.config.ts", "playwright.visual.config.ts"]
 }

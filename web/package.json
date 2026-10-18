@@ -7,7 +7,9 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit -p .",
     "test": "node --test \"test/unit/*.test.ts\"",
-    "test:e2e": "node scripts/build.mjs && playwright test"
+    "test:e2e": "node scripts/build.mjs && playwright test",
+    "test:visual": "scripts/visual.sh",
+    "test:visual:update": "scripts/visual.sh --update-snapshots"
   },
   "dependencies": {
     "chrono-node": "2.10.3"
