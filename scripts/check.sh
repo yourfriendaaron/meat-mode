@@ -3,6 +3,7 @@
 # deploy. Only gitleaks and the container image build, with its end-to-end
 # run and smoke test, stay in CI. Needs bd on PATH for the end-to-end suite,
 # and docker for the screenshot baselines.
+# The android step builds in ghcr.io/cirruslabs/android-sdk:36 and needs docker.
 # E2E_PORT sets the web suite's port, so parallel worktrees don't collide.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -33,6 +34,15 @@ pnpm --dir web test:visual
 step "end to end"
 pnpm --dir e2e typecheck
 E2E_REQUIRE_BD=1 pnpm --dir e2e test
+
+step "android"
+if [ -d android ]; then
+  docker run --rm -v "$PWD:/work" -v meat-mode-gradle:/gradle -e GRADLE_USER_HOME=/gradle -w /work/android \
+    ghcr.io/cirruslabs/android-sdk:36 \
+    ./gradlew :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --no-daemon
+else
+  echo "android/ does not exist; skipping."
+fi
 
 step "public safety"
 shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit .githooks/pre-push
