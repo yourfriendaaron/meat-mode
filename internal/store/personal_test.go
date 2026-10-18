@@ -336,3 +336,18 @@ func TestTransferKeepsTwoBridgesApart(t *testing.T) {
 		t.Errorf("items after rerun = %d", n)
 	}
 }
+
+func TestTransferDropsABeadsRepeat(t *testing.T) {
+	s, c := open(t)
+	due := c.t.Add(time.Hour)
+	legacySeed(t, s, "laptop", api.Item{ID: "lp-1", Title: "Water the plants", Status: "open", DueAt: &due,
+		Repeat: &api.Repeat{Every: api.EveryDay, TimeZone: "UTC", Until: "someday"}})
+	must(t, s.TransferPersonal())
+	key := hubKey("lp-1")
+	if it := item(t, mustState(t, s), key); it.Repeat != nil {
+		t.Fatalf("imported repeat %+v", it.Repeat)
+	}
+	if a := act(t, s, api.KindDone, key, api.Payload{}); a.Payload.Was != nil {
+		t.Fatalf("done %+v", a)
+	}
+}

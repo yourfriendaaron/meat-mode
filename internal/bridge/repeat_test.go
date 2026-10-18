@@ -112,6 +112,70 @@ func TestAddAndEditRepeat(t *testing.T) {
 	}
 }
 
+func TestUntil(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	hub.SetTimeZone("America/New_York")
+	env, out := pairedEnv(t, hub) // mm-1 does not repeat
+	ctx := context.Background()
+
+	if err := Add(ctx, []string{"Water the plants", "--due", "2026-03-01 20:30", "--every", "week", "--until", "2026-11-26"}, env); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	ps := hub.Personals()
+	if r := ps[len(ps)-1].Repeat; r == nil || r.Until != "2026-11-26" || r.Every != api.EveryWeek || r.TimeZone != "America/New_York" {
+		t.Fatalf("added repeat %+v", r)
+	}
+
+	// With --every, the end goes on the new rule.
+	if err := Edit(ctx, []string{"mm-2", "--every", "2 days", "--until", "2026-12-01"}, env); err != nil {
+		t.Fatal(err)
+	}
+	if err := Edit(ctx, []string{"mm-2", "--every", "day", "--no-until"}, env); err != nil {
+		t.Fatal(err)
+	}
+	// Without one, on the to-do's own rule, sent back whole.
+	hub.SetTimeZone("Europe/Paris")
+	if err := Edit(ctx, []string{"mm-2", "--until", "2026-12-24", "--due", "2026-03-08 20:30"}, env); err != nil {
+		t.Fatal(err)
+	}
+	if err := Edit(ctx, []string{"mm-2", "--no-until"}, env); err != nil {
+		t.Fatal(err)
+	}
+	cs := hub.Changes()
+	if len(cs) != 4 {
+		t.Fatalf("changes %+v", cs)
+	}
+	if r := cs[0].Payload.Set.Repeat; r == nil || r.Every != api.EveryDay || r.Interval != 2 || r.Until != "2026-12-01" {
+		t.Fatalf("every with until %+v", r)
+	}
+	if r := cs[1].Payload.Set.Repeat; r == nil || r.Every != api.EveryDay || r.Until != "" {
+		t.Fatalf("every with no-until %+v", r)
+	}
+	// The rule keeps its own zone; only the due time is read in the hub's.
+	set := cs[2].Payload.Set
+	if r := set.Repeat; r == nil || r.Every != api.EveryWeek || r.Until != "2026-12-24" || r.TimeZone != "America/New_York" || r.Start != nil ||
+		set.Due == nil || !set.Due.Equal(time.Date(2026, 3, 8, 19, 30, 0, 0, time.UTC)) {
+		t.Fatalf("until on the own rule %+v, repeat %+v", set, set.Repeat)
+	}
+	if r := cs[3].Payload.Set.Repeat; r == nil || r.Every != api.EveryWeek || r.Until != "" || r.Start != nil || cs[3].Payload.Set.Due != nil {
+		t.Fatalf("no-until on the own rule %+v", r)
+	}
+
+	// A to-do that does not repeat has no end to change.
+	for _, args := range [][]string{{"mm-1", "--until", "2026-12-24"}, {"mm-1", "--no-until"}} {
+		if err := Edit(ctx, args, env); err == nil || !strings.Contains(err.Error(), "does not repeat") {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if err := Edit(ctx, []string{"mm-9", "--no-until"}, env); err == nil || !strings.Contains(err.Error(), "this machine added") {
+		t.Errorf("unknown to-do: %v", err)
+	}
+	if len(hub.Changes()) != 4 {
+		t.Fatal("a refused edit reached the hub")
+	}
+}
+
 func TestRepeatFlagsRefuse(t *testing.T) {
 	hub := fakehub.New(map[string]string{token: us})
 	defer hub.Close()
@@ -126,6 +190,10 @@ func TestRepeatFlagsRefuse(t *testing.T) {
 		"bad rule":        {[]string{"Water the plants", "--due", "2026-03-02", "--every", "fortnight"}, "--every"},
 		"from-done alone": {[]string{"Water the plants", "--due", "2026-03-02", "--from-done"}, "--every"},
 		"from-done, days": {[]string{"Water the plants", "--due", "2026-03-02", "--every", "mon", "--from-done"}, "--from-done"},
+		"until alone":     {[]string{"Water the plants", "--due", "2026-03-02", "--until", "2026-11-26"}, "--every"},
+		"bad until":       {[]string{"Water the plants", "--due", "2026-03-02", "--every", "day", "--until", "26 November"}, "--until"},
+		"empty until":     {[]string{"Water the plants", "--due", "2026-03-02", "--every", "day", "--until", ""}, "--until"},
+		"no-until on add": {[]string{"Water the plants", "--due", "2026-03-02", "--every", "day", "--no-until"}, "no-until"},
 	} {
 		if err := Add(ctx, tc.args, env); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("add %s: %v, want %q", name, err, tc.want)
@@ -139,6 +207,11 @@ func TestRepeatFlagsRefuse(t *testing.T) {
 		"every and clear-due": {[]string{"mm-1", "--every", "day", "--clear-due"}, "--clear-due"},
 		"from-done alone":     {[]string{"mm-1", "--from-done"}, "--every"},
 		"bad rule":            {[]string{"mm-1", "--every", "sometimes"}, "--every"},
+		"until and no-until":  {[]string{"mm-1", "--until", "2026-11-26", "--no-until"}, "not both"},
+		"until and no-repeat": {[]string{"mm-1", "--until", "2026-11-26", "--no-repeat"}, "--no-repeat"},
+		"no-until, clear-due": {[]string{"mm-1", "--no-until", "--clear-due"}, "--clear-due"},
+		"bad until":           {[]string{"mm-1", "--every", "day", "--until", "2026-02-30"}, "--until"},
+		"bad until alone":     {[]string{"mm-1", "--until", "soon"}, "--until"},
 	} {
 		if err := Edit(ctx, tc.args, env); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("edit %s: %v, want %q", name, err, tc.want)

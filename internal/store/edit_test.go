@@ -529,3 +529,216 @@ func TestAddWithRepeat(t *testing.T) {
 		t.Fatalf("agent's done %+v, item %+v", a, it)
 	}
 }
+
+func TestRepeatUntil(t *testing.T) {
+	s, c := open(t)
+	// Every Sunday at 20:30 in New York until 15 March, across the change to
+	// summer time on 8 March. The last date is already the 16th in UTC.
+	first := time.Date(2026, 3, 2, 1, 30, 0, 0, time.UTC)  // 1 March, 20:30 EST
+	second := time.Date(2026, 3, 9, 0, 30, 0, 0, time.UTC) // 8 March, 20:30 EDT
+	last := time.Date(2026, 3, 16, 0, 30, 0, 0, time.UTC)  // 15 March, 20:30 EDT
+	weekly := api.Repeat{Every: api.EveryWeek, TimeZone: "America/New_York", Until: "2026-03-15"}
+	key := addRepeating(t, s, "Water the plants", first, weekly)
+	if it := item(t, mustState(t, s), key); it.Repeat == nil || it.Repeat.Until != "2026-03-15" {
+		t.Fatalf("added %+v", it.Repeat)
+	}
+
+	a := act(t, s, api.KindDone, key, api.Payload{})
+	if it := item(t, mustState(t, s), key); it.Status != "open" || !it.DueAt.Equal(second) || a.Payload.Was == nil {
+		t.Fatalf("after the first done %+v", it)
+	}
+	// The Undo of a done keeps the rule and its until.
+	edit(t, s, key, *a.Payload.Was)
+	if it := item(t, mustState(t, s), key); !it.DueAt.Equal(first) || it.Repeat.Until != "2026-03-15" || !it.Repeat.Start.Equal(first) {
+		t.Fatalf("after undoing the done %+v", it)
+	}
+	act(t, s, api.KindDone, key, api.Payload{})
+	act(t, s, api.KindDone, key, api.Payload{})
+	if it := item(t, mustState(t, s), key); it.Status != "open" || !it.DueAt.Equal(last) {
+		t.Fatalf("the last occurrence %+v", it)
+	}
+
+	// The done after the last date closes it like any other, with no Was.
+	c.tick()
+	a = act(t, s, api.KindDone, key, api.Payload{})
+	it := item(t, mustState(t, s), key)
+	if a.Payload.Was != nil || it.Status != "closed" || it.CloseReason != ReasonDone || !it.ClosedAt.Equal(c.t) ||
+		!it.DueAt.Equal(last) || it.Repeat == nil || it.Repeat.Until != "2026-03-15" {
+		t.Fatalf("closing done %+v, item %+v", a, it)
+	}
+	// Its Undo is a reopen, at the last due time, and a done closes it again.
+	act(t, s, api.KindReopen, key, api.Payload{})
+	if it := item(t, mustState(t, s), key); it.Status != "open" || !it.DueAt.Equal(last) || it.Repeat == nil {
+		t.Fatalf("after reopen %+v", it)
+	}
+	if a := act(t, s, api.KindDone, key, api.Payload{}); a.Payload.Was != nil {
+		t.Fatalf("done after reopen %+v", a)
+	}
+
+	// Removing the until resends the rule without one; its Undo puts it back.
+	act(t, s, api.KindReopen, key, api.Payload{})
+	forGood := weekly
+	forGood.Until = ""
+	a = edit(t, s, key, api.Edit{Repeat: &forGood})
+	if w := a.Payload.Was; w.Repeat == nil || w.Repeat.Until != "2026-03-15" {
+		t.Fatalf("was %+v", w)
+	}
+	if a := act(t, s, api.KindDone, key, api.Payload{}); a.Payload.Was == nil {
+		t.Fatal("a rule with no until closed the item")
+	}
+	edit(t, s, key, api.Edit{Due: &last})
+	edit(t, s, key, *a.Payload.Was)
+	if it := item(t, mustState(t, s), key); it.Repeat.Until != "2026-03-15" {
+		t.Fatalf("after undoing the edit %+v", it.Repeat)
+	}
+}
+
+func TestRepeatUntilOnTheDueDate(t *testing.T) {
+	s, c := open(t)
+	// Until the due date itself: one occurrence, and its done closes it.
+	due := c.t.Add(time.Hour)
+	key := addRepeating(t, s, "Water the plants", due, api.Repeat{Every: api.EveryDay, TimeZone: "UTC", Until: "2026-03-01"})
+	if a := act(t, s, api.KindDone, key, api.Payload{}); a.Payload.Was != nil {
+		t.Fatalf("done %+v", a)
+	}
+	if it := item(t, mustState(t, s), key); it.Status != "closed" || !it.DueAt.Equal(due) {
+		t.Fatalf("after done %+v", it)
+	}
+
+	// Counted from the done day, the next date is the done day plus the
+	// interval, so a late done can end the series early.
+	due = time.Date(2026, 3, 1, 18, 0, 0, 0, time.UTC)
+	key = addRepeating(t, s, "Call Sam", due, api.Repeat{Every: api.EveryDay, Interval: 3, FromDone: true, TimeZone: "Europe/Paris", Until: "2026-03-08"})
+	c.t = time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
+	act(t, s, api.KindDone, key, api.Payload{})
+	if it := item(t, mustState(t, s), key); it.Status != "open" || !it.DueAt.Equal(time.Date(2026, 3, 5, 18, 0, 0, 0, time.UTC)) {
+		t.Fatalf("after the first done %+v", it)
+	}
+	// Done on the 6th: the 9th is past the 8th.
+	c.t = time.Date(2026, 3, 6, 12, 0, 0, 0, time.UTC)
+	if a := act(t, s, api.KindDone, key, api.Payload{}); a.Payload.Was != nil {
+		t.Fatalf("closing done %+v", a)
+	}
+	if it := item(t, mustState(t, s), key); it.Status != "closed" {
+		t.Fatalf("after the closing done %+v", it)
+	}
+}
+
+func TestRepeatUntilRefuses(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("desk")
+	must(t, err)
+	// 20:30 on 1 March in New York is the 2nd in UTC: an until of the 1st
+	// is the due date, in the rule's zone.
+	due := time.Date(2026, 3, 2, 1, 30, 0, 0, time.UTC)
+	ny := func(until string) *api.Repeat {
+		return &api.Repeat{Every: api.EveryDay, TimeZone: "America/New_York", Until: until}
+	}
+	addRepeating(t, s, "Water the plants", due, *ny("2026-03-01"))
+
+	for name, na := range map[string]api.NewAction{
+		"until before due": {Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo, Payload: api.Payload{Title: "Water the plants", Due: &due, Repeat: ny("2026-02-28")}},
+		"until not a date": {Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo, Payload: api.Payload{Title: "Water the plants", Due: &due, Repeat: ny("2026-02-30")}},
+	} {
+		na.ID = uuid.NewString()
+		if _, _, err := s.AppendAction(na, "alex-app"); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: %v, want invalid", name, err)
+		}
+	}
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Take the bins out", Due: &due, Repeat: &api.Repeat{Every: api.EveryDay, TimeZone: "UTC", Until: "2026-03-01"}}, "desk"); !errors.Is(err, ErrInvalid) {
+		t.Errorf("agent's until before due: %v", err)
+	}
+
+	plain := hubKey(addPersonal(t, s, id1, "Call Sam", &due).BeadID)
+	key := addRepeating(t, s, "Sweep the porch", due, *ny("2026-03-10"))
+	later := time.Date(2026, 3, 11, 13, 0, 0, 0, time.UTC)
+	for name, tc := range map[string]struct {
+		key string
+		set api.Edit
+	}{
+		"rule with until before due":  {plain, api.Edit{Repeat: ny("2026-02-28")}},
+		"rule and due past until":     {plain, api.Edit{Repeat: ny("2026-03-10"), Due: &later}},
+		"due moved past until":        {key, api.Edit{Due: &later}},
+		"until changed to before due": {key, api.Edit{Repeat: ny("2026-02-28")}},
+		"until not a date":            {key, api.Edit{Repeat: ny("10 March")}},
+	} {
+		_, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindEdit, Key: tc.key,
+			Payload: api.Payload{Set: &tc.set}}, "alex-app")
+		if !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: %v, want invalid", name, err)
+		}
+	}
+	if it := item(t, mustState(t, s), key); !it.DueAt.Equal(due) || it.Repeat.Until != "2026-03-10" {
+		t.Fatalf("a refused edit changed the item %+v", it)
+	}
+	if it := item(t, mustState(t, s), plain); it.Repeat != nil {
+		t.Fatalf("a refused edit set a repeat %+v", it.Repeat)
+	}
+	// A move up to the until, or a move with the rule cleared, is fine.
+	onUntil := time.Date(2026, 3, 11, 3, 0, 0, 0, time.UTC) // 10 March, 23:00 EDT
+	edit(t, s, key, api.Edit{Due: &onUntil})
+	edit(t, s, key, api.Edit{Due: &later, ClearRepeat: true})
+}
+
+func TestChangingUntilKeepsTheSeries(t *testing.T) {
+	s, c := open(t)
+	// Every month on the 31st at 9:00 UTC, now due on 30 April.
+	due := time.Date(2026, 1, 31, 9, 0, 0, 0, time.UTC)
+	april := time.Date(2026, 4, 30, 9, 0, 0, 0, time.UTC)
+	may := time.Date(2026, 5, 31, 9, 0, 0, 0, time.UTC)
+	monthly := api.Repeat{Every: api.EveryMonth, TimeZone: "UTC"}
+	key := addRepeating(t, s, "Pay the rent", due, monthly)
+	edit(t, s, key, api.Edit{Due: &april})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(due) {
+		t.Fatalf("start after a move onto the series %v", it.Repeat.Start)
+	}
+	c.t = april.Add(-time.Hour)
+
+	// doneLandsOnThe31st checks that a done from 30 April lands on 31 May,
+	// and puts it back with its Undo.
+	doneLandsOnThe31st := func(step string) {
+		t.Helper()
+		it := item(t, mustState(t, s), key)
+		if !it.DueAt.Equal(april) || !it.Repeat.Start.Equal(due) {
+			t.Fatalf("%s: item %+v, start %v", step, it, it.Repeat.Start)
+		}
+		a := act(t, s, api.KindDone, key, api.Payload{})
+		if it := item(t, mustState(t, s), key); !it.DueAt.Equal(may) {
+			t.Fatalf("%s: done landed on %v", step, it.DueAt)
+		}
+		edit(t, s, key, *a.Payload.Was)
+	}
+
+	ended := monthly
+	ended.Until = "2026-12-31"
+	set := edit(t, s, key, api.Edit{Repeat: &ended})
+	doneLandsOnThe31st("until set")
+	if it := item(t, mustState(t, s), key); it.Repeat.Until != "2026-12-31" {
+		t.Fatalf("until %+v", it.Repeat)
+	}
+	removed := edit(t, s, key, api.Edit{Repeat: &monthly})
+	doneLandsOnThe31st("until removed")
+	// The Undo of each edit keeps the series too.
+	edit(t, s, key, *removed.Payload.Was)
+	doneLandsOnThe31st("removal undone")
+	if it := item(t, mustState(t, s), key); it.Repeat.Until != "2026-12-31" {
+		t.Fatalf("until after the undo %+v", it.Repeat)
+	}
+	edit(t, s, key, *set.Payload.Was)
+	doneLandsOnThe31st("until undone")
+
+	// Any other change to the rule starts it at the due time.
+	bimonthly := ended
+	bimonthly.Interval = 2
+	edit(t, s, key, api.Edit{Repeat: &bimonthly})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(april) {
+		t.Fatalf("start after a new interval %v", it.Repeat.Start)
+	}
+	// So does a new until with the due time moved off the series.
+	off := april.Add(time.Hour)
+	bimonthly.Until = ""
+	edit(t, s, key, api.Edit{Repeat: &bimonthly, Due: &off})
+	if it := item(t, mustState(t, s), key); !it.Repeat.Start.Equal(off) {
+		t.Fatalf("start after a move off the series %v", it.Repeat.Start)
+	}
+}

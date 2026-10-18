@@ -165,4 +165,28 @@ func TestRepeatOverHTTP(t *testing.T) {
 	if a := decode[api.Action](t, w); a.Payload.Was == nil || a.Payload.Was.Repeat == nil || !a.Payload.Was.ClearRemindBefore {
 		t.Fatalf("edit %+v", a.Payload.Was)
 	}
+
+	// An end date before the due date is refused, and so is a move past it.
+	ended := func(until time.Time) *api.Repeat {
+		return &api.Repeat{Every: api.EveryDay, TimeZone: "UTC", Until: until.Format(time.DateOnly)}
+	}
+	h.expect(h.do("POST", "/bridge/v1/personal", api.PersonalTodo{Title: "Call Sam", Due: &due, Repeat: ended(due.AddDate(0, 0, -1))}, h.token), http.StatusBadRequest)
+	w = h.do("POST", "/bridge/v1/personal", api.PersonalTodo{Title: "Call Sam", Due: &due, Repeat: ended(due)}, h.token)
+	h.expect(w, http.StatusCreated)
+	id = decode[api.PersonalTodoReply](t, w).ID
+	if it := decode[api.Item](t, h.do("GET", "/bridge/v1/personal/"+id, nil, h.token)); it.Repeat == nil || it.Repeat.Until != due.Format(time.DateOnly) {
+		t.Fatalf("added %+v", it.Repeat)
+	}
+	later := due.AddDate(0, 0, 2)
+	h.expect(h.do("POST", "/bridge/v1/personal/"+id+"/actions", api.PersonalChange{Kind: api.KindEdit,
+		Payload: api.Payload{Set: &api.Edit{Due: &later}}}, h.token), http.StatusBadRequest)
+	// Its one date done, it closes.
+	w = h.do("POST", "/bridge/v1/personal/"+id+"/actions", api.PersonalChange{Kind: api.KindDone}, h.token)
+	h.expect(w, http.StatusCreated)
+	if a := decode[api.Action](t, w); a.Payload.Was != nil {
+		t.Fatalf("closing done %+v", a)
+	}
+	if it := decode[api.Item](t, h.do("GET", "/bridge/v1/personal/"+id, nil, h.token)); it.Status != "closed" {
+		t.Fatalf("after the closing done %+v", it)
+	}
 }

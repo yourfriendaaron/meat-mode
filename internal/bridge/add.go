@@ -26,9 +26,9 @@ func Add(ctx context.Context, args []string, env Env) error {
 	note := fs.String("note", "", "a note, added as the first comment")
 	author := fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id := fs.String("id", "", "a UUID for this to-do; adding the same id again changes nothing")
-	every, fromDone := repeatFlags(fs)
+	every, fromDone, until := repeatFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--due TIME [--every RULE [--from-done]]] [--note TEXT] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--due TIME [--every RULE [--from-done] [--until DATE]]] [--note TEXT] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -50,6 +50,14 @@ func Add(ctx context.Context, args []string, env Env) error {
 	repeat, err := repeatArg(*every, *fromDone)
 	if err != nil {
 		return err
+	}
+	if given(fs, "until") {
+		if repeat == nil {
+			return errors.New("--until goes with --every")
+		}
+		if repeat.Until, err = ParseUntil(*until); err != nil {
+			return err
+		}
 	}
 	if repeat != nil && *due == "" {
 		return errors.New("--every needs --due, the first time it is due")
@@ -85,10 +93,18 @@ func Add(ctx context.Context, args []string, env Env) error {
 }
 
 // repeatFlags adds the flags that make a to-do repeat.
-func repeatFlags(fs *flag.FlagSet) (every *string, fromDone *bool) {
+func repeatFlags(fs *flag.FlagSet) (every *string, fromDone *bool, until *string) {
 	every = fs.String("every", "", "how often it repeats once done: "+everyForms+"; it keeps the due time's time of day in the hub's time zone")
 	fromDone = fs.Bool("from-done", false, "with --every, count the next date from the day it is done instead of from the schedule")
-	return every, fromDone
+	until = fs.String("until", "", "the last date it repeats on, YYYY-MM-DD; the done after it closes the to-do")
+	return every, fromDone, until
+}
+
+// given reports whether the flag name was set on the command line.
+func given(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
 }
 
 // repeatArg reads --every and --from-done: nil when it does not repeat.

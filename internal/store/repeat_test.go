@@ -184,6 +184,11 @@ func TestCheckRepeat(t *testing.T) {
 		"no zone":            {Every: api.EveryDay},
 		"Local":              {Every: api.EveryDay, TimeZone: "Local"},
 		"unknown zone":       {Every: api.EveryDay, TimeZone: "Mars/Olympus"},
+		"until not a date":   {Every: api.EveryDay, TimeZone: "UTC", Until: "soon"},
+		"until 30 February":  {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-02-30"},
+		"until unpadded":     {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-3-1"},
+		"until with a time":  {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-03-01T00:00:00Z"},
+		"until with a space": {Every: api.EveryDay, TimeZone: "UTC", Until: " 2026-03-01"},
 	} {
 		if _, err := checkRepeat(r); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: %v, want invalid", name, err)
@@ -193,9 +198,30 @@ func TestCheckRepeat(t *testing.T) {
 		{Every: api.EveryYear, TimeZone: "UTC"},
 		{Every: api.EveryDay, Interval: api.MaxRepeatInterval, FromDone: true, TimeZone: "America/New_York"},
 		{Every: api.EveryWeek, Weekdays: []int{0, 1, 2, 3, 4, 5, 6}, TimeZone: "Europe/Paris"},
+		{Every: api.EveryMonth, TimeZone: "UTC", Until: "2026-02-28"},
 	} {
-		if _, err := checkRepeat(r); err != nil {
-			t.Errorf("%+v: %v", r, err)
+		if got, err := checkRepeat(r); err != nil || got.Until != r.Until {
+			t.Errorf("%+v: %+v, %v", r, got, err)
 		}
+	}
+}
+
+func TestAfterUntil(t *testing.T) {
+	r := api.Repeat{Every: api.EveryDay, TimeZone: "America/New_York", Until: "2026-03-15"}
+	for at, want := range map[time.Time]bool{
+		// 20:30 on 15 March in New York is already the 16th in UTC.
+		time.Date(2026, 3, 16, 0, 30, 0, 0, time.UTC): false,
+		time.Date(2026, 3, 16, 3, 59, 0, 0, time.UTC): false,
+		time.Date(2026, 3, 16, 4, 0, 0, 0, time.UTC):  true,
+		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC):   false,
+		time.Date(2027, 1, 1, 12, 0, 0, 0, time.UTC):  true,
+	} {
+		if got := afterUntil(r, at); got != want {
+			t.Errorf("afterUntil(%v) = %v, want %v", at, got, want)
+		}
+	}
+	r.Until = ""
+	if afterUntil(r, time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Error("a rule with no until never ends")
 	}
 }

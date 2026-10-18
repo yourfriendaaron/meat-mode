@@ -71,6 +71,16 @@ func ParseEvery(s string, fromDone bool) (api.Repeat, error) {
 	return r, nil
 }
 
+// ParseUntil reads --until: the last date a repeat may land on, as the hub
+// takes it.
+func ParseUntil(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if d, err := time.Parse(time.DateOnly, s); err == nil && d.Format(time.DateOnly) == s {
+		return s, nil
+	}
+	return "", fmt.Errorf("--until %q is not a date; use 2026-11-26", s)
+}
+
 // everyForms lists what --every takes.
 const everyForms = `day, week, month, year, "3 days", "2 weeks", weekday (Monday to Friday), mon,thu or "2 weeks on mon,thu"`
 

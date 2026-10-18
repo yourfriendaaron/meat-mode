@@ -183,11 +183,14 @@ type legacyItem struct {
 // personal list. Each bead arrives once: one already imported is skipped,
 // whatever it holds now, because the hub's copy is the one that changes.
 // An id taken by another item gets a suffix. Reminders already fired for a
-// bead stay fired. It returns the keys of the items it created.
+// bead stay fired. A bead carries no repeat: one is set only by an add or
+// edit on the hub, which checks it. It returns the keys of the items it
+// created.
 func importPersonal(tx *sql.Tx, bridge, repo string, items []legacyItem) ([]string, error) {
 	var created []string
 	for _, l := range items {
 		it := l.item
+		it.Repeat = nil
 		var done int
 		if err := tx.QueryRow(`SELECT COUNT(*) FROM personal_origins WHERE bridge = ? AND bead_id = ?`,
 			bridge, it.ID).Scan(&done); err != nil {

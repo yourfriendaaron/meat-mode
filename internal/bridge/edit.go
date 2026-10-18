@@ -14,7 +14,8 @@ import (
 
 // Edit runs `meat-mode edit`: it changes the title, description, due time,
 // repeat or priority of a personal to-do this machine added, and prints its
-// id.
+// id. --until and --no-until apply to the --every given with them, or else
+// to the to-do's own repeat, which is sent back whole with the new end.
 func Edit(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("edit", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -23,11 +24,12 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	due := fs.String("due", "", "the new due time, read as by `meat-mode add`")
 	clearDue := fs.Bool("clear-due", false, "remove the due time")
 	priority := fs.Int("priority", 2, "the new priority, 0 (highest) to 4")
-	every, fromDone := repeatFlags(fs)
+	every, fromDone, until := repeatFlags(fs)
+	noUntil := fs.Bool("no-until", false, "let its repeat go on for good")
 	noRepeat := fs.Bool("no-repeat", false, "stop it repeating")
 	author, id := changeFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--priority N] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -77,9 +79,27 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	if repeat != nil && set.ClearDue {
 		return errors.New("--every needs a due time; --clear-due also stops it repeating")
 	}
-	if set.Title == nil && set.Description == nil && *due == "" && !set.ClearDue && set.Priority == nil && repeat == nil && !set.ClearRepeat {
+	// newUntil is the end the repeat gets when endChanged; "" for none.
+	var newUntil string
+	endChanged := given(fs, "until") || *noUntil
+	switch {
+	case given(fs, "until") && *noUntil:
+		return errors.New("use --until or --no-until, not both")
+	case endChanged && set.ClearRepeat:
+		return errors.New("use --until or --no-until with a repeat, not with --no-repeat")
+	case endChanged && set.ClearDue:
+		return errors.New("--until and --no-until need a repeat; --clear-due stops it repeating")
+	case given(fs, "until"):
+		if newUntil, err = ParseUntil(*until); err != nil {
+			return err
+		}
+	}
+	if repeat != nil {
+		repeat.Until = newUntil
+	}
+	if set.Title == nil && set.Description == nil && *due == "" && !set.ClearDue && set.Priority == nil && repeat == nil && !set.ClearRepeat && !endChanged {
 		fs.Usage()
-		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat or --priority")
+		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat, --until, --no-until or --priority")
 	}
 
 	hub, err := pairedHub(env)
@@ -104,6 +124,20 @@ func Edit(ctx context.Context, args []string, env Env) error {
 			}
 			set.Repeat = repeat
 		}
+	}
+	if endChanged && repeat == nil {
+		// The hub takes a repeat whole, so the to-do's own goes back with
+		// the new end.
+		it, err := hub.PersonalItem(ctx, item)
+		if err != nil {
+			return notOurs(item, err)
+		}
+		if it.Repeat == nil {
+			return fmt.Errorf("%s does not repeat; give --every with --until", item)
+		}
+		r := *it.Repeat
+		r.Start, r.Until = nil, newUntil
+		set.Repeat = &r
 	}
 	return change(ctx, hub, env, item, api.PersonalChange{ID: *id, Kind: api.KindEdit,
 		Payload: api.Payload{Set: &set}, Author: *author})
@@ -164,12 +198,18 @@ func itemArg(fs *flag.FlagSet, cmd string, pos []string) (string, error) {
 // change posts c and prints the item's id.
 func change(ctx context.Context, hub *Hub, env Env, item string, c api.PersonalChange) error {
 	if _, err := hub.ChangePersonal(ctx, item, c); err != nil {
-		var herr *HTTPError
-		if errors.As(err, &herr) && herr.Status == http.StatusNotFound {
-			return fmt.Errorf("the hub has no to-do %q that this machine added; an agent can change only the to-dos its own machine added", item)
-		}
-		return err
+		return notOurs(item, err)
 	}
 	fmt.Fprintln(env.Stdout, item)
 	return nil
+}
+
+// notOurs explains the hub's not found for a to-do: it is not one this
+// machine added.
+func notOurs(item string, err error) error {
+	var herr *HTTPError
+	if errors.As(err, &herr) && herr.Status == http.StatusNotFound {
+		return fmt.Errorf("the hub has no to-do %q that this machine added; an agent can change only the to-dos its own machine added", item)
+	}
+	return err
 }

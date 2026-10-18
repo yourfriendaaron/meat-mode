@@ -143,10 +143,16 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 		if it.Repeat == nil || it.DueAt == nil || it.Status == "closed" {
 			return nil
 		}
+		next := nextDue(*it.Repeat, *it.DueAt, a.CreatedAt)
+		if afterUntil(*it.Repeat, next) {
+			// The series is over: with no Was, apply closes it, and it
+			// keeps its due time and repeat for a reopen.
+			return nil
+		}
 		// It stays open and moves on to its next date; apply sees Was and
 		// leaves it open.
 		p.Was = &api.Edit{Due: ptr(*it.DueAt), Checklist: ptr(cloneChecklist(it.Checklist))}
-		it.DueAt = ptr(nextDue(*it.Repeat, *it.DueAt, a.CreatedAt))
+		it.DueAt = ptr(next)
 		it.DeferUntil = nil
 		if len(it.Checklist) > 0 {
 			cs := slices.Clone(it.Checklist)
@@ -179,8 +185,9 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 		switch {
 		case set.Repeat != nil || set.ClearRepeat || (set.ClearDue && it.Repeat != nil):
 			// Clearing the due date ends the repeat too.
-			if it.Repeat != nil {
-				was.Repeat = ptr(*it.Repeat)
+			old := it.Repeat
+			if old != nil {
+				was.Repeat = ptr(*old)
 			} else {
 				was.ClearRepeat = true
 			}
@@ -191,6 +198,10 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 				}
 				r := *set.Repeat
 				r.Start = ptr(*it.DueAt)
+				if old != nil && onlyUntilDiffers(*old, r) && isOccurrence(*old, *it.DueAt) {
+					// A new end date never moves the series.
+					r.Start = old.Start
+				}
 				it.Repeat = &r
 			}
 		case set.Due != nil && it.Repeat != nil && !isOccurrence(*it.Repeat, *it.DueAt):
@@ -200,6 +211,11 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 			r := *it.Repeat
 			r.Start = ptr(*it.DueAt)
 			it.Repeat = &r
+		}
+		if (set.Repeat != nil || set.Due != nil) && it.Repeat != nil {
+			if err := checkUntil(*it.Repeat, *it.DueAt); err != nil {
+				return err
+			}
 		}
 		if set.Priority != nil {
 			was.Priority = ptr(it.Priority)
