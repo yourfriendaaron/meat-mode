@@ -287,3 +287,31 @@ export interface SetupStatus {
   /** The hub's clock, as an ISO time. */
   time: string;
 }
+
+/** One place reminders go: a browser's push subscription or the Android app (docs/api.md, Devices). */
+export interface Device {
+  id: string;
+  name: string;
+  kind: "web" | "app";
+  confirmed: boolean;
+  createdAt: string;
+  lastSeen: string;
+  lastPush: string | null;
+}
+
+/** Reminders as the Android app reports them over the message bridge (docs/api.md, Android app). */
+export type AppPushState = "off" | "waiting" | "on" | "blocked" | "unavailable";
+
+export interface AppPushStatus {
+  state: AppPushState;
+  endpoint?: string;
+  distributor?: string;
+  lastPush: string | null;
+  batteryExempt: boolean;
+}
+
+/** What `push-on` answers: the subscription the page registers with `kind: "app"`. */
+export interface AppPushSubscription {
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
+  name: string;
+}

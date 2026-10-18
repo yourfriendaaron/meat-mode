@@ -17,13 +17,24 @@ type Message struct {
 	// see docs/api.md, Agent push. A reminder has none.
 	Actions []Action
 	Key     string
+	Channel string // ChannelReminders, ChannelAgents or ChannelTest
 }
 
 // Action names of a notification's buttons.
 const (
-	ActionReply = "reply" // opens the item at the note box
-	ActionOpen  = "open"  // opens the item
-	ActionRetry = "retry" // asks the agent again
+	ActionReply  = "reply"  // opens the item at the note box
+	ActionOpen   = "open"   // opens the item
+	ActionRetry  = "retry"  // asks the agent again
+	ActionDone   = "done"   // marks a reminded item done
+	ActionSnooze = "snooze" // snoozes a reminded item for an hour
+)
+
+// Channels a push names, so the Android app files it under the right
+// notification channel.
+const (
+	ChannelReminders = "reminders"
+	ChannelAgents    = "agents"
+	ChannelTest      = "test"
 )
 
 // Action is one button on a notification.

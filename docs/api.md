@@ -28,9 +28,14 @@ The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `ht
 | `GET /api/actions?limit=n` | | Recent actions, newest first, for the sync popover; `limit` defaults to 50 and is capped at 500 |
 | `POST /api/items/{key}/seen` | | `204`; marks replies on the item read |
 | `GET /api/push/key` | | `{"publicKey": "<VAPID public key>"}` |
-| `POST /api/push/subscriptions` | `PushSubscription` (the browser's JSON) | `204` (upsert by endpoint); `400` unless the endpoint is an https URL on a known push service (Mozilla, FCM, Apple, Windows). The hub keeps the 20 newest. |
+| `POST /api/push/subscriptions` | `PushSubscription`: the browser's JSON, plus optional `"kind"` (`web`, the default, or `app`) and `"name"` (up to 64 characters; the hub trims it and uses `Browser` or `Android app` when it is empty) | `web`: `204` (upsert by endpoint); `400` unless the endpoint is an https URL on a known push service (Mozilla, FCM, Apple, Windows). `app`: `202` with `{"device": "<id>"}` and the hub pushes a confirmation to the endpoint (see Devices); `204` when that endpoint already belongs to a confirmed device, which renews it; `400` unless the endpoint passes the endpoint rule (see Devices). The hub keeps the 20 newest subscriptions of both kinds. |
 | `DELETE /api/push/subscriptions` | `{"endpoint": "…"}` | `204` |
 | `POST /api/reminders/test` | `{"endpoint": "…"}`, this device's push subscription (`""` when it has none) | `{"push", "ntfy"}`: sends a test reminder to that subscription only, and to ntfy when set up. With a login the subscription must belong to the calling session. `push` is `sent` (the push service accepted it), `none` (this device has no subscription), `expired` (the push service answered that the subscription is gone, or its endpoint is not a known push service, so the hub removed it and the app should subscribe again) or `failed`; `ntfy` is `sent`, `failed` or `off`. `404` when push is not set up. |
+| `GET /api/devices` | | `[]Device`, newest first (see Devices) |
+| `DELETE /api/devices/{id}` | | `204`; revokes the device: drops its push subscription and its device token. `404` for an unknown id. |
+| `POST /api/devices/{id}/confirm` | `{"code": "…"}` | `200` with `{"token": "…"}`, the device token, shown once. Needs no session: the code is the credential. `403` for a wrong, used or expired code. |
+| `PUT /api/devices/self` | `PushSubscription` (`endpoint` and `keys` only) | `204`; replaces the calling device's endpoint and keys and renews it. Device token only. `400` as for `app` registration. |
+| `DELETE /api/devices/self` | | `204`; the calling device revokes itself. Device token only. |
 | `GET /api/bridges` | | `[]Bridge` |
 | `POST /api/bridges` | `{"name": "…"}` | `201` with `{"name", "token"}`; the token is shown once |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |
@@ -39,13 +44,13 @@ The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `ht
 
 Login is on when the hub has a password hash: one set in the app (see Password below), or one from the environment (`MEAT_MODE_PASSWORD_HASH`, or `MEAT_MODE_PASSWORD_HASH_FILE` naming a file that holds it), which wins over the app's. The hash is an Argon2id string in PHC format (`$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`), printed by `meat-mode hash-password`. Setting both variables, or a value that is not such a string, stops the hub at start with a plain message. With no hash, login is off: no route needs a session, `GET /api/session` reports `authenticated: true`, `POST /api/logout` answers `204` and does nothing, and `POST /api/login` answers `404`.
 
-When login is on, every `/api/` route except the three below and `POST /api/setup/claim` answers `401` with `{"error": "log in first"}` unless the request carries a valid session cookie. That includes `GET /api/events`, so an app whose session ended sees its event stream fail and checks `GET /api/session` before reconnecting. An open stream ends at its next heartbeat, within 25 seconds, after its session ends or login is turned on. The three routes below still pass the Host, Origin and Content-Type checks above; they only skip the session check. The app's pages and static files stay public; they hold no data. The bridge API keeps its bearer tokens and `/healthz` stays public.
+When login is on, every `/api/` route except the three below, `POST /api/setup/claim`, `POST /api/devices/{id}/confirm` and the routes a device token opens (see Devices) answers `401` with `{"error": "log in first"}` unless the request carries a valid session cookie. That includes `GET /api/events`, so an app whose session ended sees its event stream fail and checks `GET /api/session` before reconnecting. An open stream ends at its next heartbeat, within 25 seconds, after its session ends or login is turned on. The three routes below still pass the Host, Origin and Content-Type checks above; they only skip the session check. The app's pages and static files stay public; they hold no data. The bridge API keeps its bearer tokens and `/healthz` stays public.
 
 | Method and path | Body | Response |
 |---|---|---|
 | `GET /api/session` | | `{"login": bool, "authenticated": bool}`: whether this hub has a login, and whether this request is logged in (always `true` when login is off) |
 | `POST /api/login` | `{"password": "…"}` | `204` and the session cookie; `401` `{"error": "wrong password"}`; `429` with `Retry-After` after 5 failed logins within a minute, counted for the whole hub; `404` when login is off |
-| `POST /api/logout` | | `204`; ends this session, clears the cookie and drops the push subscriptions it registered |
+| `POST /api/logout` | | `204`; ends this session, clears the cookie and drops the push subscriptions and devices it registered |
 
 The session cookie is `meat_mode_session`: 32 random bytes, `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` when `MEAT_MODE_PUBLIC_URL` is `https://`. The hub stores only its SHA-256. A session lasts 90 days from its last use; the hub renews the cookie at most once a day. A session belongs to the password hash it was made under, so changing the hash in the environment logs every device out; changing it in the app keeps the device that changed it logged in. Logins and the existing Host, Origin and Content-Type checks apply together: `POST /api/login` needs `Content-Type: application/json` like any other `/api/` write.
 
@@ -87,6 +92,44 @@ The name and the time zone the hub keeps, shown in the wizard's Name and time zo
 - `reminderLead` is how many minutes before an item's due time an early reminder comes, `0` (none, the default) to `10080` (a week). It applies to every item; a personal item can set its own with `remindBefore` (see Reminders).
 - A field left out of `PUT` stays as it is.
 - The app keeps showing times in each device's own zone. The hub's zone is for agents: `meat-mode add` reads `--due 2026-03-02` and `--due "2026-03-02 14:30"` in it, so a to-do added from a server in UTC lands at 9:00 in the user's zone. A `--due` with an offset, such as `2026-03-02T09:00:00Z`, is used as written. While the hub has no zone, `meat-mode add` uses the zone of the machine it runs on.
+
+### Devices
+
+A **device** is one place reminders go: a browser's push subscription (`kind: web`) or the Android app (`kind: app`). Settings lists them and can revoke any of them. `Device` is `{"id", "name", "kind", "confirmed", "createdAt", "lastSeen", "lastPush"}`: `id` is 32 hex characters, `lastSeen` is the last registration, renewal or device-token call, and `lastPush` is the last push its push service accepted, `null` before the first. The list never shows endpoints or keys: an endpoint is a capability URL.
+
+**Endpoint rule.** A `web` endpoint must be an https URL on a known push service, as before. An `app` endpoint is a UnifiedPush endpoint, which can be any server, so the hub guards it:
+
+- `https`, no user info, at most 1000 bytes.
+- Every address its host resolves to must be global: not loopback, private (RFC 1918, `fc00::/7`), link-local, shared address space (RFC 6598, which Tailscale uses), documentation, benchmarking, multicast, unspecified or reserved, and not an IPv4-mapped, 6to4, NAT64 or Teredo form of one. The hub checks this when the endpoint is registered and again at every send, and dials the address it checked, so DNS that changes in between cannot reach an internal address.
+- Or it matches `MEAT_MODE_PUSH_ALLOW`, a comma-separated list of host names and CIDRs the operator trusts, such as a push server on the tailnet or the LAN. A host name entry matches the endpoint's host exactly; a CIDR entry admits a resolved address inside it.
+- Sends follow no redirects and time out after 10 seconds.
+
+**Confirmation.** A new `app` registration gets no reminders until it is confirmed. The hub pushes `{"confirm": {"device": "<id>", "code": "<code>"}}` to it at once; the app posts the code to `POST /api/devices/{id}/confirm` and gets its device token. The code is 32 random bytes, base64url, good for one use within 10 minutes. A registration not confirmed in 10 minutes is dropped. A confirmation push is never shown to the user. Unconfirmed registrations do not count toward the 20 newest subscriptions; the hub keeps at most 3 of them, newest first.
+
+**Device token.** `mmd_` followed by 32 random bytes, base64url. The hub stores only its SHA-256. The app sends it as `Authorization: Bearer <token>` from outside the WebView, so notification buttons work without opening the app and without the web session. It is accepted on `POST /api/actions` for kinds `ask`, `done` and `snooze` only, and on `PUT` and `DELETE /api/devices/self`. On any other route, or for another kind, it answers `401`; it never reads state. A request with an `Authorization: Bearer` header is a device request: the hub ignores any session cookie on it. A request with a token passes the Host, Origin and Content-Type checks like any other: it carries no `Origin`, and a bodiless `DELETE` still sends `Content-Type: application/json`.
+
+A device belongs to the session that registered it while login is on, as push subscriptions do: logging out, the session ending, a password change that ends the session, and turning login on (for devices registered with login off) drop the device and its token. With login off the confirm call still issues a token; `POST /api/actions` needs none then. A device not renewed for 60 days is dropped. Revoking a `web` device stops pushes to it until that browser opens the app again with notifications allowed, when it registers anew; to stop a browser for good, log it out or block its notifications. Revoking an `app` device makes the app forget its token at its next device-token call (`401`); it shows reminders as off. The app renews through `PUT /api/devices/self` each time it opens and whenever its distributor hands it a new endpoint.
+
+**Send results**, for both kinds: `2xx` delivered, and `lastPush` is set. `404` and `410` remove the subscription; an `app` device then shows no push until it registers again. `413` logs that the payload was too large and keeps the subscription. `429` holds every send to that endpoint until its `Retry-After` (seconds or a date, at most an hour; 60 seconds when absent). `5xx`, ntfy's `507` among them, and network errors are retried for that message at about 1, 5 and 30 minutes, then the message is given up; retries live in memory and a restart drops them. A subscription that has had no delivery for 3 days while every send to it failed is removed. A test reminder reports the first attempt and is not retried.
+
+### Android app
+
+The Android app shows the hub's own pages in a WebView and handles push natively. The page and the app talk through `WebViewCompat.addWebMessageListener`, injected as `window.meatMode` for exactly the hub's https origin. Each message is a JSON string. The page sends `{"id", "type", …}` with `meatMode.postMessage`; the app answers each with one message carrying the same `id`, through `meatMode.onmessage`, or `{"id", "error": "<plain message>"}`. The page treats the app as present only when `window.meatMode` exists and `hello` answers within 2 seconds.
+
+| `type` | Request | Answer |
+|---|---|---|
+| `hello` | | `{"app": "android", "version": "X.Y.Z", "bridge": 1}` |
+| `push-status` | | `{"state", "endpoint"?, "distributor"?, "lastPush", "batteryExempt"}`. `state` is `off`, `waiting` (registered, not confirmed yet), `on`, `blocked` (notifications not allowed in Android settings) or `unavailable` (no distributor and no Play Services). `endpoint` is there when `waiting` or `on`, for `POST /api/reminders/test`; `lastPush` is when the last push arrived, `null` before the first. |
+| `push-on` | `{"vapidKey": "…"}`, from `GET /api/push/key` | Asks for notification permission, picks a distributor (a dialog when several are installed) and registers with UnifiedPush. Answers `{"subscription": {"endpoint", "keys": {"p256dh", "auth"}}, "name": "<phone model>"}`. The page posts that to `POST /api/push/subscriptions` with `"kind": "app"`, then asks `push-status` every second until `on`, for up to 30 seconds. |
+| `push-off` | | Unregisters from the distributor, calls `DELETE /api/devices/self` and forgets the device token. Answers `{"state": "off"}`. |
+
+In the app the page asks the app instead of `PushManager` whether reminders are on, to turn them on, and for the endpoint the test reminder names. The service worker still runs and still handles a browser's pushes.
+
+The app builds each notification from the push payload (see Agent push). A tap, and the `open` and `reply` buttons, open the WebView at the URL, same-origin only, as the service worker does. `retry`, `done` and `snooze` post the action with the device token in the background; when the hub refuses, the app opens the item instead. `channel` picks the Android notification channel: `reminders` (with `test`) or `agents`.
+
+Build: a Gradle project in `android/` with the wrapper at `android/gradlew` and one module, `app`. `./gradlew :app:assembleDebug` builds a debug APK anywhere; `./gradlew :app:assembleRelease` reads the signing config from `MEAT_MODE_ANDROID_KEYSTORE` (path to the keystore file), `MEAT_MODE_ANDROID_KEYSTORE_PASSWORD`, `MEAT_MODE_ANDROID_KEY_ALIAS` and `MEAT_MODE_ANDROID_KEY_PASSWORD`, and fails when any is unset, so no unsigned or debug-signed release exists. The version comes from the Gradle property `-PappVersion=X.Y.Z` (CI passes the tag without its `v`); without it the build uses `0.0.0`. The release APK lands in `android/app/build/outputs/apk/release/`. On the dev box it builds inside `ghcr.io/cirruslabs/android-sdk:36`; `scripts/check.sh` runs `:app:lintDebug :app:testDebugUnitTest :app:assembleDebug` there.
+
+Releases: one signed universal APK per tag `vX.Y.Z`, named `meat-mode-android-vX.Y.Z.apk`, package `io.github.yourfriendaaron.meatmode`, minSdk 26, `versionName` `X.Y.Z` and `versionCode` `X*1000000 + Y*1000 + Z`.
 
 ### Actions
 
@@ -205,7 +248,7 @@ While a run is `working` and its bridge has not been seen for 60 seconds, the hu
 
 When a run ends the hub sends one notification for it, through Web Push and ntfy as reminders go: `<agent> replied` (`waiting`), `<agent> finished` (`done`) or `<agent> stopped` with the reason in words (`stopped`). It sends one per run end, keyed on the run's `id` and state, never one per agent comment mid-run, and none for a run the user stopped or on an item the user closed (its latest done, dismiss or reopen since the run started is a done or dismiss). A run that ended more than an hour before the hub first sees it sends nothing, so a bridge's first sync does not bring a flood. Its link opens the item, and the Reply action opens it at the note box: `/?item=<key>&reply=1`.
 
-The Web Push payload is `{"title", "body", "url", "tag", "actions"?}`; `actions` is a list of `{"action", "title"}` where `action` is `reply`, `open` or `retry` (`retry` on `stopped` only), and the payload then also carries `"key"`, the item key. The service worker opens `url` for `open` and a tap on the notification, `/?item=<key>&reply=1` for `reply`, and for `retry` posts `{"kind": "ask", "key"}` as a new action. The payload stays within Web Push's size limit: with a long key or title the hub shortens the body, then the title, never the link, the key, the tag or the actions. ntfy gets the same title, body and link, with Reply and Open as view actions.
+The Web Push payload is `{"title", "body", "url", "tag", "channel", "actions"?}`; `channel` is `reminders`, `agents` or `test`. `actions` is a list of `{"action", "title"}` where `action` is `reply`, `open` or `retry` (`retry` on `stopped` only) on an agent push, and `done` and `snooze` on a reminder for one item; the payload then also carries `"key"`, the item key. The service worker opens `url` for `open` and a tap on the notification, `/?item=<key>&reply=1` for `reply`, for `retry` posts `{"kind": "ask", "key"}` as a new action, for `done` posts `{"kind": "done", "key"}`, and for `snooze` posts `{"kind": "snooze", "key", "payload": {"until": <one hour from now>, "previous": null}}`, the app's "In 1 hour". A reminder that gathers several missed ones has no actions. The payload stays within Web Push's size limit: with a long key or title the hub shortens the body, then the title, never the link, the key, the tag or the actions. ntfy gets the same title, body and link, with Reply and Open as view actions.
 
 ## Bridge API
 
@@ -288,6 +331,6 @@ A wrong code or current password answers `403`, not `401`, because the app takes
 
 ## Configuration
 
-Hub, from environment variables (see `.env.example`): `MEAT_MODE_LISTEN`, `MEAT_MODE_DATA_DIR`, `MEAT_MODE_PUBLIC_URL`, `MEAT_MODE_ALLOWED_HOSTS`, `MEAT_MODE_PASSWORD_HASH`, `MEAT_MODE_PASSWORD_HASH_FILE`, `MEAT_MODE_USER`, `MEAT_MODE_VAPID_SUBJECT`, `MEAT_MODE_NTFY_URL`, `MEAT_MODE_NTFY_TOPIC`, `MEAT_MODE_NTFY_TOKEN`.
+Hub, from environment variables (see `.env.example`): `MEAT_MODE_LISTEN`, `MEAT_MODE_DATA_DIR`, `MEAT_MODE_PUBLIC_URL`, `MEAT_MODE_ALLOWED_HOSTS`, `MEAT_MODE_PASSWORD_HASH`, `MEAT_MODE_PASSWORD_HASH_FILE`, `MEAT_MODE_USER`, `MEAT_MODE_VAPID_SUBJECT`, `MEAT_MODE_NTFY_URL`, `MEAT_MODE_NTFY_TOPIC`, `MEAT_MODE_NTFY_TOKEN`, `MEAT_MODE_PUSH_ALLOW`.
 
 Bridge: `MEAT_MODE_BRIDGE_TOKEN` gives `meat-mode bridge pair <url>` its token without putting it on the command line. Agent runs read `MEAT_MODE_AGENT_COMMAND`, `MEAT_MODE_AGENT_NAME`, `MEAT_MODE_AGENT_TIMEOUT`, `MEAT_MODE_AGENT_BUDGET_USD`, `MEAT_MODE_AGENT_RUNS_PER_TASK` and `MEAT_MODE_AGENT_CONCURRENT` (see `.env.example` and deploy.md).

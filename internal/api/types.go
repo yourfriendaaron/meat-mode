@@ -302,12 +302,49 @@ type NewBridgeReply struct {
 }
 
 // PushSubscription is the browser's PushSubscription.toJSON().
+// Kind and Name are Meat Mode's own: Kind is DeviceWeb (the default) or
+// DeviceApp, and Name labels the device in Settings.
 type PushSubscription struct {
 	Endpoint string `json:"endpoint"`
 	Keys     struct {
 		P256dh string `json:"p256dh"`
 		Auth   string `json:"auth"`
 	} `json:"keys"`
+	Kind string `json:"kind,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+// Device kinds: a browser's push subscription, or the Android app.
+const (
+	DeviceWeb = "web"
+	DeviceApp = "app"
+)
+
+// Device is one place reminders go, as Settings lists it (docs/api.md,
+// Devices). It never carries the endpoint or keys.
+type Device struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Kind      string     `json:"kind"`
+	Confirmed bool       `json:"confirmed"`
+	CreatedAt time.Time  `json:"createdAt"`
+	LastSeen  time.Time  `json:"lastSeen"`
+	LastPush  *time.Time `json:"lastPush"`
+}
+
+// DeviceRegistered answers an app registration that awaits confirmation.
+type DeviceRegistered struct {
+	Device string `json:"device"`
+}
+
+// DeviceConfirm is what the app posts back from the confirmation push.
+type DeviceConfirm struct {
+	Code string `json:"code"`
+}
+
+// DeviceToken is the device token the hub issues once, on confirmation.
+type DeviceToken struct {
+	Token string `json:"token"`
 }
 
 // PersonalTodo is what an agent posts to add to the personal list.
