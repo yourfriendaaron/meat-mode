@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Debug builds may reach a hub on this device or the emulator's host over
+         plain http; Hub.parseAddress allows it for those hosts only. -->
+    <application
+        android:usesCleartextTraffic="true"
+        tools:replace="android:usesCleartextTraffic"
+        tools:ignore="UnusedAttribute">
+        <activity
+            android:name=".PushLogActivity"
+            android:exported="false"
+            android:label="@string/push_log_title" />
+    </application>
+</manifest>

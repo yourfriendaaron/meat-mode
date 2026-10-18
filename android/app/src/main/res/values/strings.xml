@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Meat Mode</string>
+
+    <string name="setup_title">Connect to your hub</string>
+    <string name="setup_intro">Enter the address you open Meat Mode at in a browser. The app shows that hub\'s pages and lets it send reminders to this phone, so enter only a hub you run or trust.</string>
+    <string name="setup_hint">https://hub.example.com</string>
+    <string name="setup_connect">Connect</string>
+    <string name="setup_checking">Checking %1$s…</string>
+
+    <string name="offline_title">Can\'t reach the hub</string>
+    <string name="offline_unreachable">Check that this phone is online and on the hub\'s network, then try again.</string>
+    <string name="offline_certificate">The hub\'s certificate is not trusted on this phone, so the app did not open it.</string>
+    <string name="offline_retry">Retry</string>
+
+    <string name="settings_title">App settings</string>
+    <string name="settings_hub">Hub</string>
+    <string name="settings_no_hub">Not set</string>
+    <string name="settings_reminders">Reminders on this phone</string>
+    <string name="settings_distributor">Push service</string>
+    <string name="settings_last_push">Last push received</string>
+    <string name="settings_battery">Battery</string>
+    <string name="settings_none">None</string>
+    <string name="settings_never">Never</string>
+    <string name="settings_notifications">Notification settings</string>
+    <string name="settings_push_log">Push log</string>
+    <string name="settings_change_hub">Change hub address</string>
+    <string name="settings_reminders_hint">Turn reminders on or off in the hub\'s own Settings.</string>
+
+    <string name="state_on">On</string>
+    <string name="state_waiting">Waiting for the hub to confirm</string>
+    <string name="state_off">Off</string>
+    <string name="state_blocked">Blocked: notifications are off in Android settings</string>
+    <string name="state_unavailable">Unavailable: no push service on this phone</string>
+
+    <string name="battery_unrestricted">Unrestricted</string>
+    <string name="battery_optimised">Optimised: reminders through a push service app may arrive late</string>
+    <string name="battery_allow">Allow</string>
+    <string name="battery_not_now">Not now</string>
+    <string name="battery_title">Let reminders arrive on time</string>
+    <string name="battery_message">Your push service app wakes Meat Mode when a reminder comes in. Android delays that unless Meat Mode may run unrestricted. Give your push service app the same setting in its own settings.</string>
+
+    <string name="change_hub_title">Change hub address?</string>
+    <string name="change_hub_message">Reminders on this phone stop, and the app signs out of the current hub.</string>
+    <string name="change_hub_confirm">Change</string>
+
+    <string name="pick_title">Choose your push service</string>
+    <string name="pick_message">Several apps on this phone can deliver pushes. Android will ask which one delivers Meat Mode\'s reminders; pick the one you use, such as ntfy or Sunup.</string>
+    <string name="pick_continue">Continue</string>
+    <string name="pick_none_chosen">No push service was chosen.</string>
+
+    <string name="push_blocked">Notifications are off for Meat Mode. Allow them in Android settings.</string>
+    <string name="push_unavailable">No push service on this phone. Install a UnifiedPush distributor such as ntfy or Sunup, or use a phone with Google Play Services.</string>
+    <string name="distributor_embedded">Google (built in)</string>
+
+    <string name="channel_reminders">Reminders</string>
+    <string name="channel_reminders_about">Due to-dos and test reminders</string>
+    <string name="channel_agents">Agents</string>
+    <string name="channel_agents_about">Replies, finished work and stopped runs from agents</string>
+
+    <string name="action_refused_title">That button did not go through</string>
+    <string name="action_refused_hub">The hub did not take it. Tap to open the item.</string>
+    <string name="action_refused_offline">The hub could not be reached. Tap to open the item.</string>
+    <string name="action_refused_off">Reminders are off on this phone. Tap to open the item.</string>
+</resources>

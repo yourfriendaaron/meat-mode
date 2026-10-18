@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app icon's steak (web/scripts/icons.mjs) as one silhouette, with its
+     checkbox cut out and the tick drawn inside the hole. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <group android:translateY="1">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M8,46C8,31 22,25 40,25C60,25 80,30 89,44C95,53 92,63 83,64C72,65 66,59 56,61C45,63 39,71 26,70C13,69 8,59 8,46Z M26,34.5H39A6,6 0,0 1,45 40.5V53.5A6,6 0,0 1,39 59.5H26A6,6 0,0 1,20 53.5V40.5A6,6 0,0 1,26 34.5Z" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M26,47L31,52L39.5,41.5"
+            android:strokeWidth="4.5"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MeatMode" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorPrimary">@color/accent</item>
+    </style>
+
+    <style name="Heading">
+        <item name="android:textSize">22sp</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingTop">24dp</item>
+        <item name="android:paddingBottom">12dp</item>
+    </style>
+
+    <style name="Label">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/accent</item>
+        <item name="android:layout_marginTop">16dp</item>
+    </style>
+
+    <style name="Value">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textIsSelectable">true</item>
+    </style>
+</resources>
