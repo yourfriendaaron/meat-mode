@@ -28,6 +28,12 @@ func runHub(args []string) error {
 			if err != nil {
 				return nil, err
 			}
+			// Run validated the list before it built the registry.
+			hosts, cidrs, err := cfg.PushAllowList()
+			if err != nil {
+				return nil, err
+			}
+			reg.Guard = notify.NewEndpointGuard(hosts, cidrs)
 			// The password can be set in the app while the hub runs.
 			reg.RequireSession = func() bool {
 				if cfg.PasswordHash != "" {
