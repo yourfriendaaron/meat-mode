@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -232,5 +233,22 @@ func TestKeyOfSharesOneReminder(t *testing.T) {
 	s.Tick(context.Background())
 	if len(n.got) != 1 {
 		t.Fatalf("sent %d reminders for one added task", len(n.got))
+	}
+}
+
+func TestLinkUsesTheItemsOwnKey(t *testing.T) {
+	db, c, src, n := setup(t)
+	s := sched(t, db, c, src, n)
+	s.KeyOf = func(context.Context, api.Item) (string, error) { return "home/chores/pending-1", nil }
+	// The bridge has reported the added bead; the provisional item is gone.
+	real := item(tp(t0.Add(-time.Minute)))
+	real.Key, real.ID = "home/chores/ch-7", "ch-7"
+	src.items = []api.Item{real}
+	s.Tick(context.Background())
+	if len(n.got) != 1 {
+		t.Fatalf("sent %d reminders, want 1", len(n.got))
+	}
+	if got := n.got[0].URL; !strings.Contains(got, url.QueryEscape("home/chores/ch-7")) || strings.Contains(got, "pending") {
+		t.Fatalf("link %q does not point at the item's own key", got)
 	}
 }
