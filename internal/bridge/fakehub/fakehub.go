@@ -25,6 +25,8 @@ type Hub struct {
 	repos    map[string][]api.Repo
 	items    map[string][]api.Item // "<bridge>/<repo>" -> items
 	itemPuts map[string]int
+	runs     map[string][]api.RunReport // bridge -> its last run list
+	runPuts  map[string]int
 	queue    map[string][]api.Action // bridge -> actions it was sent
 	results  map[string][]api.ActionResult
 	personal []Personal
@@ -60,12 +62,14 @@ func New(tokens map[string]string) *Hub {
 	h := &Hub{
 		tokens: tokens, repos: map[string][]api.Repo{}, items: map[string][]api.Item{},
 		itemPuts: map[string]int{}, queue: map[string][]api.Action{}, results: map[string][]api.ActionResult{},
+		runs: map[string][]api.RunReport{}, runPuts: map[string]int{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bridge/v1/hello", h.auth(h.hello))
 	mux.HandleFunc("GET /bridge/v1/settings", h.auth(h.settings))
 	mux.HandleFunc("PUT /bridge/v1/repos", h.auth(h.putRepos))
 	mux.HandleFunc("PUT /bridge/v1/items", h.auth(h.putItems))
+	mux.HandleFunc("PUT /bridge/v1/runs", h.auth(h.putRuns))
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
 	mux.HandleFunc("POST /bridge/v1/actions/{id}/result", h.auth(h.result))
 	mux.HandleFunc("POST /bridge/v1/personal", h.auth(h.addPersonal))
@@ -254,6 +258,40 @@ func (h *Hub) putItems(w http.ResponseWriter, r *http.Request, bridge string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// putRuns checks each run as the real hub does and replaces the bridge's list.
+func (h *Hub) putRuns(w http.ResponseWriter, r *http.Request, bridge string) {
+	var runs []api.RunReport
+	if err := json.NewDecoder(r.Body).Decode(&runs); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if runs == nil {
+		writeErr(w, http.StatusBadRequest, "the run list must be a JSON array")
+		return
+	}
+	for _, rn := range runs {
+		switch {
+		case rn.Repo == "" || rn.BeadID == "" || rn.ID == "" || rn.Agent == "" || rn.StartedAt.IsZero() || rn.Count < 0:
+			writeErr(w, http.StatusBadRequest, "run must have a repo, bead id, id, agent and start time")
+			return
+		case !slices.Contains([]string{api.RunWorking, api.RunWaiting, api.RunDone, api.RunStopped}, rn.State):
+			writeErr(w, http.StatusBadRequest, "unknown run state "+rn.State)
+			return
+		case (rn.State == api.RunStopped) != (rn.Reason != "") || rn.Reason == api.ReasonOffline:
+			writeErr(w, http.StatusBadRequest, "a stopped run needs a reason a bridge may send, and only a stopped run has one")
+			return
+		case (rn.State == api.RunWorking) != (rn.EndedAt == nil):
+			writeErr(w, http.StatusBadRequest, "only a working run has no end time")
+			return
+		}
+	}
+	h.mu.Lock()
+	h.runs[bridge] = runs
+	h.runPuts[bridge]++
+	h.mu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Hub) actions(w http.ResponseWriter, _ *http.Request, bridge string) {
 	writeJSON(w, h.Pending(bridge))
 }
@@ -373,4 +411,18 @@ func (h *Hub) ItemPuts(bridge, repo string) int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.itemPuts[bridge+"/"+repo]
+}
+
+// Runs returns the bridge's last run list.
+func (h *Hub) Runs(bridge string) []api.RunReport {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.runs[bridge])
+}
+
+// RunPuts counts the run lists received from a bridge.
+func (h *Hub) RunPuts(bridge string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.runPuts[bridge]
 }
