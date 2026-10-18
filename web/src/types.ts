@@ -27,6 +27,10 @@ export interface Item {
   comments: Comment[] | null;
   /** Personal items only. */
   checklist?: Check[] | null;
+  /** Personal items only. */
+  repeat?: Repeat | null;
+  /** Minutes before the due time an early reminder comes; unset uses the hub's reminderLead. Personal items only. */
+  remindBefore?: number | null;
   pending?: boolean;
   seenAt?: string | null;
   firstSeen?: string;
@@ -53,6 +57,35 @@ export interface Edit {
   priority?: number;
   /** Replaces the whole list; [] clears it. */
   checklist?: Check[];
+  repeat?: Repeat;
+  /** Ends the repeat; never sent with `repeat`. */
+  clearRepeat?: boolean;
+  /** Minutes, 0 (no early reminder) to MAX_LEAD_MINUTES. */
+  remindBefore?: number;
+  /** Goes back to the hub's reminderLead; never sent with `remindBefore`. */
+  clearRemindBefore?: boolean;
+}
+
+export type RepeatUnit = "day" | "week" | "month" | "year";
+
+/** Caps Repeat.interval. */
+export const MAX_REPEAT_INTERVAL = 100;
+/** Caps a reminder lead time: one week. */
+export const MAX_LEAD_MINUTES = 7 * 24 * 60;
+
+/** Makes a personal item come back after it is done (docs/api.md, Repeating to-dos). The item's due time is the current occurrence. */
+export interface Repeat {
+  every: RepeatUnit;
+  /** Every n units, 1 to MAX_REPEAT_INTERVAL; left out means 1. */
+  interval?: number;
+  /** A weekly rule's days, 0 (Sunday) to 6. Left out, the due date's weekday. */
+  weekdays?: number[];
+  /** Counts the next date from the day the item is done. */
+  fromDone?: boolean;
+  /** IANA zone whose wall-clock time the rule keeps. */
+  timeZone: string;
+  /** Set by the hub; a client sends none. */
+  start?: string;
 }
 
 export interface Repo {
@@ -78,10 +111,15 @@ export interface Payload {
   text?: string;
   title?: string;
   due?: string | null;
+  /** add, personal list only; needs `due`. */
+  repeat?: Repeat;
   on?: boolean;
   /** edit */
   set?: Edit;
-  /** edit: the values the fields in `set` held before, filled in by the hub. */
+  /**
+   * Filled in by the hub. edit: the values the fields in `set` held before.
+   * done on a repeating item: the due time and checklist before it moved on.
+   */
   was?: Edit;
   /** note-edit and note-delete. */
   commentId?: string;
@@ -159,10 +197,29 @@ export interface SetupInfo {
   tailscaleOnly: boolean;
 }
 
-/** PUT /api/settings: the name and time zone the hub keeps. A field left out stays as it is. */
+/** GET /api/settings. */
+export interface Settings {
+  name: string;
+  timeZone: string;
+  /** Minutes before an item's due time an early reminder comes, 0 (none) to MAX_LEAD_MINUTES. */
+  reminderLead: number;
+}
+
+/** PUT /api/settings. A field left out stays as it is. */
 export interface SettingsUpdate {
   name?: string;
   timeZone?: string;
+  reminderLead?: number;
+}
+
+/** GET /api/calendar. */
+export interface CalendarStatus {
+  on: boolean;
+}
+
+/** POST /api/calendar: the feed's address, shown once. */
+export interface CalendarLink {
+  url: string;
 }
 
 /** GET /api/setup/status: what the connection check learns from the hub (docs/api.md, Setup). */
