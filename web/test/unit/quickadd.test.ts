@@ -183,10 +183,12 @@ test("a one-off date is not a repeat", () => {
   assert.equal(local(r.due), "2026-10-15 09:00");
 });
 
-test("the 31st in a month without one is its last day", () => {
+// The hub counts the series from the first due date, so it must be a 31st
+// for later months to come back to the 31st.
+test("the 31st starts in the next month that has one", () => {
   const r = parseQuickAdd("Pay rent every month on the 31st", new Date(2026, 10, 5, 10, 0), lists);
-  assert.equal(local(r.due), "2026-11-30 09:00");
-  assert.equal(local(parseQuickAdd("Pay rent every month on the 30th", new Date(2026, 1, 1, 10, 0), lists).due), "2026-02-28 09:00");
+  assert.equal(local(r.due), "2026-12-31 09:00");
+  assert.equal(local(parseQuickAdd("Pay rent every month on the 30th", new Date(2026, 1, 1, 10, 0), lists).due), "2026-03-30 09:00");
 });
 
 test("a day of the month counts only with a monthly repeat", () => {

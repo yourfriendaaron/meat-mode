@@ -101,14 +101,16 @@ export function findRepeat(text: string): RepeatMatch | null {
 /**
  * The first occurrence of a rule after now, at hours:minutes local time: the
  * first day on or after today, past now, that a weekly rule's weekdays allow.
- * A monthly rule given a day of the month takes the next such day; a month
- * without it takes its last day, as the hub does.
+ * A monthly rule given a day of the month takes the next month that has that
+ * day, so the hub counts the series from it and later short months fall on
+ * their last day.
  */
 export function firstOccurrence(r: RepeatRule, now: Date, hours: number, minutes: number, monthDay?: number): Date {
   if (r.every === "month" && monthDay) {
     for (let i = 0; ; i++) {
       const last = new Date(now.getFullYear(), now.getMonth() + i + 1, 0).getDate();
-      const d = new Date(now.getFullYear(), now.getMonth() + i, Math.min(monthDay, last), hours, minutes);
+      if (monthDay > last) continue;
+      const d = new Date(now.getFullYear(), now.getMonth() + i, monthDay, hours, minutes);
       if (d > now) return d;
     }
   }
