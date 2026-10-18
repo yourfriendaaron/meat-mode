@@ -185,10 +185,13 @@ for (const size of Object.keys(SIZES) as Size[]) {
 
         test("edit a personal task", async ({ page, hub }) => {
           const it = hub.find("hub/personal/pe-1")!;
+          it.repeat = { every: "week", weekdays: [1, 4], timeZone: "UTC", start: it.dueAt! };
           await openApp(page, "/?item=" + encodeURIComponent("hub/personal/pe-1"));
           await expect(page.locator("#detail h2#d-title")).toHaveText(it.title);
           await page.locator("#detail").getByRole("button", { name: "Edit", exact: true }).click();
           await expect(page.locator("#detail").getByLabel("Title")).toBeFocused();
+          // The lead time choice names the hub's default once it has loaded.
+          await expect(page.locator("#edit-lead option:checked")).toHaveText("Use default (none)");
           await shot(page, "edit");
         });
 
@@ -220,6 +223,9 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await openApp(page);
           await goToSettings(page, size);
           await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+          // Sections that load their own data have drawn.
+          await expect(page.getByLabel("Remind me early")).toBeVisible();
+          await expect(page.getByRole("button", { name: "Get calendar link" })).toBeVisible();
           await shot(page, "settings");
         });
 
