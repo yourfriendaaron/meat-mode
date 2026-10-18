@@ -109,6 +109,12 @@ func changesRun(a api.Action) bool {
 	return a.Kind == api.KindAsk || a.Kind == api.KindStop || (a.Kind == api.KindAdd && a.Payload.Ask)
 }
 
+// AgentsOnError is the result for an agents action with on: true. Agents are
+// switched on at this machine only.
+func AgentsOnError(repo string) string {
+	return "switch agents on at this machine: meat-mode bridge agents on " + repo
+}
+
 // ErrUnknownRepo is the result for a sync switch on a repo the bridge did
 // not find.
 const ErrUnknownRepo = "unknown repo"
@@ -126,6 +132,8 @@ func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (
 		return api.ActionResult{Error: ErrUnknownRepo}, nil
 	case a.Payload.On == nil:
 		return api.ActionResult{Error: kind + " switch has no position"}, nil
+	case a.Kind == api.KindAgents && *a.Payload.On:
+		return api.ActionResult{Error: AgentsOnError(a.Repo)}, nil
 	case save == nil:
 		return api.ActionResult{Error: "this bridge cannot save " + kind + " switches"}, nil
 	}
@@ -345,6 +353,7 @@ func (b *Bridge) ask(ctx context.Context, a api.Action, st *repoState, res api.A
 	if actor == "" {
 		actor = defaultActor
 	}
+	b.reloadAgents()
 	req := askRequest{ActionID: a.ID, Repo: st.Repo, Author: actor, Allowed: b.Agents[a.Repo]}
 	switch {
 	case a.Kind == api.KindAsk:

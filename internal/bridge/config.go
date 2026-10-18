@@ -14,6 +14,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 )
 
 // Config is the bridge's settings file, bridge.json.
@@ -32,7 +34,15 @@ type Config struct {
 	// Agents holds the agents switches set in the app, by repo name. Agents
 	// run only in a repo switched on here; no repo file can do it.
 	Agents map[string]bool `json:"agents,omitempty"`
+	// TrustedNetworks is MEAT_MODE_TRUSTED_NETWORKS as `bridge pair` saw it:
+	// networks outside the private set that the hub may be in. The
+	// environment, when set, wins at run time.
+	TrustedNetworks string `json:"trustedNetworks,omitempty"`
 }
+
+// Allowed is the set of addresses the hub may have: the private set plus the
+// trusted networks.
+func (c Config) Allowed() (netguard.Set, error) { return netguard.ParseTrusted(c.TrustedNetworks) }
 
 // Paths are where the bridge keeps its files.
 type Paths struct {
@@ -70,8 +80,8 @@ func stateDir(goos, home, xdg string) string {
 	return filepath.Join(home, ".local", "state", "meat-mode")
 }
 
-// LoadConfig reads the config file and applies the MEAT_MODE_HUB_URL and
-// MEAT_MODE_ALLOW_INSECURE_HTTP overrides. A missing file gives an empty
+// LoadConfig reads the config file and applies the MEAT_MODE_HUB_URL,
+// MEAT_MODE_ALLOW_INSECURE_HTTP and MEAT_MODE_TRUSTED_NETWORKS overrides. A missing file gives an empty
 // config. It logs a warning when the file, which holds the token, is
 // readable by anyone but its owner.
 func LoadConfig(path string) (Config, error) {
@@ -88,6 +98,12 @@ func LoadConfig(path string) (Config, error) {
 			return c, fmt.Errorf("MEAT_MODE_ALLOW_INSECURE_HTTP must be true or false, not %q", v)
 		}
 		c.AllowInsecureHTTP = on
+	}
+	if v := os.Getenv(netguard.EnvTrusted); v != "" {
+		c.TrustedNetworks = v
+	}
+	if _, err := c.Allowed(); err != nil {
+		return c, err
 	}
 	return c, nil
 }
@@ -125,16 +141,45 @@ func SaveAgents(path, repo string, on bool) error {
 }
 
 func saveSwitch(path string, field func(*Config) *map[string]bool, repo string, on bool) error {
+	return WithConfigLock(path, func() error {
+		c, err := readConfigFile(path)
+		if err != nil {
+			return err
+		}
+		m := field(&c)
+		if *m == nil {
+			*m = map[string]bool{}
+		}
+		(*m)[repo] = on
+		return c.Save(path)
+	})
+}
+
+// LoadAgents reads the agents map as saved in the config file at path. The
+// running bridge calls it before each repo report, so `meat-mode bridge
+// agents` reaches the hub within one poll.
+func LoadAgents(path string) (map[string]bool, error) {
 	c, err := readConfigFile(path)
+	return c.Agents, err
+}
+
+// WithConfigLock runs fn holding the lock that serializes every
+// read-modify-write of the config file at path. It is a lock file of its own,
+// not the journal's single-instance lock, so a command can change the config
+// while the bridge runs.
+func WithConfigLock(path string, fn func() error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
-	m := field(&c)
-	if *m == nil {
-		*m = map[string]bool{}
+	defer f.Close() // closing releases the lock
+	if err := lockFileWait(f); err != nil {
+		return fmt.Errorf("lock %s: %w", f.Name(), err)
 	}
-	(*m)[repo] = on
-	return c.Save(path)
+	return fn()
 }
 
 // Save writes the config with mode 0600, creating its directory.

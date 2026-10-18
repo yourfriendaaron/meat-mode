@@ -6,19 +6,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 )
 
 // Hub is a client for the hub's bridge API.
 type Hub struct {
 	URL   string
 	Token string
-	HTTP  *http.Client
+	// HTTP supplies the client's settings such as its timeout. Its
+	// transport is never used: every connection goes through dial.
+	HTTP *http.Client
+	// Allowed is the private set plus the operator's trusted networks; the
+	// bridge dials the hub only at an address inside it.
+	Allowed netguard.Set
+	// Resolver looks up the hub's host name; nil is the system resolver.
+	Resolver Resolver
+}
+
+// Resolver looks up the addresses of a host name.
+type Resolver interface {
+	LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error)
 }
 
 // HTTPError is a non-2xx reply from the hub.
@@ -42,8 +57,57 @@ func (h *Hub) client() *http.Client {
 		cp := *h.HTTP
 		c = &cp
 	}
+	c.Transport = &http.Transport{
+		Proxy:                 nil, // a proxy from the environment would dial for us
+		DialContext:           h.dial,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ForceAttemptHTTP2:     true,
+	}
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return c
+}
+
+// dial resolves the hub's host, refuses it when any address is outside the
+// allowed set, and dials one of the checked addresses itself, so a name that
+// answers differently the second time cannot move the connection.
+func (h *Hub) dial(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	var ips []netip.Addr
+	if ip, err := netip.ParseAddr(host); err == nil {
+		ips = []netip.Addr{ip}
+	} else {
+		var r Resolver = net.DefaultResolver
+		if h.Resolver != nil {
+			r = h.Resolver
+		}
+		if ips, err = r.LookupNetIP(ctx, "ip", host); err != nil {
+			return nil, err
+		}
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("the hub's host %s has no address", host)
+	}
+	for _, ip := range ips {
+		if !h.Allowed.Contains(ip) {
+			return nil, fmt.Errorf("refusing the hub at %s: %s is outside the private network, "+
+				"and the bridge sends its token only to a hub on one; "+
+				"set MEAT_MODE_TRUSTED_NETWORKS if this is your own network", host, netguard.Normalize(ip))
+		}
+	}
+	var d net.Dialer
+	var last error
+	for _, ip := range ips {
+		c, err := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return c, nil
+		}
+		last = err
+	}
+	return nil, last
 }
 
 func (h *Hub) do(ctx context.Context, method, path string, in, out any) error {

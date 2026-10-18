@@ -550,25 +550,47 @@ func TestAgentsSwitchPerRepo(t *testing.T) {
 		t.Errorf("a refused run made a worktree: %v", err)
 	}
 
+	// The app cannot switch agents on; the bridge refuses and saves nothing.
 	on := true
 	w.hub.Enqueue(us, action("agents-on", api.KindAgents, "garden", "", api.Payload{On: &on}))
 	w.hub.Enqueue(us, action("agents-elsewhere", api.KindAgents, "nowhere", "", api.Payload{On: &on}))
 	w.tick(b)
-	w.oneOK(aid("agents-on"))
+	want := "switch agents on at this machine: meat-mode bridge agents on garden"
+	if rs := w.hub.Results(aid("agents-on")); len(rs) != 1 || rs[0].OK || rs[0].Error != want {
+		t.Errorf("agents on from the app = %+v, want the error %q", rs, want)
+	}
 	if rs := w.hub.Results(aid("agents-elsewhere")); len(rs) != 1 || rs[0].Error != ErrUnknownRepo {
 		t.Errorf("switch on an unknown repo = %+v", rs)
 	}
-	if !saved["garden"] {
-		t.Error("the switch was not saved")
+	if _, ok := saved["garden"]; ok {
+		t.Error("a refused switch was saved")
 	}
+	w.ask(b, "ask-refused", id, "close")
+	if rec := runOf(b, id); rec.Run == nil || rec.Run.Reason != api.ReasonNotAllowed {
+		t.Errorf("run after the refused switch = %+v", rec.Run)
+	}
+
+	// The machine's own switch reaches the next report and the next ask.
+	file := map[string]bool{"garden": true}
+	b.LoadAgents = func() (map[string]bool, error) { return file, nil }
+	w.tick(b)
 	for _, r := range w.hub.Repos(us) {
 		if r.Name == "garden" && !r.AgentsAllowed {
-			t.Errorf("hub repo = %+v", r)
+			t.Errorf("hub repo after the machine switch = %+v", r)
 		}
 	}
 	w.ask(b, "ask-on", id, "close")
 	if run := w.waitRun(b, id, settled); run.State != api.RunDone || run.Count != 1 {
 		t.Errorf("run with agents on = %+v", run)
+	}
+
+	// Switching off from the app still works and is saved.
+	off := false
+	w.hub.Enqueue(us, action("agents-off", api.KindAgents, "garden", "", api.Payload{On: &off}))
+	w.tick(b)
+	w.oneOK(aid("agents-off"))
+	if on, ok := saved["garden"]; !ok || on {
+		t.Errorf("saved = %v, want garden off", saved)
 	}
 }
 

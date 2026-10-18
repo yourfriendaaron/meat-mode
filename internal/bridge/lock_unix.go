@@ -16,3 +16,13 @@ func lockFile(f *os.File) error {
 	}
 	return err
 }
+
+// lockFileWait takes an exclusive lock on f, waiting for its holder.
+func lockFileWait(f *os.File) error {
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+		if !errors.Is(err, syscall.EINTR) {
+			return err
+		}
+	}
+}
