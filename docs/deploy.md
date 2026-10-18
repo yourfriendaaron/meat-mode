@@ -318,7 +318,7 @@ Only your own asks start an agent. The agent's notes and closes, and your other 
 
 ### Allow agents in a repo
 
-In the app, under **Settings**, below its machine, each synced repo has an **Agents** switch. It starts off. The machine keeps your choice in the `agents` map of its own `bridge.json`, and only takes it for a repo it found itself. No line in a repo can switch agents on. An ask in a repo with agents off still leaves your note, and the run shows stopped with the reason.
+In the app, under **Settings**, **Agent machines**, each synced repo has an **Agents can work here** switch below its sync switch. It starts off. The machine keeps your choice in the `agents` map of its own `bridge.json`, and only takes it for a repo it found itself. No line in a repo can switch agents on. An ask in a repo with agents off still leaves your note, and the run shows stopped with the reason.
 
 The default agent is Claude Code, run as `claude -p` with `--permission-mode auto` and no permission prompts. **This is not a sandbox.** Auto mode lets the agent run commands as you, in your home folder, with your credentials: in testing it changed the global Git config and deleted a file in the home folder without asking. Its instructions tell it never to send, post, spend, delete or push for you, and to stop and ask in a note when it needs you, but nothing enforces that. Allow agents only in repos where you would let an agent work unattended.
 
