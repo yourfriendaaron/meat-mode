@@ -1257,11 +1257,13 @@ kbd {
   margin: 0;
   padding: 0;
 }
+/* Outcome, then the title with its Settings link under it, so a long title
+   keeps the width and the links line up at phone width. */
 .wiz-summary li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
@@ -1277,8 +1279,12 @@ kbd {
 .wiz-open {
   color: var(--soft);
 }
-.wiz-sum-title {
-  flex: 1;
+.wiz-summary .link-btn {
+  grid-column: 2;
+  justify-self: start;
+  margin-left: -4px;
+  padding-block: 2px;
+  text-align: left;
 }
 .wiz-nav {
   display: flex;
