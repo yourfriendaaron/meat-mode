@@ -48,8 +48,8 @@ test("quick add leaves repeat words alone on an agent's list", async ({ page, hu
   await expect(page.locator("#qa-chips .chip-repeat")).toHaveCount(0);
   await expect(page.locator("#qa-backdrop mark.hl-repeat")).toHaveCount(0);
   await input.press("Enter");
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "add", bridge: "home", repo: "garden" });
   const add = hub.posted.at(-1)!;
-  expect(add).toMatchObject({ kind: "add", bridge: "home", repo: "garden" });
   expect(add.payload.repeat).toBeUndefined();
   expect(add.payload.title).toContain("every week");
 });
