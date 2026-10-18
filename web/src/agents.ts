@@ -76,7 +76,15 @@ To put something on ${who}'s personal to-do list instead, not tied to a repo:
 
     meat-mode add "Renew the library card" --due 2026-03-02 --note "It expires on Friday." --author <your name>
 
---due takes a date (due at 9:00), a date and time in ${who}'s time zone such as "2026-03-02 18:30", or an RFC 3339 time. Pass --id with a UUID you make up, and running the command again changes nothing.
+--due takes a date (due at 9:00), a date and time in ${who}'s time zone such as "2026-03-02 18:30", or an RFC 3339 time. Pass --id with a UUID you make up, and running the command again changes nothing. It prints the new to-do's id, such as mm-12.
+
+To change a to-do this machine added, by that id:
+
+    meat-mode edit mm-12 --due "2026-03-09 18:30"
+    meat-mode done mm-12
+    meat-mode reopen mm-12
+
+edit takes --title, --description, --due or --clear-due, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
 
 Keep titles short and say what to do. Put the context in the description or the note.
 `;
