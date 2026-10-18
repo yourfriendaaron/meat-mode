@@ -80,12 +80,17 @@ func New(db *sql.DB, src ItemSource, n notify.Notifier, clock Clock, publicURL s
 }
 
 // fireTime is when the item should remind: the snooze end if one is set,
-// otherwise the due time. Closed items never fire.
-func fireTime(it api.Item) (time.Time, bool, bool) {
+// otherwise the due time. A due time after the snooze end takes over once
+// it comes, so a due date moved past an old snooze still reminds. Closed
+// items never fire.
+func fireTime(it api.Item, now time.Time) (time.Time, bool, bool) {
 	if it.Status == "closed" {
 		return time.Time{}, false, false
 	}
 	if it.DeferUntil != nil {
+		if it.DueAt != nil && it.DueAt.After(*it.DeferUntil) && !it.DueAt.After(now) {
+			return *it.DueAt, false, true
+		}
 		return *it.DeferUntil, true, true
 	}
 	if it.DueAt != nil {
@@ -127,7 +132,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	now := s.clock.Now()
 	var errs []error
 	for _, it := range items {
-		at, snoozed, ok := fireTime(it)
+		at, snoozed, ok := fireTime(it, now)
 		if !ok || at.After(now) {
 			continue
 		}
