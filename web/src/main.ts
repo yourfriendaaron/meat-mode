@@ -38,6 +38,7 @@ import { machineReposHTML } from "./agents.ts";
 import { remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
+import { trackKeyboard } from "./keyboard.ts";
 import { sectionsHTML } from "./settings/registry.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
@@ -1591,6 +1592,7 @@ function boot() {
   document.addEventListener("change", onChange);
   document.addEventListener("submit", onSubmit);
   new ResizeObserver(() => render()).observe(app);
+  trackKeyboard();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void refresh();
   });

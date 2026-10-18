@@ -391,8 +391,11 @@ kbd {
   z-index: 40;
   left: 0;
   right: 0;
-  bottom: 0;
-  padding: 16px calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  /* --kb-* are set by keyboard.ts only while the on-screen keyboard is open. */
+  bottom: var(--kb-inset, 0px);
+  max-height: var(--kb-room, none);
+  overflow-y: auto;
+  padding: 16px calc(16px + var(--safe-right)) calc(16px + var(--kb-safe-bottom, var(--safe-bottom))) calc(16px + var(--safe-left));
   background: var(--pane);
   border-top: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
@@ -718,8 +721,8 @@ kbd {
   z-index: 40;
   left: 0;
   right: 0;
-  bottom: 0;
-  max-height: 88%;
+  bottom: var(--kb-inset, 0px);
+  max-height: min(88%, calc(var(--kb-room, 100%) - 8px));
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--pane);
@@ -919,6 +922,7 @@ kbd {
 .dialog-wrap {
   position: fixed;
   inset: 0;
+  bottom: var(--kb-inset, 0px);
   z-index: 50;
   display: flex;
   align-items: flex-end;
@@ -933,7 +937,10 @@ kbd {
   border: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
   box-shadow: var(--shadow);
-  padding: 14px calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  max-height: var(--kb-room, none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px calc(16px + var(--safe-right)) calc(16px + var(--kb-safe-bottom, var(--safe-bottom))) calc(16px + var(--safe-left));
 }
 .dialog-sub {
   margin: -4px 0 10px;
@@ -1604,6 +1611,8 @@ kbd {
     flex-direction: column;
     gap: 8px;
     position: static;
+    max-height: none;
+    overflow: visible;
     padding: 0 24px 10px;
     background: transparent;
     border: 0;
