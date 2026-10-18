@@ -1,1 +1,30 @@
 /* Search field and results. */
+
+/* Takes the room between the title and the header buttons, and shrinks first. */
+.search {
+  flex: 1 1 120px;
+  min-width: 0;
+  max-width: 320px;
+  margin-left: auto;
+}
+.search[hidden] {
+  display: none;
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  /* 16px keeps iOS from zooming the page on focus. */
+  font-size: 16px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raise);
+}
+.search input::placeholder {
+  color: var(--soft);
+}
+@container app (min-width: 880px) {
+  .search input {
+    font-size: 14px;
+  }
+}
