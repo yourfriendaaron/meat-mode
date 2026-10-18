@@ -1,7 +1,9 @@
 name: release
 
-# Builds the meat-mode binary for each platform when a version tag is pushed,
-# and attaches the binaries and checksums to a GitHub release.
+# When a version tag is pushed, builds the meat-mode binary for each platform
+# and the signed Android APK, then attaches them all to one GitHub release. The
+# release is created last, so a failed build (a missing signing secret, say)
+# publishes nothing.
 on:
   push:
     tags: ["v*"]
@@ -37,7 +39,82 @@ jobs:
               -o "dist/meat-mode-${t%/*}-${t#*/}" ./cmd/meat-mode
           done
           (cd dist && sha256sum meat-mode-* > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/*
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.MEAT_MODE_ANDROID_KEYSTORE_BASE64 }}
+      MEAT_MODE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.MEAT_MODE_ANDROID_KEYSTORE_PASSWORD }}
+      MEAT_MODE_ANDROID_KEY_ALIAS: ${{ secrets.MEAT_MODE_ANDROID_KEY_ALIAS }}
+      MEAT_MODE_ANDROID_KEY_PASSWORD: ${{ secrets.MEAT_MODE_ANDROID_KEY_PASSWORD }}
+    steps:
+      - name: Check the tag and the signing secrets
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The tag $GITHUB_REF_NAME is not vX.Y.Z, so it cannot become an Android version."
+            exit 1
+          fi
+          missing=0
+          for name in KEYSTORE_BASE64 MEAT_MODE_ANDROID_KEYSTORE_PASSWORD MEAT_MODE_ANDROID_KEY_ALIAS MEAT_MODE_ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              secret=$name
+              [ "$name" = KEYSTORE_BASE64 ] && secret=MEAT_MODE_ANDROID_KEYSTORE_BASE64
+              echo "::error::The repository secret $secret is empty. Set it as docs/android-release.md describes; a release APK is never built unsigned."
+              missing=1
+            fi
+          done
+          exit "$missing"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Decode the keystore
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/release.keystore"
+          test -s "$RUNNER_TEMP/release.keystore"
+          echo "MEAT_MODE_ANDROID_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+      - name: Build the release APK
+        working-directory: android
+        run: ./gradlew :app:assembleRelease --no-daemon "-PappVersion=${GITHUB_REF_NAME#v}"
+      - name: Verify the signature and name the APK
+        run: |
+          apksigner=$(find "$ANDROID_HOME"/build-tools -name apksigner | sort -V | tail -n 1)
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one release APK, found ${#apks[@]}."
+            exit 1
+          fi
+          "$apksigner" verify --print-certs "${apks[0]}"
+          mkdir out
+          mv "${apks[0]}" "out/meat-mode-android-${GITHUB_REF_NAME}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*.apk
+          if-no-files-found: error
+      - name: Delete the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+  release:
+    needs: [binaries, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes

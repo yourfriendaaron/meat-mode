@@ -7,6 +7,7 @@ Style guide for this page.
 - Setup detail lives in docs/deploy.md and the wire contract in docs/api.md; link to them, do not copy. The wizard step list under "Get started" follows web/src/wizard/steps and the step table in docs/deploy.md.
 - Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec at deviceScaleFactor 2 and reduced to 8-bit PNGs; they are not the visual test baselines. The agent images set runs with the fake hub's allowAgents and setRun. Retake them when the screens they show change, and give each alt text that says what it shows.
 - Agent runs: keep the "This is not a sandbox" caution in "Hand a task to an agent" whenever that section exists. Limits and defaults quoted there follow the table in docs/deploy.md, "Wake an agent on a task".
+- Android app: the install section names the Obtainium link, APK filter and package ID; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate row stays a marked placeholder until the first signed release.
 - Nothing else in the repo depends on this page's headings. The Start here links depend on docs/deploy.md's headings.
 -->
 # Meat Mode
@@ -96,6 +97,27 @@ Setup gives you a short instruction text to paste into your agents' instruction 
 
 Turn on the calendar feed and subscribe to it in Apple Calendar, Thunderbird or another calendar app, and your dated to-dos show up there. The feed is read-only.
 
+### Use it as an Android app
+
+Meat Mode has an Android app. It opens your hub inside the app and delivers reminders and agent notifications the way a native app does, with **Done** and **Snooze** buttons on the notification. It adds nothing else: the screens are the ones from your browser.
+
+Install it with [Obtainium](https://obtainium.imranr.dev), which installs the signed APK from each GitHub release and keeps it up to date:
+
+1. Install Obtainium, then open this link on the phone: [add Meat Mode to Obtainium](obtainium://add/https://github.com/yourfriendaaron/meat-mode).
+2. Under the app's settings, set **Filter APKs by regular expression** to `meat-mode-android-.*\.apk`.
+3. Tap **Add**, then **Install**.
+
+To install by hand, download `meat-mode-android-vX.Y.Z.apk` from the [releases page](https://github.com/yourfriendaaron/meat-mode/releases).
+
+Check what you installed with [AppVerifier](https://github.com/soupslurpr/AppVerifier) before you trust it. It compares the app against these two values:
+
+| | |
+|---|---|
+| Package ID | `io.github.yourfriendaaron.meatmode` |
+| Certificate SHA-256 | `TO BE FILLED IN AT THE FIRST SIGNED RELEASE` |
+
+Reminders on Android need one of two things: Google Play Services on the phone, or a [UnifiedPush](https://unifiedpush.org) distributor app such as [ntfy](https://ntfy.sh) or Sunup. The app asks you to pick one when you turn reminders on. Maintainers set up the signing key with [docs/android-release.md](docs/android-release.md).
+
 ## Is this for you?
 
 It fits if:
@@ -114,6 +136,7 @@ It is not:
 
 | If you want to | Read |
 |---|---|
+| Install the Android app | [Use it as an Android app](#use-it-as-an-android-app) |
 | Run the hub and set it up | [docs/deploy.md](docs/deploy.md) |
 | Connect the machine your agents run on | [Install the bridge](docs/deploy.md#3-install-the-bridge-on-the-agent-machine) and [Pair](docs/deploy.md#4-pair) |
 | Let an agent work on a task you hand it | [Wake an agent on a task](docs/deploy.md#wake-an-agent-on-a-task) |
