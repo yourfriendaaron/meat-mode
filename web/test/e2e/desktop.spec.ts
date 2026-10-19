@@ -111,6 +111,29 @@ test("keyboard: j/k, Enter, x, s, n, Escape", async ({ page, hub }) => {
   expect(add.id).toMatch(/^[0-9a-f-]{36}$/);
 });
 
+test("New task adds to the list being viewed", async ({ page, hub }) => {
+  void hub;
+  await openApp(page);
+  const list = page.locator("#qa-list");
+  await expect(list).toHaveValue("hub/personal");
+
+  await page.getByRole("navigation", { name: "Lists" }).getByRole("button", { name: /garden/ }).click();
+  await expect(list).toHaveValue("home/garden");
+
+  // A pick by hand holds while typing, and a #tag still wins.
+  await list.selectOption("home/website");
+  const input = page.getByRole("textbox", { name: "New task" });
+  await input.fill("Buy twine");
+  await expect(list).toHaveValue("home/website");
+  await input.fill("Buy twine #garden");
+  await expect(list).toHaveValue("home/garden");
+
+  // Another view starts afresh.
+  await input.fill("");
+  await page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Today/ }).click();
+  await expect(list).toHaveValue("hub/personal");
+});
+
 test("Undo cancels a pending Done", async ({ page, hub }) => {
   await openApp(page);
   await row(page, "Order compost for the beds").getByRole("button", { name: "Mark done: Order compost for the beds" }).click();

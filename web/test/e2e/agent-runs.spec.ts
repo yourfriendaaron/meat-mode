@@ -214,11 +214,9 @@ test.describe("desktop", () => {
     const ask = page.getByRole("switch", { name: "An agent starts on it" });
     const add = page.locator("#qa-add");
 
-    // Personal, the default list: off and disabled, with the reason.
+    // Personal, the default list, has no agent: no Agent pill.
     await expect(page.locator("#qa-list")).toHaveValue("hub/personal");
-    await expect(ask).toBeDisabled();
-    await expect(ask).toHaveAttribute("aria-checked", "false");
-    await expect(page.locator("#qa-agent")).toContainText("Personal to-dos have no agent.");
+    await expect(page.locator("#qa-agent")).toBeHidden();
     await expect(add).toHaveText("Add");
 
     // A list that allows agents: the switch starts off, so a plain Add wakes nobody.
@@ -228,7 +226,8 @@ test.describe("desktop", () => {
     await expect(add).toHaveText("Add");
     await ask.click();
     await expect(ask).toHaveAttribute("aria-checked", "true");
-    await expect(add).toHaveText("Add and ask agent");
+    await expect(page.locator("#qa-agent-why")).toHaveText("It reads the task in garden and replies here.");
+    await expect(add).toHaveText("Add");
     await expect(add).toHaveClass(/btn-agent/);
     await axe(page);
 
@@ -242,7 +241,8 @@ test.describe("desktop", () => {
     // The next task starts with the switch off again: Add is plain and posts no ask.
     await page.locator("#qa-list").selectOption("home/garden");
     await expect(ask).toHaveAttribute("aria-checked", "false");
-    await expect(add).toHaveText("Add");
+    await expect(page.locator("#qa-agent-why")).toBeHidden();
+    await expect(add).not.toHaveClass(/btn-agent/);
     await input.fill("Label the seed trays");
     await add.click();
     await expect.poll(() => hub.posted.at(-1)?.payload.title).toBe("Label the seed trays");
@@ -250,10 +250,9 @@ test.describe("desktop", () => {
     expect(plain).toMatchObject({ kind: "add", repo: "garden", payload: { title: "Label the seed trays" } });
     expect(plain.payload.ask).toBeUndefined();
 
-    // A repo with agents off shows the switch disabled with how to turn them on.
+    // A repo with agents off has no Agent pill.
     await page.locator("#qa-list").selectOption("home/website");
-    await expect(ask).toBeDisabled();
-    await expect(page.locator("#qa-agent")).toContainText("Agents are off for this list. They switch on at its machine.");
+    await expect(page.locator("#qa-agent")).toBeHidden();
   });
 
   test("New task shows no agent switch while no list allows agents", async ({ page, hub }) => {
