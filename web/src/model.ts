@@ -80,14 +80,36 @@ export const DISMISSED = "Dismissed";
 /** Today's agenda groups, which the Today view fills from every list. */
 const AGENDA: GroupId[] = ["pastdue", "today", "evening", "done"];
 
-/** Personal repos, by repo key. */
-export function personalRepoKeys(repos: Repo[]): Set<string> {
-  return new Set(repos.filter((r) => r.personal).map((r) => repoKey(r)));
+/** The bridge name under which the hub keeps the personal list itself. */
+export const HUB_BRIDGE = "hub";
+
+/** Personal: on the list the hub keeps itself. Agent: from a repo on an agent machine. */
+export type Kind = "personal" | "agent";
+
+/**
+ * The one rule for what an item, repo or action belongs to: the personal list
+ * is the hub's own bridge, everything else came from an agent machine.
+ */
+export function kindOf(x: { bridge: string }): Kind {
+  return x.bridge === HUB_BRIDGE ? "personal" : "agent";
 }
 
-/** An agent item is any item outside a personal repo. */
-export function isAgentItem(item: Item, personal: Set<string>): boolean {
-  return !personal.has(repoKey(item));
+export function isPersonal(x: { bridge: string }): boolean {
+  return kindOf(x) === "personal";
+}
+
+export function isAgentItem(x: { bridge: string }): boolean {
+  return kindOf(x) === "agent";
+}
+
+/** Deleted: a personal item closed as Dismissed. On an agent item the same close is Won't do. */
+export function isDeleted(item: Item): boolean {
+  return !isOpen(item) && item.closeReason === DISMISSED && isPersonal(item);
+}
+
+/** Won't do: an agent item closed as Dismissed. */
+export function isWontDo(item: Item): boolean {
+  return !isOpen(item) && item.closeReason === DISMISSED && isAgentItem(item);
 }
 
 function date(s: string | null | undefined): Date | null {
@@ -145,18 +167,17 @@ function compare(now: Date) {
  * agenda from every list, then the rest of the personal list. A deleted
  * personal item shows nowhere.
  */
-export function buildView(view: ViewId, items: Item[], repos: Repo[], now: Date): Group[] {
-  const personal = personalRepoKeys(repos);
-  let pool = items.filter((i) => isOpen(i) || i.closeReason !== DISMISSED || isAgentItem(i, personal));
+export function buildView(view: ViewId, items: Item[], now: Date): Group[] {
+  let pool = items.filter((i) => !isDeleted(i));
   let order: GroupId[];
   if (view === "today") {
     order = VIEW_GROUPS.today;
-    pool = pool.filter((i) => !isAgentItem(i, personal) || AGENDA.includes(groupOf(i, now) ?? "nodate"));
+    pool = pool.filter((i) => isPersonal(i) || AGENDA.includes(groupOf(i, now) ?? "nodate"));
   } else if (view === "upcoming" || view === "all") {
     order = VIEW_GROUPS[view];
   } else if (view === "agents") {
     order = VIEW_GROUPS.all;
-    pool = pool.filter((i) => isAgentItem(i, personal));
+    pool = pool.filter(isAgentItem);
   } else {
     const key = view.slice("list:".length);
     order = VIEW_GROUPS.all;
@@ -211,8 +232,8 @@ export function appAuthor(user: string): string {
 }
 
 /** "New": an agent item the user has never opened. */
-export function isNew(item: Item, personal: Set<string>): boolean {
-  return isOpen(item) && isAgentItem(item, personal) && !item.seenAt;
+export function isNew(item: Item): boolean {
+  return isOpen(item) && isAgentItem(item) && !item.seenAt;
 }
 
 /** "New reply": a comment by someone else, newer than the last time the item was opened. */
@@ -236,17 +257,16 @@ export function isUnreadComment(createdAt: string, author: string, seenAt: strin
 
 export type Attention = "new" | "reply" | null;
 
-export function attention(item: Item, personal: Set<string>, user: string): Attention {
+export function attention(item: Item, user: string): Attention {
   if (!isOpen(item)) return null;
-  if (isNew(item, personal)) return "new";
+  if (isNew(item)) return "new";
   if (hasNewReply(item, user)) return "reply";
   return null;
 }
 
 /** Count for the pink "N new" badge on From agents. */
-export function agentNewCount(items: Item[], repos: Repo[], user: string): number {
-  const personal = personalRepoKeys(repos);
-  return items.filter((i) => isAgentItem(i, personal) && attention(i, personal, user) !== null).length;
+export function agentNewCount(items: Item[], user: string): number {
+  return items.filter((i) => isAgentItem(i) && attention(i, user) !== null).length;
 }
 
 /** A bridge is online when it was seen within this window. */
@@ -262,9 +282,6 @@ export function bridgeOnline(b: Bridge, now: Date): boolean {
   return seen !== null && now.getTime() - seen.getTime() <= ONLINE_WINDOW_MS;
 }
 
-/** The bridge name under which the hub keeps the personal list itself. */
-export const HUB_BRIDGE = "hub";
-
 export function syncStatus(state: Pick<State, "unapplied" | "bridges">, now: Date): SyncStatus {
   const bridges = state.bridges ?? [];
   // With no machine paired there is only the personal list, which the hub keeps.
@@ -278,10 +295,10 @@ export function syncStatus(state: Pick<State, "unapplied" | "bridges">, now: Dat
 /** Repos shown as lists: personal and opted-in ones, personal first, then by name. */
 export function visibleRepos(repos: Repo[]): Repo[] {
   return repos
-    .filter((r) => r.personal || r.optedIn)
+    .filter((r) => isPersonal(r) || r.optedIn)
     .sort(
       (a, b) =>
-        Number(b.personal) - Number(a.personal) ||
+        Number(isPersonal(b)) - Number(isPersonal(a)) ||
         repoLabel(a).localeCompare(repoLabel(b)) ||
         a.name.localeCompare(b.name) ||
         a.bridge.localeCompare(b.bridge),

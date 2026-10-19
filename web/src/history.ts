@@ -1,8 +1,8 @@
 // The Completed and Deleted views over the 7 days the hub keeps closed items. Pure: every function takes `now`.
 
-import type { Item, Repo } from "./types.ts";
+import type { Item } from "./types.ts";
 import type { Group } from "./model.ts";
-import { DISMISSED, isAgentItem, isOpen, personalRepoKeys } from "./model.ts";
+import { isDeleted, isOpen } from "./model.ts";
 import { addDays, fmtDay, sameDay } from "./dates.ts";
 
 function closedAt(item: Item): Date | null {
@@ -11,21 +11,15 @@ function closedAt(item: Item): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** A closed personal item with reason Dismissed: Delete in the app. */
-export function isDeleted(item: Item, personal: Set<string>): boolean {
-  return !isOpen(item) && item.closeReason === DISMISSED && !isAgentItem(item, personal);
-}
-
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
 /** Closed items that are not deleted personal items, one group per close day, newest first. */
-export function completedGroups(items: Item[], repos: Repo[], now: Date): Group[] {
-  const personal = personalRepoKeys(repos);
+export function completedGroups(items: Item[], now: Date): Group[] {
   const closed: { item: Item; at: Date }[] = [];
   for (const item of items) {
-    if (isOpen(item) || isDeleted(item, personal)) continue;
+    if (isOpen(item) || isDeleted(item)) continue;
     const at = closedAt(item);
     if (at) closed.push({ item, at });
   }
@@ -45,10 +39,9 @@ export function completedGroups(items: Item[], repos: Repo[], now: Date): Group[
 }
 
 /** Deleted personal items, newest first, in one group. */
-export function deletedGroups(items: Item[], repos: Repo[], _now: Date): Group[] {
-  const personal = personalRepoKeys(repos);
+export function deletedGroups(items: Item[]): Group[] {
   const gone = items
-    .filter((i) => isDeleted(i, personal))
+    .filter(isDeleted)
     .sort((a, b) => (closedAt(b)?.getTime() ?? 0) - (closedAt(a)?.getTime() ?? 0));
   return gone.length ? [{ id: "deleted", label: "Deleted", items: gone }] : [];
 }

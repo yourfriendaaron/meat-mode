@@ -2,7 +2,7 @@
 // shows, the label of the note box's pink button, and which repos let an
 // agent work. Pure: nothing here touches the page.
 
-import { appAuthor, isAgentItem, personalRepoKeys, repoKey } from "./model.ts";
+import { appAuthor, isAgentItem, isPersonal, repoKey } from "./model.ts";
 import type { Comment, Item, Repo, Run, RunReason, RunState } from "./types.ts";
 
 /** Why a run stopped, in plain words. */
@@ -37,13 +37,13 @@ export function workingItems(items: Item[]): Item[] {
 
 /** Whether an ask may wake an agent on this item: an agent item in a repo whose agents switch is on. */
 export function agentsAllowed(item: Item, repos: Repo[]): boolean {
-  if (!isAgentItem(item, personalRepoKeys(repos))) return false;
-  return repos.some((r) => repoKey(r) === repoKey(item) && !r.personal && r.agentsAllowed === true);
+  if (!isAgentItem(item)) return false;
+  return repos.some((r) => repoKey(r) === repoKey(item) && r.agentsAllowed === true);
 }
 
 /** Whether any list lets agents work, so the New task form offers its switch. */
 export function anyAgentsAllowed(repos: Repo[]): boolean {
-  return repos.some((r) => !r.personal && r.agentsAllowed === true);
+  return repos.some((r) => !isPersonal(r) && r.agentsAllowed === true);
 }
 
 export interface RunLine {
@@ -117,7 +117,7 @@ export function runEnded(before: RunState | undefined, after: RunState | undefin
 /** Why an item takes no ask, for the New task switch: "" when it can. */
 export function noAgentReason(list: Repo | undefined): string {
   if (!list) return "";
-  if (list.personal) return "Personal to-dos have no agent.";
+  if (isPersonal(list)) return "Personal to-dos have no agent.";
   if (!list.agentsAllowed) return "Agents are off for this list. They switch on at its machine.";
   return "";
 }

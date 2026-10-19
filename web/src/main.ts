@@ -11,13 +11,14 @@ import {
   attention,
   buildView,
   dateChip,
-  HUB_BRIDGE,
   isAgentItem,
+  isDeleted,
   isOpen,
+  isPersonal,
   isUnreadComment,
+  isWontDo,
   openToday,
   pastDue,
-  personalRepoKeys,
   repoColours,
   repoDetail,
   repoKey,
@@ -30,7 +31,7 @@ import {
   type ViewId,
 } from "./model.ts";
 import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput, ymd } from "./dates.ts";
-import { completedGroups, deletedGroups, isDeleted } from "./history.ts";
+import { completedGroups, deletedGroups } from "./history.ts";
 import { searchGroups } from "./search.ts";
 import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "./bulk.ts";
 import { snoozeOptions, typedSnooze } from "./snooze.ts";
@@ -271,10 +272,10 @@ function searching(): boolean {
 
 function currentGroups(): Group[] {
   if (isPage(S.view)) return [];
-  if (S.query.trim()) return searchGroups(items(), repos(), S.query, now());
-  if (S.view === "completed") return completedGroups(items(), repos(), now());
-  if (S.view === "deleted") return deletedGroups(items(), repos(), now());
-  return buildView(S.view, items(), repos(), now());
+  if (S.query.trim()) return searchGroups(items(), S.query, now());
+  if (S.view === "completed") return completedGroups(items(), now());
+  if (S.view === "deleted") return deletedGroups(items());
+  return buildView(S.view, items(), now());
 }
 
 /** Keys of the rows in the current view, in display order. */
@@ -292,12 +293,12 @@ function browsing(v: View): boolean {
 function renderNav() {
   const all = items();
   const n = now();
-  const agentNew = agentNewCount(all, repos(), user());
+  const agentNew = agentNewCount(all, user());
   // While any agent works, its tab icon carries the same light as the run's row.
   const working = workingItems(all).length;
   const agentsIcon = working ? `<span class="tab-ic" data-run="working">${TRACER}${ICON.agents}</span>` : ICON.agents;
   const agentsWorking = working ? `<span class="sr">, ${working === 1 ? "an agent is" : `${working} agents are`} working</span>` : "";
-  const upcoming = buildView("upcoming", all, repos(), n).reduce((s, g) => s + g.items.length, 0);
+  const upcoming = buildView("upcoming", all, n).reduce((s, g) => s + g.items.length, 0);
   const everything = all.filter(isOpen).length;
   const entry = (v: View, label: string, icon: string, count: string) =>
     `<button class="nav-item" data-act="view" data-view="${esc(v)}"${S.view === v ? ' aria-current="page"' : ""}>${icon}<span class="nav-label">${label}</span>${count}</button>`;
@@ -366,7 +367,7 @@ function renderSync() {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
           const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : (item?.title ?? a.beadId ?? "");
           const state =
-            a.status === "applied" ? (a.bridge === HUB_BRIDGE ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
+            a.status === "applied" ? (isPersonal(a) ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
         })
         .join("") +
@@ -384,7 +385,7 @@ function actionLabel(a: Action): string {
     case "reopen":
       return "Reopen";
     case "dismiss":
-      return a.bridge === HUB_BRIDGE ? "Delete" : "Won't do";
+      return isPersonal(a) ? "Delete" : "Won't do";
     case "note":
       return "Note on";
     case "add":
@@ -414,8 +415,7 @@ function actionLabel(a: Action): string {
 
 function chipsFor(item: Item, opts: { list: boolean }): string {
   const n = now();
-  const personal = personalRepoKeys(repos());
-  const agent = isAgentItem(item, personal);
+  const agent = isAgentItem(item);
   const out: string[] = [];
   // The list comes first, so it starts at the same x on every row.
   if (opts.list) {
@@ -423,7 +423,7 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
     const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
     out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
   }
-  const att = attention(item, personal, user());
+  const att = attention(item, user());
   if (att === "new") out.push('<span class="chip chip-new">New</span>');
   if (att === "reply") out.push('<span class="chip chip-new">New reply</span>');
   const prio = priorityChip(item.priority);
@@ -431,7 +431,7 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   const dc = dateChip(item, n);
   if (dc) out.push(`<span class="chip chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>`);
   if (item.repeat) out.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(item.repeat, n))}</span>`);
-  if (agent && !isOpen(item) && item.closeReason === DISMISSED) out.push('<span class="chip chip-wontdo">Won\'t do</span>');
+  if (isWontDo(item)) out.push('<span class="chip chip-wontdo">Won\'t do</span>');
   if (agent && item.createdBy) out.push(`<span class="chip chip-agent">${esc(item.createdBy)}</span>`);
   const notes = item.comments?.length ?? 0;
   if (notes) out.push(`<span class="chip chip-notes" aria-label="${notes} ${notes === 1 ? "note" : "notes"}">${ICON.note}${notes}</span>`);
@@ -449,7 +449,7 @@ function checkButton(item: Item, agent: boolean): string {
     const on = S.picked.has(item.key);
     return `<button class="check pick${agent ? " check-agent" : ""}${on ? " checked" : ""}" role="checkbox" aria-checked="${on}" data-act="pick" data-key="${esc(item.key)}" aria-label="${esc(`Select: ${item.title}`)}">${ICON.check}</button>`;
   }
-  const gone = isDeleted(item, personalRepoKeys(repos()));
+  const gone = isDeleted(item);
   const label = open ? `Mark done: ${item.title}` : `${gone ? "Restore" : "Reopen"}: ${item.title}`;
   return `<button class="check${agent ? " check-agent" : ""}${open ? "" : " checked"}" data-act="${open ? "done" : gone ? "restore" : "reopen"}" data-key="${esc(item.key)}" aria-label="${esc(label)}">${ICON.check}</button>`;
 }
@@ -499,8 +499,7 @@ function noteRunEnds(next: Item[]) {
 }
 
 function rowHTML(item: Item, showList: boolean): string {
-  const personal = personalRepoKeys(repos());
-  const agent = isAgentItem(item, personal);
+  const agent = isAgentItem(item);
   const done = !isOpen(item);
   const picked = !done && S.selecting && S.picked.has(item.key);
   const run = agent && item.run ? item.run : null;
@@ -508,7 +507,7 @@ function rowHTML(item: Item, showList: boolean): string {
 <div class="under" aria-hidden="true"><span class="u-done">Done</span><span class="u-snooze">Snooze</span></div>
 <div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
     done
-      ? isDeleted(item, personal)
+      ? isDeleted(item)
         ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
         : `<button class="btn btn-small" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>`
       : ""
@@ -644,7 +643,7 @@ function renderBulk() {
   const pickable = pickableKeys(currentGroups());
   const picks = [...S.picked].map(byKey).filter((i): i is Item => Boolean(i));
   // With nothing picked, the label names what Select all would pick.
-  const label = bulkDismissLabel(picks.length ? picks : pickable.map(byKey).filter((i): i is Item => Boolean(i)), repos());
+  const label = bulkDismissLabel(picks.length ? picks : pickable.map(byKey).filter((i): i is Item => Boolean(i)));
   const off = picks.length ? "" : " disabled";
   setHTML(
     bar,
@@ -860,9 +859,8 @@ function renderDetail() {
     setHTML(el, '<div class="detail-empty"><p>Select a task to see its details.</p></div>');
     return;
   }
-  const personal = personalRepoKeys(repos());
-  const agent = isAgentItem(item, personal);
-  const editable = !agent && canEdit(item);
+  const agent = isAgentItem(item);
+  const editable = canEdit(item);
   const editing = editable && S.edit?.key === item.key;
   const open = isOpen(item);
   const allowed = agent && agentsAllowed(item, repos());
@@ -878,7 +876,7 @@ function renderDetail() {
       ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">${ICON.check}Done</button>${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
         }<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? `${ICON.ban}Won't do` : `${ICON.trash}Delete`}</button>`
-      : isDeleted(item, personalRepoKeys(repos()))
+      : isDeleted(item)
         ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
         : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
@@ -1187,7 +1185,7 @@ function patchLocal(key: string, fn: (i: Item) => void) {
   if (!it) return;
   fn(it);
   // The hub applies actions on the personal list at once; nothing waits.
-  it.pending = it.bridge !== HUB_BRIDGE;
+  it.pending = isAgentItem(it);
   it.error = undefined;
 }
 
@@ -1298,7 +1296,7 @@ async function doneRepeating(it: Item) {
 function doDismiss(key: string) {
   const it = byKey(key);
   if (!it || !isOpen(it)) return;
-  const agent = isAgentItem(it, personalRepoKeys(repos()));
+  const agent = isAgentItem(it);
   moveSelectionOff([key]);
   const t = now().toISOString();
   patchLocal(key, (i) => {
@@ -1471,8 +1469,7 @@ function bulkDismiss() {
   const its = pickedItems();
   if (!its.length) return;
   const keys = its.map((i) => i.key);
-  const verb = bulkDismissDone(its, repos());
-  const personal = personalRepoKeys(repos());
+  const verb = bulkDismissDone(its);
   moveSelectionOff(keys);
   const t = now().toISOString();
   for (const k of keys)
@@ -1481,7 +1478,7 @@ function bulkDismiss() {
       i.closedAt = t;
       i.closeReason = DISMISSED;
     });
-  const openGone = S.open && keys.includes(S.open) && !isAgentItem(byKey(S.open)!, personal);
+  const openGone = S.open && keys.includes(S.open) && isPersonal(byKey(S.open)!);
   endSelect();
   if (openGone) closeDetail();
   void closing(
@@ -1909,7 +1906,7 @@ function updateQuickAdd() {
   // back to the default so the picker is never blank.
   if (select.selectedIndex < 0) select.value = defaultList();
   // Only the personal list repeats; on an agent's list the words stay as typed.
-  if (qa.repeat && !select.value.startsWith(`${HUB_BRIDGE}/`)) qa = parseQuickAdd(input.value, now(), quickLists(), { repeat: false });
+  if (qa.repeat && !repos().some((r) => repoKey(r) === select.value && isPersonal(r))) qa = parseQuickAdd(input.value, now(), quickLists(), { repeat: false });
 
   updateQaAgent(select.value);
 
@@ -2343,7 +2340,7 @@ function onKey(e: KeyboardEvent) {
       else if (S.selected) {
         const it = byKey(S.selected);
         if (it && isOpen(it)) doDone(it.key);
-        else if (it && isDeleted(it, personalRepoKeys(repos()))) void doRestore(it.key);
+        else if (it && isDeleted(it)) void doRestore(it.key);
         else if (it) void doReopen(it.key);
       }
       break;

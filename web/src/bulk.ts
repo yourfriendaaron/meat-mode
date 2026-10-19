@@ -1,7 +1,7 @@
 // Select mode: what several picked items can do together. Pure.
 
-import { isAgentItem, isOpen, personalRepoKeys, type Group } from "./model.ts";
-import type { Item, Repo } from "./types.ts";
+import { isAgentItem, isOpen, type Group } from "./model.ts";
+import type { Item } from "./types.ts";
 
 /**
  * Whether the Select button shows: on the task lists, and on search results
@@ -27,17 +27,16 @@ export function keepPickable(picked: Set<string>, pickable: string[]): Set<strin
 }
 
 /** The dismiss button's label for the picked items: "Delete", "Won't do", or both when mixed. */
-export function bulkDismissLabel(picked: Item[], repos: Repo[]): string {
-  const personal = personalRepoKeys(repos);
-  const agents = picked.filter((i) => isAgentItem(i, personal)).length;
+export function bulkDismissLabel(picked: Item[]): string {
+  const agents = picked.filter(isAgentItem).length;
   if (!agents) return "Delete";
   if (agents === picked.length) return "Won't do";
   return "Delete or won't do";
 }
 
 /** What dismissing the picks did, in the past tense the toast uses. */
-export function bulkDismissDone(picked: Item[], repos: Repo[]): string {
-  const label = bulkDismissLabel(picked, repos);
+export function bulkDismissDone(picked: Item[]): string {
+  const label = bulkDismissLabel(picked);
   return label === "Delete" ? "Deleted" : label === "Won't do" ? "Won't do" : "Deleted or won't do";
 }
 
