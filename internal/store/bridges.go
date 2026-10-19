@@ -66,7 +66,7 @@ func (s *Store) CreateBridge(name string) (string, error) {
 		return "", conflictf("a bridge named %q already exists", name)
 	default:
 		_, err = tx.Exec(`UPDATE bridges SET token_hash = ?, created_at = ?, revoked_at = NULL,
-			last_seen = NULL, version = '', bd_version = '' WHERE name = ?`,
+			last_seen = NULL, version = '', bd_version = '', trackers = '' WHERE name = ?`,
 			hashToken(token), now, name)
 	}
 	if err != nil {
@@ -121,10 +121,14 @@ func (s *Store) Touch(name string) error {
 	return err
 }
 
-// Hello records the bridge's versions and last-seen time.
+// Hello records the bridge's versions, its trackers and last-seen time.
 func (s *Store) Hello(name string, h api.Hello) error {
-	_, err := s.db.Exec(`UPDATE bridges SET last_seen = ?, version = ?, bd_version = ? WHERE name = ?`,
-		fmtTime(s.now()), truncRunes(h.Version, maxVersionLen), truncRunes(h.BdVersion, maxVersionLen), name)
+	trackers, err := encodeTrackers(h.Trackers)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`UPDATE bridges SET last_seen = ?, version = ?, bd_version = ?, trackers = ? WHERE name = ?`,
+		fmtTime(s.now()), truncRunes(h.Version, maxVersionLen), truncRunes(h.BdVersion, maxVersionLen), trackers, name)
 	if err != nil {
 		return err
 	}
@@ -134,7 +138,7 @@ func (s *Store) Hello(name string, h api.Hello) error {
 
 // Bridges lists active bridges by name, without the hub's own row.
 func (s *Store) Bridges() ([]api.Bridge, error) {
-	rows, err := s.db.Query(`SELECT name, created_at, last_seen, version, bd_version
+	rows, err := s.db.Query(`SELECT name, created_at, last_seen, version, bd_version, trackers
 		FROM bridges WHERE revoked_at IS NULL AND name != ? ORDER BY name`, HubBridge)
 	if err != nil {
 		return nil, err
@@ -145,7 +149,11 @@ func (s *Store) Bridges() ([]api.Bridge, error) {
 		var b api.Bridge
 		var created string
 		var last sql.NullString
-		if err := rows.Scan(&b.Name, &created, &last, &b.Version, &b.BdVersion); err != nil {
+		var trackers string
+		if err := rows.Scan(&b.Name, &created, &last, &b.Version, &b.BdVersion, &trackers); err != nil {
+			return nil, err
+		}
+		if b.Trackers, err = decodeTrackers(trackers); err != nil {
 			return nil, err
 		}
 		b.CreatedAt = parseTime(created)

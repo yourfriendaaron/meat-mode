@@ -149,7 +149,9 @@ func TestMigrationNineAddsVerifiedAt(t *testing.T) {
 	// ago, with the old 90-day expiry from its last use.
 	now := time.Now()
 	created, used := now.Add(-30*24*time.Hour).Unix(), now.Add(-20*24*time.Hour).Unix()
-	_, err = s.DB().Exec(`ALTER TABLE sessions DROP COLUMN verified_at`)
+	_, err = s.DB().Exec(`ALTER TABLE sessions DROP COLUMN verified_at;
+		ALTER TABLE repos DROP COLUMN tracker; ALTER TABLE repos DROP COLUMN actions;
+		ALTER TABLE bridges DROP COLUMN trackers`)
 	must(t, err)
 	_, err = s.DB().Exec(`INSERT INTO sessions (id, tag, created_at, renewed_at, expires_at) VALUES (?, 'tag', ?, ?, ?)`,
 		hashToken("old"), created, used, used+90*24*3600)

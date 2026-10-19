@@ -213,6 +213,14 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		if err != nil {
 			return a, false, err
 		}
+		if err := checkCapability(tx, na.Bridge, na.Repo, capabilityOf(na.Kind, a.Payload)); err != nil {
+			return a, false, err
+		}
+		if na.Kind == api.KindAdd && a.Payload.Ask {
+			if err := checkCapability(tx, na.Bridge, na.Repo, api.KindAsk); err != nil {
+				return a, false, err
+			}
+		}
 		switch {
 		case na.Kind == api.KindSync && isHubRepo(na.Bridge, na.Repo):
 			return a, false, invalidf("the personal list is kept on the hub and always shows")
@@ -259,6 +267,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		}
 		if n == 0 {
 			return a, false, notFoundf("no item %q", na.Key)
+		}
+		if err := checkCapability(tx, b, r, capabilityOf(na.Kind, a.Payload)); err != nil {
+			return a, false, err
 		}
 		if na.Kind == api.KindAsk {
 			if err := checkAgentsAllowed(tx, b, r); err != nil {

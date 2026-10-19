@@ -62,10 +62,16 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		return err
 	}
 	for _, r := range repos {
-		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed) VALUES (?, ?, ?, ?, ?)
+		actions, err := encodeActions(r.Actions)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, tracker, actions)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in,
-				agents_allowed = excluded.agents_allowed`,
-			bridge, r.Name, r.Personal && r.Name == PersonalRepo, r.OptedIn, r.AgentsAllowed); err != nil {
+				agents_allowed = excluded.agents_allowed, tracker = excluded.tracker, actions = excluded.actions`,
+			bridge, r.Name, r.Personal && r.Name == PersonalRepo, r.OptedIn, r.AgentsAllowed,
+			truncRunes(strings.TrimSpace(r.Tracker), maxTrackerLen), actions); err != nil {
 			return err
 		}
 	}
@@ -132,8 +138,8 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 		q    string
 		args []any
 	}{
-		{`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, synced_at)
-			SELECT bridge, ?, personal, opted_in, agents_allowed, synced_at FROM repos WHERE bridge = ? AND name = ?`, []any{to, bridge, from}},
+		{`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, synced_at, tracker, actions)
+			SELECT bridge, ?, personal, opted_in, agents_allowed, synced_at, tracker, actions FROM repos WHERE bridge = ? AND name = ?`, []any{to, bridge, from}},
 		{`UPDATE items SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
 		{`UPDATE runs SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
 		{`UPDATE actions SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
@@ -164,7 +170,7 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 // Repos lists the repos of active bridges.
 func (s *Store) Repos() ([]api.Repo, error) {
 	// A bridge's own personal repo is only a source for the personal list.
-	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in, r.agents_allowed FROM repos r
+	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in, r.agents_allowed, r.tracker, r.actions FROM repos r
 		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
 		WHERE r.personal = 0 OR r.bridge = ? ORDER BY r.bridge, r.name`, HubBridge)
 	if err != nil {
@@ -174,7 +180,11 @@ func (s *Store) Repos() ([]api.Repo, error) {
 	out := []api.Repo{}
 	for rows.Next() {
 		var r api.Repo
-		if err := rows.Scan(&r.Bridge, &r.Name, &r.Personal, &r.OptedIn, &r.AgentsAllowed); err != nil {
+		var actions sql.NullString
+		if err := rows.Scan(&r.Bridge, &r.Name, &r.Personal, &r.OptedIn, &r.AgentsAllowed, &r.Tracker, &actions); err != nil {
+			return nil, err
+		}
+		if r.Actions, err = decodeActions(actions); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
