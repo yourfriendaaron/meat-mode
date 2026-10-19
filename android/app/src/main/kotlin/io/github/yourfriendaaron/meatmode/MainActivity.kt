@@ -30,12 +30,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import org.json.JSONArray
 import org.json.JSONObject
 import org.unifiedpush.android.connector.UnifiedPush
 import org.unifiedpush.android.connector.UnifiedPush.VapidNotValidException
@@ -253,16 +251,8 @@ class MainActivity : ComponentActivity() {
     /** Gives the bars behind the system icons the page's theme colour, and icons that read on it. */
     private fun matchPageColor() {
         web.evaluateJavascript("(function(){var m=document.querySelector('meta[name=\"theme-color\"]');return m?m.content:''})()") { result ->
-            val hex = try {
-                JSONArray("[$result]").optString(0)
-            } catch (_: Exception) {
-                ""
-            }
-            val color = try {
-                hex.toColorInt()
-            } catch (_: IllegalArgumentException) {
-                return@evaluateJavascript
-            }
+            // A page that has not parsed its head yet has no colour; the next callback brings it.
+            val color = PageColor.parse(result) ?: return@evaluateJavascript
             root.setBackgroundColor(color)
             val light = (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114) / 1000 > 140
             WindowInsetsControllerCompat(window, root).apply {

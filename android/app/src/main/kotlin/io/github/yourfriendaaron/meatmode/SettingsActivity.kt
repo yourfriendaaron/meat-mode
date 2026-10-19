@@ -1,6 +1,8 @@
 package io.github.yourfriendaaron.meatmode
 
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -10,13 +12,14 @@ import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 
 /**
  * The app's own settings, reached from the launcher icon's shortcut, Android's
  * app info screen, and the offline page: the hub address, how reminders
- * stand, and when the last push arrived.
+ * stand, when the last push arrived, and the app's last crash.
  */
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +37,16 @@ class SettingsActivity : ComponentActivity() {
             // The log screen exists in debug builds only.
             visibility = if (BuildConfig.DEBUG) View.VISIBLE else View.GONE
             setOnClickListener { startActivity(Intent().setClassName(packageName, "$packageName.PushLogActivity")) }
+        }
+        findViewById<Button>(R.id.crash_copy).setOnClickListener {
+            val report = CrashLog.read(this) ?: return@setOnClickListener
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(getString(R.string.settings_last_crash), report))
+            // Android 13 and later confirm a copy on their own.
+            if (android.os.Build.VERSION.SDK_INT < 33) Toast.makeText(this, R.string.crash_copied, Toast.LENGTH_SHORT).show()
+        }
+        findViewById<Button>(R.id.crash_clear).setOnClickListener {
+            CrashLog.clear(this)
+            showCrash()
         }
     }
 
@@ -58,6 +71,13 @@ class SettingsActivity : ComponentActivity() {
         val exempt = Registration.batteryExempt(this)
         findViewById<TextView>(R.id.battery_state).text = getString(if (exempt) R.string.battery_unrestricted else R.string.battery_optimised)
         findViewById<Button>(R.id.battery).visibility = if (exempt) View.GONE else View.VISIBLE
+        showCrash()
+    }
+
+    private fun showCrash() {
+        val report = CrashLog.read(this)
+        findViewById<TextView>(R.id.last_crash).text = report ?: getString(R.string.settings_none)
+        findViewById<View>(R.id.crash_actions).visibility = if (report == null) View.GONE else View.VISIBLE
     }
 
     private fun confirmChangeHub() {

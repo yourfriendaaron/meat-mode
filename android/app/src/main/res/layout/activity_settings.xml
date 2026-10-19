@@ -46,6 +46,29 @@
             android:layout_height="wrap_content"
             android:text="@string/battery_allow" />
 
+        <TextView style="@style/Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_last_crash" />
+        <TextView android:id="@+id/last_crash" style="@style/Value" android:layout_width="match_parent" android:layout_height="wrap_content" android:fontFamily="monospace" android:textSize="12sp" />
+        <LinearLayout
+            android:id="@+id/crash_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/crash_copy"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/crash_copy" />
+
+            <Button
+                android:id="@+id/crash_clear"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/crash_clear" />
+        </LinearLayout>
+
         <Button
             android:id="@+id/notification_settings"
             android:layout_width="match_parent"

@@ -25,6 +25,10 @@
     <string name="settings_notifications">Notification settings</string>
     <string name="settings_push_log">Push log</string>
     <string name="settings_change_hub">Change hub address</string>
+    <string name="settings_last_crash">Last crash</string>
+    <string name="crash_copy">Copy</string>
+    <string name="crash_clear">Clear</string>
+    <string name="crash_copied">Crash report copied</string>
     <string name="settings_reminders_hint">Turn reminders on or off in the hub\'s own Settings.</string>
 
     <string name="state_on">On</string>
