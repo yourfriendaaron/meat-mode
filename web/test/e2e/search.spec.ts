@@ -105,3 +105,16 @@ test("search results can be picked and marked done together", async ({ page, hub
   await page.getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => hub.posted.slice(-2).map((a) => a.kind)).toEqual(["reopen", "reopen"]);
 });
+
+test("a parent's name finds the parent and its sub-tasks", async ({ page, hub }) => {
+  const base = hub.find("hub/personal/pe-1")!;
+  hub.items.push(
+    { ...structuredClone(base), key: "hub/personal/pe-91", id: "pe-91", title: "Fill the watering can", parent: "pe-1", dueAt: null },
+    { ...structuredClone(base), key: "hub/personal/pe-92", id: "pe-92", title: "Check the rain barrel", parent: "pe-gone", parentTitle: "Garden jobs", dueAt: null },
+  );
+  await openApp(page);
+  await page.locator("#search-input").fill("water the plants");
+  await expect(page.locator("#list .row-title")).toHaveText(["Water the plants", "Fill the watering can"]);
+  await page.locator("#search-input").fill("garden jobs");
+  await expect(page.locator("#list .row-title")).toHaveText(["Check the rain barrel"]);
+});

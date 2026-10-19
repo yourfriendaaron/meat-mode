@@ -98,3 +98,18 @@ test("open items run by when, then priority, then title", () => {
   ];
   assert.deepEqual(titles("tea", items), [["found-open", ["Tea first", "Tea urgent", "Tea a", "Tea b", "Tea later"]]]);
 });
+
+test("a sub-task is found by its parent's title, from the held parent or the title the tracker gave", () => {
+  const parent = item({ id: "bd-p", title: "Plan the picnic" });
+  const held = item({ title: "Pack the basket", parent: "bd-p" });
+  const unheld = item({ title: "Book the park", parent: "bd-gone", parentTitle: "Picnic budget" });
+  const other = item({ title: "Buy milk" });
+  const items = [parent, held, unheld, other];
+  const found = titles("picnic", items);
+  assert.equal(found.length, 1);
+  assert.deepEqual(new Set(found[0][1] as string[]), new Set(["Plan the picnic", "Pack the basket", "Book the park"]));
+  // A held parent's title wins over a stale parentTitle, and words may split across the sub-task and its parent.
+  const stale = item({ title: "Pack the basket", parent: "bd-p", parentTitle: "Old name" });
+  assert.deepEqual(titles("old", [parent, stale]), []);
+  assert.deepEqual(titles("basket picnic", [parent, stale]), [["found-open", ["Pack the basket"]]]);
+});
