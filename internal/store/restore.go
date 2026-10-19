@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -25,7 +26,8 @@ var ErrHubInUse error = &userError{ErrConflict, "This hub already has data, so i
 	"Restore goes only into a fresh hub, so nothing a hub holds is lost; start a new hub with an empty data directory and restore there."}
 
 // CancelledByRestore is the error a restore gives each action that was
-// still waiting for a machine, so a machine paired again never replays it.
+// still pending, on a machine's repo or on a list the hub keeps, so a
+// machine paired again never replays it and nothing waits forever.
 const CancelledByRestore = "Not sent: the hub was restored from an export."
 
 // exportUpgrades turns an export of version i+1 into one of version i+2,
@@ -365,7 +367,10 @@ func (s *Store) load(ex api.Export) (api.RestoreResult, error) {
 	}
 
 	for _, a := range ex.Actions {
-		if a.Status == api.StatusPending && !onHub(a.Bridge) {
+		// A pending action has nothing to apply it once the log is loaded:
+		// a machine may never pair again, and an action on a list the hub
+		// keeps was applied by the hub that wrote the file, not this one.
+		if a.Status == api.StatusPending {
 			a.Status, a.Error = api.StatusCancelled, CancelledByRestore
 			res.Cancelled++
 		}
@@ -545,6 +550,12 @@ func checkExport(ex *api.Export) error {
 		if !onHub(a.Bridge) && !ValidBridgeName(a.Bridge) {
 			return invalidf("action %s names a machine %q that is not a valid machine name", a.ID, a.Bridge)
 		}
+		if overTruncated(a.Author, maxCommentAuthorLen) {
+			return invalidf("action %s has an author longer than %d characters", a.ID, maxCommentAuthorLen)
+		}
+		if strings.ContainsFunc(a.Author, unicode.IsControl) {
+			return invalidf("action %s has an author with a control character in it", a.ID)
+		}
 		if a.CreatedAt.IsZero() {
 			return invalidf("action %s has no time", a.ID)
 		}
@@ -582,6 +593,13 @@ func checkExport(ex *api.Export) error {
 	return nil
 }
 
+// overTruncated reports whether s is longer than the hub leaves text it
+// truncates: limit runes and an ellipsis (api.TruncRunes). A hub's own
+// export holds text cut that way, from a bridge or an agent.
+func overTruncated(s string, limit int) bool {
+	return utf8.RuneCountInString(s) > limit+1
+}
+
 // checkExportItem checks one item of an export against the rules an item
 // of the hub's lists keeps, and clears the fields the hub sets itself.
 func checkExportItem(it *api.ExportItem) error {
@@ -615,7 +633,7 @@ func checkExportItem(it *api.ExportItem) error {
 	}
 	// An item moved from a bridge's personal repo may hold a description
 	// as long as a bridge may send, longer than an edit sets.
-	if utf8.RuneCountInString(it.Description) > maxDescriptionLen {
+	if overTruncated(it.Description, maxDescriptionLen) {
 		return fail("description is longer than %d characters", maxDescriptionLen)
 	}
 	if err := api.CheckPriority(it.Priority); err != nil {
@@ -651,13 +669,25 @@ func checkExportItem(it *api.ExportItem) error {
 			return fail("a checklist entry is longer than %d characters", MaxTitleLen)
 		}
 	}
+	if overTruncated(it.ParentTitle, maxTitleLen) {
+		return fail("parentTitle is longer than %d characters", maxTitleLen)
+	}
+	if overTruncated(it.CreatedBy, maxCommentAuthorLen) {
+		return fail("createdBy is longer than %d characters", maxCommentAuthorLen)
+	}
+	if overTruncated(it.CloseReason, api.DetailLimit) {
+		return fail("closeReason is longer than %d characters", api.DetailLimit)
+	}
 	// A comment from a bridge's bead keeps the id its tracker gave it, which
 	// may be empty, so only its size is checked.
 	for _, c := range it.Comments {
-		if utf8.RuneCountInString(c.Text) > maxCommentLen {
+		if overTruncated(c.ID, maxCommentAuthorLen) {
+			return fail("a comment has an id longer than %d characters", maxCommentAuthorLen)
+		}
+		if overTruncated(c.Text, maxCommentLen) {
 			return fail("comment %s is longer than %d characters", c.ID, maxCommentLen)
 		}
-		if utf8.RuneCountInString(c.Author) > maxCommentAuthorLen {
+		if overTruncated(c.Author, maxCommentAuthorLen) {
 			return fail("comment %s has an author longer than %d characters", c.ID, maxCommentAuthorLen)
 		}
 	}
@@ -688,6 +718,9 @@ func checkExportItem(it *api.ExportItem) error {
 	}
 	if it.Owner != "" && (!ValidBridgeName(it.Owner) || onHub(it.Owner)) {
 		return fail("owner %q is not a valid machine name", it.Owner)
+	}
+	if it.CreatedAt.IsZero() {
+		return fail("has no time")
 	}
 	if it.FirstSeen.IsZero() {
 		it.FirstSeen = it.CreatedAt

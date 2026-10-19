@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // NeedBD skips the test when bd is not on PATH.
@@ -59,7 +61,7 @@ func run(t testing.TB, dir, name string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "BD_NON_INTERACTIVE=1", "GIT_AUTHOR_NAME=Alex", "GIT_COMMITTER_NAME=Alex",
+	cmd.Env = append(tracker.ChildEnv(os.Environ()), "BD_NON_INTERACTIVE=1", "GIT_AUTHOR_NAME=Alex", "GIT_COMMITTER_NAME=Alex",
 		"GIT_AUTHOR_EMAIL=alex@example.com", "GIT_COMMITTER_EMAIL=alex@example.com")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

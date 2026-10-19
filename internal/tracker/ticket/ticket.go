@@ -182,10 +182,10 @@ func read(dir, id string) (tracker.Issue, error) {
 	return parseTicket(data).issue(id, hex.EncodeToString(sum[:8]), info.ModTime()), nil
 }
 
-// validID keeps an id inside the store folder: tk's own ids are letters,
-// digits and dashes.
+// validID keeps an id inside the store folder, and off tk's command line as
+// an option: tk's own ids are letters, digits and dashes.
 func validID(id string) bool {
-	return id != "" && !strings.ContainsAny(id, `/\`) && !strings.HasPrefix(id, ".")
+	return id != "" && !strings.ContainsAny(id, `/\`) && !strings.HasPrefix(id, ".") && !strings.HasPrefix(id, "-")
 }
 
 func (t *Ticket) Close(ctx context.Context, dir, id, _, _ string) error {
@@ -358,7 +358,7 @@ func (t *Ticket) exec(ctx context.Context, dir string, args ...string) (string, 
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "TICKETS_DIR="+filepath.Join(dir, storeDir))
+	cmd.Env = append(tracker.ChildEnv(os.Environ(), "TICKETS_DIR"), "TICKETS_DIR="+filepath.Join(dir, storeDir))
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {

@@ -195,7 +195,7 @@ func (b *Tracker) run(ctx context.Context, dir string, args ...string) ([]byte, 
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(childEnv(os.Environ()), "NO_COLOR=1")
+	cmd.Env = append(tracker.ChildEnv(os.Environ(), "BACKLOG_CWD"), "NO_COLOR=1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
@@ -217,18 +217,6 @@ func (b *Tracker) run(ctx context.Context, dir string, args ...string) ([]byte, 
 		return nil, fmt.Errorf("%w: %w", tracker.ErrNotFound, e)
 	}
 	return nil, e
-}
-
-// childEnv drops the bridge's own MEAT_MODE_* settings, the hub token among
-// them, and BACKLOG_CWD, which would point backlog at another folder.
-func childEnv(env []string) []string {
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		if !strings.HasPrefix(kv, "MEAT_MODE_") && !strings.HasPrefix(kv, "BACKLOG_CWD=") {
-			out = append(out, kv)
-		}
-	}
-	return out
 }
 
 func firstLine(s string) string {

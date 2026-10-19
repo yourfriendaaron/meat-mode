@@ -82,7 +82,7 @@ func (c *CLI) run(ctx context.Context, dir string, args ...string) ([]byte, erro
 		full = append([]string{"-C=" + dir}, args...)
 	}
 	cmd := exec.CommandContext(ctx, bin, full...)
-	cmd.Env = append(childEnv(os.Environ()), "BD_NON_INTERACTIVE=1", "NO_COLOR=1")
+	cmd.Env = append(tracker.ChildEnv(os.Environ()), "BD_NON_INTERACTIVE=1", "NO_COLOR=1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
@@ -107,18 +107,6 @@ func (c *CLI) run(ctx context.Context, dir string, args ...string) ([]byte, erro
 		return nil, fmt.Errorf("%w: %w", tracker.ErrNotFound, e)
 	}
 	return nil, e
-}
-
-// childEnv drops the bridge's own MEAT_MODE_* settings, the hub token among
-// them, so bd and any hook it runs never see them.
-func childEnv(env []string) []string {
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		if !strings.HasPrefix(kv, "MEAT_MODE_") {
-			out = append(out, kv)
-		}
-	}
-	return out
 }
 
 func firstLine(s string) string {

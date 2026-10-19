@@ -10,6 +10,7 @@
 .github
 .githooks
 docs
+android
 e2e
 tests
 backups

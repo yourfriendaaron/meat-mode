@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"reflect"
 	"slices"
 	"strings"
@@ -57,7 +58,7 @@ type Bridge struct {
 	Log     *slog.Logger
 	Now     func() time.Time
 	// Poll, when set, replaces ActionEvery, SyncEvery and ScanEvery. New sets it
-	// from the undocumented MEAT_MODE_BRIDGE_POLL variable (a Go duration),
+	// from the test-only MEAT_MODE_BRIDGE_POLL variable (a Go duration),
 	// which the end-to-end tests use to avoid waiting 30 seconds per round.
 	Poll time.Duration
 
@@ -84,6 +85,9 @@ type repoState struct {
 	items  map[string]api.Item
 	pushed time.Time
 	primed bool
+	// refused holds the ids in the last list that the hub cannot take, so
+	// each is logged once while it stays.
+	refused map[string]bool
 }
 
 // errCrash stops a replay without recording anything, as a killed process
@@ -277,7 +281,7 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 			continue
 		}
 		if err := b.syncRepo(ctx, b.repos[name]); err != nil {
-			if isHubErr(err) {
+			if isHubErr(err) && !refusedSet(err) {
 				return b.hubErr(err)
 			}
 			b.log().Warn("sync failed", "repo", name, "err", err)
@@ -323,6 +327,14 @@ func (e hubError) Unwrap() error { return e.error }
 func isHubErr(err error) bool {
 	var h hubError
 	return errors.As(err, &h)
+}
+
+// refusedSet reports whether the hub refused one repo's items as they are,
+// a fault of that repo's content rather than of the hub, so the other
+// repos still sync.
+func refusedSet(err error) bool {
+	var h *HTTPError
+	return errors.As(err, &h) && (h.Status == http.StatusBadRequest || h.Status == http.StatusRequestEntityTooLarge)
 }
 
 func (b *Bridge) syncedNames() []string {
@@ -395,13 +407,22 @@ func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
 	}
 	fps := make(map[string]string, len(list))
 	var changed []string
+	refused := map[string]bool{}
 	for _, i := range list {
+		if !api.ValidSegment(i.ID) || strings.HasPrefix(i.ID, api.ProvisionalPrefix) {
+			if !st.refused[i.ID] {
+				b.log().Warn("skipping a task whose id the hub cannot take", "repo", st.Name, "id", i.ID)
+			}
+			refused[i.ID] = true
+			continue
+		}
 		fp := i.Version
 		fps[i.ID] = fp
 		if st.fps[i.ID] != fp {
 			changed = append(changed, i.ID)
 		}
 	}
+	st.refused = refused
 	removed := len(st.fps) != len(fps)-countNew(changed, st.fps)
 	if st.primed && len(changed) == 0 && !removed && b.now().Sub(st.pushed) < RefreshEvery {
 		return nil

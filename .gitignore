@@ -11,6 +11,9 @@ mise.local.toml
 /compose.override.yml
 /docker-compose*.yaml
 /docker-compose*.yml
+/compose.*.yaml
+/compose.*.yml
+!/compose.example.yaml
 *.local
 *.local.*
 .public-safety.local

@@ -147,6 +147,23 @@ func TestNoEarlyReminderInsideASnooze(t *testing.T) {
 	expectBodies(t, n, "Snoozed until now", "Due now", "Snoozed until now", "Due in 1 hour", "Due now")
 }
 
+// An early reminder that would land exactly on a snooze's end is left out:
+// the snooze-end reminder says that moment already, so the two must not
+// fire in one tick.
+func TestNoEarlyReminderAtASnoozesEnd(t *testing.T) {
+	db, c, src, n := setup(t)
+	s := sched(t, db, c, src, n)
+	s.Lead = &fakeLead{minutes: 60}
+	it := item(tp(t0.Add(2 * time.Hour)))
+	it.Status, it.DeferUntil = "deferred", tp(t0.Add(time.Hour))
+	src.items = []api.Item{it}
+	for _, at := range []time.Duration{time.Hour, 2 * time.Hour} {
+		c.now = t0.Add(at)
+		s.Tick(context.Background())
+	}
+	expectBodies(t, n, "Snoozed until now", "Due now")
+}
+
 func TestClosedItemHasNoEarlyReminder(t *testing.T) {
 	db, c, src, n := setup(t)
 	s := sched(t, db, c, src, n)
