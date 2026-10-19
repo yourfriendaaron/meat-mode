@@ -128,6 +128,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	s.passwordRoutes(m)
 	s.remindersRoutes(m)
 	s.calendarRoutes(m)
+	s.occurrencesRoutes(m)
 	s.devicesRoutes(m)
 	s.exportRoutes(m)
 	s.restoreRoutes(m)
