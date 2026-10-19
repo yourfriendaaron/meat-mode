@@ -1,0 +1,2 @@
+{"id":"state","type":"response","command":"get_state","success":true,"data":{"sessionId":"7c9e6679-7425-40de-944b-e07fc1f90ae7","messageCount":0,"pendingMessageCount":0}}
+{"id":"prompt","type":"response","command":"prompt","success":false,"error":"No model selected"}

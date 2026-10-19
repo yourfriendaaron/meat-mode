@@ -1,0 +1,7 @@
+{"id":"state","type":"response","command":"get_state","success":true,"data":{"sessionId":"7c9e6679-7425-40de-944b-e07fc1f90ae7","messageCount":0,"pendingMessageCount":0}}
+{"id":"prompt","type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}
+{"type":"agent_start"}
+{"type":"message_end","message":{"role":"user","content":"Water the plants.","timestamp":1733234401000}}
+{"type":"message_end","message":{"role":"assistant","content":[],"usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"error","errorMessage":"401 invalid x-api-key","timestamp":1733234402000}}
+{"type":"agent_end","messages":[],"willRetry":false}
+{"type":"agent_settled","aborted":false}
