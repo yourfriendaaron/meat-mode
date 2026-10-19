@@ -8,7 +8,7 @@ Style guide for this page.
 - Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec (not committed) at deviceScaleFactor 2, phone 390x844 and desktop 1280 wide, with element shots of the new task bar (#qa-form) and the detail pane (#detail), and reduced to 8-bit PNGs; they are not the visual test baselines. The agent images set runs with the fake hub's allowAgents and setRun. Retake them when the screens they show change, and give each alt text that says what it shows.
 - Private network only: the hub is reached over Tailscale (Serve or a Tailscale Service) or a LAN reverse proxy, never the internet, and always has a password; the hub refuses internet requests and the bridge refuses a public hub. Login, session limits and password-again rules follow docs/api.md "Login". Never suggest Funnel, Cloudflare Tunnel, port forwards or a public calendar feed; detail lives in docs/deploy.md, "Private network only".
 - Agent runs: keep the "This is not a sandbox" caution in "Hand a task to an agent" whenever that section exists. Limits and defaults quoted there follow the table in docs/deploy.md, "Wake an agent on a task".
-- Android app: the install section names the Obtainium link, APK filter and package ID; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate row stays a marked placeholder until the first signed release.
+- Android app: the install section names the Obtainium badge link, APK filter and package ID. The badge link is an apps.obtainium.imranr.dev redirect carrying an obtainium://app/ config (double URL-encoded) with the APK filter and the certificate SHA-256; rebuild it when either changes. The badge image is Obtainium's assets/graphics/badge_obtainium.png, trimmed; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate row stays a marked placeholder until the first signed release.
 - Nothing else in the repo depends on this page's headings. The Start here links depend on docs/deploy.md's headings.
 -->
 # Meat Mode
@@ -102,11 +102,13 @@ Turn on the calendar feed and subscribe to it in Apple Calendar, Thunderbird or 
 
 Meat Mode has an Android app. It opens your hub inside the app and delivers reminders and agent notifications the way a native app does, with **Done** and **Snooze** buttons on the notification. It adds nothing else: the screens are the ones from your browser.
 
-Install it with [Obtainium](https://obtainium.imranr.dev), which installs the signed APK from each GitHub release and keeps it up to date:
+Install it with [Obtainium](https://obtainium.imranr.dev), which installs the signed APK from each GitHub release and keeps it up to date. Install Obtainium on the phone, then tap this badge there and confirm:
 
-1. Install Obtainium, then open this link on the phone: [add Meat Mode to Obtainium](obtainium://add/https://github.com/yourfriendaaron/meat-mode).
-2. Under the app's settings, set **Filter APKs by regular expression** to `meat-mode-android-.*\.apk`.
-3. Tap **Add**, then **Install**.
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%2522io.github.yourfriendaaron.meatmode%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fgithub.com%252Fyourfriendaaron%252Fmeat-mode%2522%252C%2522author%2522%253A%2522yourfriendaaron%2522%252C%2522name%2522%253A%2522Meat%2520Mode%2522%252C%2522additionalSettings%2522%253A%2522%257B%255C%2522apkFilterRegEx%255C%2522%253A%255C%2522meat-mode-android-.*%255C%255C%255C%255C.apk%255C%2522%252C%255C%2522allowedSigningCertHashes%255C%2522%253A%255C%2522D9%253A96%253ACE%253A79%253AAB%253A03%253ABC%253A39%253A67%253A5C%253A6F%253A69%253A09%253AED%253A88%253A87%253A7F%253A2C%253ACA%253A12%253AB5%253A79%253A36%253A09%253A28%253A75%253AD0%253A68%253AFF%253A65%253A39%253A90%255C%2522%257D%2522%257D"><img src="docs/images/get-it-on-obtainium.png" alt="Get it on Obtainium" height="54"></a>
+
+The badge sets Meat Mode up in Obtainium for you. It picks the app file from each release, and Obtainium refuses any APK not signed with the certificate below. Without Obtainium on the phone, the badge's page offers to get it first.
+
+To add it by hand instead, paste `https://github.com/yourfriendaaron/meat-mode` into Obtainium's **Add App** and set **Filter APKs by regular expression** to `meat-mode-android-.*\.apk`.
 
 To install by hand, download `meat-mode-android-vX.Y.Z.apk` from the [releases page](https://github.com/yourfriendaaron/meat-mode/releases).
 
