@@ -123,21 +123,6 @@ func repeatArg(every string, fromDone bool) (*api.Repeat, error) {
 	return &r, nil
 }
 
-// pairedHub is the hub this machine's bridge config pairs it with.
-func pairedHub(env Env) (*Hub, error) {
-	cfg, err := LoadConfig(env.Paths.Config)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.HubURL == "" || cfg.Token == "" {
-		return nil, errors.New("this machine is not paired with a hub; run `meat-mode bridge pair <url> <token>` first")
-	}
-	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
-		return nil, err
-	}
-	return env.hub(cfg), nil
-}
-
 // hubZone is the hub's time zone, which reads a date or time without one:
 // the person who wrote it means their own, which the hub keeps rather than
 // this machine, often a server in UTC. It is this machine's zone while the

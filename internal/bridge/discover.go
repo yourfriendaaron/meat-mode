@@ -35,6 +35,15 @@ func (r Repo) Synced() bool {
 	return r.OptedIn
 }
 
+// syncSwitch is the app's sync switch for the repo name in switches, nil
+// when it has none.
+func syncSwitch(switches map[string]bool, name string) *bool {
+	if on, ok := switches[name]; ok {
+		return &on
+	}
+	return nil
+}
+
 // Discover walks each root for beads repos.
 // The walk skips the folders in pruneNames and pruneHomePaths, symlinks,
 // Git worktrees and anything it cannot read, and finds repos nested at any

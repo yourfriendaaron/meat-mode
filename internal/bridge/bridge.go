@@ -348,10 +348,7 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 	for i := range b.found {
 		r := &b.found[i]
 		r.OptedIn = OptedIn(r.Dir)
-		r.Switch = nil
-		if on, ok := b.Switches[r.Name]; ok {
-			r.Switch = &on
-		}
+		r.Switch = syncSwitch(b.Switches, r.Name)
 		st := b.repos[r.Name]
 		if st == nil || st.Dir != r.Dir || st.Synced() != r.Synced() {
 			st = &repoState{fps: map[string]string{}, items: map[string]api.Item{}}

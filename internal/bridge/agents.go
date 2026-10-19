@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,14 +15,14 @@ const agentsUsage = "usage: meat-mode bridge agents [on|off <repo>]"
 // with their agents switch, or switches one on or off. Agents are switched on
 // here only; the app can only switch them off.
 func agentsCommand(args []string, env Env) error {
-	cfg, err := LoadConfig(env.Paths.Config)
+	s, err := LoadSettings(env)
 	if err != nil {
 		return err
 	}
-	repos := Discover(cfg.ResolveRoots(env.Paths.Home), env.Paths.Home, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	repos := s.Repos()
 	switch {
 	case len(args) == 0:
-		listAgents(env.Stdout, repos, cfg.Agents)
+		listAgents(env.Stdout, repos, s.Config.Agents)
 		return nil
 	case len(args) == 2 && (args[0] == "on" || args[0] == "off"):
 		r, err := findRepo(repos, args[1], env.Paths.Home)
@@ -70,19 +69,12 @@ func findRepo(repos []Repo, arg, home string) (Repo, error) {
 		}
 	}
 	if abs, err := filepath.Abs(expandHome(arg, home)); err == nil {
-		abs = realPath(abs)
+		abs = resolvePath(abs)
 		for _, r := range repos {
-			if realPath(r.Dir) == abs {
+			if resolvePath(r.Dir) == abs {
 				return r, nil
 			}
 		}
 	}
 	return Repo{}, fmt.Errorf("%q is not a repo this bridge finds with its roots; run `meat-mode bridge agents` to list them", strings.TrimSpace(arg))
-}
-
-func realPath(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return filepath.Clean(p)
 }
