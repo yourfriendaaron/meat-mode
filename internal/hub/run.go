@@ -113,6 +113,19 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 		}
 	}
 
+	// Removed attachments are purged and stray files cleared at start and
+	// every few minutes after. The sweep ends before the store closes.
+	sweepCtx, stopSweep := context.WithCancel(ctx)
+	swept := make(chan struct{})
+	go func() {
+		defer close(swept)
+		h.sweepAttachments(sweepCtx, store.AttachmentSweepEvery)
+	}()
+	defer func() {
+		stopSweep()
+		<-swept
+	}()
+
 	srv := newHTTPServer(ctx, h)
 
 	ln, err := net.Listen("tcp", cfg.Listen)

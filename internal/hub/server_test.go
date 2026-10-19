@@ -90,6 +90,7 @@ const testPassword = "water the plants"
 type harness struct {
 	t      *testing.T
 	st     *store.Store
+	dir    string // the store's data directory
 	srv    *Server
 	push   *fakePush
 	token  string
@@ -98,12 +99,13 @@ type harness struct {
 
 func newHarness(t *testing.T, static fstest.MapFS, withPush bool) *harness {
 	t.Helper()
-	st, err := store.Open(t.TempDir())
+	dir := t.TempDir()
+	st, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	h := &harness{t: t, st: st}
+	h := &harness{t: t, st: st, dir: dir}
 	var push PushRegistry
 	if withPush {
 		h.push = &fakePush{subs: map[string]api.PushSubscription{}}
