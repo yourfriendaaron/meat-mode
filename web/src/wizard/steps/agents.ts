@@ -101,8 +101,8 @@ registerStep({
   render(ctx) {
     const machines = agentMachines(ctx.state?.bridges);
     if (!wanted && !machines.length && !pairing) {
-      return `<p><strong>Do you use AI agents with beads?</strong></p>
-<p>Meat Mode can show the tasks your agents raise for you in beads repos. A small bridge on the machine they work on connects it to this hub.</p>
+      return `<p><strong>Do you use AI agents with a task tracker?</strong></p>
+<p>Meat Mode can show the tasks your agents raise for you in a repo's tracker, such as beads, Backlog.md or ticket. A small bridge on the machine they work on connects it to this hub.</p>
 <div class="btn-row"><button class="btn" data-act="agents-yes">Yes, add a machine</button><button class="btn" data-act="wizard-skip">No</button></div>`;
     }
     const intro = machines.length

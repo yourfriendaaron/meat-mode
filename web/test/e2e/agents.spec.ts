@@ -25,7 +25,7 @@ test.describe("desktop", () => {
     await openWizardAt(page, hub, "agents");
     const w = wizard(page);
     await expect(w.heading).toHaveText("Agent machines");
-    await expect(w.region).toContainText("Do you use AI agents with beads?");
+    await expect(w.region).toContainText("Do you use AI agents with a task tracker?");
     await axe(page);
 
     await w.region.getByRole("button", { name: "Yes, add a machine" }).click();
@@ -56,7 +56,7 @@ test.describe("desktop", () => {
 
     await w.next.click();
     await expect(w.heading).toHaveText("Choose repos");
-    await expect(w.region).toContainText("Only beads labelled human appear");
+    await expect(w.region).toContainText("Only tasks labelled human appear");
     const garden = w.region.getByRole("switch", { name: "Sync garden (projects/garden)" });
     await expect(garden).toHaveAttribute("aria-checked", "false");
     await garden.click();
