@@ -368,3 +368,26 @@ func TestExportUpgradesReachTheCurrentVersion(t *testing.T) {
 		t.Fatalf("%d upgrade steps for version %d; add the step from version %d", len(exportUpgrades), api.ExportVersion, api.ExportVersion-1)
 	}
 }
+
+// A version 1 file restores whatever labels its items carry: those that
+// break the tag rules, which version 1 never showed, are dropped.
+func TestRestoreV1DropsLabelsThatBreakTheTagRules(t *testing.T) {
+	s, _ := open(t)
+	file := changeExport(t, func(ex map[string]any) {
+		exportList(ex, "items", 0)["labels"] = []any{"human", "two words", "garden", "Garden", strings.Repeat("x", 51)}
+	})
+	_, err := s.Restore(bytes.NewReader(file))
+	must(t, err)
+	var ex map[string]any
+	must(t, json.Unmarshal(exportFile(t), &ex))
+	key := exportList(ex, "items", 0)["key"].(string)
+	for _, it := range mustState(t, s).Items {
+		if it.Key == key {
+			if !slices.Equal(it.Labels, []string{"garden"}) {
+				t.Fatalf("labels %q, want [garden]", it.Labels)
+			}
+			return
+		}
+	}
+	t.Fatalf("item %s not restored", key)
+}

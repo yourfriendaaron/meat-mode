@@ -409,7 +409,7 @@ Files are not put in the JSON as base64: that grows them by a third, makes the h
 
 **Versions.** `version` goes up by one whenever what an export holds changes in any way, an added field included, so a hub never restores a file it would read only in part. A hub restores a file of its own version and of every older one, upgrading an older file step by step to its own before loading it. It refuses a file from a newer hub with `400` and says which version the file is and which this hub reads, so the user updates the hub first. A file whose `format` is not `meat-mode-export`, or whose `version` is not a whole number from 1 up, is refused as not an export.
 
-- Version 1 was a bare JSON file with no attachments and no tags on hub list items. Version 2 made the export a zip and added `labels` and `attachments` to its items. Its upgrade step changes only `version`.
+- Version 1 was a bare JSON file with no attachments and no tags on hub list items. Version 2 made the export a zip and added `labels` and `attachments` to its items. Its upgrade step sets `version` and drops any label of a version 1 item that breaks the rules in Tags: such labels came from beads moved off a machine's personal repo, version 1 never showed them, and a file that restored before must still restore.
 - A restore reads a zip by its first bytes (`PK\x03\x04`) and anything else as bare JSON. A bare JSON of version 2 or later restores only when it lists no attachment; one that lists any is refused, naming how many files it lists, so the user restores the zip it came in.
 
 **Restore.** Restore is offered by the hub part of the setup wizard on a hub whose setup status is `new`, after the password step:

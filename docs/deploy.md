@@ -124,6 +124,7 @@ Start the hub and check the log: it says `login is on, with the password from th
 - Pass the original `Host` header through. If it rewrites it, add the name the hub receives to `MEAT_MODE_ALLOWED_HOSTS`.
 - Send `X-Forwarded-Proto`, and `X-Forwarded-For` with the client's address. Inside a container the hub sees only the container network as the peer, so that header is how it tells a LAN request from an internet one.
 - Not buffer responses from `/api/events`, the server-sent event stream that keeps the app current. The hub marks it unbuffered, which nginx honors; the nginx snippet turns buffering off for it as well.
+- Let large request bodies through, and wait for them. An attached file is up to 25 MiB, and restoring an export with its files up to about 1.07 GB (64 MiB plus 1 GiB of files); the hub gives each of those two routes 30 minutes to arrive. nginx takes 1 MB by default: the snippet raises it.
 - Present a certificate that browsers trust, such as Let's Encrypt. Web Push and installing to the home screen do not work with a self-signed one.
 
 **Settings**, **Connection** checks all of this from the browser: that the address matches `MEAT_MODE_PUBLIC_URL` and the hub accepts it, that public DNS has no public address for the name, that the page is a secure context, that live updates arrive at once (a buffering proxy holds them back), that the device and hub clocks agree, and that the hub has its reminder keys. Each problem comes with what to change.
@@ -145,6 +146,10 @@ server {
     listen 443 ssl;
     server_name meat-mode.example.com;
     # ssl_certificate and ssl_certificate_key here
+    # Attachments and restoring an export with its files.
+    client_max_body_size 1100m;
+    proxy_read_timeout 30m;
+    client_body_timeout 30m;
 
     location / {
         proxy_pass http://127.0.0.1:8080;

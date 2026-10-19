@@ -37,14 +37,42 @@ var exportUpgrades = []func(json.RawMessage) (json.RawMessage, error){
 }
 
 // upgradeExportV1 turns version 1 into version 2, which added attachments
-// and the tags of hub list items. A version 1 file has neither, so only its
-// version changes.
+// and the tags of hub list items. A version 1 file has no attachments. Its
+// items may carry labels from beads moved off a machine's personal repo,
+// which version 1 never showed; those that break the tag rules are dropped,
+// so a file that restored before still restores.
 func upgradeExportV1(raw json.RawMessage) (json.RawMessage, error) {
 	var file map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &file); err != nil {
 		return nil, err
 	}
 	file["version"] = json.RawMessage("2")
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(file["items"], &items); err != nil {
+		return nil, err
+	}
+	for _, it := range items {
+		var labels []string
+		if json.Unmarshal(it["labels"], &labels) != nil {
+			continue
+		}
+		kept := []string{}
+		for _, l := range labels {
+			if clean, err := cleanLabels(append(kept, l)); err == nil {
+				kept = clean
+			}
+		}
+		b, err := json.Marshal(kept)
+		if err != nil {
+			return nil, err
+		}
+		it["labels"] = b
+	}
+	b, err := json.Marshal(items)
+	if err != nil {
+		return nil, err
+	}
+	file["items"] = b
 	return json.Marshal(file)
 }
 
