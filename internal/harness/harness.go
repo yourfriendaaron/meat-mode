@@ -112,9 +112,10 @@ type Event struct {
 	Session string `json:"session,omitempty"`
 	// Tool is a tool call the agent started.
 	Tool *Tool `json:"tool,omitempty"`
-	// Read is how many of the messages the bridge wrote to stdin the
-	// harness has now taken in, for a harness that says so. When a harness
-	// never says, a turn's end counts every message sent before it as read.
+	// Read is how many more of the messages the bridge wrote to stdin the
+	// harness has taken in with this line (an increment, such as 1 for each
+	// echoed message), for a harness that says so. When a harness never
+	// says, a turn's end counts every message sent before it as read.
 	Read int `json:"read,omitempty"`
 	// CostUSD is spending this line adds to the run, for a metered harness.
 	CostUSD float64 `json:"costUsd,omitempty"`

@@ -48,7 +48,7 @@ Each event sets one field, except that `Session` may come with any other:
 
 - `Session`: the harness's session id, whenever a line names it. The bridge stores the newest one that passes `ValidSession` and resumes it on the task's next ask.
 - `Tool`: a tool call the agent started, mapped onto a kind: `shell` (with `Command`), `edit`, `write`, `read`, `search`, `web`, `agent`, `plan` or `other`, with `File` for one that names a file. The bridge turns it into the activity line ("Running go test", "Editing notes.txt", "Closing the task" for the tracker's own commands) and shows no more than a command's first word or two and a file's base name.
-- `Read`: how many messages the bridge wrote to stdin the harness has now taken in, for a harness that echoes them. When a harness never does, a turn's end counts every message sent before it as read.
+- `Read`: how many more of the messages the bridge wrote to stdin the harness has taken in with this line, such as 1 for each message it echoes; the bridge adds it up. When a harness never does, a turn's end counts every message sent before it as read.
 - `CostUSD`: spending a line adds, for a metered harness only.
 - `Limit`: the agent hit its usage limit, with `ResetsAt` when known.
 - `End`: the turn is over, with `Error` when it failed, `Budget` when a native harness stopped at its cap, and `Text`, its final message or error.
