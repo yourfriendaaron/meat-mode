@@ -4,7 +4,13 @@
 
 ## Install
 
-Install `tk` from the ticket project's README (a Homebrew tap, the AUR, or the script copied onto PATH). The bridge looks for `tk` on PATH, or at the path `trackerBins` gives for `ticket` in the bridge config. ticket prints no version, so the version shown for it in Settings is blank.
+Install `tk` one of these ways, as the ticket project's README gives them:
+
+- Homebrew on macOS or Linux: `brew tap wedow/tools`, then `brew install ticket`. The formula installs the script as `tk`.
+- Arch Linux: the AUR package `ticket`, such as `yay -S ticket`.
+- Any system with bash: copy the `ticket` script from the repo or a release's source archive onto PATH as `tk` with execute permission.
+
+The bridge looks for `tk` on PATH, or at the path `trackerBins` gives for `ticket` in the bridge config. ticket prints no version, so the version shown for it in Settings is blank.
 
 ## What marks a task for you
 
