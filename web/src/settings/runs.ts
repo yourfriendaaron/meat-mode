@@ -2,7 +2,7 @@
 // rules every run keeps.
 
 import { agentMachines } from "../agents.ts";
-import { api, newId } from "../api.ts";
+import { newId } from "../api.ts";
 import { esc } from "../html.ts";
 import { agentName, workingItems } from "../runs.ts";
 import { registerSection } from "./registry.ts";
@@ -26,14 +26,8 @@ registerSection({
   async act(act, _el, ctx) {
     if (act !== "stop-all") return;
     const working = workingItems(ctx.state?.items ?? []);
-    let failed = 0;
-    for (const i of working) {
-      try {
-        await api.postAction({ id: newId(), kind: "stop", key: i.key, payload: {} });
-      } catch {
-        failed++;
-      }
-    }
+    const h = await ctx.perform(working.map((i) => ({ id: newId(), kind: "stop", key: i.key, payload: {} })));
+    const failed = working.length - h.posted.length;
     ctx.toast(failed ? `Could not stop ${failed} of ${working.length}` : working.length === 1 ? "Stopped 1 agent" : `Stopped ${working.length} agents`);
     await ctx.refresh();
   },

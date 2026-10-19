@@ -1,7 +1,8 @@
 // What the app hands the setup wizard's steps and the Settings sections that
 // live in their own modules. main.ts builds the one instance.
 
-import type { Session, SetupInfo, State } from "./types.ts";
+import type { Handle } from "./actions.ts";
+import type { NewAction, Session, SetupInfo, State } from "./types.ts";
 
 export interface AppContext {
   /** The hub's state, or null before the first load. */
@@ -18,6 +19,8 @@ export interface AppContext {
   render(): void;
   /** Loads /api/state, /api/setup and /api/session again, then draws the app. */
   refresh(): Promise<void>;
+  /** Posts actions through the app's pipeline, which patches the local copy and toasts a failed post. */
+  perform(actions: NewAction[]): Promise<Handle>;
   /** Shows a short message at the bottom of the screen. */
   toast(text: string): void;
   /** Switches the view, as the navigation does. */

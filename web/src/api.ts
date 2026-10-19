@@ -68,16 +68,8 @@ export const api = {
   logout: () => call<void>("POST", "/api/logout"),
   state: () => call<State>("GET", "/api/state"),
   postAction: (a: NewAction) => call<Action>("POST", "/api/actions", a),
-  /** Resolves to true when cancelled, false when the action was already applied (409). */
-  cancelAction: async (id: string): Promise<boolean> => {
-    try {
-      await call<Action>("POST", `/api/actions/${encodeURIComponent(id)}/cancel`);
-      return true;
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) return false;
-      throw e;
-    }
-  },
+  /** Throws ApiError 409 when the action was already applied; actions.ts then posts its inverse. */
+  cancelAction: (id: string) => call<Action>("POST", `/api/actions/${encodeURIComponent(id)}/cancel`),
   actions: (limit = 30) => call<Action[]>("GET", `/api/actions?limit=${limit}`),
   seen: (key: string) => call<void>("POST", `/api/items/${encodeURIComponent(key)}/seen`),
   pushKey: () => call<{ publicKey: string }>("GET", "/api/push/key"),
