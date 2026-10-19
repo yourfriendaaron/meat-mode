@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -110,13 +111,8 @@ func (j *Journal) apply(e JournalEntry) {
 
 // compact rewrites the file with the live entries only.
 func (j *Journal) compact() error {
-	tmp := j.path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	w := bufio.NewWriter(f)
-	enc := json.NewEncoder(w)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	cutoff := time.Now().Add(-journalKeep)
 	for id, e := range j.entries {
 		if e.Done() && e.At.Before(cutoff) {
@@ -126,41 +122,15 @@ func (j *Journal) compact() error {
 		in := *e
 		in.Phase, in.At = "intent", e.Intent
 		if err := enc.Encode(in); err != nil {
-			f.Close()
 			return err
 		}
 		if e.Done() {
 			if err := enc.Encode(e); err != nil {
-				f.Close()
 				return err
 			}
 		}
 	}
-	if err := w.Flush(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, j.path); err != nil {
-		return err
-	}
-	return syncDir(filepath.Dir(j.path))
-}
-
-func syncDir(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	_ = d.Sync() // not supported everywhere; the rename is still atomic
-	return nil
+	return writeFileAtomic(j.path, buf.Bytes(), 0o600)
 }
 
 func (j *Journal) write(e JournalEntry) error {

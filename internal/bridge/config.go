@@ -191,14 +191,7 @@ func (c Config) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return writeFileAtomic(path, append(b, '\n'), 0o600)
 }
 
 // ResolveRoots returns the scan roots with ~ expanded. With no roots set it
