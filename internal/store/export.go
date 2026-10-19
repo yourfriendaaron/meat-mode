@@ -1,7 +1,14 @@
 package store
 
 import (
+	"archive/zip"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
 	"slices"
 	"time"
 
@@ -23,6 +30,9 @@ func (s *Store) Export() (api.Export, error) {
 		return e, err
 	}
 	if e.Items, err = exportItems(tx); err != nil {
+		return e, err
+	}
+	if err := s.checkExportFiles(e.Items); err != nil {
 		return e, err
 	}
 	if e.Actions, err = queryActionsTx(tx, `SELECT `+actionCols+` FROM actions ORDER BY seq`); err != nil {
@@ -66,7 +76,8 @@ func exportItems(tx *sql.Tx) ([]api.ExportItem, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []api.ExportItem{}
+	var items []api.Item
+	var owners []string
 	for rows.Next() {
 		var repo, data, first, owner string
 		var seen sql.NullString
@@ -78,9 +89,82 @@ func exportItems(tx *sql.Tx) ([]api.ExportItem, error) {
 			return nil, err
 		}
 		it.Run, it.Pending, it.Error = nil, false, ""
-		out = append(out, api.ExportItem{Item: it, Owner: owner})
+		items = append(items, it)
+		owners = append(owners, owner)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if err := joinAttachments(tx, items); err != nil {
+		return nil, err
+	}
+	out := make([]api.ExportItem, len(items))
+	for i, it := range items {
+		out[i] = api.ExportItem{Item: it, Owner: owners[i]}
+	}
+	return out, nil
+}
+
+// checkExportFiles checks that the file of every attachment an export
+// lists is on disk with its size, so an export that cannot hold a file
+// stops before it starts rather than leave the file out.
+func (s *Store) checkExportFiles(items []api.ExportItem) error {
+	for _, it := range items {
+		for _, a := range it.Attachments {
+			fi, err := os.Stat(s.attachmentPath(a.ID))
+			if err != nil || fi.Size() != a.Size {
+				return &userError{ErrFileMissing, fmt.Sprintf("The file of %s (attachment %s) on item %s is missing or changed in the hub's data directory, "+
+					"so the export stops rather than leave it out.", a.Name, a.ID, it.Key)}
+			}
+		}
+	}
+	return nil
+}
+
+// WriteExportZip writes e as the export's zip (docs/api.md, Export and
+// restore): export.json, then the bytes of each attachment it lists,
+// stored without compression, as it goes. A file that cannot be read whole,
+// or whose bytes no longer match its size and SHA-256, fails the export:
+// what was written so far is not a whole export.
+func (s *Store) WriteExportZip(w io.Writer, e api.Export) error {
+	zw := zip.NewWriter(w)
+	jw, err := zw.CreateHeader(&zip.FileHeader{Name: api.ExportJSONName, Method: zip.Deflate, Modified: e.ExportedAt})
+	if err != nil {
+		return err
+	}
+	if err := json.NewEncoder(jw).Encode(e); err != nil {
+		return err
+	}
+	for _, it := range e.Items {
+		for _, a := range it.Attachments {
+			if err := s.writeExportFile(zw, it.Key, a); err != nil {
+				return err
+			}
+		}
+	}
+	return zw.Close()
+}
+
+func (s *Store) writeExportFile(zw *zip.Writer, key string, a api.Attachment) error {
+	fw, err := zw.CreateHeader(&zip.FileHeader{Name: api.ExportAttachmentDir + a.ID, Method: zip.Store, Modified: a.CreatedAt})
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(s.attachmentPath(a.ID))
+	if err != nil {
+		return fmt.Errorf("export: the file of %s (attachment %s) on item %s: %w", a.Name, a.ID, key, err)
+	}
+	defer f.Close()
+	h := sha256.New()
+	n, err := io.Copy(io.MultiWriter(fw, h), io.LimitReader(f, a.Size+1))
+	if err != nil {
+		return fmt.Errorf("export: the file of %s (attachment %s) on item %s: %w", a.Name, a.ID, key, err)
+	}
+	if n != a.Size || hex.EncodeToString(h.Sum(nil)) != a.SHA256 {
+		return fmt.Errorf("export: the file of %s (attachment %s) on item %s no longer matches its size and SHA-256", a.Name, a.ID, key)
+	}
+	return nil
 }
 
 // exportReminders reads the reminders already sent for the exported items,
