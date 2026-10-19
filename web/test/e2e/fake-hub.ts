@@ -3,7 +3,7 @@
 
 import { createHash } from "node:crypto";
 import type { Page, Route } from "@playwright/test";
-import type { Action, Attachment, Bridge, Device, Edit, HarnessInfo, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Attachment, Bridge, Device, Edit, HarnessInfo, Item, NewAction, Occurrence, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS_BYTES, MAX_ATTACHMENTS_PER_ITEM } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
@@ -141,24 +141,44 @@ function keptRepeat(r: Repeat, due: string): Repeat {
   return out;
 }
 
+/** The date after `d` in a rule's series, counted in UTC as nextDue does. */
+function stepRepeat(r: Repeat, d: Date): Date {
+  const n = r.interval || 1;
+  const x = new Date(d);
+  if (r.every === "day") x.setUTCDate(x.getUTCDate() + n);
+  else if (r.every === "week" && r.weekdays?.length) {
+    do x.setUTCDate(x.getUTCDate() + 1);
+    while (!r.weekdays.includes(x.getUTCDay()));
+  } else if (r.every === "week") x.setUTCDate(x.getUTCDate() + 7 * n);
+  else if (r.every === "month") x.setUTCMonth(x.getUTCMonth() + n);
+  else x.setUTCFullYear(x.getUTCFullYear() + n);
+  return x;
+}
+
+/**
+ * The later dates of open repeating items in [from, to) (docs/api.md, Month
+ * view): after each due time, on or before the rule's end, none for fromDone.
+ */
+export function occurrencesIn(items: Item[], from: Date, to: Date): Occurrence[] {
+  const out: Occurrence[] = [];
+  for (const it of items) {
+    const r = it.repeat;
+    if (it.status === "closed" || !r || !it.dueAt || r.fromDone) continue;
+    for (let d = stepRepeat(r, new Date(it.dueAt)); d < to; d = stepRepeat(r, d)) {
+      if (r.until && d.toISOString().slice(0, 10) > r.until) break;
+      if (d >= from) out.push({ key: it.key, at: d.toISOString() });
+    }
+  }
+  return out.sort((a, b) => a.at.localeCompare(b.at) || a.key.localeCompare(b.key));
+}
+
 /**
  * The next occurrence of a repeating item after its due time and now. The
  * fake hub counts in UTC, the zone the tests run in, and a weekly rule with
  * weekdays only every week; tests stay within that.
  */
 export function nextDue(r: Repeat, dueAt: string, now: Date): string {
-  const n = r.interval || 1;
-  const step = (d: Date): Date => {
-    const x = new Date(d);
-    if (r.every === "day") x.setUTCDate(x.getUTCDate() + n);
-    else if (r.every === "week" && r.weekdays?.length) {
-      do x.setUTCDate(x.getUTCDate() + 1);
-      while (!r.weekdays.includes(x.getUTCDay()));
-    } else if (r.every === "week") x.setUTCDate(x.getUTCDate() + 7 * n);
-    else if (r.every === "month") x.setUTCMonth(x.getUTCMonth() + n);
-    else x.setUTCFullYear(x.getUTCFullYear() + n);
-    return x;
-  };
+  const step = (d: Date) => stepRepeat(r, d);
   const due = new Date(dueAt);
   if (r.fromDone) {
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), due.getUTCHours(), due.getUTCMinutes()));
@@ -192,6 +212,8 @@ export class FakeHub {
   requests: string[] = [];
   /** When set, GET /api/actions answers 500, as an unreachable hub route would. */
   failActions = false;
+  /** When set, GET /api/occurrences answers 500. */
+  failOccurrences = false;
   posted: NewAction[] = [];
   /** When set, every /api/events connection sends one change event and asks to reconnect after this many ms. */
   eventRetryMs = 0;
@@ -658,6 +680,15 @@ export class FakeHub {
     }
     if (method === "POST" && path === "/api/actions") {
       return this.postAction(route, req.postDataJSON() as NewAction);
+    }
+    if (method === "GET" && path === "/api/occurrences") {
+      if (this.failOccurrences) return this.json(route, 500, { error: "occurrences unavailable" });
+      const from = new Date(url.searchParams.get("from") ?? "");
+      const to = new Date(url.searchParams.get("to") ?? "");
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return this.json(route, 400, { error: "from and to must be RFC 3339 times" });
+      if (to <= from) return this.json(route, 400, { error: "to must be after from" });
+      if (to.getTime() - from.getTime() > 62 * 24 * 60 * 60 * 1000) return this.json(route, 400, { error: "the window is longer than 62 days" });
+      return this.json(route, 200, { occurrences: occurrencesIn(this.items, from, to) });
     }
     let m = path.match(/^\/api\/actions\/([^/]+)\/cancel$/);
     if (method === "POST" && m) {
