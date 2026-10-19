@@ -28,7 +28,8 @@ function item(key: string, over: Partial<Item> = {}): Item {
 
 /**
  * A hub in memory: it applies personal actions at once and leaves agent ones
- * pending, moves a repeating personal item on with `was` in its reply, and
+ * pending, moves a repeating personal item on with `was` in its reply,
+ * reopening its done sub-tasks, and
  * refuses to cancel an applied action with 409.
  */
 function fakeHub(items: Item[], opts: { failPost?: (a: NewAction) => boolean; failCancel?: boolean } = {}) {
@@ -43,7 +44,13 @@ function fakeHub(items: Item[], opts: { failPost?: (a: NewAction) => boolean; fa
       const personal = it?.bridge === "hub";
       if (personal) applied.add(a.id);
       const payload = { ...a.payload };
-      if (a.kind === "done" && personal && it?.repeat) payload.was = { due: it.dueAt ?? undefined };
+      if (a.kind === "done" && personal && it?.repeat) {
+        payload.was = { due: it.dueAt ?? undefined };
+        // Its sub-tasks closed as done open again with it.
+        const reopened = items.filter((i) => i.parent === it.id && i.repo === it.repo && i.closeReason === "Done in Meat Mode");
+        for (const s of reopened) s.status = "open";
+        if (reopened.length) payload.was.subtasksDone = reopened.map((s) => s.id);
+      }
       const [bridge, repo, beadId] = (a.key ?? "").split("/");
       const reply: Action = {
         id: a.id,
@@ -132,6 +139,22 @@ test("done on a repeating personal item leaves it open and undoes with the edit 
   const u = hub.posted[1];
   assert.equal(u.kind, "edit");
   assert.deepEqual(u.payload.set, { due });
+});
+
+test("Undo of a repeating parent's done closes the sub-tasks it reopened, before it posts", async () => {
+  const parent = item("hub/personal/pe-2", { dueAt: due, repeat });
+  const closed = { status: "closed" as const, closedAt: now.toISOString(), closeReason: "Done in Meat Mode" };
+  const sub = item("hub/personal/pe-21", { parent: "pe-2", ...closed });
+  const gone = item("hub/personal/pe-22", { parent: "pe-2", ...closed, closeReason: "Dismissed" });
+  const hub = fakeHub([parent, sub, gone]);
+  const h = await hub.actions.perform([done(parent.key, "d1")]);
+  assert.equal(sub.status, "open");
+  assert.equal(gone.status, "closed");
+
+  let seen = "";
+  await hub.actions.undo(h, { onPatched: () => (seen = `${sub.status} ${sub.closeReason}`) });
+  assert.equal(seen, "closed Done in Meat Mode");
+  assert.deepEqual(hub.posted[1].payload.set, { due, subtasksDone: ["pe-21"] });
 });
 
 test("a mixed batch undoes each item its own way, in one call", async () => {

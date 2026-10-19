@@ -62,6 +62,7 @@ import {
   dueLabel,
   dueOutcome,
   editError,
+  moveTargets,
   priorityChip,
   priorityOptions,
   removeCheck,
@@ -708,9 +709,24 @@ ${repeatFieldsHTML(item, d)}
 <label for="edit-lead">Remind me early</label>${leadSelect("edit-lead", d.remindBefore, true)}
 <label for="edit-desc">Details</label><textarea id="edit-desc" rows="4" maxlength="${TEXT_MAX}"></textarea>
 <label for="edit-prio">Priority</label><select id="edit-prio">${prio}</select>
+${parentFieldHTML(item, d)}
 ${e.error ? `<p class="row-error" role="alert">${esc(e.error)}</p>` : ""}
 <div class="btn-row"><button type="submit" class="btn btn-primary">${ICON.check}Save</button><button type="button" class="btn" data-act="edit-cancel">Cancel</button></div>
 </form>`;
+}
+
+/**
+ * The edit form's "Sub-task of": the top level, or an item of the same list
+ * to move it under. Left out when there is nowhere to move it.
+ */
+function parentFieldHTML(item: Item, d: EditDraft): string {
+  const opts = moveTargets(item, items()).map((t) => [t.id, t.title]);
+  if (item.parent && !opts.some(([id]) => id === item.parent)) opts.unshift([item.parent, parentTitle(item, items()) || item.parent]);
+  if (!opts.length) return "";
+  const pick = [["", "None, a top-level task"], ...opts]
+    .map(([v, label]) => `<option value="${esc(v)}"${v === d.parent ? " selected" : ""}>${esc(label)}</option>`)
+    .join("");
+  return `<label for="edit-parent">Sub-task of</label><select id="edit-parent">${pick}</select>`;
 }
 
 const REPEAT_CHOICES: [EditDraft["repeat"], string][] = [
@@ -2177,6 +2193,7 @@ function onChange(e: Event) {
 function editChanged(d: EditDraft, t: HTMLInputElement) {
   if (t.id === "edit-prio") d.priority = Number(t.value);
   else if (t.id === "edit-lead") d.remindBefore = t.value === "" ? null : Number(t.value);
+  else if (t.id === "edit-parent") d.parent = t.value;
   else if (t.id === "edit-repeat") {
     d.repeat = t.value as EditDraft["repeat"];
     render();

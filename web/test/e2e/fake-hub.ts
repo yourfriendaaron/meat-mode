@@ -638,6 +638,16 @@ export class FakeHub {
         if (why) return bad(why);
         if (set.clearDue || !(set.due ?? it.dueAt)) return bad("a repeat needs a due date");
       }
+      const subs = this.items.filter((i) => i.parent === it.id && i.bridge === it.bridge && i.repo === it.repo);
+      if (set.parent) {
+        // A move follows the add rules, and an item with sub-tasks stays top-level (docs/api.md, Sub-tasks).
+        if (set.parent === it.id) return bad("an item cannot be its own parent");
+        const p = this.find(`${it.bridge}/${it.repo}/${set.parent}`);
+        if (!p) return bad("no such parent", 404);
+        if (p.status === "closed" || p.parent) return bad("not a parent");
+        if (subs.length) return bad("an item with sub-tasks cannot become a sub-task");
+      }
+      if (set.subtasksDone?.some((id) => !subs.some((i) => i.id === id))) return bad("subtasksDone names an item that is not its sub-task");
       const rule = set.repeat ?? (set.clearRepeat ? null : it.repeat);
       const at = set.due ?? it.dueAt;
       if (rule && at && !set.clearDue && endsBefore(rule, at)) return bad("repeat until is before the due date");
@@ -693,6 +703,16 @@ export class FakeHub {
         if (next.length > 100) return bad("a checklist holds at most 100 entries");
         was.checklist = structuredClone(it.checklist ?? []);
         it.checklist = next;
+      }
+      if (set.parent !== undefined) {
+        was.parent = it.parent ?? "";
+        it.parent = set.parent || undefined;
+      }
+      for (const s of subs) {
+        if (!set.subtasksDone?.includes(s.id) || s.status === "closed") continue;
+        s.status = "closed";
+        s.closeReason = "Done in Meat Mode";
+        s.closedAt = this.now();
       }
       return { set, was };
     }
@@ -812,7 +832,16 @@ export class FakeHub {
           // A repeating item moves on and stays open (docs/api.md, Repeating to-dos),
           // until its next date falls after the rule's end.
           if (it.repeat && it.dueAt && onHub && !endsBefore(it.repeat, nextDue(it.repeat, it.dueAt, NOW))) {
-            payload = { ...a.payload, was: { due: it.dueAt, checklist: structuredClone(it.checklist ?? []) } };
+            const was: Edit = { due: it.dueAt, checklist: structuredClone(it.checklist ?? []) };
+            // Its sub-tasks closed as done open again; dismissed ones stay closed.
+            const reopened = this.items.filter((i) => i.parent === it.id && i.bridge === it.bridge && i.repo === it.repo && i.status === "closed" && i.closeReason === "Done in Meat Mode");
+            for (const s of reopened) {
+              s.status = "open";
+              s.closedAt = null;
+              s.closeReason = undefined;
+            }
+            if (reopened.length) was.subtasksDone = reopened.map((s) => s.id);
+            payload = { ...a.payload, was };
             it.dueAt = nextDue(it.repeat, it.dueAt, NOW);
             it.deferUntil = null;
             it.checklist = (it.checklist ?? []).map((c) => ({ ...c, done: false }));
