@@ -1,0 +1,4 @@
+{"event":"init","conversation_id":"2e4f6a8c-0b1d-4e3f-8a5c-7d9e1f2a3b4c","init":{"cwd":"/repo","tools":["run_command"],"permission_mode":"always-proceed"}}
+{"event":"step_update","step_update":{"conversation_id":"2e4f6a8c-0b1d-4e3f-8a5c-7d9e1f2a3b4c","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"2e4f6a8c-0b1d-4e3f-8a5c-7d9e1f2a3b4c","step_index":2,"state":"DONE","step_type":"tool","tool_name":"run_command","tool_info":{"name":"run_command","parameters":{"CommandLine":"go test ./..."},"output":"","error":{"type":"canceled","message":"command canceled"}}}}
+{"event":"result","result":{"conversation_id":"2e4f6a8c-0b1d-4e3f-8a5c-7d9e1f2a3b4c","status":"CANCELED","response":"","duration_seconds":40.2,"num_turns":1,"usage":{"input_tokens":9100,"output_tokens":120,"thinking_tokens":80,"cache_read_tokens":0,"total_tokens":9220}}}

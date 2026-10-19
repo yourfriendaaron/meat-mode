@@ -3,5 +3,6 @@
 package all
 
 import (
+	_ "github.com/yourfriendaaron/meat-mode/internal/harness/antigravity"
 	_ "github.com/yourfriendaaron/meat-mode/internal/harness/codex"
 )
