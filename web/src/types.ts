@@ -111,6 +111,17 @@ export const MAX_REPEAT_INTERVAL = 100;
 /** Caps a reminder lead time: one week. */
 export const MAX_LEAD_MINUTES = 7 * 24 * 60;
 
+/** One later date of a repeating item's series (docs/api.md, Month view). */
+export interface Occurrence {
+  key: string;
+  at: string;
+}
+
+/** GET /api/occurrences: ordered by `at`, then `key`. */
+export interface Occurrences {
+  occurrences: Occurrence[];
+}
+
 /** Makes a personal item come back after it is done (docs/api.md, Repeating to-dos). The item's due time is the current occurrence. */
 export interface Repeat {
   every: RepeatUnit;

@@ -1,6 +1,6 @@
 // Thin client for the hub's app API (docs/api.md).
 
-import type { Action, Attachment, Bridge, Device, NewAction, NewBridgeReply, Session, SetupInfo, State } from "./types.ts";
+import type { Action, Attachment, Bridge, Device, NewAction, NewBridgeReply, Occurrences, Session, SetupInfo, State } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -150,6 +150,9 @@ export const api = {
   removeAttachment: (id: string) => call<void>("DELETE", attachmentURL(id)),
   /** Throws ApiError 404 once the attachment is purged, 409 when putting it back would pass a cap. */
   restoreAttachment: (id: string) => call<Attachment>("POST", `${attachmentURL(id)}/restore`),
+  /** The later dates of repeating items in [from, to), at most 62 days (docs/api.md, Month view). */
+  occurrences: (from: Date, to: Date) =>
+    call<Occurrences>("GET", `/api/occurrences?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`),
 };
 
 /** A fresh action id. randomUUID needs a secure context, so plain-HTTP LAN use falls back to getRandomValues. */

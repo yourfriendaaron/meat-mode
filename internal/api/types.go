@@ -136,6 +136,19 @@ const MaxRepeatInterval = 100
 // MaxLeadMinutes caps a reminder lead time: one week.
 const MaxLeadMinutes = 7 * 24 * 60
 
+// Occurrence is one later date of a repeating item's series, in GET
+// /api/occurrences (docs/api.md, Month view).
+type Occurrence struct {
+	Key string    `json:"key"`
+	At  time.Time `json:"at"`
+}
+
+// Occurrences is GET /api/occurrences: ordered by At, then Key, and never
+// nil.
+type Occurrences struct {
+	Occurrences []Occurrence `json:"occurrences"`
+}
+
 // Repeat makes a personal item come back after it is done. The item's due
 // time is the current occurrence; the rule needs one.
 type Repeat struct {

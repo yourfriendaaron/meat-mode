@@ -355,6 +355,18 @@ The app's `agents` action can only switch off. The bridge accepts it only for a 
 
 A `sync` switch is applied by the bridge, not by bd. The bridge accepts it only for a repo it found itself, looked up by name, so the app cannot make it read anywhere else; any other name fails with `unknown repo`. It saves the choice in the `sync` map of its own `bridge.json`, where it overrides the repo's `meat-mode.sync` line, and sends its new repo list before reporting the result. A repo with no switch syncs when its `.beads/config.yaml` has the top-level line `meat-mode.sync: true`.
 
+### Month view
+
+The app's month view shows each day's dated items: open items on their due day, snoozed ones also on the day they come back, and repeating ones on each later date of their series. The app has the due and snooze times in the state; the hub works out the later dates, from the same rule that moves an item on when it is done (see Repeating to-dos).
+
+| Method and path | Response |
+|---|---|
+| `GET /api/occurrences?from=<time>&to=<time>` | `{"occurrences": [{"key", "at"}]}` |
+
+- `from` and `to` are RFC 3339 times, and the window `[from, to)` is at most 62 days long. A missing or unreadable time, `to` not after `from`, or a longer window is `400`.
+- Each entry is a later occurrence of an open item with a `repeat`: a date of its series after its current due time, in the window, on or before its `until`. The current due time itself is not listed. A rule with `fromDone` has no later dates until it is done, so its items list none.
+- Entries are ordered by `at`, then `key`; `at` is UTC. The list is `[]`, never `null`, when there are none.
+
 ### Agent runs
 
 An ask wakes an agent on one item: it reads the item's latest state, then does the work and closes the bead, or replies with a note. Only the user's own actions wake an agent; an agent's comments and closes never do. The bridge runs the agent; the hub only carries the ask and shows what the bridge reports.
