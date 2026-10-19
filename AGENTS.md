@@ -37,6 +37,14 @@ How to work within that:
 - Each tracker's conformance suite runs against its real tool: `bd`, `backlog` and `tk` on PATH. A missing one skips its suite, so a green check without them has not tested that tracker; CI installs all three.
 - Screenshot baselines live in `web/test/visual/__screenshots__`. `pnpm --dir web test:visual` checks them inside the Playwright container that CI uses, so the fonts match; after an intended layout change, run `pnpm --dir web test:visual:update` and look at every changed PNG before committing it. The container has no bold weight for the app's system font stack, so baselines catch layout changes but not font-weight changes.
 
+## Releases
+
+A release is a `vX.Y.Z` tag; pushing it runs `release.yml`, which builds the binaries and the APK and publishes them. `tag.yml` gives every green push to main the next patch as a lightweight tag, with notes GitHub generates, and skips a commit the latest tag already holds.
+
+- A minor or major release is an annotated tag made by hand on local main, pushed with main. Its message is the release notes: the first line is the release title, the rest the body. Make it with `git tag -a --cleanup=whitespace -F <notes>`, so Markdown headings are not stripped as comments.
+- Floor paths: a change to `docs/api.md`, the export version in `internal/api`, or a migration in `internal/store/store.go` makes the release at least a minor.
+- Public surface, whose break is a major: the app and bridge HTTP APIs, the export format, and the `meat-mode` CLI.
+
 ## Work tracking
 
 Work is tracked in beads in this repo: `bd ready`, `bd show <id>`, `bd update <id> --claim`, `bd close <id>`. The build epic holds the decisions and the order of work; start there.

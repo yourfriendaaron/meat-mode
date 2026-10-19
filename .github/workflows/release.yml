@@ -120,4 +120,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+        # An annotated tag carries the release notes: its first line is the
+        # title and the rest the body. tag.yml's lightweight patch tags carry
+        # none, so GitHub writes theirs.
+        run: |
+          ref=$(gh api "repos/$GH_REPO/git/ref/tags/$GITHUB_REF_NAME")
+          if [ "$(jq -r .object.type <<<"$ref")" = tag ]; then
+            message=$(gh api "repos/$GH_REPO/git/tags/$(jq -r .object.sha <<<"$ref")" --jq .message)
+            title=$(head -n1 <<<"$message")
+            tail -n +2 <<<"$message" | sed '/./,$!d' > "$RUNNER_TEMP/notes.md"
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$title" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+          fi
