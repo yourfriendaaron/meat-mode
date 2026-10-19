@@ -276,6 +276,11 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 				return a, false, err
 			}
 		}
+		if na.Kind == api.KindEdit {
+			if err := checkEditList(tx, b, r, id, *a.Payload.Set); err != nil {
+				return a, false, err
+			}
+		}
 		if na.Kind == api.KindDone || na.Kind == api.KindDismiss {
 			if err := s.checkCloses(tx, b, r, id); err != nil {
 				return a, false, err

@@ -68,6 +68,40 @@ func TestEditChangesOnlyTheGivenFields(t *testing.T) {
 	}
 }
 
+func TestEditParent(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	env, out := pairedEnv(t, hub)
+	ctx := context.Background()
+	if err := Add(ctx, []string{"Find the old card"}, env); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := Edit(ctx, []string{"mm-2", "--parent", "mm-1"}, env); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if err := Edit(ctx, []string{"mm-2", "--no-parent"}, env); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "mm-2\nmm-2\n" {
+		t.Errorf("printed %q", got)
+	}
+	cs := hub.Changes()
+	if len(cs) != 2 {
+		t.Fatalf("changes %+v", cs)
+	}
+	if set := cs[0].Payload.Set; set.Parent == nil || *set.Parent != "mm-1" || set.Title != nil || set.Due != nil {
+		t.Fatalf("--parent set %+v", set)
+	}
+	if set := cs[1].Payload.Set; set.Parent == nil || *set.Parent != "" {
+		t.Fatalf("--no-parent set %+v", set)
+	}
+	// A not found names both to-dos, since it may be for either.
+	if err := Edit(ctx, []string{"mm-9", "--parent", "mm-1"}, env); err == nil || !strings.Contains(err.Error(), `"mm-9" or "mm-1"`) {
+		t.Errorf("unknown item: %v", err)
+	}
+}
+
 func TestDoneAndReopen(t *testing.T) {
 	hub := fakehub.New(map[string]string{token: us})
 	defer hub.Close()
@@ -104,6 +138,8 @@ func TestEditRefuses(t *testing.T) {
 		"bad due":        {[]string{"mm-1", "--due", "soon"}, "--due"},
 		"empty title":    {[]string{"mm-1", "--title", " "}, "--title"},
 		"priority 5":     {[]string{"mm-1", "--priority", "5"}, "--priority"},
+		"parent and no":  {[]string{"mm-1", "--parent", "mm-2", "--no-parent"}, "not both"},
+		"empty parent":   {[]string{"mm-1", "--parent", ""}, "--no-parent"},
 		"someone else's": {[]string{"mm-2", "--title", "Renew"}, "this machine added"},
 		"not a to-do id": {[]string{"gd-1", "--title", "Renew"}, "this machine added"},
 	} {

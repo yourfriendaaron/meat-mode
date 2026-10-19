@@ -118,3 +118,97 @@ func OpenSubtasksError(n int) string {
 	}
 	return fmt.Sprintf("finish or remove its %d open sub-tasks first", n)
 }
+
+// checkEditList checks an edit's parent and subtasksDone against the list.
+// A move to a parent follows checkParent, and an item with sub-tasks of its
+// own, open, closed or still being added, cannot become a sub-task. Every
+// id in subtasksDone must be one of the item's sub-tasks.
+func checkEditList(tx *sql.Tx, bridge, repo, id string, set api.Edit) error {
+	if set.Parent != nil && *set.Parent != "" {
+		if *set.Parent == id {
+			return invalidf("an item cannot be its own sub-task")
+		}
+		var n int
+		if err := tx.QueryRow(`SELECT
+			(SELECT COUNT(*) FROM items WHERE bridge = ? AND repo = ? AND json_extract(data, '$.parent') = ?) +
+			(SELECT COUNT(*) FROM actions WHERE bridge = ? AND repo = ? AND kind = ? AND status = ?
+				AND json_extract(payload, '$.parent') = ?)`,
+			bridge, repo, id, bridge, repo, api.KindAdd, api.StatusPending, id).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return invalidf("it has sub-tasks of its own; sub-tasks go one level deep")
+		}
+		if err := checkParent(tx, bridge, repo, *set.Parent); err != nil {
+			return err
+		}
+	}
+	for _, sub := range set.SubtasksDone {
+		var n int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM items WHERE bridge = ? AND repo = ? AND id = ?
+			AND json_extract(data, '$.parent') = ?`, bridge, repo, sub, id).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return invalidf("%q is not a sub-task of this item", sub)
+		}
+	}
+	return nil
+}
+
+// applyHubSubtasks changes the sub-tasks an applied action on a list the
+// hub keeps names. An edit's SubtasksDone closes them as done. A done that
+// moved a repeating parent on to its next date reopens its sub-tasks closed
+// as done, even ones closed long enough ago to have left the app, and
+// records them in Was, so its Undo closes them again. Dismissed ones stay
+// closed.
+func applyHubSubtasks(tx *sql.Tx, a *api.Action) error {
+	switch {
+	case a.Kind == api.KindEdit && a.Payload.Set != nil:
+		for _, id := range a.Payload.Set.SubtasksDone {
+			it, err := hubItem(tx, a.Repo, id)
+			if err != nil {
+				return err
+			}
+			if it.Status == "closed" {
+				continue
+			}
+			apply(&it, api.Action{Kind: api.KindDone, CreatedAt: a.CreatedAt}, "")
+			if err := putHubItem(tx, a.Repo, it, it.FirstSeen, it.SeenAt); err != nil {
+				return err
+			}
+		}
+	case a.Kind == api.KindDone && a.Payload.Was != nil:
+		rows, err := tx.Query(`SELECT id FROM items WHERE bridge = ? AND repo = ? AND json_extract(data, '$.parent') = ?
+			AND json_extract(data, '$.status') = 'closed' AND json_extract(data, '$.closeReason') = ? ORDER BY id`,
+			HubBridge, a.Repo, a.BeadID, ReasonDone)
+		if err != nil {
+			return err
+		}
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			ids = append(ids, id)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, id := range ids {
+			it, err := hubItem(tx, a.Repo, id)
+			if err != nil {
+				return err
+			}
+			apply(&it, api.Action{Kind: api.KindReopen, CreatedAt: a.CreatedAt}, "")
+			if err := putHubItem(tx, a.Repo, it, it.FirstSeen, it.SeenAt); err != nil {
+				return err
+			}
+		}
+		a.Payload.Was.SubtasksDone = ids
+	}
+	return nil
+}

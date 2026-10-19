@@ -243,3 +243,29 @@ func TestAddToProject(t *testing.T) {
 		t.Error("a refused add reached the hub")
 	}
 }
+
+func TestAddSubtask(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	env, out := pairedEnv(t, hub)
+	ctx := context.Background()
+	if err := Add(ctx, []string{"Find the old card", "--parent", "mm-1"}, env); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(out.String()); got != "mm-2" {
+		t.Fatalf("printed %q", got)
+	}
+	if ps := hub.Personals(); len(ps) != 2 || ps[1].Parent != "mm-1" || ps[0].Parent != "" {
+		t.Fatalf("personal = %+v", ps)
+	}
+	if err := Add(ctx, []string{"Find the old card", "--parent", "mm-9"}, env); err == nil ||
+		!strings.Contains(err.Error(), `"mm-9" that this machine added`) {
+		t.Errorf("unknown parent: %v", err)
+	}
+	if err := Add(ctx, []string{"Find the old card", "--parent", " "}, env); err == nil || !strings.Contains(err.Error(), "--parent") {
+		t.Errorf("empty parent: %v", err)
+	}
+	if len(hub.Personals()) != 2 {
+		t.Fatalf("a refused add reached the hub: %+v", hub.Personals())
+	}
+}

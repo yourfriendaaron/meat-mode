@@ -166,6 +166,9 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 		if err := putHubItem(tx, a.Repo, it, it.FirstSeen, it.SeenAt); err != nil {
 			return nil, err
 		}
+		if err := applyHubSubtasks(tx, a); err != nil {
+			return nil, err
+		}
 	}
 	// The payload is stored again: an edit or a note change records in it
 	// what it replaced.
@@ -464,8 +467,19 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 			return "", false, err
 		}
 	}
+	t.Parent = strings.TrimSpace(t.Parent)
+	if t.Parent != "" {
+		// The parent is one this machine added, like any item its agents
+		// read; a retry of an add already made skips the check, since the
+		// parent may have closed since.
+		if _, err := s.Action(t.ID); errors.Is(err, ErrNotFound) {
+			if _, err := s.ownedPersonal(bridge, repo, t.Parent); err != nil {
+				return "", false, err
+			}
+		}
+	}
 	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: repo,
-		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat}}, author, func(tx *sql.Tx, a api.Action) error {
+		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat, Parent: t.Parent}}, author, func(tx *sql.Tx, a api.Action) error {
 		return recordOwner(tx, a.Repo, a.BeadID, bridge)
 	})
 	if err != nil {

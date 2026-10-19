@@ -45,11 +45,13 @@ func usage() {
   meat-mode bridge run                run the bridge in the foreground
   meat-mode bridge status             show config, repos and hub reachability
   meat-mode bridge uninstall          remove the user service and config
-  meat-mode add "<title>" [--project NAME|.] [--due TIME] [--note TEXT] [--author NAME] [--id UUID]
+  meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME] [--note TEXT] [--author NAME] [--id UUID]
                                       add a to-do to the personal list, or to a project with --project
                                       ("." for this folder's repo), with this machine's bridge config;
+                                      --parent makes it a sub-task of a to-do this machine added;
                                       prints its id
   meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--priority N]
+                 [--parent ID | --no-parent]
                                       change a to-do this machine added
   meat-mode done <id>                 mark a to-do this machine added as done
   meat-mode reopen <id>               open a to-do this machine added again

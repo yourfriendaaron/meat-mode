@@ -28,10 +28,12 @@ func personalOnly(kind string) bool {
 
 // checkEdit validates an edit's fields and returns them cleaned up: the
 // title trimmed, checklist texts trimmed and every entry given an id, a
-// repeat rule without the start the hub sets.
+// repeat rule without the start the hub sets, the parent and sub-task ids
+// trimmed. The rules that need the list are checkEditList's.
 func checkEdit(e api.Edit) (api.Edit, error) {
 	if e.Title == nil && e.Description == nil && e.Due == nil && !e.ClearDue && e.Priority == nil && e.Checklist == nil &&
-		e.Repeat == nil && !e.ClearRepeat && e.RemindBefore == nil && !e.ClearRemindBefore {
+		e.Repeat == nil && !e.ClearRepeat && e.RemindBefore == nil && !e.ClearRemindBefore &&
+		e.Parent == nil && len(e.SubtasksDone) == 0 {
 		return e, invalidf("edit needs at least one field in payload.set")
 	}
 	if e.Title != nil {
@@ -105,6 +107,26 @@ func checkEdit(e api.Edit) (api.Edit, error) {
 	if e.RemindBefore != nil && (*e.RemindBefore < 0 || *e.RemindBefore > api.MaxLeadMinutes) {
 		return e, invalidf("remindBefore must be 0 to %d minutes", api.MaxLeadMinutes)
 	}
+	if e.Parent != nil {
+		parent := strings.TrimSpace(*e.Parent)
+		if parent != "" && !validSegment(parent) {
+			return e, invalidf("parent is not a valid item id")
+		}
+		e.Parent = &parent
+	}
+	if e.SubtasksDone != nil {
+		ids := make([]string, 0, len(e.SubtasksDone))
+		for _, id := range e.SubtasksDone {
+			id = strings.TrimSpace(id)
+			if !validSegment(id) {
+				return e, invalidf("subtasksDone holds %q, which is not a valid item id", id)
+			}
+			if !slices.Contains(ids, id) {
+				ids = append(ids, id)
+			}
+		}
+		e.SubtasksDone = ids
+	}
 	return e, nil
 }
 
@@ -134,7 +156,8 @@ func checkRestore(c *api.Comment, now time.Time) (api.Comment, error) {
 // applyPersonal applies the kinds that change personal items only, and
 // done on a repeating item, and records in a's payload what they replaced:
 // an edit's old values and a repeating done's due time and checklist as
-// Was, a note-edit's or note-delete's comment as it was.
+// Was, a note-edit's or note-delete's comment as it was. The sub-tasks they
+// change are applyHubSubtasks'.
 func applyPersonal(it *api.Item, a *api.Action) error {
 	p := &a.Payload
 	switch a.Kind {
@@ -226,6 +249,12 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 			if len(*set.Checklist) > 0 {
 				it.Checklist = slices.Clone(*set.Checklist)
 			}
+		}
+		if set.Parent != nil {
+			// checkEditList has checked the move against the list.
+			was.Parent = ptr(it.Parent)
+			it.Parent = *set.Parent
+			it.ParentTitle = ""
 		}
 		if set.RemindBefore != nil || set.ClearRemindBefore {
 			if it.RemindBefore != nil {
@@ -373,6 +402,19 @@ func (s *Store) ChangePersonal(bridge, project, id string, c api.PersonalChange)
 	}
 	if _, err := s.ownedPersonal(bridge, repo, id); err != nil {
 		return api.Action{}, false, err
+	}
+	if set := c.Payload.Set; c.Kind == api.KindEdit && set != nil {
+		// The items an edit moves under or closes are the machine's own
+		// too, so an agent cannot learn which other ids exist.
+		others := slices.Clone(set.SubtasksDone)
+		if set.Parent != nil && strings.TrimSpace(*set.Parent) != "" {
+			others = append(others, strings.TrimSpace(*set.Parent))
+		}
+		for _, other := range others {
+			if _, err := s.ownedPersonal(bridge, repo, strings.TrimSpace(other)); err != nil {
+				return api.Action{}, false, err
+			}
+		}
 	}
 	if c.ID == "" {
 		c.ID = uuid.NewString()
