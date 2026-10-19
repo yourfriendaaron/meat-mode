@@ -1,7 +1,7 @@
 // The Agent machines section: the paired machines with their repos, Revoke,
 // and the form that adds one and shows its pairing command once.
 
-import { addMachineError, machineReposHTML, pairCommand, reauthFieldHTML } from "../agents.ts";
+import { addMachineError, machineReposHTML, pairCommand, reauthFieldHTML, trackersText } from "../agents.ts";
 import type { AppContext } from "../app-context.ts";
 import { api, errorText } from "../api.ts";
 import { copyText } from "../clipboard.ts";
@@ -79,11 +79,12 @@ registerSection({
       ? `<ul class="machines">${bridges
           .map((b) => {
             const seen = b.lastSeen ? `Last seen ${fmtAgo(new Date(b.lastSeen), n)}` : "Never seen";
+            const trackers = trackersText(b);
             const actions =
               m.revoking === b.name
                 ? `<span class="confirm">Revoke ${esc(b.name)}?</span><button class="btn btn-small btn-danger" data-act="revoke-confirm" data-name="${esc(b.name)}">Revoke</button><button class="btn btn-small" data-act="revoke-cancel">Cancel</button>`
                 : `<button class="btn btn-small" data-act="revoke" data-name="${esc(b.name)}">Revoke</button>`;
-            return `<li class="machine"><div><div class="m-name">${esc(b.name)}</div><div class="muted small">${esc(seen)}${b.version ? ` · ${esc(b.version)}` : ""}</div></div><div class="m-actions">${actions}</div>${machineReposHTML(repos, b.name)}</li>`;
+            return `<li class="machine"><div><div class="m-name">${esc(b.name)}</div><div class="muted small">${esc(seen)}${b.version ? ` · ${esc(b.version)}` : ""}</div>${trackers ? `<div class="muted small m-trackers">${esc(trackers)}</div>` : ""}</div><div class="m-actions">${actions}</div>${machineReposHTML(repos, b.name)}</li>`;
           })
           .join("")}</ul>`
       : '<p class="muted">No machines yet.</p>';

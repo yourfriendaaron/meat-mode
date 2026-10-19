@@ -2,7 +2,7 @@
 // shows, the label of the note box's pink button, and which repos let an
 // agent work. Pure: nothing here touches the page.
 
-import { appAuthor, isAgentItem, isPersonal, repoKey } from "./model.ts";
+import { appAuthor, isAgentItem, isPersonal, repoCan, repoKey } from "./model.ts";
 import type { Comment, Item, Repo, Run, RunReason, RunState } from "./types.ts";
 
 /** Why a run stopped, in plain words. */
@@ -35,15 +35,20 @@ export function workingItems(items: Item[]): Item[] {
   return items.filter(isWorking);
 }
 
-/** Whether an ask may wake an agent on this item: an agent item in a repo whose agents switch is on. */
+/** Whether a repo's agents may work: its tracker can ask and its agents switch is on. */
+function repoAgents(r: Repo): boolean {
+  return !isPersonal(r) && r.agentsAllowed === true && repoCan(r, "ask");
+}
+
+/** Whether an ask may wake an agent on this item: an agent item in a repo whose tracker can ask and whose agents switch is on. */
 export function agentsAllowed(item: Item, repos: Repo[]): boolean {
   if (!isAgentItem(item)) return false;
-  return repos.some((r) => repoKey(r) === repoKey(item) && r.agentsAllowed === true);
+  return repos.some((r) => repoKey(r) === repoKey(item) && repoAgents(r));
 }
 
 /** Whether any list lets agents work, so the New task form offers its switch. */
 export function anyAgentsAllowed(repos: Repo[]): boolean {
-  return repos.some((r) => !isPersonal(r) && r.agentsAllowed === true);
+  return repos.some(repoAgents);
 }
 
 export interface RunLine {
@@ -118,6 +123,7 @@ export function runEnded(before: RunState | undefined, after: RunState | undefin
 export function noAgentReason(list: Repo | undefined): string {
   if (!list) return "";
   if (isPersonal(list)) return "Personal to-dos have no agent.";
+  if (!repoCan(list, "ask")) return `${list.tracker || "This list's tracker"} has no agents.`;
   if (!list.agentsAllowed) return "Agents are off for this list. They switch on at its machine.";
   return "";
 }

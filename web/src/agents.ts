@@ -5,7 +5,7 @@
 
 import { ApiError, errorText } from "./api.ts";
 import { esc } from "./html.ts";
-import { HUB_BRIDGE, repoLabel } from "./model.ts";
+import { HUB_BRIDGE, repoCan, repoLabel } from "./model.ts";
 import type { Bridge, Repo } from "./types.ts";
 
 /** Where release binaries download from; the names match .github/workflows/release.yml. */
@@ -65,14 +65,17 @@ export function agentsOnHTML(bridge: string, repo: string, id: string): string {
  */
 export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync-"): string {
   const list = repos.filter((r) => r.bridge === bridge).sort((a, b) => a.name.localeCompare(b.name));
-  if (!list.length) return '<p class="muted small m-repos">No beads repos found on this machine yet.</p>';
+  if (!list.length) return '<p class="muted small m-repos">No repos found on this machine yet.</p>';
   return `<ul class="m-repos" aria-label="Repos on ${esc(bridge)}">${list
     .map((r) => {
       const control = `<button class="switch" role="switch" id="${esc(`${idPrefix}${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
       const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
       const agentsNote = r.agentsPending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
       let agents: string;
-      if (r.agentsAllowed === true) {
+      if (!repoCan(r, "ask")) {
+        // Its tracker runs no agents, so there is no switch to show.
+        agents = "";
+      } else if (r.agentsAllowed === true) {
         const agentsId = `${idPrefix}agents-${bridge}/${r.name}`;
         const off = `<button class="switch" role="switch" id="${esc(agentsId)}" aria-checked="true" aria-label="Agents can work in ${esc(repoLabel(r))} (${esc(r.name)})" data-act="agents-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
         agents = `<div class="m-repo-agents"><div class="m-repo-name"><div class="small">Agents can work here</div>${agentsNote}</div>${off}</div>`;
@@ -80,9 +83,18 @@ export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync
         const how = r.optedIn && !r.agentsPending ? agentsOnHTML(bridge, r.name, `${idPrefix}agents-cmd-${bridge}/${r.name}`) : "";
         agents = `<div class="m-repo-agents m-repo-agents-off"><div class="m-repo-name"><div class="small">Agents are off here</div>${agentsNote}${how}</div></div>`;
       }
-      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</div>${agents}</li>`;
+      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.tracker ? `${r.name} · ${r.tracker}` : r.name)}</div>${note}</div>${control}</div>${agents}</li>`;
     })
     .join("")}</ul>`;
+}
+
+/**
+ * The trackers a machine runs, with their tools' versions, as "beads 0.40.0 ·
+ * ticket". A machine from before trackers names only bd's version.
+ */
+export function trackersText(b: Bridge): string {
+  if (b.trackers?.length) return b.trackers.map((t) => (t.version ? `${t.name} ${t.version}` : t.name)).join(" · ");
+  return b.bdVersion ? `bd ${b.bdVersion}` : "";
 }
 
 /** What the add-machine form shows after the hub refused it, and whether it now asks for the password. */

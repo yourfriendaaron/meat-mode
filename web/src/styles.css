@@ -735,6 +735,10 @@ select.qa-pill {
   border-color: var(--role-done);
   color: var(--role-on-accent);
 }
+/* A list whose tracker cannot mark done or reopen: the check keeps its place. */
+.check-none {
+  visibility: hidden;
+}
 
 .row-body {
   flex: 1;

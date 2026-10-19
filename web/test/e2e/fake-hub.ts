@@ -348,6 +348,20 @@ export class FakeHub {
    * Why the hub refuses an ask on that repo (docs/api.md, Agent runs), or "".
    * A pending switch counts as where it was switched to.
    */
+  /**
+   * Why the action's list cannot apply it (docs/api.md, Trackers), or "". A
+   * list without actions takes every kind; sync, agents, stop and the edits
+   * are never refused this way.
+   */
+  private trackerRefusal(a: NewAction): string {
+    const [bridge, repo] = a.key ? [a.key.slice(0, a.key.indexOf("/")), a.key.slice(a.key.indexOf("/") + 1, a.key.lastIndexOf("/"))] : [a.bridge, a.repo];
+    const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
+    if (!r?.actions) return "";
+    const needs = a.kind === "add" ? [a.payload.parent ? "subtask" : "add", ...(a.payload.ask ? ["ask"] : [])] : ["done", "reopen", "snooze", "dismiss", "note", "ask"].includes(a.kind) ? [a.kind] : [];
+    const missing = needs.find((k) => !r.actions!.includes(k));
+    return missing ? `${r.tracker ?? "this list's tracker"} cannot ${missing}` : "";
+  }
+
   private askRefusal(bridge: string, repo: string): string {
     if (bridge === HUB) return "the personal list has no agents";
     const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
@@ -695,6 +709,8 @@ export class FakeHub {
     this.posted.push(a);
     const dup = this.log.find((s) => s.action.id === a.id);
     if (dup) return this.json(route, 200, dup.action);
+    const cannot = this.trackerRefusal(a);
+    if (cannot) return this.json(route, 400, { error: cannot });
     let bridge = a.bridge ?? "";
     let repo = a.repo ?? "";
     let beadId = "";
