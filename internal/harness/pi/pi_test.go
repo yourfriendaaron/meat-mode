@@ -65,7 +65,7 @@ func TestLaunch(t *testing.T) {
 	}
 }
 
-// Read counts the user messages Pi has taken in: the prompt, then each
+// Read reports each user message Pi takes in, one at a time: the prompt, then each
 // steering note once it is delivered.
 func TestRead(t *testing.T) {
 	d := (&Pi{}).NewDecoder()
@@ -81,7 +81,7 @@ func TestRead(t *testing.T) {
 			}
 		}
 	}
-	if !slices.Equal(got, []int{1, 2}) {
-		t.Fatalf("Read = %v, want [1 2]", got)
+	if !slices.Equal(got, []int{1, 1}) {
+		t.Fatalf("Read = %v, want [1 1]", got)
 	}
 }

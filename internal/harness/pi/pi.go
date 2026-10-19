@@ -162,7 +162,6 @@ type line struct {
 }
 
 type decoder struct {
-	read     int    // user messages Pi has taken in
 	last     string // the last assistant message's text
 	stop     string // its stop reason
 	errText  string // its error text, or the final error of a failed retry
@@ -186,8 +185,7 @@ func (d *decoder) Line(raw []byte) []harness.Event {
 	case "message_end":
 		switch l.Message.Role {
 		case "user":
-			d.read++
-			return []harness.Event{{Read: d.read}}
+			return []harness.Event{{Read: 1}}
 		case "assistant":
 			d.last, d.stop, d.errText, d.retryErr = l.Message.text(), l.Message.StopReason, l.Message.ErrorMessage, ""
 			if c := l.Message.Usage.Cost.Total; c > 0 {
