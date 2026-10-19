@@ -1,7 +1,8 @@
 package bridge
 
 import (
-	"encoding/json"
+	"cmp"
+	"context"
 	"fmt"
 	"path"
 	"regexp"
@@ -10,29 +11,21 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/harness"
+	_ "github.com/yourfriendaaron/meat-mode/internal/harness/all"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
-
-// DefaultAgentCommand is Claude Code headless, speaking stream-json on stdin
-// and stdout. The bridge adds --max-budget-usd and, to continue a task's
-// earlier conversation, --resume.
-const DefaultAgentCommand = "claude -p --input-format stream-json --output-format stream-json --verbose " +
-	"--replay-user-messages --permission-mode auto --permission-prompts none"
-
-// sessionRE is the shape of a session id the bridge will pass to --resume.
-// The id comes from the agent's own stream, so anything that could read as
-// a flag, a separate argument or more than an id is refused.
-var sessionRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
-
-// ValidSessionID reports whether s is a session id the bridge may resume.
-func ValidSessionID(s string) bool { return sessionRE.MatchString(s) }
 
 // AgentConfig is how the bridge runs agents, from the MEAT_MODE_AGENT_*
 // variables.
 type AgentConfig struct {
-	// Command is the agent program and its arguments, split on whitespace
-	// with no shell. It must speak Claude Code's stream-json protocol and
-	// accept --max-budget-usd and --resume.
+	// Harness is the name of the harness that runs agents
+	// (docs/harnesses.md); harness.Default when unset.
+	Harness string
+	// Command, when set, replaces the harness's program and fixed flags,
+	// split on whitespace with no shell. The harness still adds what each
+	// run needs.
 	Command []string
 	// Name is shown for the agent when the task's creator is not one.
 	Name        string
@@ -45,7 +38,7 @@ type AgentConfig struct {
 // DefaultAgentConfig returns the defaults every variable falls back to.
 func DefaultAgentConfig() AgentConfig {
 	return AgentConfig{
-		Command:     strings.Fields(DefaultAgentCommand),
+		Harness:     harness.Default,
 		Name:        "agent",
 		Timeout:     30 * time.Minute,
 		BudgetUSD:   2,
@@ -54,10 +47,16 @@ func DefaultAgentConfig() AgentConfig {
 	}
 }
 
-// AgentConfigFromEnv reads MEAT_MODE_AGENT_COMMAND, _NAME, _TIMEOUT,
-// _BUDGET_USD, _RUNS_PER_TASK and _CONCURRENT over the defaults.
+// AgentConfigFromEnv reads MEAT_MODE_AGENT_HARNESS, _COMMAND, _NAME,
+// _TIMEOUT, _BUDGET_USD, _RUNS_PER_TASK and _CONCURRENT over the defaults.
 func AgentConfigFromEnv(getenv func(string) string) (AgentConfig, error) {
 	c := DefaultAgentConfig()
+	if v := strings.TrimSpace(getenv("MEAT_MODE_AGENT_HARNESS")); v != "" {
+		if _, ok := harness.Lookup(v); !ok {
+			return c, fmt.Errorf("MEAT_MODE_AGENT_HARNESS must be one of %s, not %q", strings.Join(harness.Names(), ", "), v)
+		}
+		c.Harness = v
+	}
 	if v := strings.TrimSpace(getenv("MEAT_MODE_AGENT_COMMAND")); v != "" {
 		c.Command = strings.Fields(v)
 	}
@@ -93,29 +92,58 @@ func AgentConfigFromEnv(getenv func(string) string) (AgentConfig, error) {
 	return c, nil
 }
 
-// args returns the command line for one run, resuming session when it is
-// an id the bridge trusts.
-func (c AgentConfig) args(session string) []string {
-	out := append([]string{}, c.Command[1:]...)
-	out = append(out, "--max-budget-usd", strconv.FormatFloat(c.BudgetUSD, 'f', -1, 64))
-	if ValidSessionID(session) {
-		out = append(out, "--resume", session)
+// NewHarness builds the configured harness and checks what it declares.
+func (c AgentConfig) NewHarness(getenv func(string) string, lookPath func(string) (string, error)) (harness.Harness, error) {
+	name := cmp.Or(c.Harness, harness.Default)
+	f, ok := harness.Lookup(name)
+	if !ok {
+		return nil, fmt.Errorf("no agent harness is called %q; the bridge has %s", name, strings.Join(harness.Names(), ", "))
+	}
+	h, err := f.New(harness.Env{Command: c.Command, Getenv: getenv, LookPath: lookPath})
+	if err != nil {
+		return nil, fmt.Errorf("harness %s: %w", name, err)
+	}
+	if err := harness.Validate(name, h); err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// harnessProgram is the program h runs, Args[0] of a launch.
+func harnessProgram(h harness.Harness) string {
+	l, err := h.Launch(harness.Spec{Prompt: "x"})
+	if err != nil || len(l.Args) == 0 {
+		return ""
+	}
+	return l.Args[0]
+}
+
+// harnessInfo is h as the hello names it: version is its check's, "" when
+// that failed. The budget is 0 for a harness that enforces none.
+func harnessInfo(h harness.Harness, c AgentConfig, version string) *api.HarnessInfo {
+	info := h.Info()
+	out := &api.HarnessInfo{
+		Name: info.Name, Title: info.Title, Version: version, InstructionFile: info.InstructionFile,
+		Budget: info.Budget, TimeoutSeconds: int(c.Timeout / time.Second), Steer: info.Steer,
+	}
+	if info.Budget != harness.BudgetNone {
+		out.BudgetUSD = c.BudgetUSD
 	}
 	return out
 }
 
-// userLine is one stream-json user message.
-func userLine(text string) []byte {
-	b, _ := json.Marshal(map[string]any{
-		"type":    "user",
-		"message": map[string]string{"role": "user", "content": text},
-	})
-	return append(b, '\n')
+// checkHarness runs h's check for a hello outside the running bridge.
+func checkHarness(ctx context.Context, h harness.Harness, c AgentConfig) (*api.HarnessInfo, error) {
+	v, err := h.Check(ctx)
+	if err != nil {
+		v = ""
+	}
+	return harnessInfo(h, c, v), err
 }
 
 // agentEnv is the agent's environment: the bridge's own, without its
-// MEAT_MODE_* settings (the hub token among them) and without the variables
-// of a Claude Code session the bridge may have been started from, plus the
+// MEAT_MODE_* settings (the hub token among them) and without the session
+// markers of every harness the bridge may have been started from, plus the
 // tracker's own, such as BEADS_ACTOR, so the agent's notes carry its name.
 // An inherited variable the tracker sets is dropped.
 func agentEnv(env []string, actor string, ag tracker.Agent) []string {
@@ -125,10 +153,11 @@ func agentEnv(env []string, actor string, ag tracker.Agent) []string {
 		k, _, _ := strings.Cut(kv, "=")
 		set[k] = true
 	}
-	out := make([]string, 0, len(env)+len(extra))
-	for _, kv := range env {
+	stripped := harness.StripEnv(env)
+	out := make([]string, 0, len(stripped)+len(extra))
+	for _, kv := range stripped {
 		k, _, _ := strings.Cut(kv, "=")
-		if strings.HasPrefix(k, "MEAT_MODE_") || k == "CLAUDECODE" || strings.HasPrefix(k, "CLAUDE_CODE_") || set[k] {
+		if set[k] {
 			continue
 		}
 		out = append(out, kv)
@@ -152,33 +181,24 @@ var subcommands = map[string]bool{
 // "Editing notes.txt" or "Running go test". It never shows more of a command
 // than its first word or two, nor any path but a file's base name. ag names
 // the tracker's own commands.
-func describeTool(name string, input json.RawMessage, ag tracker.Agent) string {
-	var in struct {
-		Command  string `json:"command"`
-		FilePath string `json:"file_path"`
-		Path     string `json:"notebook_path"`
-	}
-	_ = json.Unmarshal(input, &in)
-	file := fileName(in.FilePath)
-	if file == "" {
-		file = fileName(in.Path)
-	}
-	switch name {
-	case "Bash":
-		return describeCommand(in.Command, ag)
-	case "Edit", "MultiEdit", "NotebookEdit":
+func describeTool(t harness.Tool, ag tracker.Agent) string {
+	file := fileName(t.File)
+	switch t.Kind {
+	case harness.ToolShell:
+		return describeCommand(t.Command, ag)
+	case harness.ToolEdit:
 		return orWork("Editing ", file, "Editing a file")
-	case "Write":
+	case harness.ToolWrite:
 		return orWork("Writing ", file, "Writing a file")
-	case "Read":
+	case harness.ToolRead:
 		return orWork("Reading ", file, "Reading a file")
-	case "Glob", "Grep", "LS":
+	case harness.ToolSearch:
 		return "Searching the files"
-	case "WebFetch", "WebSearch":
+	case harness.ToolWeb:
 		return "Searching the web"
-	case "Task", "Agent":
+	case harness.ToolAgent:
 		return "Starting a helper"
-	case "TodoWrite":
+	case harness.ToolPlan:
 		return "Planning"
 	}
 	return "Working"

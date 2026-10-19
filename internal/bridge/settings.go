@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/harness"
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
@@ -31,7 +32,8 @@ type Settings struct {
 	// Poll is MEAT_MODE_BRIDGE_POLL, a test-only override of every poll
 	// interval; 0 keeps the defaults.
 	Poll time.Duration
-	// Agent is the agent command and its limits from MEAT_MODE_AGENT_*.
+	// Agent is the agent harness, its command and its limits from
+	// MEAT_MODE_AGENT_*.
 	Agent AgentConfig
 
 	// runErr is a bad MEAT_MODE_BRIDGE_POLL or MEAT_MODE_AGENT_* value. Only
@@ -82,6 +84,11 @@ func (s Settings) Paired() error {
 
 // Hub returns the client for the paired hub. Check Paired first.
 func (s Settings) Hub() *Hub { return s.env.hub(s.Config, s.Allowed) }
+
+// Harness builds the configured agent harness with this machine's PATH.
+func (s Settings) Harness() (harness.Harness, error) {
+	return s.Agent.NewHarness(s.env.getenv(), s.env.lookPath)
+}
 
 // Trackers builds every registered tracker with this machine's tool paths,
 // in the order Detect is tried.

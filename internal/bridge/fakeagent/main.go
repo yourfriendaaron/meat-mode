@@ -22,8 +22,18 @@
 //	crash   exit 1 mid-turn, without a result
 //	hang    never end the turn; it ignores SIGTERM and starts a child that also waits forever
 //
+//	spend   report spending of $5 (with --protocol fake), then wait to be stopped
+//
 // With none of them it reads the bead and ends the turn without changing it.
-// When stdin closes it exits 0.
+// When stdin closes it exits 0. A first message that is not the bridge's
+// prompt, such as held notes on a resume, names its bead as "bead <id>:" or
+// "task <id>:" and is a script itself.
+//
+// With --protocol fake it speaks internal/harness/fake's protocol instead:
+// one harness.Event as JSON per stdout line, the prompt from --prompt or a
+// {"prompt": text} stdin line, notes as {"note": text} lines. Each tool
+// step then also reports $0.01 of spending. `--version` prints a version
+// and exits.
 //
 // Build it with `go build -o <dir> ./internal/bridge/fakeagent`.
 package main
@@ -48,14 +58,29 @@ var (
 	session string
 	toolN   int
 	beadRe  = regexp.MustCompile("bd show ([A-Za-z0-9][A-Za-z0-9._-]*)")
+	noteRe  = regexp.MustCompile("(?:bead|task) ([A-Za-z0-9][A-Za-z0-9._-]*):")
 	bead    string
+	fake    bool // --protocol fake
 )
 
 func main() {
-	resume := ""
-	for i, a := range os.Args[1:] {
-		if a == "--resume" && i+2 < len(os.Args) {
-			resume = os.Args[i+2]
+	resume, prompt := "", ""
+	args := os.Args[1:]
+	for i, a := range args {
+		next := ""
+		if i+1 < len(args) {
+			next = args[i+1]
+		}
+		switch a {
+		case "--version":
+			fmt.Println("1.0.0 (fakeagent)")
+			return
+		case "--resume":
+			resume = next
+		case "--prompt":
+			prompt = next
+		case "--protocol":
+			fake = next == "fake"
 		}
 	}
 	session = resume
@@ -66,12 +91,19 @@ func main() {
 		session = x[:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:]
 	}
 	cwd, _ := os.Getwd()
-	emit(map[string]any{"type": "system", "subtype": "init", "cwd": cwd, "session_id": session,
-		"tools": []string{"Bash", "Edit", "Read"}, "model": "fake", "permissionMode": "auto",
-		"claude_code_version": "fake", "fake_resume": resume})
+	if fake {
+		emit(map[string]any{"session": session, "fakeResume": resume, "fakePrompt": prompt})
+	} else {
+		emit(map[string]any{"type": "system", "subtype": "init", "cwd": cwd, "session_id": session,
+			"tools": []string{"Bash", "Edit", "Read"}, "model": "fake", "permissionMode": "auto",
+			"claude_code_version": "fake", "fake_resume": resume})
+	}
 
 	in := make(chan string)
 	go func() {
+		if prompt != "" {
+			in <- prompt
+		}
 		sc := bufio.NewScanner(os.Stdin)
 		sc.Buffer(make([]byte, 0, 64<<10), 16<<20)
 		for sc.Scan() {
@@ -81,7 +113,11 @@ func main() {
 					Content string `json:"content"`
 				} `json:"message"`
 			}
-			if json.Unmarshal(sc.Bytes(), &m) == nil && m.Type == "user" {
+			var f struct{ Prompt, Note string }
+			switch {
+			case fake && json.Unmarshal(sc.Bytes(), &f) == nil && f.Prompt+f.Note != "":
+				in <- f.Prompt + f.Note
+			case !fake && json.Unmarshal(sc.Bytes(), &m) == nil && m.Type == "user":
 				in <- m.Message.Content
 			}
 		}
@@ -95,8 +131,12 @@ func main() {
 			// The prompt's own words are the bridge's, not the script.
 			if m := beadRe.FindStringSubmatch(text); m != nil {
 				bead = m[1]
+				words = beadWords()
+			} else if m := noteRe.FindStringSubmatch(text); m != nil {
+				bead = m[1]
+			} else {
+				words = beadWords()
 			}
-			words = beadWords()
 			first = false
 		}
 		turn(words, in)
@@ -110,11 +150,15 @@ func turn(words string, in chan string) {
 	step := func(name string, input map[string]any, result string) {
 		toolN++
 		id := fmt.Sprintf("toolu_fake%d", toolN)
-		emit(map[string]any{"type": "assistant", "session_id": session, "message": map[string]any{
-			"type": "message", "role": "assistant",
-			"content": []any{map[string]any{"type": "tool_use", "id": id, "name": name, "input": input}}}})
-		emit(map[string]any{"type": "user", "session_id": session, "message": map[string]any{
-			"role": "user", "content": []any{map[string]any{"tool_use_id": id, "type": "tool_result", "content": result, "is_error": false}}}})
+		if fake {
+			emitTool(name, input)
+		} else {
+			emit(map[string]any{"type": "assistant", "session_id": session, "message": map[string]any{
+				"type": "message", "role": "assistant",
+				"content": []any{map[string]any{"type": "tool_use", "id": id, "name": name, "input": input}}}})
+			emit(map[string]any{"type": "user", "session_id": session, "message": map[string]any{
+				"role": "user", "content": []any{map[string]any{"tool_use_id": id, "type": "tool_result", "content": result, "is_error": false}}}})
+		}
 		// The tool boundary: messages sent meanwhile are read now.
 		for {
 			select {
@@ -129,8 +173,14 @@ func turn(words string, in chan string) {
 			break
 		}
 	}
-	emit(map[string]any{"type": "rate_limit_event", "session_id": session, "rate_limit_info": map[string]any{
-		"status": rateStatus(has("usage")), "resetsAt": time.Now().Add(3 * time.Hour).Unix(), "rateLimitType": "five_hour"}})
+	resets := time.Now().Add(3 * time.Hour).Unix()
+	switch {
+	case !fake:
+		emit(map[string]any{"type": "rate_limit_event", "session_id": session, "rate_limit_info": map[string]any{
+			"status": rateStatus(has("usage")), "resetsAt": resets, "rateLimitType": "five_hour"}})
+	case has("usage"):
+		emit(map[string]any{"limit": map[string]any{"resetsAt": resets}})
+	}
 	step("Bash", map[string]any{"command": "bd show " + bead, "description": "Read the bead"}, bd("show", "--", bead))
 	if has("slow") {
 		pause := 500 * time.Millisecond
@@ -158,6 +208,9 @@ func turn(words string, in chan string) {
 		result(true, "error_during_execution", "Something went wrong")
 	case has("crash"):
 		os.Exit(1)
+	case has("spend"):
+		emit(map[string]any{"costUsd": 5})
+		select {}
 	case has("hang"):
 		signal.Ignore(syscall.SIGTERM)
 		step("Bash", map[string]any{"command": "sleep 600"}, "")
@@ -178,12 +231,20 @@ func turn(words string, in chan string) {
 // replay echoes a received message, as --replay-user-messages does, and
 // returns its words.
 func replay(text string) string {
+	if fake {
+		emit(map[string]any{"read": 1})
+		return strings.ToLower(text)
+	}
 	emit(map[string]any{"type": "user", "session_id": session, "isReplay": true,
 		"message": map[string]any{"role": "user", "content": text}})
 	return strings.ToLower(text)
 }
 
 func result(isErr bool, subtype, text string) {
+	if fake {
+		emit(map[string]any{"end": map[string]any{"error": isErr, "budget": strings.Contains(subtype, "budget"), "text": text}})
+		return
+	}
 	emit(map[string]any{"type": "result", "subtype": subtype, "is_error": isErr, "result": text, "session_id": session,
 		"total_cost_usd": 0.01, "num_turns": toolN, "terminal_reason": "completed", "permission_denials": []any{}})
 }
@@ -195,8 +256,26 @@ func rateStatus(rejected bool) string {
 	return "allowed"
 }
 
+// emitTool reports one tool step in the fake protocol, with its cost.
+func emitTool(name string, input map[string]any) {
+	kinds := map[string]string{"Bash": "shell", "Edit": "edit", "Read": "read"}
+	kind := kinds[name]
+	if kind == "" {
+		kind = "other"
+	}
+	t := map[string]any{"kind": kind}
+	if c, ok := input["command"].(string); ok {
+		t["command"] = c
+	}
+	if f, ok := input["file_path"].(string); ok {
+		t["file"] = f
+	}
+	emit(map[string]any{"session": session, "tool": t})
+	emit(map[string]any{"costUsd": 0.01})
+}
+
 // scriptWords are the words a turn acts on.
-var scriptWords = []string{"reply", "close", "slow", "usage", "budget", "fail", "crash", "hang"}
+var scriptWords = []string{"reply", "close", "slow", "usage", "budget", "fail", "crash", "hang", "spend"}
 
 // beadWords are the bead's newest comment that names a script word, else its
 // title, in lower case.

@@ -68,7 +68,8 @@ type Bridge struct {
 	name       string            // from hello; empty until the hub greeted us
 	available  []tracker.Tracker // the trackers whose check last passed
 	versions   []api.TrackerVersion
-	checked    bool // the trackers were checked since the last hello
+	checked    bool             // the trackers were checked since the last hello
+	harness    *api.HarnessInfo // the agent harness at its last check; nil without a runner
 	repos      map[string]*repoState
 	found      []Repo // the last scan
 	scannedAt  time.Time
@@ -127,10 +128,15 @@ func (b *Bridge) log() *slog.Logger {
 // Name is the bridge's name as the hub knows it, after the first hello.
 func (b *Bridge) Name() string { return b.name }
 
-// CheckTrackers runs every tracker's check and keeps those that passed. It
-// fails only when none did. When the set changes, the next round rescans
-// the roots, so a tracker that came or went finds or drops its repos.
+// CheckTrackers runs every tracker's check and keeps those that passed, and
+// the agent harness's check. It fails only when no tracker passed; a failed
+// harness check leaves agents unavailable. When the tracker set changes, the
+// next round rescans the roots, so a tracker that came or went finds or
+// drops its repos.
 func (b *Bridge) CheckTrackers(ctx context.Context) error {
+	if b.Runner != nil {
+		b.harness = b.Runner.CheckHarness(ctx)
+	}
 	checks := checkTrackers(ctx, b.Trackers)
 	ok, versions, err := passed(checks)
 	if err != nil {
@@ -286,9 +292,10 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	return b.hubErr(b.Runner.Flush(ctx, b.putRuns, full))
 }
 
-// hello is the bridge's greeting: its version and its trackers'.
+// hello is the bridge's greeting: its version, its trackers' and its agent
+// harness.
 func (b *Bridge) hello() api.Hello {
-	return api.Hello{Version: b.Version, BdVersion: beadsVersion(b.versions), Trackers: b.versions}
+	return api.Hello{Version: b.Version, BdVersion: beadsVersion(b.versions), Trackers: b.versions, Harness: b.harness}
 }
 
 // trackerList is versions as one log value, such as "beads 1.3.1".

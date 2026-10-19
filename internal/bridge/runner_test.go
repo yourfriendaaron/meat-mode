@@ -3,7 +3,6 @@ package bridge
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"os"
@@ -16,6 +15,9 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/harness"
+	"github.com/yourfriendaaron/meat-mode/internal/harness/claude"
+	fakeh "github.com/yourfriendaaron/meat-mode/internal/harness/fake"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
@@ -63,6 +65,29 @@ func fakeAgent(t *testing.T) string {
 	return fakeAgentBin.path
 }
 
+// claudeHarness is the Claude Code harness running the fake agent, which
+// speaks its stream-json.
+func claudeHarness(t *testing.T) harness.Harness {
+	t.Helper()
+	h, err := claude.New(harness.Env{Command: []string{fakeAgent(t)}, Getenv: os.Getenv, LookPath: exec.LookPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+// fakeHarness is internal/harness/fake running the fake agent in its
+// protocol, set up by set.
+func fakeHarness(t *testing.T, set func(*harness.Info)) *fakeh.Fake {
+	t.Helper()
+	f := fakeh.New()
+	f.Command = []string{fakeAgent(t), "--protocol", "fake"}
+	if set != nil {
+		set(&f.Inf)
+	}
+	return f
+}
+
 // agentWorld is a world with real bd and the repo garden, synced, holding
 // one bead created by planner.
 func agentWorld(t *testing.T) (w *world, dir, id string) {
@@ -77,18 +102,25 @@ func agentWorld(t *testing.T) (w *world, dir, id string) {
 }
 
 // agentBridge starts a bridge with a runner over the world's state, as a
-// fresh process would, with agents allowed in garden or not.
+// fresh process would, with agents allowed in garden or not, running the
+// fake agent through the Claude Code harness.
 func (w *world) agentBridge(allowed bool, opts ...func(*AgentConfig)) *Bridge {
+	w.t.Helper()
+	return w.agentBridgeWith(allowed, claudeHarness(w.t), opts...)
+}
+
+// agentBridgeWith is agentBridge with the harness h.
+func (w *world) agentBridgeWith(allowed bool, h harness.Harness, opts ...func(*AgentConfig)) *Bridge {
 	w.t.Helper()
 	b := w.start()
 	cfg := DefaultAgentConfig()
-	cfg.Command = []string{fakeAgent(w.t)}
+	cfg.Harness = h.Info().Name
 	cfg.Name = "helper"
 	cfg.Timeout = time.Minute
 	for _, o := range opts {
 		o(&cfg)
 	}
-	r, err := OpenAgentRunner(filepath.Join(w.state, "agents"), cfg, quiet)
+	r, err := OpenAgentRunner(filepath.Join(w.state, "agents"), cfg, h, quiet)
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -297,30 +329,25 @@ func TestAgentFollowUpJoinsLiveRun(t *testing.T) {
 // next run, so a malformed one is ignored, warned of once, and never saved.
 func TestOnLineStoresOnlyAValidSessionID(t *testing.T) {
 	var log bytes.Buffer
-	r := &AgentRunner{Dir: t.TempDir(), Log: slog.New(slog.NewTextHandler(&log, &slog.HandlerOptions{Level: slog.LevelWarn}))}
+	r := &AgentRunner{Harness: fakeh.New(), Dir: t.TempDir(), Log: slog.New(slog.NewTextHandler(&log, &slog.HandlerOptions{Level: slog.LevelWarn}))}
 	r.init()
 	rec := &beadRecord{Repo: "garden", BeadID: "gd-1"}
 	r.records[runKey("garden", "gd-1")] = rec
 	lr := &liveRun{rec: rec, run: &api.Run{}, repo: Repo{Name: "garden"}}
-	line := func(id string) []byte {
-		b, err := json.Marshal(map[string]any{"session_id": id})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
-	}
+	p := &agentProc{}
+	line := func(id string) []harness.Event { return []harness.Event{{Session: id}} }
 	for range 2 {
-		r.onLine(lr, line("--dangerously-skip-permissions"))
+		r.onEvents(lr, p, line("--dangerously-skip-permissions"))
 	}
-	r.onLine(lr, line("two words"))
+	r.onEvents(lr, p, line("two words"))
 	if rec.Session != "" {
 		t.Fatalf("stored a malformed session id %q", rec.Session)
 	}
 	if n := strings.Count(log.String(), "level=WARN"); n != 2 {
 		t.Fatalf("%d warnings for 2 malformed ids, want one each: %s", n, log.String())
 	}
-	r.onLine(lr, line("abc-123"))
-	if rec.Session != "abc-123" {
+	r.onEvents(lr, p, line("abc-123"))
+	if rec.Session != "abc-123" || rec.Harness != "fake" {
 		t.Fatalf("a valid session id was not stored: %q", rec.Session)
 	}
 	b, err := os.ReadFile(filepath.Join(r.Dir, "runs.json"))
