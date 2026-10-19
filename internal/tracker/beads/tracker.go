@@ -57,6 +57,7 @@ func (c *CLI) Info() tracker.Info {
 		Rank:    0,
 		Prune:   []string{".beads"},
 		Actions: slices.Clone(tracker.Capabilities),
+		Raise:   `bd create "Approve the footer text" -l human -d "What is needed, why, and where to find it."`,
 	}
 }
 

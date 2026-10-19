@@ -14,6 +14,7 @@ import (
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/bridge/fakehub"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
 )
 
 // fakeService records installs without touching the system.
@@ -86,7 +87,7 @@ func TestPair(t *testing.T) {
 		t.Errorf("service = %+v", svc)
 	}
 	if hs := hub.Hellos(); len(hs) != 1 || hs[0].BdVersion != "1.3.1" ||
-		!reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "beads", Version: "1.3.1"}}) {
+		!reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "beads", Title: "beads", Version: "1.3.1", Raise: (&beads.CLI{}).Info().Raise}}) {
 		t.Errorf("hellos = %+v", hs)
 	}
 	if !strings.Contains(out.String(), `as bridge "desk"`) {

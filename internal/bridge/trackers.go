@@ -68,7 +68,8 @@ func passed(checks []trackerCheck) ([]tracker.Tracker, []api.TrackerVersion, err
 			continue
 		}
 		ok = append(ok, c.Tracker)
-		versions = append(versions, api.TrackerVersion{Name: c.Tracker.Info().Name, Version: c.Version})
+		info := c.Tracker.Info()
+		versions = append(versions, api.TrackerVersion{Name: info.Name, Title: info.Title, Version: c.Version, Raise: info.Raise})
 	}
 	switch {
 	case len(ok) > 0:

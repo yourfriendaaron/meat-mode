@@ -143,7 +143,11 @@ type Repo struct {
 // TrackerVersion is one tracker a bridge runs and its tool's version.
 type TrackerVersion struct {
 	Name    string `json:"name"`
+	Title   string `json:"title,omitempty"` // the name the app shows, such as "Backlog.md"
 	Version string `json:"version,omitempty"`
+	// Raise is the command an agent runs to raise a task for the person,
+	// for the app's agent instruction text.
+	Raise string `json:"raise,omitempty"`
 }
 
 // Run states. An item with no Run has never had an agent asked (idle).

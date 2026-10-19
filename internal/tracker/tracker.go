@@ -125,6 +125,11 @@ type Info struct {
 	Prune []string
 	// Actions are the capabilities the tracker supports, from Capabilities.
 	Actions []string
+	// Raise is the shell command an agent runs to raise a task for the
+	// person, with the example title "Approve the footer text" and the
+	// description "What is needed, why, and where to find it.". The app
+	// puts it in the instruction text for agents on the machine.
+	Raise string
 }
 
 // Can reports whether the tracker supports a capability.

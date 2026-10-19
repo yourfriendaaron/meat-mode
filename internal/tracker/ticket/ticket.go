@@ -72,6 +72,7 @@ func (*Ticket) Info() tracker.Info {
 			api.KindDone, api.KindReopen, api.KindDismiss, api.KindNote,
 			api.KindAdd, tracker.CapSubtask, api.KindAsk,
 		},
+		Raise: `tk create "Approve the footer text" --tags human -d "What is needed, why, and where to find it."`,
 	}
 }
 

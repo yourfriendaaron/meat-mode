@@ -27,6 +27,7 @@ Why these three, and why not Tasks.md or Task Master yet: [research/0004-tracker
 - `Name`: the registry key, lower case. `Title`: the name the app shows.
 - `Rank`: when two trackers detect the same folder, the lowest rank syncs it and the other is skipped with a log line. beads is 0; others take 10, 20 and so on.
 - `Prune`: folder names the bridge's repo walk never enters, such as the tracker's own store.
+- `Raise`: the shell command an agent runs to raise a task for the person, written with the title "Approve the footer text" and the description "What is needed, why, and where to find it.". The app shows it in the instruction text for agents on each machine that runs the tracker.
 - `Actions`: the capabilities it supports, from `tracker.Capabilities`: `done`, `reopen`, `snooze`, `dismiss`, `note`, `add`, `subtask` (an add under a parent) and `ask`. Every tracker supports `add`. `ask` needs `tracker.Agent` as well, and `tracker.Validate` checks both.
 
 ## Methods
@@ -63,7 +64,7 @@ The bridge reports each repo with its tracker (`docs/api.md`, Bridge API):
 
 The app hides the actions a repo's tracker cannot apply. The hub refuses them with `400` and the message from `tracker.Refusal`, such as "ticket cannot snooze", and the bridge refuses one that still arrives with a failed result carrying the same message, so an old app or a queued action never wedges.
 
-`api.Hello.trackers` lists `{name, version}` for each tracker whose check passed; the hub shows them for each machine in Settings. `bdVersion` stays, filled with beads' version when beads is available, for hubs that predate trackers.
+`api.Hello.trackers` lists `{name, title, version, raise}` for each tracker whose check passed; the hub shows them for each machine in Settings, and the app builds that machine's agent instructions from `raise`. `bdVersion` stays, filled with beads' version when beads is available, for hubs that predate trackers.
 
 ## Settings
 

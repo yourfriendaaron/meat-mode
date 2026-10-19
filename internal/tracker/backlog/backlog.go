@@ -74,6 +74,7 @@ func (b *Tracker) Info() tracker.Info {
 			api.KindDone, api.KindReopen, api.KindDismiss, api.KindNote,
 			api.KindAdd, tracker.CapSubtask, api.KindAsk,
 		},
+		Raise: `backlog task create "Approve the footer text" --labels human --description "What is needed, why, and where to find it."`,
 	}
 }
 

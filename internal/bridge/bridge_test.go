@@ -460,7 +460,7 @@ func TestHubDownThenBack(t *testing.T) {
 	}
 	hs := w.hub.Hellos()
 	if len(hs) != 1 || hs[0].Version != "test" || hs[0].BdVersion != "" ||
-		!reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "fake", Version: "1.0.0"}}) {
+		!reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "fake", Title: "Fake", Version: "1.0.0"}}) {
 		t.Errorf("hellos = %+v", hs)
 	}
 }
@@ -713,7 +713,7 @@ func TestSkipsAFailedTracker(t *testing.T) {
 	b.Trackers = []tracker.Tracker{w.tr, broken.Tracker()}
 	w.tick(b)
 	hs := w.hub.Hellos()
-	if len(hs) != 1 || !reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "fake", Version: "1.0.0"}}) {
+	if len(hs) != 1 || !reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "fake", Title: "Fake", Version: "1.0.0"}}) {
 		t.Errorf("hellos = %+v", hs)
 	}
 	if got := w.hub.Repos(us); len(got) != 1 || got[0].Tracker != "Fake" {
