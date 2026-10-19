@@ -1,0 +1,88 @@
+{
+  "format": "meat-mode-export",
+  "version": 1,
+  "exportedAt": "2026-10-14T10:00:00Z",
+  "settings": { "name": "Alex", "timeZone": "Europe/Lisbon", "reminderLead": 30, "calendarFeed": true },
+  "items": [
+    {
+      "key": "hub/personal/mm-1", "bridge": "hub", "repo": "personal", "id": "mm-1",
+      "title": "Water the plants", "status": "open", "priority": 2, "createdBy": "planner",
+      "dueAt": "2026-10-14T18:00:00Z",
+      "createdAt": "2026-10-01T09:00:00Z", "updatedAt": "2026-10-07T18:05:00Z",
+      "comments": [
+        { "id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a60", "author": "planner", "text": "The ferns need less water.", "createdAt": "2026-10-01T09:00:00Z" }
+      ],
+      "checklist": [
+        { "id": "ch-1", "text": "Ferns", "done": true },
+        { "id": "ch-2", "text": "Tomatoes", "done": false }
+      ],
+      "repeat": { "every": "week", "timeZone": "Europe/Lisbon", "start": "2026-10-07T18:00:00Z" },
+      "remindBefore": 15,
+      "firstSeen": "2026-10-01T09:00:00Z", "seenAt": "2026-10-07T18:01:00Z",
+      "owner": "laptop"
+    },
+    {
+      "key": "hub/personal/mm-2", "bridge": "hub", "repo": "personal", "id": "mm-2",
+      "title": "Buy seeds", "status": "open", "priority": 2, "createdBy": "alex-app",
+      "parent": "mm-1",
+      "createdAt": "2026-10-02T09:00:00Z", "updatedAt": "2026-10-02T09:00:00Z",
+      "comments": [],
+      "firstSeen": "2026-10-02T09:00:00Z"
+    },
+    {
+      "key": "hub/personal/pe-7", "bridge": "hub", "repo": "personal", "id": "pe-7",
+      "title": "Renew the library card", "status": "closed", "closeReason": "Done in Meat Mode", "priority": 1,
+      "createdAt": "2026-01-05T09:00:00Z", "updatedAt": "2026-02-01T09:00:00Z", "closedAt": "2026-02-01T09:00:00Z",
+      "comments": [],
+      "firstSeen": "2026-01-05T09:00:00Z"
+    },
+    {
+      "key": "hub/projects/garden/mm-3", "bridge": "hub", "repo": "projects/garden", "id": "mm-3",
+      "title": "Order compost for the beds", "status": "open", "priority": 2, "createdBy": "planner",
+      "createdAt": "2026-10-03T09:00:00Z", "updatedAt": "2026-10-03T09:00:00Z",
+      "comments": [],
+      "firstSeen": "2026-10-03T09:00:00Z",
+      "owner": "laptop"
+    }
+  ],
+  "actions": [
+    {
+      "id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a71", "seq": 1, "kind": "add", "bridge": "hub", "repo": "personal", "beadId": "mm-1",
+      "payload": { "title": "Water the plants", "due": "2026-10-07T18:00:00Z" },
+      "author": "planner", "status": "applied", "createdAt": "2026-10-01T09:00:00Z", "appliedAt": "2026-10-01T09:00:00Z"
+    },
+    {
+      "id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a72", "seq": 2, "kind": "add", "bridge": "hub", "repo": "personal", "beadId": "mm-2",
+      "payload": { "title": "Buy seeds", "parent": "mm-1" },
+      "author": "alex-app", "status": "applied", "createdAt": "2026-10-02T09:00:00Z", "appliedAt": "2026-10-02T09:00:00Z"
+    },
+    {
+      "id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a73", "seq": 3, "kind": "done", "bridge": "laptop", "repo": "garden", "beadId": "gd-2",
+      "payload": {},
+      "author": "alex-app", "status": "applied", "createdAt": "2026-10-03T08:00:00Z", "appliedAt": "2026-10-03T08:00:05Z"
+    },
+    {
+      "id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a74", "seq": 5, "kind": "add", "bridge": "hub", "repo": "projects/garden", "beadId": "mm-3",
+      "payload": { "title": "Order compost for the beds" },
+      "author": "planner", "status": "applied", "createdAt": "2026-10-03T09:00:00Z", "appliedAt": "2026-10-03T09:00:00Z"
+    },
+    {
+      "id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a75", "seq": 8, "kind": "note", "bridge": "laptop", "repo": "garden", "beadId": "gd-1",
+      "payload": { "text": "Use the rain barrel." },
+      "author": "alex-app", "status": "pending", "createdAt": "2026-10-14T09:00:00Z"
+    },
+    {
+      "id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a76", "seq": 9, "kind": "add", "bridge": "laptop", "repo": "chores", "beadId": "",
+      "payload": { "title": "Fix the gate latch" },
+      "author": "alex-app", "status": "pending", "createdAt": "2026-10-14T09:30:00Z"
+    }
+  ],
+  "reminders": [
+    { "key": "hub/personal/mm-1", "kind": "due", "at": "2026-10-07T18:00:00Z" },
+    { "key": "hub/personal/mm-1", "kind": "early", "at": "2026-10-14T18:00:00Z" }
+  ],
+  "origins": [
+    { "machine": "laptop", "beadId": "pe-7", "itemId": "pe-7" }
+  ],
+  "machines": ["laptop"]
+}
