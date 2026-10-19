@@ -160,6 +160,27 @@ export interface Bridge {
   bdVersion?: string;
   /** The trackers the machine runs, with their tools' versions. */
   trackers?: TrackerVersion[];
+  /** The agent harness the machine runs; absent for an older bridge, which runs Claude Code. */
+  harness?: HarnessInfo;
+}
+
+/** The agent harness a machine runs and its limits on each run (docs/harnesses.md, On the wire). */
+export interface HarnessInfo {
+  /** The registry key, such as "codex": the value of MEAT_MODE_AGENT_HARNESS that picks it. */
+  name: string;
+  /** The name the app shows, such as "Codex". */
+  title?: string;
+  version?: string;
+  /** The file in a repo the harness reads standing instructions from, such as AGENTS.md. */
+  instructionFile?: string;
+  /** How the spending cap is enforced; with none a run stops at its time limit only. */
+  budget?: "native" | "metered" | "none";
+  /** The cap for one run, in US dollars. */
+  budgetUsd?: number;
+  /** The time limit for one run. */
+  timeoutSeconds?: number;
+  /** True when a note reaches a live run at once; otherwise it waits for the agent's turn to end. */
+  steer?: boolean;
 }
 
 /** One tracker a machine runs (docs/trackers.md, On the wire). */

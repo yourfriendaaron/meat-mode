@@ -1,7 +1,8 @@
 // Agents, part three: text for the agents' instruction file, saying how to
 // raise a task for the user and how to add to their personal list.
 
-import { agentMachines, instructionsHTML, pickMachine } from "../../agents.ts";
+import { agentMachines, instructionFile, instructionsHTML, pickMachine } from "../../agents.ts";
+import { esc } from "../../html.ts";
 import { copyText } from "../../clipboard.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
@@ -19,7 +20,11 @@ registerStep({
     const machines = agentMachines(ctx.state?.bridges);
     const machine = pickMachine(machines, chosen);
     const user = ctx.setup?.user || ctx.state?.user || "";
-    return `<p>Agents raise tasks for you only when they know how. Add this to the instruction file your agents read on that machine, such as <code>AGENTS.md</code> or <code>CLAUDE.md</code>.</p>
+    const known = instructionFile(machines.find((b) => b.name === machine));
+    const where = known
+      ? `<code>${esc(known.file)}</code>, the file ${esc(known.harness)} reads on that machine`
+      : "the instruction file your agents read on that machine, such as <code>AGENTS.md</code> or <code>CLAUDE.md</code>";
+    return `<p>Agents raise tasks for you only when they know how. Add this to ${where}.</p>
 <p class="muted small">It holds no address or token: <code>meat-mode add</code> reads them from the machine's bridge.</p>
 ${instructionsHTML(user, machines, machine, "wiz-")}`;
   },

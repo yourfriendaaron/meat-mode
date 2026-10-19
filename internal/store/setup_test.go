@@ -81,7 +81,7 @@ func TestUpgradedHubWithDataIsInUse(t *testing.T) {
 		ALTER TABLE repos DROP COLUMN agents_allowed; DROP TABLE runs;
 		ALTER TABLE sessions DROP COLUMN verified_at;
 		ALTER TABLE repos DROP COLUMN tracker; ALTER TABLE repos DROP COLUMN actions;
-		ALTER TABLE bridges DROP COLUMN trackers; PRAGMA user_version = 3`)
+		ALTER TABLE bridges DROP COLUMN trackers; ALTER TABLE bridges DROP COLUMN harness; PRAGMA user_version = 3`)
 	must(t, err)
 	must(t, s.Close())
 

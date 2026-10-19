@@ -63,7 +63,7 @@ The guard only refuses. A forged header can make a request look more public, nev
 | `POST /api/devices/{id}/confirm` | `{"code": "…"}` | `200` with `{"token": "…"}`, the device token, shown once. Needs no session: the code is the credential. `403` for a wrong, used or expired code. |
 | `PUT /api/devices/self` | `PushSubscription` (`endpoint` and `keys` only) | `204`; replaces the calling device's endpoint and keys and renews it. Device token only. `400` as for `app` registration. |
 | `DELETE /api/devices/self` | | `204`; the calling device revokes itself. Device token only. |
-| `GET /api/bridges` | | `[]Bridge`: `{"name", "createdAt", "lastSeen", "version", "bdVersion", "trackers"?}`, with `trackers` the `{"name", "version"?}` list its last hello sent |
+| `GET /api/bridges` | | `[]Bridge`: `{"name", "createdAt", "lastSeen", "version", "bdVersion", "trackers"?, "harness"?}`, with `trackers` the `{"name", "version"?}` list and `harness` the harness its last hello sent (see Harness) |
 | `POST /api/bridges` | `{"name": "…", "password"?: "…"}` | `201` with `{"name", "token"}`; the token is shown once. `403` with `"reauth": true` unless the password was entered within the last 10 minutes or `password` is right (see Login) |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |
 
@@ -197,6 +197,21 @@ Each repo in `State` carries the task tracker its bridge found it in ([trackers.
 
 The app hides what a repo's tracker cannot apply, and the hub refuses it with `400` and `{"error": "<tracker> cannot <what>"}`, such as `ticket cannot snooze`: an action on an item whose repo does not list its kind, an `add` to a repo without `add`, an `add` with `parent` to one without `subtask`, and an `add` with `ask` to one without `ask`. `sync`, `agents` and `stop` are never refused this way. A Restore is a `reopen`, so a repo without `reopen` offers neither, and the app offers no Undo of a close there.
 
+### Harness
+
+Each bridge in `State` and `GET /api/bridges` carries `harness`, the agent harness its last hello named ([harnesses.md](harnesses.md)), with the limits it keeps on each run:
+
+- `name`: the registry key, such as `codex`, and the value of `MEAT_MODE_AGENT_HARNESS` that picks it on the machine.
+- `title`: the name the app shows, such as `Codex`.
+- `version`: the harness program's version; empty when its check failed.
+- `instructionFile`: the file in a repo the harness reads standing instructions from, such as `AGENTS.md`. The app names it in the instructions for agents.
+- `budget`: how the spending cap is enforced: `native` (the harness stops itself), `metered` (the bridge stops the run when its reported cost passes the cap) or `none` (no cap: a run stops at its time limit only). The hub drops any other value.
+- `budgetUsd`: the cap for one run, in US dollars; absent with `none`.
+- `timeoutSeconds`: the time limit for one run.
+- `steer`: `true` when a note reaches a live run at once; otherwise it waits until the agent finishes its turn.
+
+A bridge without `harness` predates harnesses and runs Claude Code; the app shows it as Claude Code without limits. The hub trims and bounds each field as it does a tracker's, and keeps no harness without a `name`. The harness is picked on the agent machine; the app only shows it.
+
 ### Sub-tasks
 
 An item's `parent` is the id of the item it is a sub-task of, in the same list; a top-level item has none. `parentTitle` is the parent's title as the list's tracker last gave it, so a sub-task whose parent is not in the set (on beads, a parent not labelled `human`) can still name it. The rules are the same on the personal list and on a tracker's list:
@@ -307,7 +322,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 
 | Method and path | Body | Response |
 |---|---|---|
-| `POST /bridge/v1/hello` | `{"version", "bdVersion", "trackers"?}`: `trackers` lists `{"name", "version"?}` for each tracker whose check passed; `bdVersion` is beads' version, empty without beads | `{"bridge": "<name>", "serverTime"}`; updates last-seen and the bridge's `trackers` |
+| `POST /bridge/v1/hello` | `{"version", "bdVersion", "trackers"?, "harness"?}`: `trackers` lists `{"name", "version"?}` for each tracker whose check passed; `bdVersion` is beads' version, empty without beads; `harness` is the agent harness the bridge runs for Ask agent (see Harness) | `{"bridge": "<name>", "serverTime"}`; updates last-seen and the bridge's `trackers` and `harness`. A hello without `harness` clears it |
 | `GET /bridge/v1/settings` | | `{"name", "timeZone"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
 | `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`, `pending` and `agentsPending`): every repo the bridge found, `optedIn` true for those it syncs, `agentsAllowed` true for those whose agents switch is on, `tracker` and `actions` as its tracker declares them (see Trackers) | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. An item's `parent` must be a valid id other than its own. |

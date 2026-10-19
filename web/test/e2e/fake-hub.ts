@@ -2,7 +2,7 @@
 // through page.route. Fixtures are invented and pinned to NOW.
 
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Device, Edit, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Bridge, Device, Edit, HarnessInfo, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -272,13 +272,18 @@ export class FakeHub {
     this.setup.status = "";
   }
 
-  /** What a newly paired bridge does on its first hello: it is seen, and reports the repos it found, all switched off. */
-  hello(name: string, repos: string[]): void {
+  /**
+   * What a newly paired bridge does on its first hello: it is seen, says
+   * which harness it runs (none for an older bridge), and reports the repos
+   * it found, all switched off.
+   */
+  hello(name: string, repos: string[], harness?: HarnessInfo): void {
     const b = this.bridges.find((x) => x.name === name);
     if (!b) throw new Error(`no machine ${name}`);
     b.lastSeen = this.now();
     b.version = "0.1.0";
     b.bdVersion = "1.3.0";
+    b.harness = harness;
     for (const r of repos) this.repos.push({ bridge: name, name: r, personal: false, optedIn: false });
   }
 

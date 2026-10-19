@@ -188,7 +188,7 @@ func TestMigrationElevenKeepsOwners(t *testing.T) {
 	_, err = s.DB().Exec(`DROP TABLE personal_owners;
 		CREATE TABLE personal_owners (item_id TEXT PRIMARY KEY, bridge TEXT NOT NULL);
 		INSERT INTO personal_owners (item_id, bridge) VALUES (?, 'laptop');
-		PRAGMA user_version = 10`, id)
+		ALTER TABLE bridges DROP COLUMN harness; PRAGMA user_version = 10`, id)
 	must(t, err)
 	must(t, s.Close())
 

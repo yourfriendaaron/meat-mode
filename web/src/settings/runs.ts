@@ -1,7 +1,7 @@
 // The Agents section: what agents are working on now, with Stop all, and the
 // rules every run keeps.
 
-import { agentMachines } from "../agents.ts";
+import { agentMachines, HARNESS_PICK, harnessLinesHTML } from "../agents.ts";
 import { newId } from "../api.ts";
 import { esc } from "../html.ts";
 import { ICON } from "../icons.ts";
@@ -20,7 +20,11 @@ registerSection({
           .map((i) => `<li class="run-line" data-run="working"><b>${esc(agentName(i))}</b> · ${esc(i.title)}</li>`)
           .join("")}</ul></div><button class="btn btn-small btn-danger" data-act="stop-all">${ICON.stop}Stop all</button></div>`
       : '<p class="muted">No agent is working now.</p>';
-    return `${now}<p class="muted small">Agents start only from your pink taps, one per task, and each run has a time limit set on its machine.</p>`;
+    const machines = agentMachines(ctx.state?.bridges).filter((b) => b.lastSeen);
+    const harnesses = machines.length
+      ? `<ul class="runs-machines" aria-label="Harness on each machine">${machines.map((b) => `<li><div class="m-name">${esc(b.name)}</div>${harnessLinesHTML(b)}</li>`).join("")}</ul><p class="muted small">${esc(HARNESS_PICK)}</p>`
+      : "";
+    return `${now}<p class="muted small">Agents start only from your pink taps, one per task, and each run keeps the limits its machine sets.</p>${harnesses}`;
   },
   async act(act, _el, ctx) {
     if (act !== "stop-all") return;

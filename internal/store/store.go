@@ -152,7 +152,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 11
+const schemaVersion = 12
 
 var migrations = []string{
 	// 1: initial schema.
@@ -312,6 +312,12 @@ CREATE TABLE hub_owners (
 INSERT INTO hub_owners (repo, item_id, bridge) SELECT 'personal', item_id, bridge FROM personal_owners;
 DROP TABLE personal_owners;
 ALTER TABLE hub_owners RENAME TO personal_owners;
+`,
+	// 12: harnesses. A bridge's harness is the JSON api.HarnessInfo its
+	// last hello sent; '' for a bridge that predates harnesses, which runs
+	// Claude Code.
+	`
+ALTER TABLE bridges ADD COLUMN harness TEXT NOT NULL DEFAULT '';
 `,
 }
 
