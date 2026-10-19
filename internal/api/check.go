@@ -49,6 +49,8 @@ const (
 	AgentNameLimit       = 200
 	ActivityLimit        = 500
 	DetailLimit          = 2000
+	ItemLabelsLimit      = 100
+	LabelLimit           = 200
 )
 
 // MaxRunCount bounds the counts a bridge may report: real ones stay far
@@ -145,7 +147,18 @@ func CheckItems(items []Item) error {
 		it.Title = TruncRunes(it.Title, ItemTitleLimit)
 		it.ParentTitle = TruncRunes(it.ParentTitle, ItemTitleLimit)
 		it.Description = TruncRunes(it.Description, ItemDescriptionLimit)
+		it.CreatedBy = TruncRunes(it.CreatedBy, CommentAuthorLimit)
+		it.CloseReason = TruncRunes(it.CloseReason, DetailLimit)
+		// A tracker's labels may be longer than an app tag (labels.go), so
+		// they are only cut to size, never checked against the tag rules.
+		if len(it.Labels) > ItemLabelsLimit {
+			it.Labels = it.Labels[:ItemLabelsLimit]
+		}
+		for j, l := range it.Labels {
+			it.Labels[j] = TruncRunes(l, LabelLimit)
+		}
 		for j := range it.Comments {
+			it.Comments[j].ID = TruncRunes(it.Comments[j].ID, CommentAuthorLimit)
 			it.Comments[j].Text = TruncRunes(it.Comments[j].Text, CommentLimit)
 			it.Comments[j].Author = TruncRunes(it.Comments[j].Author, CommentAuthorLimit)
 		}

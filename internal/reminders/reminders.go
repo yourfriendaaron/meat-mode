@@ -144,13 +144,13 @@ func fireTime(it api.Item, now time.Time) (time.Time, bool, bool) {
 
 // earlyTime is when the item's early reminder comes, lead before its due
 // time. There is none without a lead, for a closed item, or when it would
-// fall inside a snooze: the user picked the snooze end.
+// fall inside a snooze or on its end: the user picked the snooze end.
 func earlyTime(it api.Item, lead time.Duration) (time.Time, bool) {
 	if lead <= 0 || it.Status == "closed" || it.DueAt == nil {
 		return time.Time{}, false
 	}
 	at := it.DueAt.Add(-lead)
-	if it.DeferUntil != nil && at.Before(*it.DeferUntil) {
+	if it.DeferUntil != nil && !at.After(*it.DeferUntil) {
 		return time.Time{}, false
 	}
 	return at, true

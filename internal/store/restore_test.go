@@ -78,7 +78,12 @@ func TestRestoreLoadsAnExport(t *testing.T) {
 	_, err := s.NewCalendarToken()
 	must(t, err)
 
-	res, err := s.Restore(bytes.NewReader(exportFile(t)))
+	res, err := s.Restore(bytes.NewReader(changeExport(t, func(ex map[string]any) {
+		// A pending action on a list the hub keeps has nothing to apply it
+		// after a restore either, so this one is cancelled like the next.
+		a := exportList(ex, "actions", 4)
+		a["bridge"], a["repo"], a["beadId"] = HubBridge, PersonalRepo, "mm-1"
+	})))
 	must(t, err)
 	want := api.RestoreResult{Items: 4, Actions: 6, Reminders: 2, Cancelled: 2, Machines: []string{"laptop"}, CalendarFeed: true}
 	if fmt.Sprint(res) != fmt.Sprint(want) {
@@ -157,8 +162,9 @@ func TestRestoreLoadsAnExport(t *testing.T) {
 		t.Fatalf("repos %+v", repos)
 	}
 
-	// Actions keep their order and ids; those waiting for a machine are
-	// cancelled, so a machine paired again never replays them.
+	// Actions keep their order and ids; those still pending are cancelled,
+	// on a machine's repo or on a list the hub keeps, so a machine paired
+	// again never replays one and nothing waits forever.
 	acts, err := s.queryActions(`SELECT ` + actionCols + ` FROM actions ORDER BY seq`)
 	must(t, err)
 	var seqs []int64
@@ -298,6 +304,9 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 		"key mismatch":       {item(3, "key", "hub/personal/mm-9"), "does not match"},
 		"priority":           {item(3, "priority", 7), "priority"},
 		"long title":         {item(3, "title", strings.Repeat("a", MaxTitleLen+1)), "longer than"},
+		"long parent title":  {item(3, "parentTitle", strings.Repeat("a", maxTitleLen+2)), "parentTitle is longer"},
+		"long created by":    {item(3, "createdBy", strings.Repeat("a", maxCommentAuthorLen+2)), "createdBy is longer"},
+		"long close reason":  {item(3, "closeReason", strings.Repeat("a", api.DetailLimit+2)), "closeReason is longer"},
 		"repeat without due": {item(0, "dueAt", nil), "repeat needs a due date"},
 		"bad repeat":         {item(0, "repeat", map[string]any{"every": "fortnight", "timeZone": "Europe/Lisbon"}), "repeat.every"},
 		"own parent":         {item(1, "parent", "mm-2"), "parent"},
@@ -309,10 +318,14 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 		"item listed twice": {func(ex map[string]any) {
 			ex["items"] = append(ex["items"].([]any), exportList(ex, "items", 3))
 		}, "listed twice"},
-		"action id":             {func(ex map[string]any) { exportList(ex, "actions", 5)["id"] = "act-1" }, "UUID"},
-		"action listed twice":   {func(ex map[string]any) { exportList(ex, "actions", 5)["id"] = exportList(ex, "actions", 0)["id"] }, "listed twice"},
-		"action out of order":   {func(ex map[string]any) { exportList(ex, "actions", 5)["seq"] = 4 }, "out of order"},
-		"action status":         {func(ex map[string]any) { exportList(ex, "actions", 5)["status"] = "lost" }, "unknown status"},
+		"action id":           {func(ex map[string]any) { exportList(ex, "actions", 5)["id"] = "act-1" }, "UUID"},
+		"action listed twice": {func(ex map[string]any) { exportList(ex, "actions", 5)["id"] = exportList(ex, "actions", 0)["id"] }, "listed twice"},
+		"action out of order": {func(ex map[string]any) { exportList(ex, "actions", 5)["seq"] = 4 }, "out of order"},
+		"action status":       {func(ex map[string]any) { exportList(ex, "actions", 5)["status"] = "lost" }, "unknown status"},
+		"action author long": {func(ex map[string]any) {
+			exportList(ex, "actions", 5)["author"] = strings.Repeat("a", maxCommentAuthorLen+2)
+		}, "author longer than"},
+		"action author control": {func(ex map[string]any) { exportList(ex, "actions", 5)["author"] = "alex\n" }, "control character"},
 		"reminder key":          {func(ex map[string]any) { exportList(ex, "reminders", 1)["key"] = "hub/personal/mm-9" }, "not an item in the file"},
 		"reminder kind":         {func(ex map[string]any) { exportList(ex, "reminders", 1)["kind"] = "late" }, "unknown kind"},
 		"origin":                {func(ex map[string]any) { exportList(ex, "origins", 0)["machine"] = "Laptop" }, "origin"},
@@ -321,6 +334,7 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 		"reminder lead":         {func(ex map[string]any) { ex["settings"].(map[string]any)["reminderLead"] = api.MaxLeadMinutes + 1 }, "lead time"},
 		"name":                  {func(ex map[string]any) { ex["settings"].(map[string]any)["name"] = "Alex\nSam" }, "control characters"},
 		"unknown top-level key": {func(ex map[string]any) { ex["devices"] = []any{} }, "unknown field"},
+		"no created time":       {item(3, "createdAt", nil), "has no time"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -343,6 +357,52 @@ func manyChecks(n int) []any {
 		out[i] = map[string]any{"id": fmt.Sprintf("ch-%d", i), "text": "Ferns"}
 	}
 	return out
+}
+
+// Text the hub truncated, from a bridge or an agent, is its limit and an
+// ellipsis long, and a hub's own export of it restores.
+func TestRestoreKeepsTruncatedText(t *testing.T) {
+	s, _ := open(t)
+	desc := strings.Repeat("a", maxDescriptionLen) + "…"
+	by := strings.Repeat("b", maxCommentAuthorLen) + "…"
+	file := changeExport(t, func(ex map[string]any) {
+		it := exportList(ex, "items", 3)
+		it["description"], it["createdBy"] = desc, by
+		exportList(ex, "actions", 5)["author"] = by
+	})
+	_, err := s.Restore(bytes.NewReader(file))
+	must(t, err)
+	for _, it := range mustState(t, s).Items {
+		if it.Description == desc && it.CreatedBy == by {
+			return
+		}
+	}
+	t.Fatal("no restored item kept the truncated description and createdBy")
+}
+
+// A file with anything but white space after its one JSON value is not an
+// export: the format read at the top of readExport runs over the whole
+// buffer, and json.Unmarshal refuses any trailing data, so the export is
+// never read at all.
+func TestRestoreRefusesTrailingData(t *testing.T) {
+	for name, extra := range map[string]string{
+		"an object": " {}",
+		"a number":  " 1",
+		"words":     " trailing",
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, _ := open(t)
+			before := snapshot(t, s)
+			file := changeExport(t, func(ex map[string]any) { ex["version"] = api.ExportVersion })
+			_, err := s.Restore(bytes.NewReader(append(file, extra...)))
+			if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "not a Meat Mode export") {
+				t.Fatalf("got %v, want an invalid error refusing the trailing data", err)
+			}
+			if snapshot(t, s) != before {
+				t.Fatal("the refused restore changed the hub")
+			}
+		})
+	}
 }
 
 // An export with nothing in it restores the settings alone, and an empty

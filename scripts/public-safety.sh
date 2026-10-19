@@ -69,7 +69,7 @@ scan "Email addresses outside example and noreply domains:" \
   '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com|anthropic\.com)'
 
 # Files that must never be tracked, whatever they contain.
-bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|\.envrc|mise\.local\.toml|compose(\.override)?\.ya?ml|docker-compose[^/]*\.ya?ml|\.public-safety\.local|id_rsa|id_ecdsa|id_ed25519|\.netrc|\.npmrc|\.htpasswd|credentials\.json|\.beads-credential-key)$|(^|/)\.dolt/|(^|/)(keystore\.properties|local\.properties)$|\.(db|sqlite3?|pem|key|p12|pfx|jks|keystore)$|\.(db|sqlite3?)-(wal|shm|journal)$' | grep -v -E '(^|/)\.env\.example$' || true)
+bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|\.envrc|mise\.local\.toml|compose[^/]*\.ya?ml|docker-compose[^/]*\.ya?ml|\.public-safety\.local|id_rsa|id_ecdsa|id_ed25519|\.netrc|\.npmrc|\.htpasswd|credentials\.json|\.beads-credential-key)$|(^|/)\.dolt/|(^|/)(keystore\.properties|local\.properties)$|\.(db|sqlite3?|pem|key|p12|pfx|jks|keystore)$|\.(db|sqlite3?)-(wal|shm|journal)$' | grep -v -E '(^|/)(\.env\.example|compose\.example\.yaml)$' || true)
 report "Files that must never be tracked:" "$bad_files"
 
 # The beads issues stay private: only bd's four setup files are tracked, and

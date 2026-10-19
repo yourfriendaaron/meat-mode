@@ -413,3 +413,22 @@ func TestAddPersonalRetryRestoresALostNote(t *testing.T) {
 		t.Fatalf("retry of a deleted item = %q, %v", k, err)
 	}
 }
+
+// An error reading the action log stops an add with a parent; it must not
+// skip the check that the parent is this machine's own. The broken row
+// makes every read of it fail, the add's own lookup of the id included.
+func TestAddPersonalStopsOnAnActionReadError(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	_, err = s.db.Exec(`INSERT INTO actions (id, kind, bridge, repo, payload, author, status, created_at)
+		VALUES (?, 'note', 'laptop', 'garden', 'not json', 'alex-app', 'applied', '2026-03-01T09:00:00Z')`, id1)
+	must(t, err)
+	_, _, err = s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Water the plants", Parent: "mm-1"}, "laptop", "")
+	if err == nil || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid) {
+		t.Fatalf("add over an unreadable action row: %v", err)
+	}
+	if st := mustState(t, s); len(st.Items) != 0 {
+		t.Fatalf("items after the refused add: %+v", st.Items)
+	}
+}

@@ -33,7 +33,8 @@ function plainText(tokens: Token[] | null): string {
  * Drops each link whose address is not http, https or mailto, keeping its
  * text, and turns each image into a link named by its alt text: the page
  * loads no image from elsewhere, and a remote one would tell its host when
- * the item was opened.
+ * the item was opened. An image inside a link that was kept adds its text
+ * alone: a link cannot hold a link.
  */
 function guardLinks(state: StateCore) {
   for (const block of state.tokens) {
@@ -51,7 +52,7 @@ function guardLinks(state: StateCore) {
         const src = String(t.attrGet("src") ?? "");
         const text = new state.Token("text", "", 0);
         text.content = plainText(t.children) || src;
-        if (!safeHref(src)) {
+        if (!safeHref(src) || dropped.at(-1) === false) {
           out.push(text);
           continue;
         }

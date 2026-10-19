@@ -496,13 +496,13 @@ function statusLine(item: Item): string {
 function runLineHTML(item: Item, full: boolean): string {
   if (!item.run) return "";
   const line = runLine(item.run, full);
-  return `<span class="run-line" data-run="${line.state}"><b>${esc(line.lead)}</b>${line.text ? ` · ${esc(line.text)}` : ""}</span>`;
+  return `<span class="run-line" data-run="${esc(line.state)}"><b>${esc(line.lead)}</b>${line.text ? ` · ${esc(line.text)}` : ""}</span>`;
 }
 
 /** The surface attributes of an element that shows a run's state: data-run, and the flash while a run has just ended. */
 function runAttrs(item: Item): string {
   if (!item.run) return "";
-  return ` data-run="${item.run.state}"${arrived.has(item.key) ? " data-arrive" : ""}`;
+  return ` data-run="${esc(item.run.state)}"${arrived.has(item.key) ? " data-arrive" : ""}`;
 }
 
 /** Items whose run just ended, so their surfaces flash once. */
@@ -2157,7 +2157,7 @@ function updateQuickAdd() {
 async function submitQuickAdd() {
   const input = $<HTMLInputElement>("#qa-input");
   updateQuickAdd();
-  const add = addAction(input.value, now(), repos(), {
+  const add = addAction(input.value, now(), addable(), {
     id: newId(),
     list: $<HTMLSelectElement>("#qa-list").value,
     viewing: viewingList(),

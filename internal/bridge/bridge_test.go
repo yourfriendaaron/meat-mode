@@ -444,6 +444,28 @@ func TestOneRepoFailingDoesNotStopOthers(t *testing.T) {
 	}
 }
 
+// A repo whose tasks the hub cannot take, by id or because it refuses the
+// set, does not stop the repos after it from syncing.
+func TestRefusedRepoDoesNotStopOthers(t *testing.T) {
+	w := newWorld(t, false)
+	long := w.repo("a-long", true)
+	refused := w.repo("b-refused", true)
+	good := w.repo("garden", true)
+	w.seed(long, "Weed the beds")
+	w.fake.Put(long, tracker.Issue{ID: strings.Repeat("x", 129), Title: "Too long an id", Status: "open",
+		Labels: []string{tracker.HumanLabel}})
+	w.fake.Put(refused, tracker.Issue{ID: "rf-1", Title: "Bad parent", Status: "open", Parent: "-x",
+		Labels: []string{tracker.HumanLabel}})
+	w.seed(good, "Water the plants")
+	w.tick(w.start())
+	if items, _ := w.hub.Items(us, "a-long"); len(items) != 1 || items[0].Title != "Weed the beds" {
+		t.Errorf("a-long items = %+v", items)
+	}
+	if items, _ := w.hub.Items(us, "garden"); len(items) != 1 {
+		t.Errorf("garden items = %+v", items)
+	}
+}
+
 func TestHubDownThenBack(t *testing.T) {
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)

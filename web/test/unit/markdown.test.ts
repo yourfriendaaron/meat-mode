@@ -130,6 +130,12 @@ test("an image is a link named by its alt text, or by its address with none", ()
   );
   assert.match(renderMarkdown("![](https://example.com/fern.png)"), />https:\/\/example.com\/fern.png<\/a>/);
   assert.equal(renderMarkdown("![Fern](data:image/png;base64,AAAA)"), "<p>Fern</p>\n");
+  // An image inside a link that was kept shows as that link's text alone:
+  // a link cannot hold a link.
+  assert.equal(
+    renderMarkdown("[![The fern](https://example.com/fern.png)](https://example.com/plants)"),
+    '<p><a href="https://example.com/plants" target="_blank" rel="noopener noreferrer">The fern</a></p>\n',
+  );
 });
 
 test("a heading is one size with no id", () => {

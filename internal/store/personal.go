@@ -478,6 +478,8 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 			if _, err := s.ownedPersonal(bridge, repo, t.Parent); err != nil {
 				return "", false, err
 			}
+		} else if err != nil {
+			return "", false, err
 		}
 	}
 	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: repo,

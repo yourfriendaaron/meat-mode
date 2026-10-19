@@ -155,3 +155,35 @@ func TestCreateDashTitle(t *testing.T) {
 		t.Errorf("file:\n%s", data)
 	}
 }
+
+// TestExecHidesBridgeEnvironment keeps the bridge's own MEAT_MODE_*
+// settings, the hub token above all, out of the tk child.
+func TestExecHidesBridgeEnvironment(t *testing.T) {
+	t.Setenv("MEAT_MODE_BRIDGE_TOKEN", "example-secret")
+	t.Setenv("MEAT_MODE_HUB_URL", "https://hub.example.com")
+	t.Setenv("TICKETS_DIR", "/elsewhere")
+	dir := t.TempDir()
+	seen := filepath.Join(dir, "env")
+	bin := filepath.Join(dir, "tk")
+	script := "#!/bin/sh\nenv > '" + seen + "'\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	tr := &Ticket{bin: bin, look: exec.LookPath}
+	if _, err := tr.exec(context.Background(), repo, "ls"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(seen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Contains(got, "MEAT_MODE_") || strings.Contains(got, "example-secret") {
+		t.Errorf("tk saw a MEAT_MODE_ variable:\n%s", got)
+	}
+	if !strings.Contains(got, "PATH=") || !strings.Contains(got, "TICKETS_DIR="+filepath.Join(repo, storeDir)+"\n") ||
+		strings.Contains(got, "/elsewhere") {
+		t.Errorf("tk got the wrong environment:\n%s", got)
+	}
+}
