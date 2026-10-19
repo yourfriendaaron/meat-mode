@@ -106,19 +106,6 @@ func capabilityOf(kind string, p api.Payload) string {
 	return ""
 }
 
-// capabilityWords say what a tracker without the capability cannot do, as
-// "<tracker> cannot <words>".
-var capabilityWords = map[string]string{
-	api.KindDone:       "mark tasks done",
-	api.KindReopen:     "reopen tasks",
-	api.KindSnooze:     "snooze",
-	api.KindDismiss:    "dismiss tasks",
-	api.KindNote:       "take notes",
-	api.KindAdd:        "add tasks",
-	tracker.CapSubtask: "add sub-tasks",
-	api.KindAsk:        "start agents",
-}
-
 // repoTracker reads a repo's tracker name and actions; nil actions means
 // every kind. A repo the store does not hold allows every kind, so the
 // caller's own not-found check speaks first.
@@ -150,11 +137,7 @@ func checkCapability(tx *sql.Tx, bridge, repo, capability string) error {
 	if name == "" {
 		name = "this list's tracker"
 	}
-	words := capabilityWords[capability]
-	if words == "" {
-		words = capability
-	}
-	return invalidf("%s cannot %s", name, words)
+	return invalidf("%s", tracker.Refusal(name, capability))
 }
 
 // Allows reports whether the repo of the item with key can apply kind, for

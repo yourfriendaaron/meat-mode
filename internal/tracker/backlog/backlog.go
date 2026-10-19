@@ -40,7 +40,13 @@ const rootConfig = "backlog.config.yml"
 
 func init() {
 	tracker.Register(tracker.Factory{Name: Name, New: func(env tracker.Env) (tracker.Tracker, error) {
-		return &Tracker{Bin: env.Bin}, nil
+		bin := env.Bin
+		if bin == "" && env.LookPath != nil {
+			// Resolved through the bridge's LookPath, so the service PATH
+			// gets its folder; a missing one fails Check.
+			bin, _ = env.LookPath("backlog")
+		}
+		return &Tracker{Bin: bin}, nil
 	}})
 }
 

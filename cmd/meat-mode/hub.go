@@ -55,6 +55,7 @@ func runHub(args []string) error {
 				s.Every = d
 			}
 			s.KeyOf = st.ReminderKey
+			s.Allows = st.Allows
 			s.Lead = stateItems{st}
 			s.ClosedInApp = st.ClosedInApp
 			// A run's end pushes as soon as the bridge reports it.

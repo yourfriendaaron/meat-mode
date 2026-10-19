@@ -92,9 +92,9 @@ func beadsVersion(versions []api.TrackerVersion) string {
 }
 
 // cannot is the failed result for an action the repo's tracker does not
-// support: "<title> cannot <capability>", as the hub refuses it.
+// support, worded as the hub refuses it.
 func cannot(t tracker.Tracker, capability string) api.ActionResult {
-	return api.ActionResult{Error: t.Info().Title + " cannot " + capability}
+	return api.ActionResult{Error: tracker.Refusal(t.Info().Title, capability)}
 }
 
 // agentOf is the tracker's agent words, or nil for a tracker that runs no

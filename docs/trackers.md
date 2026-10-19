@@ -61,7 +61,7 @@ The bridge reports each repo with its tracker (`docs/api.md`, Bridge API):
 - `api.Repo.tracker`: the tracker's `Title`.
 - `api.Repo.actions`: its `Actions`. Absent means every kind, which is what an older bridge and the hub's own lists send.
 
-The app hides the actions a repo's tracker cannot apply. The hub refuses them with `400` and the message `<tracker> cannot <kind>`, and the bridge refuses one that still arrives with a failed result carrying the same message, so an old app or a queued action never wedges.
+The app hides the actions a repo's tracker cannot apply. The hub refuses them with `400` and the message from `tracker.Refusal`, such as "ticket cannot snooze", and the bridge refuses one that still arrives with a failed result carrying the same message, so an old app or a queued action never wedges.
 
 `api.Hello.trackers` lists `{name, version}` for each tracker whose check passed; the hub shows them for each machine in Settings. `bdVersion` stays, filled with beads' version when beads is available, for hubs that predate trackers.
 

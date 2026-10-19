@@ -674,10 +674,10 @@ func TestRefusesWhatTheTrackerCannotDo(t *testing.T) {
 	w.tick(b)
 	until := time.Date(2030, 3, 1, 9, 0, 0, 0, time.UTC)
 	refused := map[string]api.Action{
-		"Plain cannot snooze":  action("x-snooze", api.KindSnooze, "garden", water, api.Payload{Until: &until}),
-		"Plain cannot note":    action("x-note", api.KindNote, "garden", water, api.Payload{Text: "Bought soil"}),
-		"Plain cannot ask":     action("x-ask", api.KindAsk, "garden", water, api.Payload{}),
-		"Plain cannot subtask": action("x-sub", api.KindAdd, "garden", "", api.Payload{Title: "Fill the can", Parent: water}),
+		"Plain cannot snooze":        action("x-snooze", api.KindSnooze, "garden", water, api.Payload{Until: &until}),
+		"Plain cannot take notes":    action("x-note", api.KindNote, "garden", water, api.Payload{Text: "Bought soil"}),
+		"Plain cannot start agents":  action("x-ask", api.KindAsk, "garden", water, api.Payload{}),
+		"Plain cannot add sub-tasks": action("x-sub", api.KindAdd, "garden", "", api.Payload{Title: "Fill the can", Parent: water}),
 	}
 	for _, a := range refused {
 		w.hub.Enqueue(us, a)
@@ -687,7 +687,7 @@ func TestRefusesWhatTheTrackerCannotDo(t *testing.T) {
 	done := action("x-done", api.KindDone, "garden", water, api.Payload{})
 	w.hub.Enqueue(us, done)
 	w.tick(b)
-	refused["Plain cannot ask"+" (add)"] = addAsk
+	refused["Plain cannot start agents"+" (add)"] = addAsk
 	for msg, a := range refused {
 		msg = strings.TrimSuffix(msg, " (add)")
 		if rs := w.hub.Results(a.ID); len(rs) != 1 || rs[0].OK || rs[0].Error != msg {

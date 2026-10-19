@@ -43,6 +43,11 @@ func init() {
 		if look == nil {
 			look = exec.LookPath
 		}
+		// Resolve it now, so the bridge's LookPath puts its folder on the
+		// service PATH; a missing one fails Check later.
+		if path, err := look(bin); err == nil {
+			bin = path
+		}
 		return &Ticket{bin: bin, look: look}, nil
 	}})
 }

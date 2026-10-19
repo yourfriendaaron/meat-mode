@@ -3,5 +3,7 @@
 package all
 
 import (
+	_ "github.com/yourfriendaaron/meat-mode/internal/tracker/backlog"
 	_ "github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
+	_ "github.com/yourfriendaaron/meat-mode/internal/tracker/ticket"
 )
