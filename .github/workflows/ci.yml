@@ -101,8 +101,15 @@ jobs:
           path: web/test-results
           retention-days: 7
 
+  # The suite runs twice, against the binary and against the image, side by side.
+  # The image leg loads the image the image job built and smoke-tested.
   e2e:
+    needs: image
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [binary, image]
     env:
       BD_VERSION: "1.3.1"
       BD_SHA256: 3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c # beads_1.3.1_linux_amd64.tar.gz
@@ -139,16 +146,21 @@ jobs:
       - run: pnpm --dir e2e exec playwright install --with-deps chromium
       # The proxy tests run Caddy in front of the hub; pull it before the clock starts.
       - run: docker pull caddy:2.10.2-alpine
-      - name: End-to-end against the binary
-        run: pnpm --dir e2e test
-      - name: End-to-end against the image
+      - uses: actions/download-artifact@v4
+        if: matrix.target == 'image'
+        with:
+          name: image
+      - name: Load the image
+        if: matrix.target == 'image'
         run: |
-          docker build -t meat-mode:e2e .
-          E2E_IMAGE=meat-mode:e2e pnpm --dir e2e test
+          gunzip -c image.tar.gz | docker load
+          echo "E2E_IMAGE=meat-mode:ci" >> "$GITHUB_ENV"
+      - name: End-to-end against the ${{ matrix.target }}
+        run: pnpm --dir e2e test
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: e2e-results
+          name: e2e-results-${{ matrix.target }}
           path: e2e/test-results
           retention-days: 7
 
@@ -167,3 +179,10 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/assets/missing.js)
           test "$code" = 404
           docker logs mm
+      - name: Save the image for the e2e job
+        run: docker save meat-mode:ci | gzip > image.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image
+          path: image.tar.gz
+          retention-days: 1
