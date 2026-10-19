@@ -9,6 +9,7 @@ export const ORDER = {
   welcome: 0,
   connection: 10,
   secure: 20,
+  restore: 25,
   profile: 30,
   login: 40,
   install: 50,

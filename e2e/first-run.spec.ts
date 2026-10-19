@@ -126,6 +126,11 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
     if ((await heading.textContent()) === "Secure the hub") await go("Secure the hub");
   });
 
+  await test.step("restore is offered on the fresh hub, and skipped", async () => {
+    await expect(heading).toHaveText("Restore from an export");
+    await wiz.getByRole("button", { name: "Skip" }).click();
+  });
+
   await test.step("keep a name and a time zone", async () => {
     await expect(heading).toHaveText("Name and time zone");
     const profile = step("profile");
