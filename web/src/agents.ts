@@ -232,13 +232,15 @@ To put something on ${who}'s personal to-do list instead, not tied to a repo:
 
 --every makes it repeat and needs --due, its first date: day, week, month or year, "3 days", weekday, mon,thu or "2 weeks on mon,thu". Done moves it to its next date; add --from-done to count from the day it is done. --until 2026-11-26 ends the repeat on that date, and the done after its last date closes it.
 
+--parent mm-12 makes the new to-do a sub-task of mm-12, an open to-do this machine added that is not a sub-task itself.
+
 To change a to-do this machine added, by that id:
 
     meat-mode edit mm-12 --due "2026-03-09 18:30"
     meat-mode done mm-12
     meat-mode reopen mm-12
 
-For a to-do in a project, add --project . to each, from inside the repo. edit takes --title, --description, --due or --clear-due, --every (with --from-done) or --no-repeat, --until or --no-until, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
+For a to-do in a project, add --project . to each, from inside the repo. edit takes --title, --description, --due or --clear-due, --every (with --from-done) or --no-repeat, --until or --no-until, --parent ID or --no-parent to move it, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
 
 Keep titles short and say what to do. Put the context in the description or the note.
 `;
