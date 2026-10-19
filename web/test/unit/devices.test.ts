@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { browserName } from "../../src/device.ts";
 import { deviceStatus, kindLabel, revokeEffect } from "../../src/settings/devices.ts";
 import { appStateMessage } from "../../src/push.ts";
-import { SNOOZE_MS, actionBody, isPostedAction } from "../../src/sw-actions.ts";
+import { SNOOZE_MS, actionBody, failureText, isPostedAction } from "../../src/sw-actions.ts";
 import type { Device } from "../../src/types.ts";
 
 test("the browser name is generic: browser and system, no versions", () => {
@@ -50,4 +50,12 @@ test("notification buttons post retry, done and snooze", () => {
   assert.equal(SNOOZE_MS, 3600_000);
   assert.ok(isPostedAction("done") && isPostedAction("snooze") && isPostedAction("retry"));
   assert.ok(!isPostedAction("reply") && !isPostedAction("open") && !isPostedAction(""));
+});
+
+test("a refused button action says the hub's reason in plain words", () => {
+  assert.equal(failureText(409, '{"error":"finish or remove its open sub-task first"}'), "Finish or remove its open sub-task first.");
+  assert.equal(failureText(409, '{"error":"finish or remove its 2 open sub-tasks first"}'), "Finish or remove its 2 open sub-tasks first.");
+  assert.equal(failureText(500, '{"error":"Try again."}'), "Try again.");
+  assert.equal(failureText(502, "<html>bad gateway</html>"), "The hub could not do that.");
+  assert.equal(failureText(0, ""), "Could not reach the hub.");
 });
