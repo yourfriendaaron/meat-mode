@@ -1,5 +1,28 @@
 // Wire types, mirroring internal/api/types.go. Times are RFC 3339 strings.
 
+/** A file attached to an item of a list the hub keeps (docs/api.md, Attachments). */
+export interface Attachment {
+  id: string;
+  name: string;
+  /** The media type the hub sniffed. */
+  type: string;
+  /** Bytes. */
+  size: number;
+  sha256: string;
+  createdAt: string;
+}
+
+/** Caps on attachments, as api.MaxAttachmentBytes and friends. */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENTS_BYTES = 1024 * 1024 * 1024;
+export const MAX_ATTACHMENTS_PER_ITEM = 20;
+
+/** Marks a tracker item for the person; never shown as a tag. */
+export const HUMAN_LABEL = "human";
+/** Caps on tags, as api.MaxTags and api.MaxTagLen. */
+export const MAX_TAGS = 20;
+export const MAX_TAG_LEN = 50;
+
 export interface Comment {
   id: string;
   author: string;
@@ -17,6 +40,7 @@ export interface Item {
   status: string; // open, in_progress, blocked, deferred, closed
   closeReason?: string;
   priority: number;
+  /** Tags; the app never shows HUMAN_LABEL (docs/api.md, Tags). Read-only on a tracker's items. */
   labels?: string[];
   createdBy?: string;
   dueAt?: string | null;
@@ -35,6 +59,8 @@ export interface Item {
   repeat?: Repeat | null;
   /** Minutes before the due time an early reminder comes; unset uses the hub's reminderLead. Personal items only. */
   remindBefore?: number | null;
+  /** Files on the hub, oldest first. Items of the hub's own lists only. */
+  attachments?: Attachment[];
   /** The latest agent run on this item; absent when no agent was ever asked. */
   run?: Run | null;
   pending?: boolean;
@@ -74,6 +100,8 @@ export interface Edit {
   parent?: string;
   /** Ids of the item's sub-tasks to mark done; the hub fills it into a repeating done's `was`. */
   subtasksDone?: string[];
+  /** Replaces the item's tags; [] clears them. */
+  labels?: string[];
 }
 
 export type RepeatUnit = "day" | "week" | "month" | "year";
@@ -211,6 +239,8 @@ export interface Payload {
   ask?: boolean;
   /** add: the id of the item the new one is a sub-task of. */
   parent?: string;
+  /** add: tags, on the hub's own lists only. */
+  labels?: string[];
   /** edit */
   set?: Edit;
   /**

@@ -17,7 +17,7 @@ import (
 
 // HumanLabel is the label or tag that marks a task for the person, in every
 // tracker that has labels.
-const HumanLabel = "human"
+const HumanLabel = api.HumanLabel
 
 // ClosedWindow is how long a closed task stays in the list a tracker
 // returns.

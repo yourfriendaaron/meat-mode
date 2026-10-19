@@ -26,7 +26,21 @@ const CancelledByRestore = "Not sent: the hub was restored from an export."
 // one step each, so a file of any older version reaches api.ExportVersion
 // one step at a time. When ExportVersion goes up, add the step from the
 // version before; TestExportUpgradesReachTheCurrentVersion holds the count.
-var exportUpgrades = []func(json.RawMessage) (json.RawMessage, error){}
+var exportUpgrades = []func(json.RawMessage) (json.RawMessage, error){
+	upgradeExportV1,
+}
+
+// upgradeExportV1 turns version 1 into version 2, which added attachments
+// and the tags of hub list items. A version 1 file has neither, so only its
+// version changes.
+func upgradeExportV1(raw json.RawMessage) (json.RawMessage, error) {
+	var file map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return nil, err
+	}
+	file["version"] = json.RawMessage("2")
+	return json.Marshal(file)
+}
 
 // restoreKnownStatuses are the item statuses a restored item may have.
 var restoreKnownStatuses = []string{"open", "in_progress", "blocked", "deferred", "closed"}

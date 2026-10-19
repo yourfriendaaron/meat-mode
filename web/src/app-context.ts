@@ -21,8 +21,8 @@ export interface AppContext {
   refresh(): Promise<void>;
   /** Posts actions through the app's pipeline, which patches the local copy and toasts a failed post. */
   perform(actions: NewAction[]): Promise<Handle>;
-  /** Shows a short message at the bottom of the screen. */
-  toast(text: string): void;
+  /** Shows a short message at the bottom of the screen, with an Undo button when `undo` is given. */
+  toast(text: string, undo?: () => Promise<void>): void;
   /** Switches the view, as the navigation does. */
   setView(view: string): void;
   /** Opens Settings at the section whose heading has this id, such as "s-push". */

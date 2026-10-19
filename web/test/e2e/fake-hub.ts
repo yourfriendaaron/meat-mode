@@ -30,6 +30,23 @@ function item(repo: string, id: string, title: string, over: Partial<Item> = {})
   };
 }
 
+/** The hub's tag rules (docs/api.md, Tags): the cleaned list, or the error. */
+function cleanLabels(tags: string[]): string[] | string {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of tags) {
+    const t = raw.trim();
+    if (!t) continue;
+    if ([...t].length > 50) return `the tag "${t}" is longer than 50 characters`;
+    if (/[\s,\p{Cc}]/u.test(t)) return `the tag "${t}" has a space, comma or control character; a tag is one word`;
+    const fold = t.toLowerCase();
+    if (fold === "human" || seen.has(fold)) continue;
+    seen.add(fold);
+    out.push(t);
+  }
+  return out.length > 20 ? "an item has at most 20 tags" : out;
+}
+
 export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } {
   return {
     repos: [
@@ -704,6 +721,12 @@ export class FakeHub {
         was.checklist = structuredClone(it.checklist ?? []);
         it.checklist = next;
       }
+      if (set.labels !== undefined) {
+        const clean = cleanLabels(set.labels);
+        if (typeof clean === "string") return bad(clean);
+        was.labels = [...(it.labels ?? [])];
+        it.labels = clean.length ? clean : undefined;
+      }
       if (set.parent !== undefined) {
         was.parent = it.parent ?? "";
         it.parent = set.parent || undefined;
@@ -792,6 +815,13 @@ export class FakeHub {
         if (why) return this.json(route, 400, { error: why });
         if (endsBefore(r, a.payload.due)) return this.json(route, 400, { error: "repeat until is before the due date" });
       }
+      let labels: string[] | undefined;
+      if (a.payload.labels) {
+        if (!onHub) return this.json(route, 400, { error: "only the personal list and projects take tags" });
+        const clean = cleanLabels(a.payload.labels);
+        if (typeof clean === "string") return this.json(route, 400, { error: clean });
+        labels = clean;
+      }
       beadId = onHub ? `mm-${this.seq + 1}` : `pending-${a.id}`;
       this.items.push({
         key: `${bridge}/${repo}/${beadId}`,
@@ -804,6 +834,7 @@ export class FakeHub {
         dueAt: a.payload.due ?? null,
         ...(a.payload.parent ? { parent: a.payload.parent } : {}),
         ...(r ? { repeat: keptRepeat(r, a.payload.due!) } : {}),
+        ...(labels?.length ? { labels } : {}),
         createdAt: this.now(),
         updatedAt: this.now(),
         firstSeen: this.now(),

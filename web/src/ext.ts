@@ -2,11 +2,13 @@
 // steps and the Settings sections kept in their own modules.
 
 import type { AppContext } from "./app-context.ts";
+import { attachmentHandlers } from "./attachments.ts";
 import { findSection } from "./settings/registry.ts";
 import { currentStep, wizardAct } from "./wizard/wizard.ts";
 import "./settings/index.ts";
 
 function owner(el: Element) {
+  if (el.closest("[data-attachments]")) return attachmentHandlers;
   const step = el.closest<HTMLElement>("[data-step]");
   if (step) return currentStep(step.dataset.step);
   const section = el.closest<HTMLElement>("[data-section]");

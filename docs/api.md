@@ -18,7 +18,7 @@ The hub refuses to start without an `https://` `MEAT_MODE_PUBLIC_URL` (plain `ht
 
 - A `Host` other than `localhost`, `127.0.0.1`, `[::1]`, the host of `MEAT_MODE_PUBLIC_URL` or one listed in `MEAT_MODE_ALLOWED_HOSTS` gets `421` (on `/api/` and the app's pages).
 - An `/api/` request (any method) or a non-GET page request whose `Origin` is neither the request's own origin nor that of `MEAT_MODE_PUBLIC_URL` gets `403`, and so does an `/api/` request whose `Sec-Fetch-Site` is `same-site` or `cross-site`. A plain subresource load such as an image carries no `Origin`, so in a browser too old to send `Sec-Fetch-Site` a hostile page can still tie up event stream slots.
-- A non-GET `/api/` request without `Content-Type: application/json` gets `415`, bodiless ones included.
+- A non-GET `/api/` request without `Content-Type: application/json` gets `415`, bodiless ones included. The two routes that take a file, `POST /api/items/{key}/attachments` and `POST /api/restore`, take `application/octet-stream` instead (restore takes either). Both types make a browser ask before a cross-site send, as JSON does; `multipart/form-data` and `text/plain` would not, so neither is taken.
 
 Every response carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy: same-origin` and a `Content-Security-Policy` with `frame-ancestors 'none'`.
 
@@ -177,7 +177,7 @@ Releases: one signed universal APK per tag `vX.Y.Z`, named `meat-mode-android-vX
 | `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
-| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true, "parent"?: "<item id>"}` (`repeat` on the personal list and projects only; `ask` only where agents are allowed; `parent` makes it a sub-task, see Sub-tasks) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs), and the provisional item shows a `working` run at once. |
+| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true, "parent"?: "<item id>", "labels"?: ["…"]}` (`repeat` and `labels` on the personal list and projects only; `ask` only where agents are allowed; `parent` makes it a sub-task, see Sub-tasks) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs), and the provisional item shows a `working` run at once. |
 | `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list or a project. |
 | `ask` | `key` | `{"text"?: "…"}` | wakes an agent on the item (see Agent runs). With `text`, appends it as a note first, as `note` does, in the same action. The item's `run` shows `working` at once; on a live run it counts the note in `queued` instead. |
 | `stop` | `key` | `{}` | ends the item's live run; `run` shows `stopped` with reason `stopped` at once |
@@ -222,7 +222,7 @@ An item's `parent` is the id of the item it is a sub-task of, in the same list; 
 - On the personal list and projects, an `edit` with `parent` moves an item: under another item by the `add` rules, or to the top level with `""`. An item with sub-tasks of its own, open or closed, cannot become a sub-task, and an item cannot be its own parent. An agent's item is moved in its tracker (on beads, `bd update --parent`), and the bridge sends the new `parent`.
 - `done` on a repeating parent reopens the sub-tasks it closed with `done` when the parent moves on to its next date, as it unchecks the checklist. Dismissed sub-tasks stay closed.
 
-`Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?}`. A field left out stays as it is.
+`Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?, "parent"?, "subtasksDone"?, "labels"?}`. A field left out stays as it is.
 
 - `title` follows the `add` rules: trimmed, not empty, up to 1000 characters.
 - `description` is up to 10000 characters; `""` clears it.
@@ -232,9 +232,71 @@ An item's `parent` is the id of the item it is a sub-task of, in the same list; 
 - `repeat` sets the item's `Repeat` (see Repeating to-dos); `"clearRepeat": true` ends it. Sending both is refused, and so is a `repeat` on an item that has no due date and gets none in the same edit.
 - `remindBefore` is the item's own lead time in minutes, `0` to `10080`, where `0` means no early reminder; `"clearRemindBefore": true` goes back to the hub's `reminderLead`. Sending both is refused.
 - `parent` moves the item (see Sub-tasks); `""` makes it top-level.
+- `labels` replaces the item's tags with the list given, by the rules in Tags; `[]` clears them.
 - `subtasksDone` lists ids of the item's own sub-tasks to mark done. The hub puts it in the `was` of a repeating `done`, so that Undo closes the sub-tasks the repeat reopened; ids that are not the item's sub-tasks are refused.
 
-The applied `edit` action carries `was`, an `Edit` with the same fields as `set` holding the values before it (`clearDue: true` for a due date that was not set, `clearRepeat: true` for no repeat, `clearRemindBefore: true` for no lead time of its own; an edit that clears the due date of a repeating item records its `repeat` too). Its Undo is an `edit` with `set` = `was`. The Undo of `note-edit` is a `note-edit` back to the text of the `comment` the applied action carries; the Undo of `note-delete` is `note-restore` with the `comment` the applied action carries.
+The applied `edit` action carries `was`, an `Edit` with the same fields as `set` holding the values before it (`labels: []` for no tags, `clearDue: true` for a due date that was not set, `clearRepeat: true` for no repeat, `clearRemindBefore: true` for no lead time of its own; an edit that clears the due date of a repeating item records its `repeat` too). Its Undo is an `edit` with `set` = `was`. The Undo of `note-edit` is a `note-edit` back to the text of the `comment` the applied action carries; the Undo of `note-delete` is `note-restore` with the `comment` the applied action carries.
+
+### Tags
+
+An item's `labels` are its tags. The app calls them tags and shows them as chips on its row and in its detail, filters the list by one and finds items by them in search. It never shows the label `human`, in any case, on any item.
+
+**On the personal list and projects** the user sets tags in the app, and an agent sets them on the to-dos its machine added (see Agents). An `add` with `labels` or an `edit` with `labels` sets them, by these rules:
+
+- Each tag is trimmed, then 1 to 50 characters (`api.MaxTagLen`) with no whitespace, control character or comma. A tag that breaks a rule is refused with `400` naming it; an empty one after trimming is dropped.
+- Tags compare without case: a repeat of one already in the list is dropped, the first spelling kept. `human` is dropped, since the app never shows it.
+- The list keeps the order given and holds at most 20 tags (`api.MaxTags`).
+
+Quick add reads `@word` as a tag on the personal list and projects, as Todoist does: `#` already names a list. A word is a letter followed by letters, digits and `_ . : / -`, so `@5pm` stays in the title. On a tracker's list, quick add leaves `@word` in the title.
+
+**On a tracker's items** the tags are the labels its tracker gives, read-only:
+
+| Tracker | Where the tags come from | Left out by the bridge |
+|---|---|---|
+| beads | the bead's labels (`bd label`) | nothing; the app hides `human` |
+| Backlog.md | the task's `labels` | `dismissed`, which marks a task closed as not needed |
+| ticket | the ticket's `tags` | nothing; the app hides `human` |
+
+Nothing sends a tag back to a tracker. The `edit` action is refused on an agent's item (see Actions), `labels` included, and an `add` with `labels` to a tracker's repo is refused with `400`: an agent item's labels belong to its agent and its tracker, so ask for a change in a note. A tag on an agent item changes when the bridge sends the item again.
+
+### Descriptions and notes in Markdown
+
+The detail view renders an item's `description` and each comment's `text` as Markdown, on every item: agents write Markdown into beads, and the user may too. The hub stores and sends the text as it was typed; the app renders it. Lists and rows show titles only, as plain text. Editing stays a plain text box.
+
+- The renderer is markdown-it (research: [research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)) with `html: false`, `linkify: false`, `typographer: false` and `breaks: true`, so a single newline stays a line break as in plain text. Any HTML in the text shows as text.
+- CommonMark and GitHub tables and strikethrough render. A task list item (`- [ ]`) renders as its text, with no checkbox.
+- A link renders only for `http:`, `https:` and `mailto:` addresses, opening in a new tab with `rel="noopener noreferrer"`; any other address renders as the link's text alone.
+- An image renders as a link to its address, named by its alt text: the page's `img-src` loads no image from elsewhere, and a remote image would tell its host when the item was opened.
+- Headings render one size, smaller than the detail's own headings, with no `id`.
+- The app's Content-Security-Policy is unchanged; the renderer needs no `eval` and no inline script.
+
+### Attachments
+
+The user can attach files to an item of the personal list or a project, and open and remove them in the app. Agent items take none: beads (bd 1.3.1), Backlog.md and ticket have no attachment to carry a file back to the agent machine, so a file on the hub would never reach the agent. Agents cannot attach files either.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `POST /api/items/{key}/attachments?name=<file name>` | the file's bytes, `Content-Type: application/octet-stream` | `201` and the `Attachment`; `400` for an item not on the hub's own lists or for a bad name, `404` for no such item, `413` past a cap below |
+| `GET /api/attachments/{id}` | | `200` and the file (see Serving), `404` for an unknown or removed one |
+| `DELETE /api/attachments/{id}` | | `204`; the attachment is removed, and can be put back until it is purged |
+| `POST /api/attachments/{id}/restore` | | `200` and the `Attachment`, back in its place; `404` once purged, `409` when putting it back would pass a cap |
+
+`{key}` is the item key, escaped as one path segment. Each route sits behind the login and the guards above, and each change makes the app's live updates refresh, as an action does. Adding or removing an attachment is not an action: the action log does not show it.
+
+`Attachment` is `{"id", "name", "type", "size", "sha256", "createdAt"}`. The item's `attachments` lists those not removed, oldest first, in `GET /api/state` and `GET /bridge/v1/personal/{id}`.
+
+- `id` is 32 lowercase hex characters the hub makes.
+- `name` is the `name` query parameter: control characters are dropped, `/` and `\` become `_`, it is trimmed and cut to 255 bytes on a character boundary, and an empty one becomes `file`. Two attachments may share a name.
+- `type` is the media type the hub sniffs from the first 512 bytes (Go's `http.DetectContentType`, without parameters), never one the client gives.
+- `size` is the byte count and `sha256` the lowercase hex SHA-256 of the bytes, both worked out as the hub writes the file.
+
+**Caps.** A file is at most 25 MiB (`api.MaxAttachmentBytes`); an item holds at most 20 attachments (`api.MaxAttachmentsPerItem`); and all files the hub keeps, removed ones not yet purged included, come to at most 1 GiB (`api.MaxAttachmentsBytes`). Every type is taken: attachments are the user's own files, and Serving below keeps any of them from running in the page. A file past a cap answers `413` with `{"error"}` naming the cap and the sizes in MB to one decimal, such as "Vacation.mov is 31.4 MB; a file can be at most 25 MB." or "The hub's files would come to 1.02 GB; they can be at most 1 GB." The app checks the size before it sends and shows the same words. A reverse proxy in front of the hub must let a 25 MiB body through (see [deploy.md](deploy.md)).
+
+**Serving.** Every file answers with `X-Content-Type-Options: nosniff`, `Cache-Control: private, max-age=86400` and `Content-Security-Policy: default-src 'none'; sandbox` in place of the page's policy. A file whose `type` is `image/png`, `image/jpeg`, `image/gif` or `image/webp` is served as that type with `Content-Disposition: inline`, so the app shows it as a thumbnail and opens it in a tab. Every other file is served as `application/octet-stream` with `Content-Disposition: attachment`, so it downloads under its name and never renders on the hub's origin; SVG, HTML and PDF among them. Both dispositions carry the name as `filename*=UTF-8''<percent-escaped name>`, with an ASCII `filename` fallback.
+
+**Storage.** The hub keeps each file as `attachments/<id>` in its data directory and the metadata in its database, keyed by the item. It writes a file to a temporary name in the same folder, syncs it, renames it into place and syncs the folder, then records it; a crash leaves at most a stray temporary file. Files never sit in the database: most are over 100 KB, where SQLite's own measurements favour files, and a 25 MiB write would hold the hub's only database connection. An upload and a restore may take longer than the hub's usual 60-second read limit; each of those two routes allows 30 minutes to read its body.
+
+**Removing and purging.** `DELETE` marks an attachment removed at once: it leaves the item and stops being served. The app offers Undo, which calls `restore`. A removed attachment is purged, its file deleted and its row dropped, 24 hours after removal. The hub sweeps at start and every 10 minutes: it purges what is due, deletes stray temporary files and any file in `attachments/` with no row, and logs any row whose file is missing. The hub's lists have no way to delete an item (a Delete in the app closes it), so an item's attachments stay while it does. Should an item row ever go, its attachment rows go with it, and the sweep removes their files.
 
 ### Repeating to-dos
 
@@ -323,33 +385,40 @@ The Web Push payload is `{"title", "body", "url", "tag", "channel", "actions"?}`
 
 ### Export and restore
 
-The hub holds the only copy of the personal list, the projects, the action log and the settings kept in the app. An export takes them out as one JSON file; a restore loads that file into a fresh hub. The Go types are `api.Export` and `api.RestoreResult`.
+The hub holds the only copy of the personal list, the projects, their attachments, the action log and the settings kept in the app. An export takes them out as one zip file; a restore loads that file into a fresh hub. The Go types are `api.Export` and `api.RestoreResult`.
 
 | Method and path | Body | Response |
 |---|---|---|
-| `GET /api/export` | | `200`, the export, with `Content-Disposition: attachment; filename="meat-mode-export-<YYYY-MM-DD>.json"` (the date in the hub's time zone, UTC while it has none) |
-| `POST /api/restore` | the export file as it was downloaded | `200` and `{"items", "actions", "reminders", "cancelled", "machines", "calendarFeed"}`; `409` on a hub that already has data; `400` for a file that is not an export, is from a newer hub or fails a check below. Bodies up to 64 MiB. |
+| `GET /api/export` | | `200`, the export, `Content-Type: application/zip`, with `Content-Disposition: attachment; filename="meat-mode-export-<YYYY-MM-DD>.zip"` (the date in the hub's time zone, UTC while it has none) |
+| `POST /api/restore` | the export file as it was downloaded: the zip, or the JSON file of an older hub | `200` and `{"items", "actions", "reminders", "cancelled", "machines", "calendarFeed", "attachments"}`; `409` on a hub that already has data; `400` for a file that is not an export, is from a newer hub or fails a check below. Bodies up to 64 MiB plus `api.MaxAttachmentsBytes`. |
 
-**What an export holds.** `{"format": "meat-mode-export", "version": 1, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
+**The file.** The export is a zip of `export.json` (`api.ExportJSONName`), the JSON below, and one entry `attachments/<id>` (`api.ExportAttachmentDir`) holding the bytes of each attachment it lists, stored without compression. The JSON is the manifest: each attachment's `size` and `sha256` are in its item. The hub writes the zip as it sends it, in constant memory.
+
+Files are not put in the JSON as base64: that grows them by a third, makes the hub hold the whole file in memory to write and read it, and would need the restore cap raised by the same third. Every app of this kind that restores its own attachments (Memos, Vikunja, Joplin, Trilium) exports a zip or tar of metadata plus raw files ([research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)).
+
+**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 2, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
 
 - `settings` is `{"name", "timeZone", "reminderLead", "calendarFeed"}`: the first three as `GET /api/settings` shows them, except that `name` is `""` while none was chosen, and `calendarFeed` whether the calendar feed was on.
-- `items` holds every item of the lists the hub keeps, the personal list and every project, closed ones included however old: the `Item` fields as `GET /api/state` shows them, with `key`, `bridge` (`hub`), `repo` (the list), `firstSeen` and `seenAt`, and no `run`, `pending` or `error`. `owner` names the machine whose agents added the item, `""` (left out) for one added in the app.
+- `items` holds every item of the lists the hub keeps, the personal list and every project, closed ones included however old: the `Item` fields as `GET /api/state` shows them, with `key`, `bridge` (`hub`), `repo` (the list), `firstSeen`, `seenAt`, `labels` and `attachments` (those not removed, each with `size` and `sha256`), and no `run`, `pending` or `error`. `owner` names the machine whose agents added the item, `""` (left out) for one added in the app.
 - `actions` is the whole action log, every machine's included, oldest first, each as `GET /api/actions` shows it.
 - `reminders` lists the reminders already sent for those items: `{"key", "kind", "at"}`, where `kind` is `due` (at the due time or a snooze end, `at` being that moment) or `early` (`at` being the due time it came before).
 - `origins` lists the items moved from a machine's personal repo: `{"machine", "beadId", "itemId"}`.
 - `machines` names the machines paired when the export was made, revoked ones left out.
 
-**What it leaves out.** No secret is exported: no machine token, password hash, login session, setup code, calendar feed address, Web Push subscription or VAPID key. Items from a machine's repos stay out too, whatever its tracker (beads, ticket, Backlog.md): each is a copy of a file on that machine, which stays its source of truth and sends it again once paired. So do the hub's copies of agent runs and its record of the run ends it pushed.
+**What it leaves out.** Removed attachments not yet purged stay out. No secret is exported: no machine token, password hash, login session, setup code, calendar feed address, Web Push subscription or VAPID key. Items from a machine's repos stay out too, whatever its tracker (beads, ticket, Backlog.md): each is a copy of a file on that machine, which stays its source of truth and sends it again once paired. So do the hub's copies of agent runs and its record of the run ends it pushed.
 
 **Versions.** `version` goes up by one whenever what an export holds changes in any way, an added field included, so a hub never restores a file it would read only in part. A hub restores a file of its own version and of every older one, upgrading an older file step by step to its own before loading it. It refuses a file from a newer hub with `400` and says which version the file is and which this hub reads, so the user updates the hub first. A file whose `format` is not `meat-mode-export`, or whose `version` is not a whole number from 1 up, is refused as not an export.
+
+- Version 1 was a bare JSON file with no attachments and no tags on hub list items. Version 2 made the export a zip and added `labels` and `attachments` to its items. Its upgrade step changes only `version`.
+- A restore reads a zip by its first bytes (`PK\x03\x04`) and anything else as bare JSON. A bare JSON of version 2 or later restores only when it lists no attachment; one that lists any is refused, naming how many files it lists, so the user restores the zip it came in.
 
 **Restore.** Restore is offered by the hub part of the setup wizard on a hub whose setup status is `new`, after the password step:
 
 - It refuses with `409` on a hub that already has data: any item, any action, or any machine other than `hub`, revoked ones included. It never merges into or replaces data, so nothing a hub holds is lost to a restore. The settings the wizard has already set do not count as data; the export's replace them.
-- It checks the whole file before it writes anything, and loads it in one transaction, so a file that fails a check changes nothing. Each item must belong to the personal list or a valid project name (see Identity), with a valid id unique in its list, a title, a known status and the limits an edit holds to; each action needs a valid id, unique in the file; each `key` must name an item in the file; and the settings must pass `PUT /api/settings`'s checks.
-- It keeps every item's id, key, times, comments, checklist, repeat and parent; every action's id, order, status and times; and each owner, reminder and origin. An action still `pending` for a machine's repo is loaded as `cancelled`, with `error` "Not sent: the hub was restored from an export.", so a machine paired again never replays an old change; actions on the hub's own lists are already applied.
+- It checks the whole file before it writes anything, and loads it in one transaction, so a file that fails a check changes nothing. It saves an uploaded zip to a temporary file in the data directory, since a zip is read from its end, and deletes that file when done. Attachment files are written before the transaction commits and deleted again if it does not. Each item must belong to the personal list or a valid project name (see Identity), with a valid id unique in its list, a title, a known status and the limits an edit holds to; each action needs a valid id, unique in the file; each `key` must name an item in the file; and the settings must pass `PUT /api/settings`'s checks. Tags must pass the rules in Tags. Each attachment must be on an item of the file, with an id unique in the file, a clean name, and a size within the caps in Attachments; its entry must be in the zip, with that size and SHA-256. A missing entry, a size or hash that does not match, an entry the JSON does not list, or any entry name other than `export.json` and `attachments/<id>` refuses the file, naming the attachment and its item. No file is ever skipped. Entry names are never used as paths: the hub writes each file under the id the JSON gives.
+- It keeps every item's id, key, times, comments, checklist, repeat, parent, tags and attachments; every action's id, order, status and times; and each owner, reminder and origin. An action still `pending` for a machine's repo is loaded as `cancelled`, with `error` "Not sent: the hub was restored from an export.", so a machine paired again never replays an old change; actions on the hub's own lists are already applied.
 - It does not record the setup wizard as done; the wizard goes on to its next step.
-- The answer counts what it loaded and lists what to do again: pair each machine in `machines`, turn the calendar feed on again when `calendarFeed` is true, and turn notifications on, on each device. A machine paired again under its old name gets back the items its agents added.
+- The answer counts what it loaded, `attachments` included, and lists what to do again: pair each machine in `machines`, turn the calendar feed on again when `calendarFeed` is true, and turn notifications on, on each device. A machine paired again under its old name gets back the items its agents added.
 
 
 ## Bridge API
@@ -375,13 +444,14 @@ The bridge sends the full set per repo whenever any fingerprint in it changed. T
 
 An agent adds a personal to-do with `POST /bridge/v1/personal` and the bridge token of its machine. No bridge needs to run, and the post leaves the bridge's last-seen time alone, so an agent's add never makes a stopped bridge look online. On a paired machine, `meat-mode add` makes this call with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
 
-`PersonalTodo` is `{"id"?, "title", "due"?, "repeat"?, "parent"?, "note"?, "author"?}`:
+`PersonalTodo` is `{"id"?, "title", "due"?, "repeat"?, "parent"?, "note"?, "labels"?, "author"?}`:
 
 - `title` is required, up to 1000 characters.
 - `due` is an RFC 3339 time.
 - `repeat` is a `Repeat` (see Repeating to-dos) and needs `due`.
 - `parent` is the `id` of an item this machine added to the same list, open and top-level; the new item is its sub-task (see Sub-tasks). Any other id answers `404`; a closed parent or a sub-task `400`.
 - `note`, up to 10000 characters, becomes the item's first comment.
+- `labels` are the item's tags, by the rules in Tags. `meat-mode add --tag <tag>` sets one and repeats for more.
 - `author` is the agent's name, shown as the item's creator and the note's author. It defaults to the token's machine name.
 - `id` is a UUID the agent generates. Posting the same `id` again returns the item it added and changes nothing, so an agent can retry safely.
 
@@ -400,7 +470,7 @@ An agent can read and change a personal to-do that its machine's token added, an
 | `GET /bridge/v1/personal/{id}` | | `200` with the `Item`, including a closed one still shown |
 | `POST /bridge/v1/personal/{id}/actions` | `PersonalChange` | `201` with the applied `Action`, or `200` with the same for a repeated `id` |
 
-Like the add, these calls leave the bridge's last-seen time alone, and take `?project=<name>` for a to-do in a project. On a paired machine, `meat-mode edit`, `meat-mode done` and `meat-mode reopen` make them with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
+Like the add, these calls leave the bridge's last-seen time alone, and take `?project=<name>` for a to-do in a project. An `edit` with `labels` sets the to-do's tags. `meat-mode edit --tag <tag>` adds a tag and `--untag <tag>` removes one, each repeatable: the command reads the to-do, works out the new list and sends it as `labels`. On a paired machine, `meat-mode edit`, `meat-mode done` and `meat-mode reopen` make them with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
 
 `PersonalChange` is `{"id"?, "kind", "payload", "author"?}`. `kind` is `edit` (payload `{"set": Edit}`), `done`, `reopen`, `dismiss` or `note` (payload `{"text"}`), with the rules of the app's actions above. `id` and `author` work as for `PersonalTodo`.
 

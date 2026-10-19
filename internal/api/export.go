@@ -2,6 +2,13 @@ package api
 
 import "time"
 
+// The export's names. An export is a zip holding ExportJSONName and one
+// entry per attachment, ExportAttachmentDir followed by the attachment's id.
+const (
+	ExportJSONName      = "export.json"
+	ExportAttachmentDir = "attachments/"
+)
+
 // The export file's identity. ExportVersion goes up by one whenever what an
 // export holds changes in any way, an added field included, so a hub never
 // restores a file it would read only in part. A hub restores its own version
@@ -9,7 +16,7 @@ import "time"
 // newer one. docs/api.md, Export and restore, describes the format.
 const (
 	ExportFormat  = "meat-mode-export"
-	ExportVersion = 1
+	ExportVersion = 2
 )
 
 // Export is the whole of what a hub keeps that no other copy holds: the
@@ -42,8 +49,10 @@ type ExportSettings struct {
 }
 
 // ExportItem is one item of a list the hub keeps: the Item with Key, Bridge
-// ("hub"), Repo (the list), FirstSeen and SeenAt filled in, and no Run,
-// Pending or Error.
+// ("hub"), Repo (the list), FirstSeen, SeenAt, Labels and Attachments filled
+// in, and no Run, Pending or Error. Each attachment's bytes travel beside the
+// JSON in the export's zip, as attachments/<id> (docs/api.md, Export and
+// restore).
 type ExportItem struct {
 	Item
 	// Owner is the machine whose agents added the item and may change it
@@ -88,4 +97,6 @@ type RestoreResult struct {
 	// CalendarFeed is true when the export had the feed on: turn it on
 	// again, and give calendars its new address.
 	CalendarFeed bool `json:"calendarFeed"`
+	// Attachments counts the files it loaded.
+	Attachments int `json:"attachments"`
 }

@@ -80,7 +80,9 @@ import { remote } from "./remote.ts";
 import { agentName, agentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
 import { initPush, remindersOn, subscribePush } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
+import { attachmentsHTML } from "./attachments.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
+import { renderMarkdown } from "./markdown.ts";
 import { trackKeyboard } from "./keyboard.ts";
 import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
 import { leaveSettings, sectionsHTML } from "./settings/registry.ts";
@@ -842,7 +844,7 @@ function runCardHTML(item: Item, allowed: boolean, askable: boolean): string {
   const run = item.run;
   const key = esc(item.key);
   const label = item.description ? `${esc(who)} asks because` : esc(who);
-  const reason = item.description ? `<p>${esc(item.description)}</p>` : "";
+  const reason = item.description ? `<div class="md">${renderMarkdown(item.description)}</div>` : "";
   let line = runLineHTML(item, true);
   let button = "";
   if (run?.state === "working") {
@@ -889,7 +891,7 @@ function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): st
   const editing = editable && S.noteEdit?.key === item.key && S.noteEdit.commentId === c.id;
   const body = editing
     ? `<form class="note-edit" data-form="note-edit"><label class="sr" for="note-edit-input">Edit note</label><textarea id="note-edit-input" rows="3" maxlength="${TEXT_MAX}"></textarea><div class="btn-row"><button type="submit" class="btn btn-small btn-primary">Save</button><button type="button" class="btn btn-small" data-act="note-edit-cancel">Cancel</button></div></form>`
-    : `<p>${esc(c.text)}</p>`;
+    : `<div class="md">${renderMarkdown(c.text)}</div>`;
   const tools =
     editable && !editing
       ? `<span class="note-tools"><button class="link-btn" id="ne-${esc(c.id)}" data-act="note-edit" data-id="${esc(c.id)}" aria-label="Edit note" title="Edit note">${ICON.edit}</button><button class="link-btn" data-act="note-delete" data-id="${esc(c.id)}" aria-label="Delete note" title="Delete note">${ICON.trash}</button></span>`
@@ -916,7 +918,7 @@ function renderDetail() {
   const why = agent
     ? runCardHTML(item, allowed, allows(item, "ask"))
     : item.description
-      ? `<div class="why"><div class="why-label">Details</div><p>${esc(item.description)}</p></div>`
+      ? `<div class="why"><div class="why-label">Details</div><div class="md">${renderMarkdown(item.description)}</div></div>`
       : "";
   const queued = queuedComments(item, user());
   const comments = (item.comments ?? []).map((c) => noteHTML(item, c, editable, queued.has(c.id))).join("");
@@ -940,6 +942,7 @@ ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
 ${editing ? editFormHTML(item) : why + actions}
 ${editable ? checklistHTML(item) : ""}
 ${subtasksHTML(item)}
+${attachmentsHTML(item, editable)}
 ${open && allows(item, "snooze") ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
 ${noteBoxHTML(item, allowed)}</section>
@@ -1059,7 +1062,7 @@ const ctx: AppContext = {
     render();
   },
   perform: (acts) => actions.perform(acts),
-  toast: (text) => showToast(text),
+  toast: (text, undo) => showToast(text, undo),
   setView: (v) => setView(v as View),
   openSettings(section) {
     setView("settings");

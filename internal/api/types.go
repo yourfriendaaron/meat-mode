@@ -6,23 +6,26 @@ import "time"
 
 // Item is the hub's copy of one bead.
 type Item struct {
-	Key         string     `json:"key,omitempty"` // <bridge>/<repo>/<bead id>
-	Bridge      string     `json:"bridge,omitempty"`
-	Repo        string     `json:"repo,omitempty"`
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Description string     `json:"description,omitempty"`
-	Status      string     `json:"status"` // open, in_progress, blocked, deferred, closed
-	CloseReason string     `json:"closeReason,omitempty"`
-	Priority    int        `json:"priority"`
-	Labels      []string   `json:"labels,omitempty"`
-	CreatedBy   string     `json:"createdBy,omitempty"`
-	DueAt       *time.Time `json:"dueAt,omitempty"`
-	DeferUntil  *time.Time `json:"deferUntil,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	ClosedAt    *time.Time `json:"closedAt,omitempty"`
-	Comments    []Comment  `json:"comments"`
+	Key         string `json:"key,omitempty"` // <bridge>/<repo>/<bead id>
+	Bridge      string `json:"bridge,omitempty"`
+	Repo        string `json:"repo,omitempty"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status"` // open, in_progress, blocked, deferred, closed
+	CloseReason string `json:"closeReason,omitempty"`
+	Priority    int    `json:"priority"`
+	// Labels are the item's tags. A tracker item's come from its tracker
+	// and are read-only; a hub list item's are set by an edit. The app
+	// shows them without HumanLabel (docs/api.md, Tags).
+	Labels     []string   `json:"labels,omitempty"`
+	CreatedBy  string     `json:"createdBy,omitempty"`
+	DueAt      *time.Time `json:"dueAt,omitempty"`
+	DeferUntil *time.Time `json:"deferUntil,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+	ClosedAt   *time.Time `json:"closedAt,omitempty"`
+	Comments   []Comment  `json:"comments"`
 	// Parent is the id of the item this one is a sub-task of, in the same
 	// list; empty for a top-level item. ParentTitle is the parent's title
 	// as the list's tracker last gave it, so a sub-task whose parent is not
@@ -34,6 +37,10 @@ type Item struct {
 	// RemindBefore is how many minutes before the due time an early
 	// reminder comes; nil uses the hub's ReminderLead. Personal items only.
 	RemindBefore *int `json:"remindBefore,omitempty"`
+	// Attachments are the files kept on the hub for an item of a list the
+	// hub keeps, oldest first; removed ones are left out (docs/api.md,
+	// Attachments). Hub-only: the hub joins them from its own table.
+	Attachments []Attachment `json:"attachments,omitempty"`
 	// Run is the latest agent run on this item; nil when no agent was ever
 	// asked. Hub-only: the hub joins it from the bridge's run list.
 	Run *Run `json:"run,omitempty"`
@@ -43,6 +50,34 @@ type Item struct {
 	FirstSeen time.Time  `json:"firstSeen,omitempty"` // when the hub first received it
 	Error     string     `json:"error,omitempty"`     // last failed action on it
 }
+
+// Attachment is one file attached to an item of a list the hub keeps.
+type Attachment struct {
+	ID        string    `json:"id"`     // 32 lowercase hex characters, made by the hub
+	Name      string    `json:"name"`   // the file name as uploaded, cleaned
+	Type      string    `json:"type"`   // the media type the hub sniffed from the bytes
+	Size      int64     `json:"size"`   // bytes
+	SHA256    string    `json:"sha256"` // lowercase hex of the bytes
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// Limits on attachments (docs/api.md, Attachments).
+const (
+	MaxAttachmentBytes    = 25 << 20 // one file
+	MaxAttachmentsBytes   = 1 << 30  // every file the hub keeps, removed ones not yet purged included
+	MaxAttachmentsPerItem = 20
+	MaxAttachmentName     = 255 // bytes of a cleaned file name
+)
+
+// HumanLabel marks a tracker item for the person. The app never shows it as
+// a tag, and an edit drops it from a hub list item's tags.
+const HumanLabel = "human"
+
+// Limits on tags (docs/api.md, Tags).
+const (
+	MaxTags   = 20
+	MaxTagLen = 50 // characters
+)
 
 // Comment is one bead comment.
 type Comment struct {
@@ -82,6 +117,9 @@ type Edit struct {
 	// into the Was of a repeating done that reopened them, so its Undo
 	// closes them again.
 	SubtasksDone []string `json:"subtasksDone,omitempty"`
+	// Labels replaces the item's tags; an empty list clears them. The Was
+	// of an edit holds the old list, empty for none.
+	Labels *[]string `json:"labels,omitempty"`
 }
 
 // Repeat units.
@@ -293,6 +331,7 @@ type Payload struct {
 	On       *bool      `json:"on,omitempty"`       // sync and agents
 	Ask      bool       `json:"ask,omitempty"`      // add: an agent starts on the new item
 	Parent   string     `json:"parent,omitempty"`   // add: the id of the item the new one is a sub-task of
+	Labels   []string   `json:"labels,omitempty"`   // add: tags, on the hub's own lists only
 	Set      *Edit      `json:"set,omitempty"`      // edit
 	// Was is filled in by the hub. On edit it holds the fields Set changed,
 	// as they were; on done of a repeating item, the due time and checklist
@@ -431,6 +470,7 @@ type PersonalTodo struct {
 	Repeat *Repeat    `json:"repeat,omitempty"` // needs Due
 	Parent string     `json:"parent,omitempty"` // id of an item this machine added to the same list; the new one is its sub-task
 	Note   string     `json:"note,omitempty"`   // added as the first comment, by Author
+	Labels []string   `json:"labels,omitempty"` // tags, as an edit's Labels
 	Author string     `json:"author,omitempty"` // the agent's name; defaults to the token's machine name
 }
 
