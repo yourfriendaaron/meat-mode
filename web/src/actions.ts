@@ -116,6 +116,11 @@ export function createActions(deps: ActionsDeps) {
     if (!it || !patchItem(it, a, deps.now())) return;
     it.pending = isAgentItem(it);
     it.error = undefined;
+    // The Undo of a repeating done closes the sub-tasks it reopened.
+    for (const id of a.payload.set?.subtasksDone ?? []) {
+      const sub = deps.item(`${it.bridge}/${it.repo}/${id}`);
+      if (sub) close(sub, DONE_REASON, deps.now());
+    }
   }
 
   async function post(a: NewAction): Promise<Action | null> {
