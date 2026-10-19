@@ -223,7 +223,15 @@ func (t *Ticket) AddComment(ctx context.Context, dir, id, author, text string) e
 
 func (t *Ticket) Create(ctx context.Context, dir string, in tracker.NewIssue) (string, error) {
 	title := strings.Join(strings.Fields(in.Title), " ")
-	args := []string{"create", title, "--tags", tracker.HumanLabel, "-a", in.Actor}
+	// tk create has no -- and takes any word starting with - as an option,
+	// so a title like that goes in behind a space, which tk keeps and the
+	// rewrite below takes off again.
+	dashed := strings.HasPrefix(title, "-")
+	arg := title
+	if dashed {
+		arg = " " + title
+	}
+	args := []string{"create", arg, "--tags", tracker.HumanLabel, "-a", in.Actor}
 	if in.Parent != "" {
 		if !validID(in.Parent) {
 			return "", fmt.Errorf("%s: %w", in.Parent, tracker.ErrNotFound)
@@ -244,18 +252,19 @@ func (t *Ticket) Create(ctx context.Context, dir string, in tracker.NewIssue) (s
 	if !validID(id) || strings.ContainsAny(id, " \n") {
 		return "", fmt.Errorf("tk create printed %q, not a ticket id", out)
 	}
-	if in.Due != nil {
-		if err := setDue(dir, id, *in.Due); err != nil {
-			return id, fmt.Errorf("ticket %s created, but its due date was not kept: %w", id, err)
+	if in.Due != nil || dashed {
+		if err := finish(dir, id, in.Due, title); err != nil {
+			return id, fmt.Errorf("ticket %s created, but its due date or title was not kept: %w", id, err)
 		}
 	}
 	return id, nil
 }
 
-// setDue adds a due: line to the frontmatter, the shape tk parses (a key at
-// column 0), through a temp file and a rename so a reader never sees half a
-// file. tk has no flag for it.
-func setDue(dir, id string, due time.Time) error {
+// finish adds a due: line to the frontmatter, the shape tk parses (a key at
+// column 0), since tk has no flag for it, and sets the title heading to
+// title. It writes through a temp file and a rename so a reader never sees
+// half a file.
+func finish(dir, id string, due *time.Time, title string) error {
 	path := filepath.Join(dir, storeDir, id+".md")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -274,8 +283,16 @@ func setDue(dir, id string, due time.Time) error {
 	if end < 0 {
 		return errors.New("no frontmatter")
 	}
-	line := "due: " + due.UTC().Format(time.RFC3339)
-	lines = append(lines[:end], append([]string{line}, lines[end:]...)...)
+	for i := end + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "# ") {
+			lines[i] = "# " + title
+			break
+		}
+	}
+	if due != nil {
+		line := "due: " + due.UTC().Format(time.RFC3339)
+		lines = append(lines[:end], append([]string{line}, lines[end:]...)...)
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+id+".md.tmp-*")
 	if err != nil {
 		return err

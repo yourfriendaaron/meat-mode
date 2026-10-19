@@ -71,6 +71,14 @@ func Run(t *testing.T, name string, setup Setup) {
 		}
 	})
 
+	t.Run("a title starting with a dash", func(t *testing.T) {
+		tr, dir := setup(t)
+		id := create(t, tr, dir, tracker.NewIssue{Title: "-v Water the plants", Actor: "alex"})
+		if got := listed(t, tr, dir, id); got.Title != "-v Water the plants" {
+			t.Fatalf("title %q; want it as given", got.Title)
+		}
+	})
+
 	t.Run("close and reopen", func(t *testing.T) {
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Book the dentist", Actor: "alex"})
@@ -121,7 +129,8 @@ func Run(t *testing.T, name string, setup Setup) {
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Pick up the parcel", Actor: "alex"})
 		before := listed(t, tr, dir, id).Version
-		text := "It is at the post office.\n\nBring an ID."
+		// The rule line is one Backlog.md reserves; it must still read back.
+		text := "It is at the post office.\n\n---\n\nBring an ID."
 		if !check(t, tr, api.KindNote, tr.AddComment(ctx, dir, id, "sam-app", text)) {
 			return
 		}

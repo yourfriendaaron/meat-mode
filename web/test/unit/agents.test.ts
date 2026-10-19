@@ -84,6 +84,20 @@ test("several trackers get one raise line each, by the name the app shows", () =
   assert.match(text, /In a repo with no tracker/);
 });
 
+test("an older machine that names its trackers without their commands gets each tracker's own command", () => {
+  const text = agentInstructions("Sam", { name: "desk", trackers: [{ name: "ticket" }, { name: "backlog", version: "1.54.0" }] });
+  assert.match(text, /In a repo that uses ticket:\n\n    tk create "Approve the footer text" --tags human /);
+  assert.match(text, /In a repo that uses Backlog\.md:\n\n    backlog task create "Approve the footer text" --labels human /);
+  assert.doesNotMatch(text, /bd create|raise a bead/);
+  assert.match(text, /check the task before asking again/);
+});
+
+test("a tracker the app does not know is named without a command", () => {
+  const text = agentInstructions("Sam", { name: "desk", trackers: [{ name: "plans", title: "Plans" }] });
+  assert.match(text, /In a repo that uses Plans, create the task with that tracker's own command and label it human\./);
+  assert.doesNotMatch(text, /bd create|raise a bead/);
+});
+
 const b = (name: string, createdAt: string): Bridge => ({ name, createdAt });
 
 test("the hub's own entry is not an agent machine, and the newest machine is picked unless one was chosen", () => {

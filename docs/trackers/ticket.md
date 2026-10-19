@@ -4,7 +4,13 @@
 
 ## Install
 
-Install `tk` from the ticket project's README (a Homebrew tap, the AUR, or the script copied onto PATH). The bridge looks for `tk` on PATH, or at the path `trackerBins` gives for `ticket` in the bridge config. ticket prints no version, so the version shown for it in Settings is blank.
+Install `tk` one of these ways, as the ticket project's README gives them:
+
+- Homebrew on macOS or Linux: `brew tap wedow/tools`, then `brew install ticket`. The formula installs the script as `tk`.
+- Arch Linux: the AUR package `ticket`, such as `yay -S ticket`.
+- Any system with bash: copy the `ticket` script from the repo or a release's source archive onto PATH as `tk` with execute permission.
+
+The bridge looks for `tk` on PATH, or at the path `trackerBins` gives for `ticket` in the bridge config. ticket prints no version, so the version shown for it in Settings is blank.
 
 ## What marks a task for you
 
@@ -35,6 +41,8 @@ Put `sync: true` in `.meat-mode.yaml` at the repo root, or turn the repo's switc
 
 A due date has no `tk` flag. The bridge adds a `due: <time>` line to the task's frontmatter after the create, through a temp file and a rename, and reads it back.
 
+`tk create` has no `--` and reads any word starting with `-` as an option. A title that starts with `-` goes to `tk` behind a space, which the same rewrite takes off the `# ` heading.
+
 ## How a task reads
 
 The bridge parses the files itself, since `tk` prints no JSON for a title or notes.
@@ -42,7 +50,7 @@ The bridge parses the files itself, since `tk` prints no JSON for a title or not
 - Frontmatter keys sit at column 0 and arrays are inline (`tags: [human, garden]`), the shape `tk` itself reads. Only the lines between the first two `---` count, so a body line starting `status:` is not a field.
 - The title is the first `# ` heading; the description is the text after it, up to a `## Design`, `## Acceptance Criteria` or `## Notes` heading.
 - Status: `open` is open, `in_progress` is in progress, `closed` and `done` are closed. ticket keeps no close time, so a closed task's close time is the file's last write.
-- Notes are the `**<UTC time>**` blocks under `## Notes`. ticket records no author, so a note Meat Mode writes starts with a line `by <author>:`, which the app strips off again. A note without that line, from `tk` or an agent, shows as written by "agent".
+- Notes are the `**<UTC time>**` blocks under `## Notes`. ticket records no author, so a note Meat Mode writes starts with a line `by <author>:`, which the app strips off again. A note without that line, from `tk` or an agent, shows as written by "agent". `tk show` prints the file as it is, so an agent reading the task sees the line too; any mark that names the author would show there, and the line tells the agent which notes are yours.
 - The version is a hash of the file's bytes.
 
 ## Things to know
