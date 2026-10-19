@@ -41,7 +41,7 @@ func TestTrackerRoundTrip(t *testing.T) {
 	s, _ := open(t)
 	seedTicket(t, s)
 	must(t, s.Hello("laptop", api.Hello{Version: "1.0.0", BdVersion: "0.40.0", Trackers: []api.TrackerVersion{
-		{Name: "beads", Version: "0.40.0"}, {Name: "ticket"}, {Name: " "},
+		{Name: "beads", Title: "beads", Version: "0.40.0", Raise: `bd create "Approve the footer text" -l human`}, {Name: "ticket", Title: " ticket "}, {Name: " "},
 	}}))
 	st, err := s.State()
 	must(t, err)
@@ -56,7 +56,7 @@ func TestTrackerRoundTrip(t *testing.T) {
 			t.Errorf("%s/%s = %+v, want no tracker and every kind", r.Bridge, r.Name, r)
 		}
 	}
-	want := []api.TrackerVersion{{Name: "beads", Version: "0.40.0"}, {Name: "ticket"}}
+	want := []api.TrackerVersion{{Name: "beads", Title: "beads", Version: "0.40.0", Raise: `bd create "Approve the footer text" -l human`}, {Name: "ticket", Title: "ticket"}}
 	if len(st.Bridges) != 1 || !slices.Equal(st.Bridges[0].Trackers, want) {
 		t.Errorf("bridges = %+v, want trackers %+v", st.Bridges, want)
 	}

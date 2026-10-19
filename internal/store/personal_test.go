@@ -197,7 +197,7 @@ func legacySeed(t *testing.T, s *Store, bridge string, items ...api.Item) {
 		}
 		tx, err := s.DB().Begin()
 		must(t, err)
-		must(t, putHubItem(tx, it, s.now(), nil))
+		must(t, putHubItem(tx, PersonalRepo, it, s.now(), nil))
 		_, err = tx.Exec(`UPDATE items SET bridge = ? WHERE bridge = 'hub' AND repo = 'personal' AND id = ?`, bridge, it.ID)
 		must(t, err)
 		must(t, tx.Commit())
@@ -383,12 +383,12 @@ func TestAddPersonalRetryRestoresALostNote(t *testing.T) {
 	_, err := s.CreateBridge("laptop")
 	must(t, err)
 	todo := api.PersonalTodo{ID: id1, Title: "Water the plants", Note: "The fern first"}
-	key, _, err := s.AddPersonal(todo, "laptop")
+	key, _, err := s.AddPersonal(todo, "laptop", "")
 	must(t, err)
 	notes := func() int {
 		return len(item(t, mustState(t, s), key).Comments)
 	}
-	if _, _, err := s.AddPersonal(todo, "laptop"); err != nil || notes() != 1 {
+	if _, _, err := s.AddPersonal(todo, "laptop", ""); err != nil || notes() != 1 {
 		t.Fatalf("plain retry: %v, %d notes", err, notes())
 	}
 	_, err = s.db.Exec(`DELETE FROM actions WHERE kind = ?`, api.KindNote)
@@ -398,10 +398,10 @@ func TestAddPersonalRetryRestoresALostNote(t *testing.T) {
 	if notes() != 0 {
 		t.Fatalf("note still there: %d", notes())
 	}
-	if k, created, err := s.AddPersonal(todo, "laptop"); err != nil || created || k != key || notes() != 1 {
+	if k, created, err := s.AddPersonal(todo, "laptop", ""); err != nil || created || k != key || notes() != 1 {
 		t.Fatalf("retry = %q, %v, %v, %d notes", k, created, err, notes())
 	}
-	if _, _, err := s.AddPersonal(todo, "laptop"); err != nil || notes() != 1 {
+	if _, _, err := s.AddPersonal(todo, "laptop", ""); err != nil || notes() != 1 {
 		t.Fatalf("second retry: %v, %d notes", err, notes())
 	}
 	// With the note lost and the item gone, a retry still answers.
@@ -409,7 +409,7 @@ func TestAddPersonalRetryRestoresALostNote(t *testing.T) {
 	must(t, err)
 	_, err = s.db.Exec(`DELETE FROM items WHERE bridge = ?`, HubBridge)
 	must(t, err)
-	if k, _, err := s.AddPersonal(todo, "laptop"); err != nil || k != key {
+	if k, _, err := s.AddPersonal(todo, "laptop", ""); err != nil || k != key {
 		t.Fatalf("retry of a deleted item = %q, %v", k, err)
 	}
 }

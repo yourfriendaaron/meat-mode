@@ -535,14 +535,15 @@ func (s *Server) handlePutRuns(w http.ResponseWriter, r *http.Request, bridge st
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleAddPersonal lets an agent add to the personal list with any bridge
-// token, with no bridge running.
+// handleAddPersonal lets an agent add to the personal list, or to the
+// project its project parameter names, with any bridge token, with no
+// bridge running.
 func (s *Server) handleAddPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
 	var t api.PersonalTodo
 	if !readJSON(w, r, maxBody, &t) {
 		return
 	}
-	key, created, err := s.store.AddPersonal(t, bridge)
+	key, created, err := s.store.AddPersonal(t, bridge, r.URL.Query().Get("project"))
 	if err != nil {
 		s.storeError(w, r, err)
 		return
@@ -555,9 +556,10 @@ func (s *Server) handleAddPersonal(w http.ResponseWriter, r *http.Request, bridg
 	writeJSON(w, status, api.PersonalTodoReply{Key: key, ID: id})
 }
 
-// handleGetPersonal lets an agent read a personal to-do its machine added.
+// handleGetPersonal lets an agent read a to-do its machine added to the
+// personal list or a project.
 func (s *Server) handleGetPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
-	it, err := s.store.PersonalItem(bridge, r.PathValue("id"))
+	it, err := s.store.PersonalItem(bridge, r.URL.Query().Get("project"), r.PathValue("id"))
 	if err != nil {
 		s.storeError(w, r, err)
 		return
@@ -565,14 +567,14 @@ func (s *Server) handleGetPersonal(w http.ResponseWriter, r *http.Request, bridg
 	writeJSON(w, http.StatusOK, it)
 }
 
-// handleChangePersonal lets an agent change a personal to-do its machine
-// added.
+// handleChangePersonal lets an agent change a to-do its machine added to
+// the personal list or a project.
 func (s *Server) handleChangePersonal(w http.ResponseWriter, r *http.Request, bridge string) {
 	var c api.PersonalChange
 	if !readJSON(w, r, maxBody, &c) {
 		return
 	}
-	a, created, err := s.store.ChangePersonal(bridge, r.PathValue("id"), c)
+	a, created, err := s.store.ChangePersonal(bridge, r.URL.Query().Get("project"), r.PathValue("id"), c)
 	if err != nil {
 		s.storeError(w, r, err)
 		return

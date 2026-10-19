@@ -16,7 +16,9 @@ import (
 
 // The personal list lives on the hub itself, as repo PersonalRepo of the
 // reserved bridge HubBridge. No bridge can hold that name or its token, so
-// actions on it are applied by the hub the moment they are appended.
+// actions on it are applied by the hub the moment they are appended. Every
+// other repo of HubBridge is a project: a list kept the same way for a repo
+// with no tracker, made by the first add an agent posts to it.
 const (
 	HubBridge    = "hub"
 	PersonalRepo = "personal"
@@ -26,27 +28,28 @@ const (
 // matching the closed items a bridge sends.
 const closedShownFor = 7 * 24 * time.Hour
 
-// isHubRepo reports whether bridge and repo name the hub's personal list.
-func isHubRepo(bridge, repo string) bool { return bridge == HubBridge && repo == PersonalRepo }
+// onHub reports whether bridge is the hub's own, whose repos are the
+// personal list and the projects, which the hub keeps and changes itself.
+func onHub(bridge string) bool { return bridge == HubBridge }
 
-// hubItem reads one personal item with its hub-local times.
-func hubItem(tx *sql.Tx, id string) (api.Item, error) {
+// hubItem reads one item of a list the hub keeps, with its hub-local times.
+func hubItem(tx *sql.Tx, repo, id string) (api.Item, error) {
 	var data, first string
 	var seen sql.NullString
 	err := tx.QueryRow(`SELECT data, first_seen, seen_at FROM items WHERE bridge = ? AND repo = ? AND id = ?`,
-		HubBridge, PersonalRepo, id).Scan(&data, &first, &seen)
+		HubBridge, repo, id).Scan(&data, &first, &seen)
 	if errors.Is(err, sql.ErrNoRows) {
-		return api.Item{}, notFoundf("no item %q", ItemKey(HubBridge, PersonalRepo, id))
+		return api.Item{}, notFoundf("no item %q", ItemKey(HubBridge, repo, id))
 	}
 	if err != nil {
 		return api.Item{}, err
 	}
-	return decodeItem(HubBridge, PersonalRepo, data, first, seen)
+	return decodeItem(HubBridge, repo, data, first, seen)
 }
 
-// putHubItem stores a personal item. firstSeen and seenAt apply to a new
-// row only; an existing row keeps its own.
-func putHubItem(tx *sql.Tx, it api.Item, firstSeen time.Time, seenAt *time.Time) error {
+// putHubItem stores an item of a list the hub keeps. firstSeen and seenAt
+// apply to a new row only; an existing row keeps its own.
+func putHubItem(tx *sql.Tx, repo string, it api.Item, firstSeen time.Time, seenAt *time.Time) error {
 	it.Key, it.Bridge, it.Repo = "", "", ""
 	it.Pending, it.SeenAt, it.Error, it.FirstSeen = false, nil, "", time.Time{}
 	if it.Comments == nil {
@@ -58,13 +61,13 @@ func putHubItem(tx *sql.Tx, it api.Item, firstSeen time.Time, seenAt *time.Time)
 	}
 	_, err = tx.Exec(`INSERT INTO items (bridge, repo, id, data, first_seen, seen_at) VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT (bridge, repo, id) DO UPDATE SET data = excluded.data`,
-		HubBridge, PersonalRepo, it.ID, string(data), fmtTime(firstSeen), fmtTimePtr(seenAt))
+		HubBridge, repo, it.ID, string(data), fmtTime(firstSeen), fmtTimePtr(seenAt))
 	return err
 }
 
 // freeHubID returns want, or want with the first free -2, -3… suffix, so an
-// id is never taken twice in the personal list.
-func freeHubID(tx *sql.Tx, want string) (string, error) {
+// id is never taken twice in one of the hub's lists.
+func freeHubID(tx *sql.Tx, repo, want string) (string, error) {
 	for n := 1; ; n++ {
 		id := want
 		if n > 1 {
@@ -72,7 +75,7 @@ func freeHubID(tx *sql.Tx, want string) (string, error) {
 		}
 		var taken int
 		if err := tx.QueryRow(`SELECT COUNT(*) FROM items WHERE bridge = ? AND repo = ? AND id = ?`,
-			HubBridge, PersonalRepo, id).Scan(&taken); err != nil {
+			HubBridge, repo, id).Scan(&taken); err != nil {
 			return "", err
 		}
 		if taken == 0 {
@@ -121,13 +124,13 @@ func apply(it *api.Item, a api.Action, commentID string) {
 	}
 }
 
-// applyHub applies an action on the personal list and records it as
+// applyHub applies an action on a list the hub keeps and records it as
 // applied, with the created item's id for an add. It returns the keys of
 // items it created.
 func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 	var created []string
 	if a.Kind == api.KindAdd {
-		id, err := freeHubID(tx, fmt.Sprintf("mm-%d", a.Seq))
+		id, err := freeHubID(tx, a.Repo, fmt.Sprintf("mm-%d", a.Seq))
 		if err != nil {
 			return nil, err
 		}
@@ -146,13 +149,13 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 			it.Repeat = ptr(*r)
 			it.Repeat.Start = ptr(*a.Payload.Due)
 		}
-		if err := putHubItem(tx, it, a.CreatedAt, nil); err != nil {
+		if err := putHubItem(tx, a.Repo, it, a.CreatedAt, nil); err != nil {
 			return nil, err
 		}
 		a.BeadID = id
-		created = append(created, ItemKey(HubBridge, PersonalRepo, id))
+		created = append(created, ItemKey(HubBridge, a.Repo, id))
 	} else {
-		it, err := hubItem(tx, a.BeadID)
+		it, err := hubItem(tx, a.Repo, a.BeadID)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +163,7 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 			return nil, err
 		}
 		apply(&it, *a, a.ID)
-		if err := putHubItem(tx, it, it.FirstSeen, it.SeenAt); err != nil {
+		if err := putHubItem(tx, a.Repo, it, it.FirstSeen, it.SeenAt); err != nil {
 			return nil, err
 		}
 	}
@@ -171,7 +174,7 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 		return nil, err
 	}
 	now := s.now()
-	a.Bridge, a.Repo, a.Status, a.Error, a.AppliedAt = HubBridge, PersonalRepo, api.StatusApplied, "", &now
+	a.Bridge, a.Status, a.Error, a.AppliedAt = HubBridge, api.StatusApplied, "", &now
 	_, err = tx.Exec(`UPDATE actions SET bridge = ?, repo = ?, bead_id = ?, payload = ?, status = ?, error = '', applied_at = ? WHERE seq = ?`,
 		a.Bridge, a.Repo, a.BeadID, string(payload), a.Status, fmtTime(now), a.Seq)
 	return created, err
@@ -206,12 +209,12 @@ func importPersonal(tx *sql.Tx, bridge, repo string, items []legacyItem) ([]stri
 			continue
 		}
 		beadID := it.ID
-		id, err := freeHubID(tx, beadID)
+		id, err := freeHubID(tx, PersonalRepo, beadID)
 		if err != nil {
 			return nil, err
 		}
 		it.ID = id
-		if err := putHubItem(tx, it, l.firstSeen, l.seenAt); err != nil {
+		if err := putHubItem(tx, PersonalRepo, it, l.firstSeen, l.seenAt); err != nil {
 			return nil, err
 		}
 		if _, err := tx.Exec(`INSERT INTO personal_origins (bridge, bead_id, item_id) VALUES (?, ?, ?)`,
@@ -339,6 +342,7 @@ func (s *Store) TransferPersonal() error {
 				}
 				a.BeadID = id
 			}
+			a.Repo = PersonalRepo
 			keys, err := s.applyHub(tx, &a)
 			if err != nil {
 				return err
@@ -427,13 +431,18 @@ func (s *Store) importFromBridge(tx *sql.Tx, bridge, repo string, items []api.It
 // noteNamespace derives the id of the note an agent adds with a to-do.
 var noteNamespace = uuid.MustParse("5d0c2f3a-7b1e-4c6d-9a48-2e1f0b7c3d95")
 
-// AddPersonal adds an agent's to-do to the personal list, with its note as
-// the first comment, for the agents of the machine whose token is bridge's.
-// Both are by t.Author, or by the machine's name when it is empty. The item
-// is recorded as that machine's, so its agents may change it later. A
-// repeated t.ID returns the item it added and changes nothing, except that
-// a note lost to a failure after the add is written.
-func (s *Store) AddPersonal(t api.PersonalTodo, bridge string) (key string, created bool, err error) {
+// AddPersonal adds an agent's to-do to the personal list, or to the
+// project when it is not empty, with its note as the first comment, for
+// the agents of the machine whose token is bridge's. The first add to a
+// project makes it. Both are by t.Author, or by the machine's name when it
+// is empty. The item is recorded as that machine's, so its agents may
+// change it later. A repeated t.ID returns the item it added and changes
+// nothing, except that a note lost to a failure after the add is written.
+func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key string, created bool, err error) {
+	repo, err := ProjectRepo(project)
+	if err != nil {
+		return "", false, err
+	}
 	author, err := agentAuthor(t.Author, bridge)
 	if err != nil {
 		return "", false, err
@@ -447,17 +456,25 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge string) (key string, crea
 	if utf8.RuneCountInString(t.Note) > MaxNoteLen {
 		return "", false, invalidf("note is longer than %d characters", MaxNoteLen)
 	}
-	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: PersonalRepo,
+	if repo != PersonalRepo {
+		// A project with nothing in it is left out of State, so one made
+		// by an add that then fails shows nowhere.
+		if _, err := s.db.Exec(`INSERT OR IGNORE INTO repos (bridge, name, personal, opted_in) VALUES (?, ?, 0, 1)`,
+			HubBridge, repo); err != nil {
+			return "", false, err
+		}
+	}
+	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: repo,
 		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat}}, author, func(tx *sql.Tx, a api.Action) error {
-		return recordOwner(tx, a.BeadID, bridge)
+		return recordOwner(tx, a.Repo, a.BeadID, bridge)
 	})
 	if err != nil {
 		return "", false, err
 	}
-	if a.Kind != api.KindAdd || !isHubRepo(a.Bridge, a.Repo) {
-		return "", false, conflictf("action %q is not a personal to-do", t.ID)
+	if a.Kind != api.KindAdd || !onHub(a.Bridge) || a.Repo != repo {
+		return "", false, conflictf("action %q is not a to-do added to this list", t.ID)
 	}
-	key = ItemKey(HubBridge, PersonalRepo, a.BeadID)
+	key = ItemKey(HubBridge, repo, a.BeadID)
 	// The note's id comes from the add's, so a retry after a failure between
 	// the two writes stores the note once and a plain retry adds none.
 	if t.Note != "" {

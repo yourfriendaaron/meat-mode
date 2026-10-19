@@ -227,25 +227,25 @@ func TestAgentChangesOnlyItsOwnPersonalTodos(t *testing.T) {
 		_, err := s.CreateBridge(name)
 		must(t, err)
 	}
-	key, created, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Renew the library card"}, "laptop")
+	key, created, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Renew the library card"}, "laptop", "")
 	must(t, err)
 	_, _, id, _ := SplitKey(key)
 	// Repeating the add keeps the one owner.
-	if again, created2, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Renew the library card"}, "desk"); err != nil || created2 || again != key || !created {
+	if again, created2, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Renew the library card"}, "desk", ""); err != nil || created2 || again != key || !created {
 		t.Fatalf("repeat add = %q, %v, %v", again, created2, err)
 	}
 	app := addPersonal(t, s, id2, "Water the plants", nil).BeadID
 
-	if it, err := s.PersonalItem("laptop", id); err != nil || it.Title != "Renew the library card" || it.Key != key {
+	if it, err := s.PersonalItem("laptop", "", id); err != nil || it.Title != "Renew the library card" || it.Key != key {
 		t.Fatalf("own item = %+v, %v", it, err)
 	}
 	var msg string
 	for _, tc := range []struct{ bridge, id string }{{"desk", id}, {"laptop", app}, {"laptop", "mm-99"}, {"laptop", "../x"}} {
-		_, err := s.PersonalItem(tc.bridge, tc.id)
+		_, err := s.PersonalItem(tc.bridge, "", tc.id)
 		if !errors.Is(err, ErrNotFound) {
 			t.Fatalf("%s reading %s: %v", tc.bridge, tc.id, err)
 		}
-		_, _, err = s.ChangePersonal(tc.bridge, tc.id, api.PersonalChange{Kind: api.KindDone})
+		_, _, err = s.ChangePersonal(tc.bridge, "", tc.id, api.PersonalChange{Kind: api.KindDone})
 		if !errors.Is(err, ErrNotFound) {
 			t.Fatalf("%s changing %s: %v", tc.bridge, tc.id, err)
 		}
@@ -257,50 +257,50 @@ func TestAgentChangesOnlyItsOwnPersonalTodos(t *testing.T) {
 	}
 
 	due := time.Date(2026, 3, 9, 9, 0, 0, 0, time.UTC)
-	a, created, err := s.ChangePersonal("laptop", id, api.PersonalChange{ID: id3, Kind: api.KindEdit,
+	a, created, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{ID: id3, Kind: api.KindEdit,
 		Payload: api.Payload{Set: &api.Edit{Due: &due}}, Author: "planner"})
 	must(t, err)
 	if !created || a.Author != "planner" || a.Status != api.StatusApplied || a.Payload.Was == nil || !a.Payload.Was.ClearDue {
 		t.Fatalf("agent edit %+v", a)
 	}
-	if again, created, err := s.ChangePersonal("laptop", id, api.PersonalChange{ID: id3, Kind: api.KindEdit,
+	if again, created, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{ID: id3, Kind: api.KindEdit,
 		Payload: api.Payload{Set: &api.Edit{Title: ptr("Something else")}}}); err != nil || created || again.Seq != a.Seq {
 		t.Fatalf("repeat = %+v, %v, %v", again, created, err)
 	}
-	if _, _, err := s.ChangePersonal("laptop", id, api.PersonalChange{ID: id3, Kind: api.KindDone}); !errors.Is(err, ErrConflict) {
+	if _, _, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{ID: id3, Kind: api.KindDone}); !errors.Is(err, ErrConflict) {
 		t.Errorf("id reused for another kind: %v", err)
 	}
-	a, _, err = s.ChangePersonal("laptop", id, api.PersonalChange{Kind: api.KindNote, Payload: api.Payload{Text: "Ask at the desk"}})
+	a, _, err = s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: api.KindNote, Payload: api.Payload{Text: "Ask at the desk"}})
 	must(t, err)
 	if a.Author != "laptop" {
 		t.Errorf("author %q, want the machine name", a.Author)
 	}
 	for _, k := range []string{api.KindNoteDelete, api.KindSnooze, api.KindAdd, ""} {
-		if _, _, err := s.ChangePersonal("laptop", id, api.PersonalChange{Kind: k}); !errors.Is(err, ErrInvalid) {
+		if _, _, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: k}); !errors.Is(err, ErrInvalid) {
 			t.Errorf("kind %q: %v", k, err)
 		}
 	}
-	if _, _, err := s.ChangePersonal("laptop", id, api.PersonalChange{Kind: api.KindDone, Author: "a\nb"}); !errors.Is(err, ErrInvalid) {
+	if _, _, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: api.KindDone, Author: "a\nb"}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("bad author: %v", err)
 	}
-	it, err := s.PersonalItem("laptop", id)
+	it, err := s.PersonalItem("laptop", "", id)
 	must(t, err)
 	if !it.DueAt.Equal(due) || len(it.Comments) != 1 || it.Comments[0].Author != "laptop" {
 		t.Fatalf("item %+v", it)
 	}
 
 	// A closed item stays the agent's for the week the app shows it.
-	_, _, err = s.ChangePersonal("laptop", id, api.PersonalChange{Kind: api.KindDone})
+	_, _, err = s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: api.KindDone})
 	must(t, err)
 	c.t = c.t.Add(6 * 24 * time.Hour)
-	if _, err := s.PersonalItem("laptop", id); err != nil {
+	if _, err := s.PersonalItem("laptop", "", id); err != nil {
 		t.Fatalf("closed item within the week: %v", err)
 	}
 	c.t = c.t.Add(2 * 24 * time.Hour)
-	if _, err := s.PersonalItem("laptop", id); !errors.Is(err, ErrNotFound) {
+	if _, err := s.PersonalItem("laptop", "", id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("closed item past the week: %v", err)
 	}
-	if _, _, err := s.ChangePersonal("laptop", id, api.PersonalChange{Kind: api.KindReopen}); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: api.KindReopen}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("reopen past the week: %v", err)
 	}
 }
@@ -312,7 +312,7 @@ func TestImportedPersonalItemsHaveNoOwner(t *testing.T) {
 	must(t, err)
 	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "personal", Personal: true, OptedIn: true}}))
 	must(t, s.ReplaceItems("laptop", "personal", []api.Item{{ID: "td-1", Title: "Call Sam", Status: "open"}}))
-	if _, err := s.PersonalItem("laptop", "td-1"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.PersonalItem("laptop", "", "td-1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("imported item: %v", err)
 	}
 }
@@ -510,20 +510,20 @@ func TestAddWithRepeat(t *testing.T) {
 	// An agent's to-do repeats too, and its done moves it on.
 	_, err := s.CreateBridge("desk")
 	must(t, err)
-	key, _, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Take the bins out", Due: &due, Repeat: &daily}, "desk")
+	key, _, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Take the bins out", Due: &due, Repeat: &daily}, "desk", "")
 	must(t, err)
 	_, _, id, _ := SplitKey(key)
-	it, err := s.PersonalItem("desk", id)
+	it, err := s.PersonalItem("desk", "", id)
 	must(t, err)
 	if it.Repeat == nil || !it.Repeat.Start.Equal(due) {
 		t.Fatalf("agent's repeat %+v", it.Repeat)
 	}
-	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Take the bins out", Repeat: &daily}, "desk"); !errors.Is(err, ErrInvalid) {
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Take the bins out", Repeat: &daily}, "desk", ""); !errors.Is(err, ErrInvalid) {
 		t.Errorf("agent's repeat with no due: %v", err)
 	}
-	a, _, err := s.ChangePersonal("desk", id, api.PersonalChange{Kind: api.KindDone})
+	a, _, err := s.ChangePersonal("desk", "", id, api.PersonalChange{Kind: api.KindDone})
 	must(t, err)
-	it, err = s.PersonalItem("desk", id)
+	it, err = s.PersonalItem("desk", "", id)
 	must(t, err)
 	if it.Status != "open" || !it.DueAt.Equal(due.Add(24*time.Hour)) || a.Payload.Was == nil || !a.Payload.Was.Due.Equal(due) {
 		t.Fatalf("agent's done %+v, item %+v", a, it)
@@ -645,7 +645,7 @@ func TestRepeatUntilRefuses(t *testing.T) {
 			t.Errorf("%s: %v, want invalid", name, err)
 		}
 	}
-	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Take the bins out", Due: &due, Repeat: &api.Repeat{Every: api.EveryDay, TimeZone: "UTC", Until: "2026-03-01"}}, "desk"); !errors.Is(err, ErrInvalid) {
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Take the bins out", Due: &due, Repeat: &api.Repeat{Every: api.EveryDay, TimeZone: "UTC", Until: "2026-03-01"}}, "desk", ""); !errors.Is(err, ErrInvalid) {
 		t.Errorf("agent's until before due: %v", err)
 	}
 
