@@ -11,5 +11,6 @@ import "./first-todo.ts";
 import "./install.ts";
 import "./profile.ts";
 import "./reminders.ts";
+import "./restore.ts";
 import "./secure.ts";
 import "./welcome.ts";
