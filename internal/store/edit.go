@@ -377,7 +377,13 @@ func (s *Store) PersonalItem(bridge, project, id string) (api.Item, error) {
 	if err != nil {
 		return api.Item{}, err
 	}
-	return s.ownedPersonal(bridge, repo, id)
+	it, err := s.ownedPersonal(bridge, repo, id)
+	if err != nil {
+		return it, err
+	}
+	items := []api.Item{it}
+	err = joinAttachments(s.db, items)
+	return items[0], err
 }
 
 // ChangePersonal applies an agent's change to a to-do its machine's token
