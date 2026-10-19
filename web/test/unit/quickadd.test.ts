@@ -458,3 +458,66 @@ test("with no list named or picked, an add starts on the list being viewed", () 
   assert.equal(added("Fix the footer", { viewing: "laptop/attic" }).action.repo, "personal");
   assert.equal(added("Fix the footer daily", { viewing: "laptop/website" }).action.payload.title, "Fix the footer daily");
 });
+
+// Tags: @word on the personal list and projects (docs/api.md, Tags).
+test("@word is a tag, taken out of the title, in the order typed", () => {
+  const r = parseQuickAdd("Water the plants @garden tomorrow @Home/Chores", now, lists);
+  assert.equal(r.title, "Water the plants");
+  assert.deepEqual(r.tags, ["garden", "Home/Chores"]);
+  assert.equal(local(r.due), "2026-10-15 09:00");
+  assert.deepEqual(r.tokens.map((t) => [t.kind, t.text]), [
+    ["tag", "@garden"],
+    ["date", "tomorrow"],
+    ["tag", "@Home/Chores"],
+  ]);
+});
+
+test("a tag word starts with a letter, so @5pm stays in the title and gives no date", () => {
+  const r = parseQuickAdd("Call Sam @5pm", now, lists);
+  assert.equal(r.title, "Call Sam @5pm");
+  assert.deepEqual(r.tags, []);
+  assert.equal(r.due, null);
+});
+
+test("a tag is never read as a date or a repeat, and an address is not a tag", () => {
+  const r = parseQuickAdd("Plan @monday @daily", now, lists);
+  assert.deepEqual(r.tags, ["monday", "daily"]);
+  assert.equal(r.due, null);
+  assert.equal(r.repeat, null);
+  const mail = parseQuickAdd("Write to sam@example.com", now, lists);
+  assert.equal(mail.title, "Write to sam@example.com");
+  assert.deepEqual(mail.tags, []);
+});
+
+test("with tags off, @word stays in the title", () => {
+  const r = parseQuickAdd("Check the logs @ops tomorrow", now, lists, { tags: false });
+  assert.equal(r.title, "Check the logs @ops");
+  assert.deepEqual(r.tags, []);
+  assert.equal(local(r.due), "2026-10-15 09:00");
+});
+
+test("tags are sent as labels on the personal list, cleaned as the hub does", () => {
+  const r = added("Water the plants @garden @Garden @human @errands");
+  assert.equal(r.action.payload.title, "Water the plants");
+  assert.deepEqual(r.action.payload.labels, ["garden", "errands"]);
+  assert.equal(added("Water the plants").action.payload.labels, undefined);
+});
+
+test("on a tracker's list @word stays in the title and no labels are sent", () => {
+  const r = added("Prune the roses @weekend #garden");
+  assert.equal(r.action.repo, "garden");
+  assert.equal(r.action.payload.title, "Prune the roses @weekend");
+  assert.equal(r.action.payload.labels, undefined);
+  assert.deepEqual(r.qa.tags, []);
+});
+
+test("a tag the hub would refuse makes no action, with the hub's words", () => {
+  const long = `@${"a".repeat(51)}`;
+  const r = addAction(`Water the plants ${long}`, now, repos, opts);
+  assert.ok("error" in r);
+  assert.equal(r.error, "tags");
+  assert.equal(r.why, `The tag "${"a".repeat(51)}" is longer than 50 characters.`);
+  const many = Array.from({ length: 21 }, (_, i) => `@t${i}`).join(" ");
+  const m = addAction(`Water the plants ${many}`, now, repos, opts);
+  assert.ok("error" in m && m.why === "An item has at most 20 tags.");
+});
