@@ -86,11 +86,53 @@ func (g *guard) check(w http.ResponseWriter, r *http.Request) bool {
 		writeError(w, http.StatusForbidden, "cross-origin request refused")
 		return false
 	}
-	if isAPI && !isJSON(r.Header.Get("Content-Type")) {
-		writeError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
-		return false
+	if isAPI {
+		if msg := bodyTypeRefusal(r); msg != "" {
+			writeError(w, http.StatusUnsupportedMediaType, msg)
+			return false
+		}
 	}
 	return true
+}
+
+// bodyTypeRefusal says why a non-GET /api/ request's Content-Type is
+// refused, or "" when it is taken. Every route takes application/json but
+// the two that take a file: an upload takes application/octet-stream, and
+// a restore either. Each makes a browser ask before a cross-site send.
+func bodyTypeRefusal(r *http.Request) string {
+	ct := r.Header.Get("Content-Type")
+	switch {
+	case r.Method == http.MethodPost && r.URL.Path == "/api/restore":
+		if isJSON(ct) || isOctetStream(ct) {
+			return ""
+		}
+		return "Content-Type must be application/json or application/octet-stream"
+	case r.Method == http.MethodPost && isUploadPath(r.URL.EscapedPath()):
+		if isOctetStream(ct) {
+			return ""
+		}
+		return "Content-Type must be application/octet-stream"
+	case isJSON(ct):
+		return ""
+	}
+	return "Content-Type must be application/json"
+}
+
+// isUploadPath reports whether an escaped path is
+// /api/items/{key}/attachments, the key being one segment.
+func isUploadPath(p string) bool {
+	key, ok := strings.CutPrefix(p, "/api/items/")
+	if !ok {
+		return false
+	}
+	key, ok = strings.CutSuffix(key, "/attachments")
+	return ok && key != "" && !strings.Contains(key, "/")
+}
+
+// isOctetStream accepts application/octet-stream with no parameters.
+func isOctetStream(ct string) bool {
+	mt, params, err := mime.ParseMediaType(ct)
+	return err == nil && mt == "application/octet-stream" && len(params) == 0
 }
 
 // isAPIPath reports whether p is in the app API: /api/... or bare /api.

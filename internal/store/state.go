@@ -70,6 +70,9 @@ func (s *Store) State() (api.State, error) {
 	if err := s.joinRuns(st.Items, index, st.Bridges, st.ServerTime); err != nil {
 		return st, err
 	}
+	if err := joinAttachments(s.db, st.Items); err != nil {
+		return st, err
+	}
 
 	// The latest settled-or-pending action on each item decides its error.
 	if err := s.eachRow(`SELECT a.bridge, a.repo, a.bead_id, a.error FROM actions a

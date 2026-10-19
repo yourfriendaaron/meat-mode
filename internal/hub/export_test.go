@@ -27,16 +27,16 @@ func TestExportRoute(t *testing.T) {
 		}
 		w := h.do("GET", "/api/export", nil, "")
 		h.expect(w, http.StatusOK)
-		e := decode[api.Export](t, w)
+		e := exportOf(t, w.Body.Bytes())
 		loc := time.UTC
 		if zone != "" {
 			loc, _ = time.LoadLocation(zone)
 		}
-		want := `attachment; filename="meat-mode-export-` + e.ExportedAt.In(loc).Format(time.DateOnly) + `.json"`
+		want := `attachment; filename="meat-mode-export-` + e.ExportedAt.In(loc).Format(time.DateOnly) + `.zip"`
 		if got := w.Header().Get("Content-Disposition"); got != want {
 			t.Errorf("zone %q: Content-Disposition %q, want %q", zone, got, want)
 		}
-		if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		if ct := w.Header().Get("Content-Type"); ct != "application/zip" {
 			t.Errorf("Content-Type %q", ct)
 		}
 		if e.Format != api.ExportFormat || e.Version != api.ExportVersion || len(e.Items) != 1 ||

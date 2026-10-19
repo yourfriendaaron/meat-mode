@@ -1,10 +1,16 @@
 package store
 
 import (
+	"archive/zip"
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -48,14 +54,142 @@ var restoreKnownStatuses = []string{"open", "in_progress", "blocked", "deferred"
 // restoreActionStatuses are the action statuses a restored action may have.
 var restoreActionStatuses = []string{api.StatusPending, api.StatusApplied, api.StatusFailed, api.StatusCancelled}
 
+// The restore's body limits: the JSON of an export, bare or in its zip,
+// and a whole zip, which adds the attachments' files.
+const (
+	MaxExportJSON  = 64 << 20
+	MaxRestoreFile = MaxExportJSON + api.MaxAttachmentsBytes
+)
+
+// zipMagic starts a zip file; anything else is read as bare JSON.
+var zipMagic = []byte("PK\x03\x04")
+
 // Restore loads an export (docs/api.md, Export and restore) into a hub that
-// holds no data yet. It reads the file, upgrades an older version step by
-// step, checks all of it, and only then writes it in one transaction, so a
-// file that fails a check changes nothing. A hub with data answers
-// ErrHubInUse and is left as it was. The settings already set are
-// replaced by the export's; the setup wizard is not recorded as done.
-func (s *Store) Restore(file []byte) (api.RestoreResult, error) {
+// holds no data yet: the zip an export is, read by its first bytes, or the
+// bare JSON file of an older hub. It reads the file, upgrades an older
+// version step by step, checks all of it, and only then writes it, the
+// attachments' files first and the rest in one transaction, so a file that
+// fails a check changes nothing. A hub with data answers ErrHubInUse and is
+// left as it was. The settings already set are replaced by the export's;
+// the setup wizard is not recorded as done. An error reading r is returned
+// wrapped, so the caller can tell a body cut short or too large.
+func (s *Store) Restore(r io.Reader) (api.RestoreResult, error) {
+	// A second restore waits, then finds the hub in use.
+	s.restoring.Lock()
+	defer s.restoring.Unlock()
+	if err := s.checkUnused(s.db); err != nil {
+		return api.RestoreResult{}, err
+	}
+	br := bufio.NewReader(r)
+	if head, _ := br.Peek(len(zipMagic)); bytes.Equal(head, zipMagic) {
+		return s.restoreZip(br)
+	}
+	file, err := readLimited(br, MaxExportJSON, "This file is larger than an export can be (%s).")
+	if err != nil {
+		return api.RestoreResult{}, err
+	}
+	ex, err := readExport(file)
+	if err != nil {
+		return api.RestoreResult{}, err
+	}
+	if n := countAttachments(ex); n > 0 {
+		return api.RestoreResult{}, invalidf("This file lists %d attached files, which travel in the zip file it came in. Restore that zip file instead.", n)
+	}
+	if err := checkExport(&ex); err != nil {
+		return api.RestoreResult{}, err
+	}
+	return s.load(ex)
+}
+
+// readLimited reads all of r, refusing more than limit bytes with
+// ErrTooLarge and tooBig, which takes the limit's size.
+func readLimited(r io.Reader, limit int64, tooBig string) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, fmt.Errorf("read the file: %w", err)
+	}
+	if int64(len(b)) > limit {
+		return nil, tooLargef(tooBig, fileSize(limit))
+	}
+	return b, nil
+}
+
+func countAttachments(ex api.Export) int {
+	n := 0
+	for _, it := range ex.Items {
+		n += len(it.Attachments)
+	}
+	return n
+}
+
+// checkUnused answers ErrHubInUse for a hub with any item, any action, or
+// any machine other than the hub, revoked ones included.
+func (s *Store) checkUnused(q rowQuerier) error {
+	var used bool
+	if err := q.QueryRow(`SELECT EXISTS (SELECT 1 FROM items) OR EXISTS (SELECT 1 FROM actions)
+		OR EXISTS (SELECT 1 FROM bridges WHERE name != ?)`, HubBridge).Scan(&used); err != nil {
+		return err
+	}
+	if used {
+		return ErrHubInUse
+	}
+	return nil
+}
+
+// restoreZip restores an export's zip. Go reads a zip from its end, so the
+// upload is saved to a temporary file in the attachments folder first and
+// deleted when done. Entry names are checked, never used as paths: each
+// file is written under the id export.json gives it.
+func (s *Store) restoreZip(r io.Reader) (api.RestoreResult, error) {
 	var res api.RestoreResult
+	key := "restore-" + newAttachmentID()
+	defer s.track(key)()
+	spool := filepath.Join(s.attachmentDir(), tempPrefix+key)
+	f, err := os.OpenFile(spool, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return res, err
+	}
+	defer os.Remove(spool)
+	defer f.Close()
+	size, err := io.Copy(f, io.LimitReader(r, MaxRestoreFile+1))
+	if err != nil {
+		return res, fmt.Errorf("read the file: %w", err)
+	}
+	if size > MaxRestoreFile {
+		return res, tooLargef("This file is larger than an export can be (%s).", fileSize(MaxRestoreFile))
+	}
+	zr, err := zip.NewReader(f, size)
+	if err != nil {
+		return res, invalidf("This file is not a Meat Mode export: it is not a zip file that can be read (%v).", err)
+	}
+
+	entries := map[string]*zip.File{}
+	for _, zf := range zr.File {
+		if entries[zf.Name] != nil {
+			return res, invalidf("This export holds %q twice.", zf.Name)
+		}
+		if id, ok := strings.CutPrefix(zf.Name, api.ExportAttachmentDir); zf.Name != api.ExportJSONName && (!ok || !validAttachmentID(id)) {
+			return res, invalidf("This export holds %q, which is not part of an export: an export holds only %s and %s<id> for each attached file.",
+				zf.Name, api.ExportJSONName, api.ExportAttachmentDir)
+		}
+		entries[zf.Name] = zf
+	}
+	je := entries[api.ExportJSONName]
+	if je == nil {
+		return res, invalidf("This file is not a Meat Mode export: the zip has no %s.", api.ExportJSONName)
+	}
+	jr, err := je.Open()
+	if err != nil {
+		return res, invalidf("This export's %s could not be read: %v", api.ExportJSONName, err)
+	}
+	file, err := readLimited(jr, MaxExportJSON, "This export's "+api.ExportJSONName+" is larger than it can be (%s).")
+	jr.Close()
+	if err != nil {
+		if !errors.Is(err, ErrTooLarge) {
+			err = invalidf("This export's %s could not be read: %v", api.ExportJSONName, err)
+		}
+		return res, err
+	}
 	ex, err := readExport(file)
 	if err != nil {
 		return res, err
@@ -64,18 +198,114 @@ func (s *Store) Restore(file []byte) (api.RestoreResult, error) {
 		return res, err
 	}
 
+	// Every attachment listed has its entry with its size, and every entry
+	// is listed.
+	listed := map[string]bool{api.ExportJSONName: true}
+	var ids []string
+	for _, it := range ex.Items {
+		for _, a := range it.Attachments {
+			name := api.ExportAttachmentDir + a.ID
+			listed[name] = true
+			ids = append(ids, a.ID)
+			zf := entries[name]
+			if zf == nil {
+				return res, invalidf("%s (attachment %s) on item %s has no file in the export.", a.Name, a.ID, it.Key)
+			}
+			if zf.UncompressedSize64 != uint64(a.Size) {
+				return res, invalidf("%s (attachment %s) on item %s is %d bytes in the export, but its item lists %d.",
+					a.Name, a.ID, it.Key, zf.UncompressedSize64, a.Size)
+			}
+		}
+	}
+	for name := range entries {
+		if !listed[name] {
+			return res, invalidf("This export holds %s, which no item lists.", name)
+		}
+	}
+
+	// The files go in before the rows, each under the id its item gives,
+	// checked against its size and SHA-256 as it is written; any failure
+	// deletes the ones written.
+	defer s.track(ids...)()
+	var written []string
+	ok := false
+	defer func() {
+		if !ok {
+			for _, id := range written {
+				os.Remove(s.attachmentPath(id))
+			}
+		}
+	}()
+	for i := range ex.Items {
+		it := &ex.Items[i]
+		for j := range it.Attachments {
+			a := &it.Attachments[j]
+			if err := s.restoreFile(entries[api.ExportAttachmentDir+a.ID], it.Key, a, &written); err != nil {
+				return res, err
+			}
+		}
+	}
+	res, err = s.load(ex)
+	if err != nil {
+		return res, err
+	}
+	ok = true
+	return res, nil
+}
+
+// restoreFile writes one attachment's entry as its file and checks it
+// against the size and SHA-256 the export lists. The type is sniffed from
+// the bytes, as for an upload.
+func (s *Store) restoreFile(zf *zip.File, key string, a *api.Attachment, written *[]string) error {
+	rc, err := zf.Open()
+	if err != nil {
+		return invalidf("%s (attachment %s) on item %s could not be read from the export: %v", a.Name, a.ID, key, err)
+	}
+	defer rc.Close()
+	in := &readErr{r: rc}
+	size, sum, typ, err := s.writeAttachmentFile(a.ID, in, a.Size)
+	if errors.Is(err, errOverLimit) || (err == nil && (size != a.Size || sum != a.SHA256)) {
+		if err == nil {
+			*written = append(*written, a.ID)
+		}
+		return invalidf("%s (attachment %s) on item %s does not match the size and SHA-256 its item lists.", a.Name, a.ID, key)
+	}
+	if in.err != nil {
+		return invalidf("%s (attachment %s) on item %s could not be read from the export: %v", a.Name, a.ID, key, in.err)
+	}
+	if err != nil {
+		return fmt.Errorf("write %s (attachment %s) on item %s: %w", a.Name, a.ID, key, err)
+	}
+	*written = append(*written, a.ID)
+	a.Type = typ
+	return nil
+}
+
+// readErr remembers the first error reading r, so a broken entry in the
+// zip can be told from a failure to write its file.
+type readErr struct {
+	r   io.Reader
+	err error
+}
+
+func (e *readErr) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if err != nil && err != io.EOF && e.err == nil {
+		e.err = err
+	}
+	return n, err
+}
+
+// load writes a checked export in one transaction.
+func (s *Store) load(ex api.Export) (api.RestoreResult, error) {
+	var res api.RestoreResult
 	tx, err := s.db.Begin()
 	if err != nil {
 		return res, err
 	}
 	defer tx.Rollback()
-	var used bool
-	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM items) OR EXISTS (SELECT 1 FROM actions)
-		OR EXISTS (SELECT 1 FROM bridges WHERE name != ?)`, HubBridge).Scan(&used); err != nil {
+	if err := s.checkUnused(tx); err != nil {
 		return res, err
-	}
-	if used {
-		return res, ErrHubInUse
 	}
 
 	if _, err := tx.Exec(`UPDATE hub_settings SET user_name = ?, time_zone = ?, reminder_lead = ?, calendar_hash = NULL WHERE id = 1`,
@@ -92,7 +322,7 @@ func (s *Store) Restore(file []byte) (api.RestoreResult, error) {
 		}
 		first, seen := it.FirstSeen, it.SeenAt
 		item := it.Item
-		item.Run = nil
+		item.Run, item.Attachments = nil, nil
 		if err := putHubItem(tx, it.Repo, item, first, seen); err != nil {
 			return res, err
 		}
@@ -100,6 +330,15 @@ func (s *Store) Restore(file []byte) (api.RestoreResult, error) {
 			if err := recordOwner(tx, it.Repo, it.ID, it.Owner); err != nil {
 				return res, err
 			}
+		}
+	}
+	// Rows in the file's order, oldest first, after every item they name.
+	for _, it := range ex.Items {
+		for _, a := range it.Attachments {
+			if err := insertAttachment(tx, it.Repo, it.ID, a); err != nil {
+				return res, err
+			}
+			res.Attachments++
 		}
 	}
 
@@ -238,6 +477,8 @@ func checkExport(ex *api.Export) error {
 	}
 
 	keys := map[string]bool{}
+	files := map[string]bool{}
+	var total int64
 	for i := range ex.Items {
 		it := &ex.Items[i]
 		if err := checkExportItem(it); err != nil {
@@ -247,6 +488,16 @@ func checkExport(ex *api.Export) error {
 			return invalidf("item %s is listed twice", it.Key)
 		}
 		keys[it.Key] = true
+		for _, a := range it.Attachments {
+			if files[a.ID] {
+				return invalidf("attachment %s is listed twice", a.ID)
+			}
+			files[a.ID] = true
+			total += a.Size
+		}
+	}
+	if total > api.MaxAttachmentsBytes {
+		return invalidf("The export's files come to %s; a hub keeps at most %s.", fileSize(total), fileSize(api.MaxAttachmentsBytes))
 	}
 
 	ids := map[string]bool{}
@@ -386,6 +637,31 @@ func checkExportItem(it *api.ExportItem) error {
 		}
 		if utf8.RuneCountInString(c.Author) > maxCommentAuthorLen {
 			return fail("comment %s has an author longer than %d characters", c.ID, maxCommentAuthorLen)
+		}
+	}
+	labels, err := cleanLabels(it.Labels)
+	if err != nil {
+		return fail("%v", err)
+	}
+	it.Labels = labels
+	if len(it.Attachments) > api.MaxAttachmentsPerItem {
+		return fail("it has %d files; an item can hold at most %d", len(it.Attachments), api.MaxAttachmentsPerItem)
+	}
+	for _, a := range it.Attachments {
+		if !validAttachmentID(a.ID) {
+			return fail("attachment %q has an id that is not 32 lowercase hex characters", a.ID)
+		}
+		if clean, err := cleanAttachmentName(a.Name); err != nil || clean != a.Name {
+			return fail("attachment %s has a name %q that is not a clean file name", a.ID, a.Name)
+		}
+		if a.Size < 0 || a.Size > api.MaxAttachmentBytes {
+			return fail("%s (attachment %s) is %s; a file can be at most %s", a.Name, a.ID, fileSize(a.Size), fileSize(api.MaxAttachmentBytes))
+		}
+		if !isLowerHex(a.SHA256, 64) {
+			return fail("attachment %s has a sha256 that is not 64 lowercase hex characters", a.ID)
+		}
+		if a.CreatedAt.IsZero() {
+			return fail("attachment %s has no time", a.ID)
 		}
 	}
 	if it.Owner != "" && (!ValidBridgeName(it.Owner) || onHub(it.Owner)) {

@@ -67,11 +67,15 @@ type Change struct {
 type Store struct {
 	db  *sql.DB
 	now func() time.Time
+	dir string // the data directory; attachments live in its AttachmentDir
 
 	mu        sync.Mutex
 	listeners []func(Change)
 	offline   map[string]bool            // runs the last State showed offline; see joinRuns
 	applying  map[string]map[string]bool // per bridge, the actions its last run list holds as applied; see ReplaceRuns
+	inflight  map[string]bool            // attachment files being written; the sweep leaves them alone
+
+	restoring sync.Mutex // one restore at a time, so two never write the same files
 }
 
 // Open checks dataDir is writable, opens (or creates) the database in it,
@@ -101,7 +105,11 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("SQLite could not use WAL mode in %s (got %q); the data directory must be local storage, not NFS or SMB", dataDir, mode)
 	}
-	s := &Store{db: db, now: func() time.Time { return time.Now().UTC() }}
+	s := &Store{db: db, now: func() time.Time { return time.Now().UTC() }, dir: dataDir}
+	if err := os.MkdirAll(s.attachmentDir(), 0o750); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("cannot create %s: %w", s.attachmentDir(), err)
+	}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -152,7 +160,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 12
+const schemaVersion = 13
 
 var migrations = []string{
 	// 1: initial schema.
@@ -318,6 +326,27 @@ ALTER TABLE hub_owners RENAME TO personal_owners;
 	// Claude Code.
 	`
 ALTER TABLE bridges ADD COLUMN harness TEXT NOT NULL DEFAULT '';
+`,
+	// 13: attachments (attachments.go), files kept for items of the lists
+	// the hub keeps. The bytes are files in the data directory's
+	// attachments folder, named by id; a row goes with its item. removed_at
+	// marks one removed and waiting to be purged. IF NOT EXISTS lets the
+	// tests of older migrations, which step user_version back, run it again.
+	`
+CREATE TABLE IF NOT EXISTS attachments (
+	id         TEXT PRIMARY KEY,
+	bridge     TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	item_id    TEXT NOT NULL,
+	name       TEXT NOT NULL,
+	type       TEXT NOT NULL,
+	size       INTEGER NOT NULL,
+	sha256     TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	removed_at TEXT,
+	FOREIGN KEY (bridge, repo, item_id) REFERENCES items(bridge, repo, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id);
 `,
 }
 

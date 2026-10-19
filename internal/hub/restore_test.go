@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/store"
 )
 
 // restoreFile is the store package's hand-written version 1 export.
@@ -85,6 +86,6 @@ func TestRestoreRouteRefusesBadFiles(t *testing.T) {
 		t.Fatalf("status after refused files: %q", s.Status)
 	}
 
-	w := h.do("POST", "/api/restore", strings.Repeat(" ", maxRestoreBody+1), "")
+	w := h.do("POST", "/api/restore", strings.Repeat(" ", store.MaxExportJSON+1), "")
 	h.expect(w, http.StatusRequestEntityTooLarge)
 }

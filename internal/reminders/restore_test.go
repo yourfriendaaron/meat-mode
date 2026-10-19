@@ -1,6 +1,7 @@
 package reminders
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -31,7 +32,7 @@ func restored(t *testing.T, now time.Time, fn func(ex map[string]any)) (*Schedul
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	if _, err := st.Restore(file); err != nil {
+	if _, err := st.Restore(bytes.NewReader(file)); err != nil {
 		t.Fatal(err)
 	}
 	n := &fakeNotifier{}

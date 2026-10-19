@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -77,7 +78,7 @@ func TestRestoreLoadsAnExport(t *testing.T) {
 	_, err := s.NewCalendarToken()
 	must(t, err)
 
-	res, err := s.Restore(exportFile(t))
+	res, err := s.Restore(bytes.NewReader(exportFile(t)))
 	must(t, err)
 	want := api.RestoreResult{Items: 4, Actions: 6, Reminders: 2, Cancelled: 2, Machines: []string{"laptop"}, CalendarFeed: true}
 	if fmt.Sprint(res) != fmt.Sprint(want) {
@@ -224,7 +225,7 @@ func TestRestoreRefusesAHubWithData(t *testing.T) {
 			s, _ := open(t)
 			add(t, s)
 			before := snapshot(t, s)
-			_, err := s.Restore(exportFile(t))
+			_, err := s.Restore(bytes.NewReader(exportFile(t)))
 			if !errors.Is(err, ErrHubInUse) || !errors.Is(err, ErrConflict) {
 				t.Fatalf("restore into a hub with data: %v", err)
 			}
@@ -238,7 +239,7 @@ func TestRestoreRefusesAHubWithData(t *testing.T) {
 func TestRestoreRefusesANewerVersion(t *testing.T) {
 	s, _ := open(t)
 	before := snapshot(t, s)
-	_, err := s.Restore(changeExport(t, func(ex map[string]any) { ex["version"] = api.ExportVersion + 1 }))
+	_, err := s.Restore(bytes.NewReader(changeExport(t, func(ex map[string]any) { ex["version"] = api.ExportVersion + 1 })))
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("newer version: %v", err)
 	}
@@ -265,7 +266,7 @@ func TestRestoreRefusesWhatIsNotAnExport(t *testing.T) {
 	for name, file := range cases {
 		t.Run(name, func(t *testing.T) {
 			s, _ := open(t)
-			_, err := s.Restore(file)
+			_, err := s.Restore(bytes.NewReader(file))
 			if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "not a Meat Mode export") {
 				t.Fatalf("%v", err)
 			}
@@ -325,7 +326,7 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s, _ := open(t)
 			before := snapshot(t, s)
-			_, err := s.Restore(changeExport(t, c.change))
+			_, err := s.Restore(bytes.NewReader(changeExport(t, c.change)))
 			if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), c.says) {
 				t.Fatalf("got %v, want an invalid error saying %q", err, c.says)
 			}
@@ -348,9 +349,9 @@ func manyChecks(n int) []any {
 // time zone stays unchosen.
 func TestRestoreAnEmptyExport(t *testing.T) {
 	s, _ := open(t)
-	res, err := s.Restore([]byte(`{"format":"meat-mode-export","version":1,"exportedAt":"2026-10-14T10:00:00Z",
+	res, err := s.Restore(bytes.NewReader([]byte(`{"format":"meat-mode-export","version":1,"exportedAt":"2026-10-14T10:00:00Z",
 		"settings":{"name":"","timeZone":"","reminderLead":0,"calendarFeed":false},
-		"items":[],"actions":[],"reminders":[],"origins":[],"machines":[]}`))
+		"items":[],"actions":[],"reminders":[],"origins":[],"machines":[]}`)))
 	must(t, err)
 	if res.Items != 0 || res.Machines == nil || res.CalendarFeed {
 		t.Fatalf("result %+v", res)

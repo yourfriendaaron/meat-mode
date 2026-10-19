@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func TestExportRestoresIntoAFreshHub(t *testing.T) {
 	must(t, err)
 
 	fresh, _ := open(t)
-	res, err := fresh.Restore(file)
+	res, err := fresh.Restore(bytes.NewReader(file))
 	must(t, err)
 	if res.Items != len(first.Items) || res.Actions != len(first.Actions) || res.Reminders != 1 || res.Cancelled != 1 ||
 		!res.CalendarFeed || len(res.Machines) != len(first.Machines) {
