@@ -27,7 +27,7 @@ Why these three, and why not Tasks.md or Task Master yet: [research/0004-tracker
 - `Name`: the registry key, lower case. `Title`: the name the app shows.
 - `Rank`: when two trackers detect the same folder, the lowest rank syncs it and the other is skipped with a log line. beads is 0; others take 10, 20 and so on.
 - `Prune`: folder names the bridge's repo walk never enters, such as the tracker's own store.
-- `Raise`: the shell command an agent runs to raise a task for the person, written with the title "Approve the footer text" and the description "What is needed, why, and where to find it.". The app shows it in the instruction text for agents on each machine that runs the tracker.
+- `Raise`: the shell command an agent runs to raise a task for the person, written with the title "Approve the footer text" and the description "What is needed, why, and where to find it.". The app shows it in the instruction text for agents on each machine that runs the tracker. For a bridge older than `raise` that names beads, Backlog.md or ticket without it, the app uses its own copy of that tracker's command (`KNOWN_RAISE` in `web/src/agents.ts`); a tracker it does not know is named with no command.
 - `Actions`: the capabilities it supports, from `tracker.Capabilities`: `done`, `reopen`, `snooze`, `dismiss`, `note`, `add`, `subtask` (an add under a parent) and `ask`. Every tracker supports `add`. `ask` needs `tracker.Agent` as well, and `tracker.Validate` checks both.
 
 ## Methods

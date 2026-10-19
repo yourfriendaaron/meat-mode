@@ -178,24 +178,49 @@ export function reauthFieldHTML(prefix: string): string {
 <label for="${id}">Password</label><p class="muted small" id="${id}-hint">Enter your password to add a machine.</p><input id="${id}" name="password" type="password" autocomplete="current-password" required aria-describedby="${id}-hint">`;
 }
 
-/** The beads command an older machine's text names, from before machines said how each tracker raises a task. */
-const BEADS_RAISE = 'bd create "Approve the footer text" -l human -d "What is needed, why, and where to find it."';
+/**
+ * The raise command and title of each tracker, for a machine whose bridge
+ * names its trackers but is older than their raise commands. Only the
+ * trackers older than that need one, since a newer tracker always sends its
+ * own. Each matches the tracker's Info().Raise, which a test in
+ * internal/tracker/all checks.
+ */
+const KNOWN_RAISE: Record<string, { title: string; raise: string }> = {
+  beads: { title: "beads", raise: 'bd create "Approve the footer text" -l human -d "What is needed, why, and where to find it."' },
+  backlog: {
+    title: "Backlog.md",
+    raise: 'backlog task create "Approve the footer text" --labels human --description "What is needed, why, and where to find it."',
+  },
+  ticket: { title: "ticket", raise: 'tk create "Approve the footer text" --tags human -d "What is needed, why, and where to find it."' },
+};
 
 /**
  * How the text says to raise a task: one command per tracker the machine
- * runs, or the beads wording for a machine that has not said which it runs
- * (an older bridge, or one not connected yet).
+ * runs, or the beads wording for a machine that names no tracker but beads
+ * and no command (an older bridge, or one not connected yet). A tracker sent
+ * without its command takes the known one; an unknown one is named without
+ * a command.
  */
 function raiseText(who: string, machine: Pick<Bridge, "trackers">): string {
-  const trackers = (machine.trackers ?? []).filter((t) => t.raise);
-  if (!trackers.length) {
+  const listed = machine.trackers ?? [];
+  if (listed.every((t) => t.name === "beads" && !t.raise)) {
     return `When you need ${who} to do something only a person can do, such as a decision, a login, a payment or a review, raise a bead labelled human in the repo you are working in:
 
-    ${BEADS_RAISE}
+    ${KNOWN_RAISE.beads.raise}
 
 It reaches ${who} when that repo is switched on in Meat Mode. Beads without the human label stay out of their list. What they do comes back to the bead: done closes it and a note becomes a comment, so check the bead before asking again.`;
   }
-  const lines = trackers.map((t) => `In a repo that uses ${t.title || t.name}:\n\n    ${t.raise}`).join("\n\n");
+  const trackers = listed.map((t) => {
+    const known = KNOWN_RAISE[t.name];
+    return t.raise || !known ? t : { ...t, title: t.title || known.title, raise: known.raise };
+  });
+  const lines = trackers
+    .map((t) =>
+      t.raise
+        ? `In a repo that uses ${t.title || t.name}:\n\n    ${t.raise}`
+        : `In a repo that uses ${t.title || t.name}, create the task with that tracker's own command and label it human.`,
+    )
+    .join("\n\n");
   return `When you need ${who} to do something only a person can do, such as a decision, a login, a payment or a review, raise a task for them in the tracker of the repo you are working in.
 
 ${lines}
