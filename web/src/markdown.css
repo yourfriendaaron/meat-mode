@@ -10,32 +10,27 @@ div.md {
   margin-top: 2px;
 }
 div.md p {
-  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-div.md > * + *,
-div.md li > * + *,
-div.md blockquote > * + * {
-  margin-top: 1lh;
+div.md :is(p, ul, ol, pre, blockquote, table, hr) {
+  margin-block: 0;
 }
-div.md > * {
-  margin-bottom: 0;
+div.md :is(p, ul, ol, pre, blockquote, table, hr):not(:first-child) {
+  margin-top: 1lh;
 }
 div.md .md-h {
   font-weight: 700;
 }
 div.md ul,
 div.md ol {
-  margin: 0;
   padding-left: 1.4em;
 }
 div.md li + li {
   margin-top: 2px;
 }
 div.md blockquote {
-  margin-left: 0;
-  margin-right: 0;
+  margin-inline: 0;
   padding-left: 10px;
   border-left: 3px solid var(--role-line);
   color: var(--role-soft);
@@ -48,7 +43,6 @@ div.md code {
   background: var(--role-sunk);
 }
 div.md pre {
-  margin-bottom: 0;
   padding: 8px 10px;
   border-radius: 6px;
   background: var(--role-sunk);
@@ -84,4 +78,13 @@ div.md td {
   padding: 4px 8px;
   border: 1px solid var(--role-line);
   overflow-wrap: normal;
+}
+div.md .md-left {
+  text-align: left;
+}
+div.md .md-center {
+  text-align: center;
+}
+div.md .md-right {
+  text-align: right;
 }

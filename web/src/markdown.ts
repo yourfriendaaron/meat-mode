@@ -42,13 +42,13 @@ function guardLinks(state: StateCore) {
     const dropped: boolean[] = [];
     for (const t of block.children) {
       if (t.type === "link_open") {
-        const ok = safeHref(t.attrGet("href") ?? "");
+        const ok = safeHref(String(t.attrGet("href") ?? ""));
         dropped.push(!ok);
         if (ok) out.push(t);
       } else if (t.type === "link_close") {
         if (!dropped.pop()) out.push(t);
       } else if (t.type === "image") {
-        const src = t.attrGet("src") ?? "";
+        const src = String(t.attrGet("src") ?? "");
         const text = new state.Token("text", "", 0);
         text.content = plainText(t.children) || src;
         if (!safeHref(src)) {
@@ -58,7 +58,7 @@ function guardLinks(state: StateCore) {
         const open = new state.Token("link_open", "a", 1);
         open.attrs = [["href", src]];
         const title = t.attrGet("title");
-        if (title) open.attrs.push(["title", title]);
+        if (title) open.attrs.push(["title", String(title)]);
         out.push(open, text, new state.Token("link_close", "a", -1));
       } else {
         out.push(t);
@@ -77,6 +77,16 @@ rules.link_open = (tokens, idx, options, _env, self) => {
   t.attrSet("rel", "noopener noreferrer");
   return self.renderToken(tokens, idx, options);
 };
+
+// A table column's alignment is a class, not an inline style.
+for (const rule of ["th_open", "td_open"]) {
+  rules[rule] = (tokens, idx, options, _env, self) => {
+    const t = tokens[idx];
+    const align = /text-align:(left|right|center)/.exec(String(t.attrGet("style") ?? ""))?.[1];
+    t.attrs = align ? [["class", `md-${align}`]] : null;
+    return self.renderToken(tokens, idx, options);
+  };
+}
 
 // A heading is one size, smaller than the detail's own, and takes no place
 // in the page's outline or an id another element could clash with.

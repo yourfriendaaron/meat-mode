@@ -20,8 +20,8 @@ const ALLOWED: Record<string, Record<string, RegExp>> = {
   thead: {},
   tbody: {},
   tr: {},
-  th: { style: /^text-align:(left|right|center)$/ },
-  td: { style: /^text-align:(left|right|center)$/ },
+  th: { class: /^md-(left|right|center)$/ },
+  td: { class: /^md-(left|right|center)$/ },
   a: { href: /^(https?:|mailto:)/i, title: /^[^"<>]*$/, target: /^_blank$/, rel: /^noopener noreferrer$/ },
 };
 
@@ -146,6 +146,7 @@ test("a single newline stays a line break", () => {
 
 test("tables and strikethrough render; typographer and linkify stay off", () => {
   assert.match(renderMarkdown("| a |\n|---|\n| 1 |"), /<table>/);
+  assert.match(renderMarkdown("| a | b |\n|:-:|---|\n| 1 | 2 |"), /<th class="md-center">a<\/th>\n<th>b<\/th>/);
   assert.equal(renderMarkdown("~~old~~"), "<p><s>old</s></p>\n");
   assert.equal(renderMarkdown('"quoted" -- (c) https://example.com'), '<p>&quot;quoted&quot; -- (c) https://example.com</p>\n');
 });
