@@ -1,8 +1,10 @@
 package hub
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,9 +47,6 @@ func TestClaimTheHub(t *testing.T) {
 	if len(code) != 14 || code[4] != '-' || code[9] != '-' {
 		t.Fatalf("setup code %q, want XXXX-XXXX-XXXX", code)
 	}
-	if err := h.st.SetTailscaleOnly(true); err != nil {
-		t.Fatal(err)
-	}
 
 	if w := h.do("POST", "/api/setup/claim", claimBody(code, "short"), ""); w.Code != http.StatusBadRequest ||
 		!strings.Contains(w.Body.String(), "at least 8") {
@@ -75,7 +74,7 @@ func TestClaimTheHub(t *testing.T) {
 		t.Errorf("another browser after the claim: %d, want 401", w.Code)
 	}
 	got := decode[api.Setup](t, h.do("GET", "/api/setup", "", c.Value))
-	if got.Password != "app" || got.TailscaleOnly {
+	if got.Password != "app" {
 		t.Errorf("setup after the claim: %+v", got)
 	}
 
@@ -178,8 +177,9 @@ func TestEnvironmentPasswordWins(t *testing.T) {
 func TestChangePassword(t *testing.T) {
 	const sub = `{"endpoint":"https://updates.push.services.mozilla.com/wpush/v2/b","keys":{"p256dh":"p","auth":"a"}}`
 	h := newLoginHarness(t, Config{})
-	if w := h.do("PUT", "/api/password", `{"current":"","password":"feed the cat"}`, ""); w.Code != http.StatusConflict {
-		t.Errorf("change on a hub with no password: %d %s, want 409", w.Code, w.Body)
+	if w := h.do("PUT", "/api/password", `{"current":"","password":"feed the cat"}`, ""); w.Code != http.StatusUnauthorized ||
+		!strings.Contains(w.Body.String(), noPassword) {
+		t.Errorf("change on a hub with no password: %d %s, want 401", w.Code, w.Body)
 	}
 
 	if err := h.st.SetPasswordHash(cheapHash("water the plants")); err != nil {
@@ -258,21 +258,96 @@ func TestWrongCurrentPasswordCountsAsAWrongLogin(t *testing.T) {
 	}
 }
 
-func TestTailscaleOnly(t *testing.T) {
-	h := newLoginHarness(t, Config{})
-	if w := h.do("PUT", "/api/setup/tailscale-only", `{"on":true}`, ""); w.Code != http.StatusNoContent {
-		t.Fatalf("record: %d %s", w.Code, w.Body)
+// reauthReply decodes a 403 that asks for the password again.
+func reauthReply(t *testing.T, w *httptest.ResponseRecorder) (msg string, reauth bool) {
+	t.Helper()
+	var v struct {
+		Error  string
+		Reauth bool
 	}
-	if got := decode[api.Setup](t, h.do("GET", "/api/setup", "", "")); !got.TailscaleOnly || got.Password != "none" {
-		t.Errorf("setup: %+v", got)
+	if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
+		t.Fatalf("reply %q: %v", w.Body, err)
 	}
-	if w := h.do("PUT", "/api/setup/tailscale-only", `{"on":false}`, ""); w.Code != http.StatusNoContent {
-		t.Fatalf("clear: %d %s", w.Code, w.Body)
+	return v.Error, v.Reauth
+}
+
+func TestAddingAMachineNeedsTheRecentPassword(t *testing.T) {
+	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
+	c := h.login("water the plants")
+
+	// Within 10 minutes of the login, no password is asked.
+	h.now = h.now.Add(reauthWindow - time.Second)
+	if w := h.do("POST", "/api/bridges", `{"name":"laptop"}`, c.Value); w.Code != http.StatusCreated {
+		t.Fatalf("add within the window: %d %s", w.Code, w.Body)
+	}
+	// At 10 minutes it is.
+	h.now = h.now.Add(time.Second)
+	w := h.do("POST", "/api/bridges", `{"name":"desktop"}`, c.Value)
+	if msg, re := reauthReply(t, w); w.Code != http.StatusForbidden || !re || msg != "enter your password to add a machine" {
+		t.Fatalf("add after the window: %d %s", w.Code, w.Body)
+	}
+	w = h.do("POST", "/api/bridges", `{"name":"desktop","password":"Water the plants"}`, c.Value)
+	if msg, re := reauthReply(t, w); w.Code != http.StatusForbidden || !re || msg != "wrong password" {
+		t.Fatalf("add with a wrong password: %d %s", w.Code, w.Body)
+	}
+	if w := h.do("POST", "/api/bridges", `{"name":"desktop","password":"water the plants"}`, c.Value); w.Code != http.StatusCreated {
+		t.Fatalf("add with the password: %d %s", w.Code, w.Body)
+	}
+	// The right password counts as entering it: the next 10 minutes need
+	// none.
+	h.now = h.now.Add(reauthWindow - time.Second)
+	if w := h.do("POST", "/api/bridges", `{"name":"tablet"}`, c.Value); w.Code != http.StatusCreated {
+		t.Errorf("add after entering the password: %d %s", w.Code, w.Body)
+	}
+	// Other sessions are not affected by it.
+	other := h.login("water the plants")
+	h.now = h.now.Add(reauthWindow)
+	if w := h.do("POST", "/api/bridges", `{"name":"spare"}`, other.Value); w.Code != http.StatusForbidden {
+		t.Errorf("another session after its window: %d, want 403", w.Code)
+	}
+}
+
+func TestWrongPasswordToAddAMachineCountsAsAWrongLogin(t *testing.T) {
+	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
+	c := h.login("water the plants")
+	h.now = h.now.Add(reauthWindow)
+	for range loginFailures {
+		h.now = h.now.Add(time.Second)
+		if w := h.do("POST", "/api/bridges", `{"name":"laptop","password":"nope"}`, c.Value); w.Code != http.StatusForbidden {
+			t.Fatalf("wrong password: %d %s", w.Code, w.Body)
+		}
+	}
+	w := h.do("POST", "/api/bridges", `{"name":"laptop","password":"water the plants"}`, c.Value)
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") != "56" {
+		t.Fatalf("sixth try: %d, Retry-After %q; want 429, 56", w.Code, w.Header().Get("Retry-After"))
+	}
+	if w := h.do("POST", "/api/login", `{"password":"water the plants"}`, ""); w.Code != http.StatusTooManyRequests {
+		t.Errorf("login after five wrong passwords to add a machine: %d, want 429", w.Code)
+	}
+	// Without a password the limit does not apply: it asks for one.
+	if w := h.do("POST", "/api/bridges", `{"name":"laptop"}`, c.Value); w.Code != http.StatusForbidden {
+		t.Errorf("no password while limited: %d, want 403", w.Code)
+	}
+}
+
+func TestClaimAndPasswordChangeCountAsEnteringThePassword(t *testing.T) {
+	cfg := Config{DataDir: t.TempDir()}
+	h := newLoginHarness(t, cfg)
+	code := mintCode(t, h, cfg)
+	w := h.do("POST", "/api/setup/claim", claimBody(code, "water the plants"), "")
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("claim: %d %s", w.Code, w.Body)
+	}
+	c := responseCookie(t, w)
+	if w := h.do("POST", "/api/bridges", `{"name":"laptop"}`, c.Value); w.Code != http.StatusCreated {
+		t.Fatalf("add right after the claim: %d %s", w.Code, w.Body)
 	}
 
-	h = newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
-	c := h.login("water the plants")
-	if w := h.do("PUT", "/api/setup/tailscale-only", `{"on":true}`, c.Value); w.Code != http.StatusConflict {
-		t.Errorf("record with a password: %d %s, want 409", w.Code, w.Body)
+	h.now = h.now.Add(time.Hour)
+	if w := h.do("PUT", "/api/password", `{"current":"water the plants","password":"feed the cat"}`, c.Value); w.Code != http.StatusNoContent {
+		t.Fatalf("change: %d %s", w.Code, w.Body)
+	}
+	if w := h.do("POST", "/api/bridges", `{"name":"desktop"}`, c.Value); w.Code != http.StatusCreated {
+		t.Errorf("add right after a password change: %d %s", w.Code, w.Body)
 	}
 }

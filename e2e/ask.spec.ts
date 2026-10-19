@@ -112,9 +112,11 @@ test(JOURNEY, async ({ page, w }) => {
   await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
   const sync = page.getByRole("switch", { name: /^Sync chores / });
   const agents = page.getByRole("switch", { name: /^Agents can work in chores / });
-  await expect(agents).toBeDisabled();
+  // The app cannot switch agents on: it shows the command for the machine instead.
+  await expect(agents).toHaveCount(0);
   await sync.click();
   await expect(sync).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText(/^meat-mode bridge agents on \S*chores$/)).toBeVisible();
   await w.setAgents("laptop", chores, true);
   await expect(agents).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText("Waiting for laptop")).toHaveCount(0);

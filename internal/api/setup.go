@@ -16,9 +16,6 @@ type Setup struct {
 	// Password is "env" when MEAT_MODE_PASSWORD_HASH or _FILE sets it,
 	// "app" when it was set in the app, "none" otherwise.
 	Password string `json:"password"`
-	// TailscaleOnly is set when the user chose no password, keeping the
-	// hub on a private network.
-	TailscaleOnly bool `json:"tailscaleOnly"`
 }
 
 // SetupRecord is POST /api/setup.
@@ -37,11 +34,6 @@ type SetupClaim struct {
 type PasswordChange struct {
 	Current  string `json:"current"`
 	Password string `json:"password"`
-}
-
-// TailscaleOnly is PUT /api/setup/tailscale-only.
-type TailscaleOnly struct {
-	On bool `json:"on"`
 }
 
 // SetupStatus is GET /api/setup/status: what the connection check cannot

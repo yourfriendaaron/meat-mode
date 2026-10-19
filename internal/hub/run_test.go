@@ -55,7 +55,7 @@ func TestRunEndsSessionsOfAnOldEnvironmentHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := newLogin(cheapHash("water the plants"), true)
-	token, _, err := st.CreateSession(old.tag, time.Now(), sessionTTL)
+	token, _, err := st.CreateSession(old.tag, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

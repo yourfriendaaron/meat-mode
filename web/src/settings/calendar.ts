@@ -85,7 +85,7 @@ async function copy(ctx: AppContext) {
 }
 
 const REACH =
-  '<p class="muted small">Anyone with the link can see the titles and due times, so keep it to yourself. Google Calendar and Outlook fetch the link from their own servers, so they need the hub reachable from the internet. A calendar app on your phone or computer fetches it itself, so a private network such as Tailscale is enough there.</p>';
+  '<p class="muted small">Anyone with the link can see the titles and due times, so keep it to yourself. The hub answers only on your private network, so the link works in a calendar app on your own phone or computer while it is on that network. Google Calendar and Outlook on the web fetch links from their own servers, which cannot reach the hub.</p>';
 
 registerSection({
   id: "calendar",

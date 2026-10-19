@@ -21,7 +21,7 @@ import (
 // PushRegistry keeps Web Push subscriptions. internal/notify provides it.
 type PushRegistry interface {
 	PublicKey() string
-	// Subscribe stores s for the session sessionID ("" when login is off).
+	// Subscribe stores s for the session sessionID.
 	Subscribe(ctx context.Context, sessionID string, s api.PushSubscription) error
 	Unsubscribe(ctx context.Context, endpoint string) error
 	// DropSession removes the subscriptions a session registered.
@@ -56,6 +56,11 @@ type Server struct {
 	mux       *http.ServeMux
 	log       *slog.Logger
 
+	lookup   dnsLookup     // public DNS, for the public DNS check
+	dnsEvery time.Duration // between public DNS checks after start
+	dnsMu    sync.Mutex
+	dns      api.PublicDNS // the latest public DNS check; read it with publicDNS
+
 	loginMu    sync.RWMutex
 	login      *login     // nil: the hub has no login; read it with currentLogin
 	verify     sync.Mutex // one password or setup code check at a time
@@ -87,6 +92,9 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 		heartbeat: 25 * time.Second,
 		mux:       http.NewServeMux(),
 		log:       slog.Default(),
+		lookup:    lookupPublic,
+		dnsEvery:  dnsEvery,
+		dns:       api.PublicDNS{State: api.DNSUnchecked},
 	}
 	s.login = newLogin(cfg.PasswordHash, true)
 	if s.login == nil {
@@ -151,6 +159,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("X-Frame-Options", "DENY")
+	h.Set("Cross-Origin-Opener-Policy", "same-origin")
 	h.Set("Content-Security-Policy", contentSecurityPolicy)
 	if !s.guard.check(w, r) {
 		return
@@ -367,11 +376,15 @@ func (s *Server) handleListBridges(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, bs)
 }
 
+// handleNewBridge adds a machine. Its token can wake agents, so it needs the
+// password entered within reauthWindow in this session, or in the body
+// (docs/api.md, Login, Password again).
 func (s *Server) handleNewBridge(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name string `json:"name"`
-	}
+	var body api.NewBridge
 	if !readJSON(w, r, maxBody, &body) {
+		return
+	}
+	if !s.passwordAgain(w, r, body.Password) {
 		return
 	}
 	token, err := s.store.CreateBridge(body.Name)

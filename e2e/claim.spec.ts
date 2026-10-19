@@ -1,8 +1,8 @@
 // End to end: claiming a new hub in the browser with the setup code it
 // writes at start, then changing the password in Settings. A real hub with no
-// password in its environment, and a second one with a password there, which
-// refuses claiming. No bridges or bd. The tests in each block share one world
-// and run in order.
+// password, which serves nothing but its setup until it is claimed, and a
+// second one with a password in its environment, which refuses claiming. No
+// bridges or bd. The tests in each block share one world and run in order.
 
 import { test as base, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { stat } from "node:fs/promises";
@@ -38,8 +38,9 @@ async function teardown() {
   failed = false;
 }
 
+/** A page in a browser of its own, without the World's login (world.ts, STORAGE_STATE). */
 async function newPage(browser: Browser): Promise<Page> {
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   contexts.push(ctx);
   return ctx.newPage();
 }
@@ -70,13 +71,13 @@ base.describe("a hub with no password", () => {
   let sam: Page;
 
   base.beforeAll(async ({ browser }) => {
-    world = await World.create();
+    world = await World.create({ noPassword: true });
     alex = await newPage(browser);
     sam = await newPage(browser);
   });
   base.afterAll(teardown);
 
-  test("writes a one-time setup code to its log and data folder", async ({ w }) => {
+  test("writes a one-time setup code to its log and data folder, and serves only its setup", async ({ w }) => {
     const code = (await w.hubFile("setup-code"))?.trim() ?? "";
     expect(code).toMatch(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
     expect(w.hub.output).toContain(code);
@@ -84,40 +85,46 @@ base.describe("a hub with no password", () => {
       const st = await stat(join(w.tmp, "hub-data", "setup-code"));
       expect(st.mode & 0o777).toBe(0o600);
     }
-    expect(await w.api("/api/setup")).toMatchObject({ status: "new", password: "none" });
+    expect(await w.api("/api/session")).toEqual({ login: false, authenticated: false });
+    const json = { "Content-Type": "application/json" };
+    const setup = await fetch(`${w.hubURL}/api/setup`);
+    expect(setup.status).toBe(401);
+    expect(await setup.json()).toEqual({ error: "this hub has no password yet: set one with the setup code" });
+    expect((await fetch(`${w.hubURL}/api/state`)).status).toBe(401);
+    const login = await fetch(`${w.hubURL}/api/login`, { method: "POST", headers: json, body: JSON.stringify({ password: FIRST }) });
+    expect(login.status).toBe(404);
+    expect((await fetch(`${w.hubURL}/api/logout`, { method: "POST", headers: json })).status).toBe(204);
   });
 
-  test("the wizard claims the hub with the code and logs this browser in", async ({ w }) => {
+  test("the app shows the claim step, claims the hub with the code and logs this browser in", async ({ w }) => {
     const code = (await w.hubFile("setup-code"))!.trim();
     await alex.goto(w.appURL);
-    await expect(heading(alex)).toHaveText("Welcome");
-    await wizard(alex).getByRole("button", { name: "Start" }).click();
-    await expect(heading(alex)).not.toHaveText("Welcome");
-    await skipUntil(alex, "Secure the hub");
+    // Nothing but the claim step: no login, and no list.
+    await expect(alex.getByLabel("Setup code")).toBeVisible();
+    await expect(alex.getByRole("button", { name: "Log in" })).toHaveCount(0);
+    await expect(alex.locator("#list")).toHaveCount(0);
 
-    const step = wizard(alex).locator('[data-step="secure"]');
     const fill = async (c: string) => {
-      await step.getByLabel("Setup code").fill(c);
-      await step.getByLabel("New password", { exact: true }).fill(FIRST);
-      await step.getByLabel("Repeat the password").fill(FIRST);
-      await step.getByRole("button", { name: "Set password" }).click();
+      await alex.getByLabel("Setup code").fill(c);
+      await alex.getByLabel("New password", { exact: true }).fill(FIRST);
+      await alex.getByLabel("Repeat the password").fill(FIRST);
+      await alex.getByRole("button", { name: "Set password" }).click();
     };
     await fill("ZZZZ-ZZZZ-ZZZZ");
-    await expect(step.getByRole("alert")).toContainText("wrong, expired or already used");
+    await expect(alex.getByRole("alert")).toContainText("wrong, expired or already used");
 
     await fill(code.toLowerCase());
-    await expect(step.getByRole("status")).toHaveText("The password is set, and this device is logged in.");
+    // The claim step gives way to the app at once.
+    await expect(alex.getByLabel("Setup code")).toHaveCount(0);
     expect(await w.hubFile("setup-code")).toBeNull();
+    // This browser is logged in; a request without its cookie is not.
+    expect(await (await alex.request.get(`${w.appURL}/api/session`)).json()).toEqual({ login: true, authenticated: true });
     expect(await w.api("/api/session")).toEqual({ login: true, authenticated: false });
+    expect((await fetch(`${w.hubURL}/api/state`)).status).toBe(401);
 
-    await wizard(alex).locator("[data-act=wizard-next]").click();
-    await expect(heading(alex)).not.toHaveText("Secure the hub");
-    await skipUntil(alex, "All set");
-    await expect(wizard(alex).locator(".wiz-summary li", { hasText: "Secure the hub" })).toContainText("Set up");
-    await wizard(alex).locator("[data-act=wizard-next]").click();
-    await expect(alex.locator("#view-title")).toHaveText("Today");
-
-    // The session holds across a reload.
+    // Close the setup wizard, then the session holds across a reload.
+    const done = await alex.request.post(`${w.appURL}/api/setup`, { data: { status: "dismissed" } });
+    expect(done.status()).toBe(204);
     await alex.reload();
     await expect(alex.locator("#view-title")).toHaveText("Today");
     await expect(alex.getByLabel("Password")).toHaveCount(0);

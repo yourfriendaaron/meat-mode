@@ -14,7 +14,8 @@ import (
 )
 
 // Device methods of fakePush: device "dev1" has token "mmd_good", and the
-// confirmation code "right" confirms any device.
+// confirmation code "right" confirms any device. Every device belongs to
+// the session owner.
 
 const fakeDevice = "0123456789abcdef0123456789abcdef"
 
@@ -33,13 +34,14 @@ func (f *fakePush) ConfirmDevice(_ context.Context, id, code string) (string, er
 	return "mmd_good", nil
 }
 
-func (f *fakePush) DeviceByToken(_ context.Context, token string) (string, error) {
+// DeviceByToken reports every device as registered by the session owner.
+func (f *fakePush) DeviceByToken(_ context.Context, token string) (string, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if id, ok := f.tokens[token]; ok {
-		return id, nil
+		return id, f.owner, nil
 	}
-	return "", store.ErrUnauthorized
+	return "", "", store.ErrUnauthorized
 }
 
 func (f *fakePush) UpdateDevice(_ context.Context, id string, s api.PushSubscription) error {
@@ -165,6 +167,7 @@ func TestDeviceRequestIgnoresTheSessionCookie(t *testing.T) {
 	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
 	h.push.giveToken("mmd_good", fakeDevice)
 	c := h.login("water the plants")
+	h.push.owner = store.SessionID(c.Value)
 	if w := h.do("GET", "/api/state", "", c.Value); w.Code != http.StatusOK {
 		t.Fatalf("state with a session: %d", w.Code)
 	}
@@ -175,10 +178,10 @@ func TestDeviceRequestIgnoresTheSessionCookie(t *testing.T) {
 	if w := deviceDo(t, h.srv, "GET", "/api/state", "", "mmd_unknown", c.Value); w.Code != http.StatusUnauthorized {
 		t.Errorf("state with a bad device token and a cookie: %d, want 401", w.Code)
 	}
-	// The token opens its routes with login on, without a session.
+	// The token opens its routes without a session cookie.
 	sub := `{"endpoint":"https://ntfy.example.com/upAbc?up=1","keys":{"p256dh":"k","auth":"a"}}`
 	if w := deviceDo(t, h.srv, "PUT", "/api/devices/self", sub, "mmd_good", ""); w.Code != http.StatusNoContent {
-		t.Errorf("renew with login on: %d %s", w.Code, w.Body)
+		t.Errorf("renew without a cookie: %d %s", w.Code, w.Body)
 	}
 }
 

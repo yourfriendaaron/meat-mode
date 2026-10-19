@@ -1,8 +1,8 @@
 // The hub's password, kept in the app: claiming a new hub with its setup
-// code, changing the password, and choosing no password on a private
-// network (docs/api.md, Password). The setup wizard's Secure step and the
-// Password section in Settings both draw these forms; `place` keeps their
-// field ids and messages apart.
+// code and changing the password (docs/api.md, Password). The claim screen a
+// hub with no password shows, the setup wizard's Secure step and the
+// Password section in Settings draw these forms; `place` keeps their field
+// ids and messages apart.
 
 import type { AppContext } from "./app-context.ts";
 import { ApiError, call } from "./api.ts";
@@ -11,7 +11,7 @@ import { esc } from "./html.ts";
 /** The hub refuses a shorter password. */
 export const MIN_PASSWORD = 8;
 
-export type Place = "wiz" | "set";
+export type Place = "wiz" | "set" | "claim";
 
 interface Status {
   error: string;
@@ -22,6 +22,7 @@ interface Status {
 const status: Record<Place, Status> = {
   wiz: { error: "", ok: "", busy: false },
   set: { error: "", ok: "", busy: false },
+  claim: { error: "", ok: "", busy: false },
 };
 
 /** Why the new password cannot be used, or "". */
@@ -104,14 +105,6 @@ ${messages(place)}
 </form>`;
 }
 
-/** The choice to keep the hub with no password. */
-export function tailscaleHTML(act: string): string {
-  return `<div class="pw-none">
-<p class="muted">No password is safe only when the hub can be reached through Tailscale or another private network, never from the internet.</p>
-<button class="btn" data-act="${esc(act)}">No password, Tailscale only</button>
-</div>`;
-}
-
 function value(form: HTMLFormElement, name: string): string {
   return form.querySelector<HTMLInputElement>(`input[name=${name}]`)?.value ?? "";
 }
@@ -151,10 +144,15 @@ async function run(place: Place, ctx: AppContext, fn: () => Promise<string>): Pr
  * is logged in and the app reloads what it knows of the hub.
  */
 export function claim(place: Place, form: HTMLFormElement, ctx: AppContext): Promise<boolean> {
+  return run(place, ctx, claimWith(form));
+}
+
+/** The claim request with the form's values read now; it throws the message to show. */
+function claimWith(form: HTMLFormElement): () => Promise<string> {
   const code = value(form, "code").trim();
   const password = value(form, "password");
   const repeat = value(form, "repeat");
-  return run(place, ctx, async () => {
+  return async () => {
     if (!code) throw new Error("Enter the setup code.");
     const bad = checkPassword(password, repeat);
     if (bad) throw new Error(bad);
@@ -164,7 +162,35 @@ export function claim(place: Place, form: HTMLFormElement, ctx: AppContext): Pro
       throw new Error(e instanceof ApiError ? claimErrorText(e.status, e.message) : sentence((e as Error).message));
     }
     return "The password is set, and this device is logged in.";
-  });
+  };
+}
+
+/**
+ * Claims the hub from the claim screen, which has no app around it: draw
+ * puts the screen back after each change. Resolves true once this browser
+ * is logged in.
+ */
+export async function claimScreen(form: HTMLFormElement, draw: () => void): Promise<boolean> {
+  const s = status.claim;
+  if (s.busy) return false;
+  const req = claimWith(form);
+  s.busy = true;
+  s.ok = "";
+  draw();
+  let ok = false;
+  try {
+    await req();
+    s.error = "";
+    ok = true;
+  } catch (e) {
+    s.error = (e as Error).message;
+  }
+  s.busy = false;
+  if (!ok) {
+    draw();
+    document.getElementById("claim-pw-error")?.focus();
+  }
+  return ok;
 }
 
 /** Changes the password; every other device is logged out. */
@@ -183,15 +209,4 @@ export function change(place: Place, form: HTMLFormElement, ctx: AppContext): Pr
     }
     return "The password is changed. Every other device is logged out.";
   });
-}
-
-/** Records that the hub keeps no password, on a private network. */
-export async function chooseTailscaleOnly(ctx: AppContext): Promise<void> {
-  try {
-    await call<void>("PUT", "/api/setup/tailscale-only", { on: true });
-  } catch (e) {
-    ctx.toast(`Could not save the choice: ${(e as Error).message}`);
-    return;
-  }
-  await ctx.refresh();
 }

@@ -118,6 +118,6 @@ export function runEnded(before: RunState | undefined, after: RunState | undefin
 export function noAgentReason(list: Repo | undefined): string {
   if (!list) return "";
   if (list.personal) return "Personal to-dos have no agent.";
-  if (!list.agentsAllowed) return "Agents are off for this list. Turn them on in Settings.";
+  if (!list.agentsAllowed) return "Agents are off for this list. They switch on at its machine.";
   return "";
 }

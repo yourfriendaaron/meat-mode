@@ -12,7 +12,7 @@ func TestSetupStatusAndRecord(t *testing.T) {
 	w := h.do("GET", "/api/setup", nil, "")
 	h.expect(w, http.StatusOK)
 	got := decode[api.Setup](t, w)
-	want := api.Setup{Status: "new", User: "alex", Password: "none"}
+	want := api.Setup{Status: "new", User: "alex", Password: "env"}
 	if got != want {
 		t.Fatalf("fresh hub: %+v", got)
 	}

@@ -1,6 +1,6 @@
-// End to end: the first run on a fresh hub, through every step of the setup
-// wizard in order. Claim the hub with the setup code from its log, keep a
-// name and time zone, check the connection, set up this device, add a first
+// End to end: the first run on a fresh hub. A hub with no password shows
+// only its claim step: claim it with the setup code from its log, then go
+// through every step of the setup wizard in order. Keep a name and time zone, check the connection, set up this device, add a first
 // to-do, pair a real bridge and switch on one of its repos, then finish. An
 // agent on the paired machine then adds a to-do with a date, read in the
 // hub's time zone rather than the machine's.
@@ -28,7 +28,7 @@ let failed = false;
 
 test.beforeAll(async () => {
   if (process.env.E2E_REQUIRE_BD && !hasBd()) throw new Error(BD_MISSING);
-  world = await World.create();
+  world = await World.create({ noPassword: true });
   await world.addMachine("laptop", [
     { name: "chores", prefix: "ch", optedIn: false, human: ["Fix the porch light"], other: ["Tidy the scripts folder"] },
     { name: "garden", prefix: "ga", optedIn: false, human: ["Prune the roses"] },
@@ -88,10 +88,27 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
   };
   await simulatePush(page);
 
-  await test.step("welcome lists the whole run", async () => {
+  await test.step("claim the hub with the setup code from its log", async () => {
     await page.goto(w.appURL);
+    // A hub with no password shows the claim step and nothing else.
+    await expect(page.getByLabel("Setup code")).toBeVisible();
+    await expect(page.locator("#list")).toHaveCount(0);
+    const code = SETUP_CODE.exec(w.hub.output)?.[0];
+    expect(code, "the hub logs a setup code").toBeTruthy();
+    await page.getByLabel("Setup code").fill(code!);
+    await page.getByLabel("New password", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Repeat the password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Set password" }).click();
+    // The claim step gives way to the app at once.
+    await expect(page.getByLabel("Setup code")).toHaveCount(0);
+    expect(await w.hubFile("setup-code")).toBeNull();
+    // The hub now wants a session: a request without one is refused.
+    expect((await fetch(`${w.hubURL}/api/state`)).status).toBe(401);
+  });
+
+  await test.step("welcome lists the whole run", async () => {
     await expect(heading).toHaveText("Welcome");
-    for (const title of ["Connection check", "Secure the hub", "Name and time zone", "Reminders", "First to-do", "Agent machines"]) {
+    for (const title of ["Connection check", "Name and time zone", "Reminders", "First to-do", "Agent machines"]) {
       await expect(wiz.locator(".wiz-list")).toContainText(title);
     }
     await go("Welcome");
@@ -100,27 +117,13 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
   await test.step("connection check passes", async () => {
     await expect(heading).toHaveText("Connection check");
     const checks = wiz.getByRole("list", { name: "Connection checks" });
-    for (const title of ["Address", "Secure connection", "Live updates", "Clocks", "Reminder keys", "ntfy"]) {
-      await expect(checks.locator(".conn-pass", { hasText: title })).toBeVisible();
+    for (const title of ["Address", "Secure connection", "Live updates", "Clocks", "Reminder keys", "ntfy", "Public DNS"]) {
+      await expect(checks.locator(".conn-pass").filter({ has: page.getByText(title, { exact: true }) })).toBeVisible();
     }
     await expect(checks.locator(".conn-fail")).toHaveCount(0);
     await go("Connection check");
-  });
-
-  await test.step("claim the hub with the setup code from its log", async () => {
-    await expect(heading).toHaveText("Secure the hub");
-    const code = SETUP_CODE.exec(w.hub.output)?.[0];
-    expect(code, "the hub logs a setup code").toBeTruthy();
-    const secure = step("secure");
-    await secure.getByLabel("Setup code").fill(code!);
-    await secure.getByLabel("New password", { exact: true }).fill(PASSWORD);
-    await secure.getByLabel("Repeat the password").fill(PASSWORD);
-    await secure.getByRole("button", { name: "Set password" }).click();
-    await expect(secure.getByRole("status")).toHaveText("The password is set, and this device is logged in.");
-    expect(await w.hubFile("setup-code")).toBeNull();
-    // The hub now wants a session: a request without one is refused.
-    expect((await fetch(`${w.hubURL}/api/state`)).status).toBe(401);
-    await go("Secure the hub");
+    // The hub is claimed already; a step about its password only reports it.
+    if ((await heading.textContent()) === "Secure the hub") await go("Secure the hub");
   });
 
   await test.step("keep a name and a time zone", async () => {
@@ -202,7 +205,7 @@ test("a fresh hub is set up from the first visit to a paired machine", async ({ 
   await test.step("finish lists what is set up", async () => {
     await expect(heading).toHaveText("All set");
     const outcome = (title: string) => wiz.locator(".wiz-summary li", { hasText: title });
-    for (const title of ["Connection check", "Secure the hub", "Name and time zone", "Reminders", "First to-do", "Agent machines", "Choose repos"]) {
+    for (const title of ["Connection check", "Name and time zone", "Reminders", "First to-do", "Agent machines", "Choose repos"]) {
       await expect(outcome(title)).toContainText("Set up");
     }
     await next.click();

@@ -72,7 +72,7 @@ func TestAppPushThroughARealNtfy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := r.DeviceByToken(ctx, token); err != nil || got != id {
+	if got, _, err := r.DeviceByToken(ctx, token); err != nil || got != id {
 		t.Fatalf("token: %q, %v", got, err)
 	}
 

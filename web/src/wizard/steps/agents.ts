@@ -2,7 +2,7 @@
 // installing and pairing its bridge, and waiting for its first hello.
 
 import type { AppContext } from "../../app-context.ts";
-import { agentMachines, copyFrom, installCommand, pairCommand, PLATFORMS, type Platform } from "../../agents.ts";
+import { addMachineError, agentMachines, copyFrom, installCommand, pairCommand, PLATFORMS, reauthFieldHTML, type Platform } from "../../agents.ts";
 import { api } from "../../api.ts";
 import { esc } from "../../html.ts";
 import type { NewBridgeReply } from "../../types.ts";
@@ -14,6 +14,9 @@ let wanted = false;
 let pairing: NewBridgeReply | null = null;
 let platform: Platform = "linux-amd64";
 let error = "";
+/** The hub asked for the password again before it adds a machine. */
+let reauth = false;
+let busy = false;
 let poll: ReturnType<typeof setInterval> | undefined;
 
 /** How often to ask the hub whether the new machine said hello, in case live updates do not arrive. */
@@ -36,6 +39,7 @@ function stopPolling() {
 function forget() {
   pairing = null;
   error = "";
+  reauth = false;
   stopPolling();
 }
 
@@ -81,9 +85,9 @@ function pairingHTML(ctx: AppContext, p: NewBridgeReply): string {
 }
 
 function formHTML(again: boolean): string {
-  return `<form class="add-machine" data-form="agents-pair"><label for="agents-name">${again ? "Add another machine" : "Machine name"}</label><div class="pick-row"><input id="agents-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off" aria-describedby="agents-name-hint"><button class="btn${again ? "" : " btn-primary"}" type="submit">Add machine</button></div><p class="muted small" id="agents-name-hint">Lowercase letters, digits and dashes, such as laptop or desk.</p>${
-    error ? `<p class="row-error" role="alert">${esc(error)}</p>` : ""
-  }</form>`;
+  return `<form class="add-machine" data-form="agents-pair"><label for="agents-name">${again ? "Add another machine" : "Machine name"}</label><div class="pick-row"><input id="agents-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off" aria-describedby="agents-name-hint"><button class="btn${again ? "" : " btn-primary"}" type="submit"${busy ? " disabled" : ""}>Add machine</button></div><p class="muted small" id="agents-name-hint">Lowercase letters, digits and dashes, such as laptop or desk.</p>${
+    reauth ? reauthFieldHTML("agents") : ""
+  }${error ? `<p class="row-error" role="alert">${esc(error)}</p>` : ""}</form>`;
 }
 
 registerStep({
@@ -140,15 +144,25 @@ registerStep({
       document.getElementById("agents-name")?.focus();
       return;
     }
+    if (busy) return;
+    const pw = form.querySelector<HTMLInputElement>("input[name=password]");
+    const password = reauth && pw ? pw.value : undefined;
+    busy = true;
     try {
-      pairing = await api.addBridge(name);
+      pairing = await api.addBridge(name, password);
       error = "";
+      reauth = false;
       waitForHello(ctx, name);
     } catch (e) {
-      error = (e as Error).message;
+      ({ error, reauth } = addMachineError(e, password !== undefined));
     }
+    busy = false;
     await ctx.refresh();
-    document.getElementById(pairing ? "agents-pair" : "agents-name")?.focus();
+    const field = reauth ? document.querySelector<HTMLInputElement>("#agents-password") : null;
+    if (field) {
+      field.value = "";
+      field.focus();
+    } else document.getElementById(pairing ? "agents-pair" : "agents-name")?.focus();
   },
   change(el, ctx) {
     if (!(el instanceof HTMLSelectElement) || !("agentsPlatform" in el.dataset)) return;

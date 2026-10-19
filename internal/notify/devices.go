@@ -235,19 +235,19 @@ func (r *Registry) ConfirmDevice(ctx context.Context, id, code string) (string, 
 }
 
 // DeviceByToken returns the ID of the confirmed, live device whose token
-// this is, and records that it was seen. An unknown, revoked or dropped
-// device's token is store.ErrUnauthorized.
-func (r *Registry) DeviceByToken(ctx context.Context, token string) (string, error) {
+// this is and the session that registered it, and records that it was seen.
+// An unknown, revoked or dropped device's token is store.ErrUnauthorized.
+func (r *Registry) DeviceByToken(ctx context.Context, token string) (id, sessionID string, err error) {
 	if err := r.prune(ctx); err != nil {
-		return "", err
+		return "", "", err
 	}
-	var id string
-	err := r.db.QueryRowContext(ctx, `UPDATE push_subscriptions SET last_seen = ?
-		WHERE token_hash = ? AND confirmed = 1 RETURNING id`, r.now().Unix(), hashSecret(token)).Scan(&id)
+	var session sql.NullString
+	err = r.db.QueryRowContext(ctx, `UPDATE push_subscriptions SET last_seen = ?
+		WHERE token_hash = ? AND confirmed = 1 RETURNING id, session_id`, r.now().Unix(), hashSecret(token)).Scan(&id, &session)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", store.ErrUnauthorized
+		return "", "", store.ErrUnauthorized
 	}
-	return id, err
+	return id, session.String, err
 }
 
 // UpdateDevice replaces the endpoint and keys of the app device id, from

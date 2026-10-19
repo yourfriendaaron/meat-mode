@@ -70,7 +70,7 @@ func (h *loginHarness) do(method, path, body, cookie string) *httptest.ResponseR
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if cookie != "" {
-		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: cookie})
+		req.AddCookie(&http.Cookie{Name: h.srv.cookieName(), Value: cookie})
 	}
 	w := httptest.NewRecorder()
 	h.srv.ServeHTTP(w, req)
@@ -87,14 +87,15 @@ func (h *loginHarness) login(password string) *http.Cookie {
 	return responseCookie(h.t, w)
 }
 
+// responseCookie returns the session cookie w sets, under either name.
 func responseCookie(t *testing.T, w *httptest.ResponseRecorder) *http.Cookie {
 	t.Helper()
 	for _, c := range w.Result().Cookies() {
-		if c.Name == sessionCookie {
+		if c.Name == sessionCookie || c.Name == secureSessionCookie {
 			return c
 		}
 	}
-	t.Fatalf("no %s cookie in %v", sessionCookie, w.Header()["Set-Cookie"])
+	t.Fatalf("no session cookie in %v", w.Header()["Set-Cookie"])
 	return nil
 }
 
@@ -126,7 +127,6 @@ var appRoutes = []struct{ method, path, body string }{
 	{"POST", "/api/setup", `{"status":"done"}`},
 	{"GET", "/api/settings", ""},
 	{"PUT", "/api/settings", `{"name":"Sam"}`},
-	{"PUT", "/api/setup/tailscale-only", `{"on":false}`},
 	{"PUT", "/api/password", `{"current":"x","password":"feed the cat"}`},
 	{"GET", "/api/setup/status", ""},
 	{"GET", "/api/calendar", ""},
@@ -183,35 +183,105 @@ func TestLoginGatesEveryAppRoute(t *testing.T) {
 	}
 }
 
-func TestNoLoginWithoutAHash(t *testing.T) {
+func TestNoPasswordServesOnlySetup(t *testing.T) {
 	h := newLoginHarness(t, Config{})
-	if w := h.do("GET", "/api/state", "", ""); w.Code != http.StatusOK {
-		t.Errorf("state with login off: %d %s", w.Code, w.Body)
+	for _, rt := range appRoutes {
+		w := h.do(rt.method, rt.path, rt.body, "")
+		if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), noPassword) {
+			t.Errorf("%s %s with no password: %d %s, want 401", rt.method, rt.path, w.Code, w.Body)
+		}
 	}
-	if l, a := sessionReply(t, h.do("GET", "/api/session", "", "")); l || !a {
-		t.Errorf("session with login off = login %v, authenticated %v; want false, true", l, a)
+	for _, path := range []string{"/api/setup/tailscale-only", "/api/devices/0123456789abcdef0123456789abcdef/confirm"} {
+		if w := h.do("PUT", path, `{"on":true}`, ""); w.Code != http.StatusUnauthorized {
+			t.Errorf("PUT %s with no password: %d, want 401", path, w.Code)
+		}
+	}
+	// A device token opens nothing either.
+	if w := deviceDo(t, h.srv, "POST", "/api/actions", `{}`, "mmd_token", ""); w.Code != http.StatusUnauthorized ||
+		!strings.Contains(w.Body.String(), noPassword) {
+		t.Errorf("device request with no password: %d %s, want 401", w.Code, w.Body)
+	}
+	if l, a := sessionReply(t, h.do("GET", "/api/session", "", "")); l || a {
+		t.Errorf("session with no password = login %v, authenticated %v; want false, false", l, a)
 	}
 	if w := h.do("POST", "/api/login", `{"password":"x"}`, ""); w.Code != http.StatusNotFound {
-		t.Errorf("login with login off: %d, want 404", w.Code)
+		t.Errorf("login with no password: %d, want 404", w.Code)
 	}
 	if w := h.do("POST", "/api/logout", "", ""); w.Code != http.StatusNoContent {
-		t.Errorf("logout with login off: %d, want 204", w.Code)
+		t.Errorf("logout with no password: %d, want 204", w.Code)
+	}
+	// Claim needs no session; a wrong code is 403, not the gate's 401.
+	if w := h.do("POST", "/api/setup/claim", `{"code":"AAAA-BBBB-CCCC","password":"water the plants"}`, ""); w.Code != http.StatusForbidden {
+		t.Errorf("claim with no password: %d %s, want 403", w.Code, w.Body)
+	}
+	// Pages, the bridge API and /healthz answer as before.
+	if w := h.do("GET", "/", "", ""); w.Code != http.StatusOK {
+		t.Errorf("page with no password: %d", w.Code)
+	}
+	if w := h.do("GET", "/healthz", "", ""); w.Code != http.StatusOK {
+		t.Errorf("healthz with no password: %d", w.Code)
+	}
+	if w := h.do("GET", "/bridge/v1/actions", "", ""); w.Code != http.StatusUnauthorized || strings.Contains(w.Body.String(), noPassword) {
+		t.Errorf("bridge route with no password: %d %s, want its own bearer check", w.Code, w.Body)
+	}
+}
+
+func TestTailscaleOnlyIsGone(t *testing.T) {
+	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
+	c := h.login("water the plants")
+	if w := h.do("PUT", "/api/setup/tailscale-only", `{"on":true}`, c.Value); w.Code == http.StatusNoContent {
+		t.Errorf("tailscale-only: %d, want no such route", w.Code)
+	}
+	if strings.Contains(h.do("GET", "/api/setup", "", c.Value).Body.String(), "tailscaleOnly") {
+		t.Error("GET /api/setup still reports tailscaleOnly")
 	}
 }
 
 func TestLoginCookie(t *testing.T) {
 	for _, tc := range []struct {
-		publicURL  string
-		wantSecure bool
+		publicURL string
+		name      string
+		secure    bool
 	}{
-		{"https://meat-mode.example.com", true},
-		{"http://localhost:8080", false},
+		{"https://meat-mode.example.com", secureSessionCookie, true},
+		{"http://localhost:8080", sessionCookie, false},
 	} {
 		h := newLoginHarness(t, Config{PublicURL: tc.publicURL, PasswordHash: cheapHash("water the plants")})
-		c := h.login("water the plants")
-		if c.Value == "" || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" ||
-			c.Secure != tc.wantSecure || c.MaxAge != int(sessionTTL/time.Second) {
+		w := h.do("POST", "/api/login", `{"password":"water the plants"}`, "")
+		cs := w.Result().Cookies()
+		if len(cs) != 1 {
+			t.Fatalf("%s: cookies %v", tc.publicURL, cs)
+		}
+		c := cs[0]
+		if c.Name != tc.name || c.Value == "" || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" ||
+			c.Domain != "" || c.Secure != tc.secure || c.MaxAge != int(store.SessionIdle/time.Second) {
 			t.Errorf("%s: cookie %+v", tc.publicURL, c)
+		}
+
+		// The hub reads only the name for its scheme.
+		other := sessionCookie
+		if tc.name == sessionCookie {
+			other = secureSessionCookie
+		}
+		for name, want := range map[string]int{tc.name: http.StatusOK, other: http.StatusUnauthorized} {
+			req := httptest.NewRequest("GET", "/api/state", nil)
+			req.Host = "localhost:8080"
+			req.AddCookie(&http.Cookie{Name: name, Value: c.Value})
+			rw := httptest.NewRecorder()
+			h.srv.ServeHTTP(rw, req)
+			if rw.Code != want {
+				t.Errorf("%s: state with cookie %s: %d, want %d", tc.publicURL, name, rw.Code, want)
+			}
+		}
+		// Logging out clears the cookie under the same name.
+		req := httptest.NewRequest("POST", "/api/logout", nil)
+		req.Host = "localhost:8080"
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: tc.name, Value: c.Value})
+		rw := httptest.NewRecorder()
+		h.srv.ServeHTTP(rw, req)
+		if cs := rw.Result().Cookies(); len(cs) != 1 || cs[0].Name != tc.name || cs[0].MaxAge >= 0 || cs[0].Secure != tc.secure {
+			t.Errorf("%s: logout cookies %v", tc.publicURL, cs)
 		}
 	}
 }
@@ -292,34 +362,90 @@ func TestNewPasswordEndsSessions(t *testing.T) {
 	h.login("feed the cat")
 }
 
-func TestSessionExpiryAndRenewal(t *testing.T) {
+func TestSessionIdleEndAndRenewal(t *testing.T) {
 	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
 	c := h.login("water the plants")
 
-	// Within a day of the last renewal, no new cookie.
+	// Within a day of the last recorded use, no new cookie.
 	h.now = h.now.Add(23 * time.Hour)
 	w := h.do("GET", "/api/state", "", c.Value)
 	if w.Code != http.StatusOK || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("same day: %d, cookies %v", w.Code, w.Result().Cookies())
 	}
 
-	// After a day, the expiry moves to 90 days from now.
+	// After a day, the use is recorded and the idle end moves to 14 days
+	// from now.
 	h.now = h.now.Add(2 * time.Hour)
 	w = h.do("GET", "/api/state", "", c.Value)
 	if w.Code != http.StatusOK {
 		t.Fatalf("next day: %d", w.Code)
 	}
-	if r := responseCookie(t, w); r.Value != c.Value || r.MaxAge != int(sessionTTL/time.Second) {
+	if r := responseCookie(t, w); r.Value != c.Value || r.MaxAge != int(store.SessionIdle/time.Second) {
 		t.Errorf("renewed cookie %+v", r)
 	}
 
-	// 90 days without use ends it.
-	h.now = h.now.Add(sessionTTL)
+	// A second before the idle end it holds; at it the session is over.
+	h.now = h.now.Add(store.SessionIdle - time.Second)
+	if w := h.do("GET", "/api/session", "", c.Value); !strings.Contains(w.Body.String(), `"authenticated":true`) {
+		t.Fatalf("a second before the idle end: %s", w.Body)
+	}
+	// That check recorded a use, so a new session shows the end itself.
+	c = h.login("water the plants")
+	h.now = h.now.Add(store.SessionIdle)
 	if w := h.do("GET", "/api/state", "", c.Value); w.Code != http.StatusUnauthorized {
-		t.Errorf("after 90 idle days: %d, want 401", w.Code)
+		t.Errorf("after 14 idle days: %d, want 401", w.Code)
 	}
 	if _, a := sessionReply(t, h.do("GET", "/api/session", "", c.Value)); a {
-		t.Error("an expired session reports authenticated")
+		t.Error("an idle session reports authenticated")
+	}
+}
+
+func TestSessionAbsoluteEnd(t *testing.T) {
+	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
+	start := h.now
+	c := h.login("water the plants")
+	// Used every few days, it still ends 90 days after the login.
+	for h.now.Before(start.Add(store.SessionLifetime - 3*24*time.Hour)) {
+		h.now = h.now.Add(3 * 24 * time.Hour)
+		if w := h.do("GET", "/api/state", "", c.Value); w.Code != http.StatusOK {
+			t.Fatalf("day %v: %d", h.now.Sub(start).Hours()/24, w.Code)
+		}
+	}
+	h.now = start.Add(store.SessionLifetime - time.Second)
+	w := h.do("GET", "/api/state", "", c.Value)
+	if w.Code != http.StatusOK {
+		t.Fatalf("a second before the absolute end: %d", w.Code)
+	}
+	// The cookie sent last never outlives the absolute end.
+	h.now = start.Add(store.SessionLifetime)
+	if w := h.do("GET", "/api/state", "", c.Value); w.Code != http.StatusUnauthorized {
+		t.Errorf("at the absolute end: %d, want 401", w.Code)
+	}
+}
+
+func TestDeviceCallsKeepTheSessionAlive(t *testing.T) {
+	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
+	c := h.login("water the plants")
+	h.push.giveToken("mmd_phone", "dev1")
+	h.push.owner = store.SessionID(c.Value)
+
+	// A phone that lives on notification buttons: a device-token call
+	// every 10 days, and no cookie use for 40 days.
+	for day := 10; day <= 40; day += 10 {
+		h.now = h.now.Add(10 * 24 * time.Hour)
+		w := deviceDo(t, h.srv, "POST", "/api/actions", `{"kind":"done","key":"laptop/garden/gd-1"}`, "mmd_phone", "")
+		if w.Code == http.StatusUnauthorized {
+			t.Fatalf("device call on day %d: %d %s", day, w.Code, w.Body)
+		}
+	}
+	if w := h.do("GET", "/api/state", "", c.Value); w.Code != http.StatusOK {
+		t.Errorf("session after 40 days of device calls: %d, want 200", w.Code)
+	}
+
+	// Once the session has ended, the device token opens nothing.
+	h.now = h.now.Add(store.SessionIdle)
+	if w := deviceDo(t, h.srv, "POST", "/api/actions", `{"kind":"done","key":"laptop/garden/gd-1"}`, "mmd_phone", ""); w.Code != http.StatusUnauthorized {
+		t.Errorf("device call after its session ended: %d, want 401", w.Code)
 	}
 }
 
@@ -419,11 +545,4 @@ func TestPushSubscriptionsBelongToTheSession(t *testing.T) {
 		t.Errorf("subscription kept after its session logged out: %v", h.push.subs)
 	}
 
-	h = newLoginHarness(t, Config{})
-	if w := h.do("POST", "/api/push/subscriptions", sub, ""); w.Code != http.StatusNoContent {
-		t.Fatalf("subscribe with login off: %d %s", w.Code, w.Body)
-	}
-	if got, ok := h.push.sessions["https://updates.push.services.mozilla.com/wpush/v2/a"]; !ok || got != "" {
-		t.Errorf("subscription session with login off = %q, %v; want none", got, ok)
-	}
 }

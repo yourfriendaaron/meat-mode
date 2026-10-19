@@ -158,10 +158,22 @@ export class FakeHub {
   posted: NewAction[] = [];
   /** When set, every /api/events connection sends one change event and asks to reconnect after this many ms. */
   eventRetryMs = 0;
-  /** When set, the hub has a login: every /api/ route but the session ones needs a logged-in session. */
-  login = false;
+  /**
+   * Whether the hub has a password. Off, it serves only its claim step
+   * (docs/api.md, Login): every /api/ route but the session ones and the
+   * claim answers 401. On, every such route needs a logged-in session.
+   */
+  login = true;
   password = "correct horse battery staple";
-  authenticated = false;
+  /** Whether this browser is logged in. */
+  authenticated = true;
+  /**
+   * Whether this session entered the password within the last 10 minutes.
+   * Off, POST /api/bridges asks for it again (docs/api.md, Password again).
+   */
+  passwordFresh = true;
+  /** Every body POSTed to /api/bridges. */
+  bridgePosts: { name: string; password?: string }[] = [];
   /** When set, POST /api/login answers this status instead of checking the password. */
   loginStatus = 0;
   /**
@@ -169,12 +181,11 @@ export class FakeHub {
    * recorded: the reply then says "new" or "in-use" from the items and
    * machines, as the real hub does. POST /api/setup sets it.
    */
-  setup: { status: "" | "done" | "dismissed"; userName: string; timeZone: string; password: SetupInfo["password"]; tailscaleOnly: boolean } = {
+  setup: { status: "" | "done" | "dismissed"; userName: string; timeZone: string; password: SetupInfo["password"] } = {
     status: "",
     userName: "",
     timeZone: "",
     password: "none",
-    tailscaleOnly: false,
   };
   /** Every body PUT to /api/settings that the hub took in. */
   settingsPuts: { name?: string; timeZone?: string; reminderLead?: number }[] = [];
@@ -210,17 +221,19 @@ export class FakeHub {
   /** When set, POST /api/setup/claim answers this status instead of checking the code. */
   claimStatus = 0;
   /**
-   * What GET /api/setup/status says. `publicUrl` "" means the address the
-   * page was opened at. `time` "" means the hub's clock, which is also the
-   * browser's fixed clock; a test sets a time to skew it.
+   * What GET /api/setup/status says; `login` follows the password. `publicUrl`
+   * "" means the address the page was opened at. `time` "" means the hub's
+   * clock, which is also the browser's fixed clock; a test sets a time to
+   * skew it.
    */
-  check: { login: SetupStatus["login"]; hostMatches: boolean; publicUrl: string; pushKeys: boolean; ntfy: boolean; time: string } = {
-    login: "none",
+  check: Omit<SetupStatus, "login"> = {
     hostMatches: true,
     publicUrl: "",
     pushKeys: true,
     ntfy: false,
     time: "",
+    publicDns: { state: "private", checkedAt: NOW.toISOString() },
+    tailscaleIdentity: false,
   };
   /**
    * When set, /api/events carries two change events, the second one a
@@ -275,10 +288,14 @@ export class FakeHub {
       status: this.setup.status || (inUse ? "in-use" : "new"),
       user: this.setup.userName || this.user,
       timeZone: this.setup.timeZone,
-      // A hub with a login has a password; one the tests did not set in the app came from the environment.
-      password: this.login && this.setup.password === "none" ? "env" : this.setup.password,
-      tailscaleOnly: this.setup.tailscaleOnly,
+      password: this.passwordSource(),
     };
+  }
+
+  /** A hub with a login has a password; one the tests did not set in the app came from the environment. */
+  passwordSource(): SetupInfo["password"] {
+    if (!this.login) return "none";
+    return this.setup.password === "none" ? "env" : this.setup.password;
   }
 
   settings() {
@@ -334,7 +351,7 @@ export class FakeHub {
   private askRefusal(bridge: string, repo: string): string {
     if (bridge === HUB) return "the personal list has no agents";
     const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
-    if (!r?.agentsAllowed) return `agents are not allowed in repo "${repo}"; switch them on in Settings`;
+    if (!r?.agentsAllowed) return `agents are not allowed in repo "${repo}"; switch them on at its machine: meat-mode bridge agents on ${repo}`;
     return "";
   }
 
@@ -374,14 +391,15 @@ export class FakeHub {
     }
 
     if (method === "GET" && path === "/api/session") {
-      return this.json(route, 200, { login: this.login, authenticated: !this.login || this.authenticated });
+      return this.json(route, 200, { login: this.login, authenticated: this.login && this.authenticated });
     }
     if (method === "POST" && path === "/api/login") {
-      if (!this.login) return this.json(route, 404, { error: "this hub has no login" });
+      if (!this.login) return this.json(route, 404, { error: "this hub has no password yet" });
       if (this.loginStatus) return this.json(route, this.loginStatus, { error: "too many failed logins" });
       const { password } = req.postDataJSON() as { password: string };
       if (password !== this.password) return this.json(route, 401, { error: "wrong password" });
       this.authenticated = true;
+      this.passwordFresh = true;
       return this.json(route, 204);
     }
     if (method === "POST" && path === "/api/logout") {
@@ -389,7 +407,8 @@ export class FakeHub {
       return this.json(route, 204);
     }
     if (method === "POST" && path === "/api/setup/claim") return this.claim(route, req.postDataJSON() as { code: string; password: string });
-    if (this.login && !this.authenticated) return this.json(route, 401, { error: "log in first" });
+    if (!this.login) return this.json(route, 401, { error: "this hub has no password yet: set one with the setup code" });
+    if (!this.authenticated) return this.json(route, 401, { error: "log in first" });
 
     if (method === "GET" && path === "/api/state") return this.json(route, 200, this.state());
     if (method === "GET" && path === "/api/setup") {
@@ -440,16 +459,17 @@ export class FakeHub {
       if (password.length < 8) return this.json(route, 400, { error: "the password must be at least 8 characters" });
       if (current !== this.password) return this.json(route, 403, { error: "wrong password" });
       this.password = password;
-      return this.json(route, 204);
-    }
-    if (method === "PUT" && path === "/api/setup/tailscale-only") {
-      const { on } = req.postDataJSON() as { on: boolean };
-      if (on && this.setupInfo().password !== "none") return this.json(route, 409, { error: "this hub has a password" });
-      this.setup.tailscaleOnly = on;
+      this.passwordFresh = true;
       return this.json(route, 204);
     }
     if (method === "GET" && path === "/api/setup/status") {
-      return this.json(route, 200, { ...this.check, publicUrl: this.check.publicUrl || url.origin, time: this.check.time || this.now() });
+      const login = { env: "environment", app: "app", none: "none" } as const;
+      return this.json(route, 200, {
+        ...this.check,
+        login: login[this.passwordSource()],
+        publicUrl: this.check.publicUrl || url.origin,
+        time: this.check.time || this.now(),
+      } satisfies SetupStatus);
     }
     if (method === "POST" && path === "/api/setup/test-event") return this.json(route, 204);
     if (method === "GET" && path === "/api/events" && this.liveEvents) {
@@ -528,7 +548,16 @@ export class FakeHub {
     }
     if (method === "GET" && path === "/api/bridges") return this.json(route, 200, this.bridges);
     if (method === "POST" && path === "/api/bridges") {
-      const { name } = req.postDataJSON() as { name: string };
+      const body = req.postDataJSON() as { name: string; password?: string };
+      this.bridgePosts.push(body);
+      const { name, password } = body;
+      if (!this.passwordFresh) {
+        if (password === undefined) return this.json(route, 403, { error: "enter your password to add a machine", reauth: true });
+        // Wrong passwords here count with wrong logins.
+        if (this.loginStatus) return route.fulfill({ status: this.loginStatus, contentType: "application/json", headers: { "Retry-After": "60" }, body: JSON.stringify({ error: "too many failed logins" }) });
+        if (password !== this.password) return this.json(route, 403, { error: "wrong password", reauth: true });
+        this.passwordFresh = true;
+      }
       if (this.bridges.some((b) => b.name === name)) return this.json(route, 409, { error: "a machine with that name exists" });
       this.bridges.push({ name, createdAt: this.now() });
       return this.json(route, 201, { name, token: "test-token" });
@@ -554,10 +583,10 @@ export class FakeHub {
     }
     this.setupCodeUsed = true;
     this.setup.password = "app";
-    this.setup.tailscaleOnly = false;
     this.password = body.password;
     this.login = true;
     this.authenticated = true;
+    this.passwordFresh = true;
     return this.json(route, 204);
   }
 
@@ -691,7 +720,9 @@ export class FakeHub {
     } else if (a.kind === "agents") {
       const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
       if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
-      r.agentsAllowed = Boolean(a.payload.on);
+      // Agents switch on only at the agent machine (docs/api.md, Agents).
+      if (a.payload.on) return this.json(route, 400, { error: `switch agents on at this machine: meat-mode bridge agents on ${repo}` });
+      r.agentsAllowed = false;
       r.agentsPending = true;
     } else if (a.kind === "add") {
       if (a.payload.ask) {

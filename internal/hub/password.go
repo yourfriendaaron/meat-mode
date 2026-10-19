@@ -22,12 +22,10 @@ const (
 	minPassword   = 8            // characters
 )
 
-// passwordRoutes registers claiming the hub, changing its password and
-// choosing no password.
+// passwordRoutes registers claiming the hub and changing its password.
 func (s *Server) passwordRoutes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/setup/claim", s.handleClaim)
 	m.HandleFunc("PUT /api/password", s.handleChangePassword)
-	m.HandleFunc("PUT /api/setup/tailscale-only", s.handleTailscaleOnly)
 }
 
 const envPassword = "the password is set by the hub's environment (MEAT_MODE_PASSWORD_HASH); change it there"
@@ -137,9 +135,6 @@ func (s *Server) handleClaim(w http.ResponseWriter, r *http.Request) {
 	if err := removeSetupCode(filepath.Join(s.cfg.DataDir, setupCodeFile)); err != nil {
 		s.log.Warn("claimed the hub", "err", err)
 	}
-	if err := s.store.SetTailscaleOnly(false); err != nil {
-		s.log.Warn("claimed the hub; tailscale-only choice not cleared", "err", err)
-	}
 	if err := s.startSession(w, l); err != nil {
 		s.log.Warn("claimed the hub; log in to continue", "err", err)
 	}
@@ -157,14 +152,12 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	sess := sessionOf(r)
-	var none, env, out bool
+	var env bool
 	var ended []string
 	ok, wait, err := s.attempt(&s.loginFails, func() (bool, error) {
+		// The gate let r in with a session, so the hub has a password.
 		l := s.currentLogin()
-		none, env = l == nil, l != nil && l.env
-		out = l != nil && sess == nil // the hub was claimed after the gate let r in
-		if none || env || out {
+		if env = l.env; env {
 			return true, nil
 		}
 		if !l.hash.Verify(body.Current) {
@@ -174,12 +167,12 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return false, err
 		}
-		c, err := r.Cookie(sessionCookie)
+		c, err := r.Cookie(s.cookieName())
 		if err != nil {
 			return false, err
 		}
 		nl := newLogin(phc, false)
-		if ended, err = s.store.ChangePassword(phc, c.Value, nl.tag); err != nil {
+		if ended, err = s.store.ChangePassword(phc, c.Value, nl.tag, s.now()); err != nil {
 			return false, err
 		}
 		s.setLogin(nl)
@@ -192,14 +185,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		s.storeError(w, r, err)
 		return
-	case none:
-		writeError(w, http.StatusConflict, "this hub has no password; set one with the setup code")
-		return
 	case env:
 		writeError(w, http.StatusConflict, envPassword)
-		return
-	case out:
-		writeError(w, http.StatusUnauthorized, "log in first")
 		return
 	case !ok:
 		writeError(w, http.StatusForbidden, "wrong password")
@@ -213,24 +200,6 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 				slog.Warn("could not drop the reminders of a logged-out session", "err", err)
 			}
 		}
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// handleTailscaleOnly records whether the user keeps the hub with no
-// password on a private network, so setup stops asking for one.
-func (s *Server) handleTailscaleOnly(w http.ResponseWriter, r *http.Request) {
-	var body api.TailscaleOnly
-	if !readJSON(w, r, maxBody, &body) {
-		return
-	}
-	if body.On && s.currentLogin() != nil {
-		writeError(w, http.StatusConflict, "this hub has a password")
-		return
-	}
-	if err := s.store.SetTailscaleOnly(body.On); err != nil {
-		s.storeError(w, r, err)
-		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

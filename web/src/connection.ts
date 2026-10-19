@@ -7,10 +7,12 @@ import { esc } from "./html.ts";
 import type { SetupStatus } from "./types.ts";
 
 export interface Check {
-  id: "address" | "secure" | "live" | "clock" | "push" | "ntfy";
+  id: "address" | "dns" | "secure" | "live" | "clock" | "push" | "ntfy" | "tailscale";
   title: string;
-  /** "info" is for what is optional and not set up. */
+  /** "info" is for what is optional or only for the record. */
   state: "pass" | "fail" | "info";
+  /** The state's label, when "Optional" does not fit an info line. */
+  label?: string;
   detail: string;
   /** What to do about a failure. */
   fix?: string;
@@ -41,6 +43,49 @@ function sameOrigin(a: string, b: string): boolean {
   }
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+/** The fix for a public address, shared by the check and the warning in Settings. */
+export const PUBLIC_DNS_FIX =
+  "The hub must be reachable only on your private network. If you turned on Tailscale Funnel for it, turn Funnel off; its public records can take a few hours to go away. Otherwise remove the public DNS record for this name, or point it at a private address.";
+
+/** What public DNS says of the hub's name, when the internet can find it; otherwise null. */
+export function publicDnsWarning(status: SetupStatus): { detail: string; fix: string } | null {
+  if (status.publicDns?.state !== "public") return null;
+  const addrs = status.publicDns.addresses ?? [];
+  const list = addrs.length ? addrs.join(", ") : "a public address";
+  return {
+    detail: `Public DNS gives ${hostOf(status.publicUrl)} the address${addrs.length === 1 ? "" : "es"} ${list}, so anyone on the internet can look it up.`,
+    fix: PUBLIC_DNS_FIX,
+  };
+}
+
+function dnsCheck(status: SetupStatus): Check {
+  const warn = publicDnsWarning(status);
+  if (warn) return { id: "dns", title: "Public DNS", state: "fail", ...warn };
+  const host = hostOf(status.publicUrl);
+  switch (status.publicDns?.state) {
+    case "private":
+      return { id: "dns", title: "Public DNS", state: "pass", detail: `Public DNS has no public address for ${host}.` };
+    case "skipped":
+      return { id: "dns", title: "Public DNS", state: "pass", detail: `${host} is localhost or a private address, so there is nothing to look up.` };
+    default:
+      return {
+        id: "dns",
+        title: "Public DNS",
+        state: "info",
+        label: "Not checked",
+        detail: `The hub could not ask public DNS about ${host} yet. It tries again every hour.`,
+      };
+  }
+}
+
 function minutes(ms: number): string {
   const m = Math.max(1, Math.round(Math.abs(ms) / 60_000));
   return m === 1 ? "about a minute" : `about ${m} minutes`;
@@ -63,6 +108,8 @@ export function evaluate(p: Probe): Check[] {
           fix: `Open the app at ${status.publicUrl}. If you use another address on purpose, set MEAT_MODE_PUBLIC_URL to it and restart the hub. Behind a reverse proxy, make sure it passes the original Host header.`,
         },
   );
+
+  out.push(dnsCheck(status));
 
   out.push(
     p.secure
@@ -129,6 +176,16 @@ export function evaluate(p: Probe): Check[] {
           detail: "Not set up. This is optional: it adds a second way to get reminders.",
         },
   );
+
+  out.push({
+    id: "tailscale",
+    title: "Tailscale identity",
+    state: "info",
+    label: "Info",
+    detail: status.tailscaleIdentity
+      ? "This request came through Tailscale Serve, which told the hub which tailnet user sent it."
+      : "This request carried no Tailscale identity. That is expected on a LAN or behind another reverse proxy; through Tailscale Serve it would carry one.",
+  });
   return out;
 }
 
@@ -138,6 +195,10 @@ let result: Check[] | null = null;
 let failure = "";
 let running = false;
 let checkedAt = 0;
+/** The latest GET /api/setup/status, from a check or from Settings, and when it came. */
+let latest: SetupStatus | null = null;
+let latestAt = 0;
+let loading = false;
 
 /** Whether the last check ran and found no failure. */
 export function connectionOK(): boolean {
@@ -192,6 +253,8 @@ export async function runChecks(ctx: AppContext): Promise<void> {
     const sent = Date.now();
     const liveProbe = probeLive();
     const status = await call<SetupStatus>("GET", "/api/setup/status");
+    latest = status;
+    latestAt = Date.now();
     const received = Date.now();
     const live = await liveProbe;
     // The hub stamped its time somewhere in the status request, so use the middle of it.
@@ -230,7 +293,7 @@ export function checksHTML(): string {
   if (!result) return '<p class="muted">Not checked yet.</p>';
   return `<ul class="conn-list" aria-label="Connection checks">${result
     .map(
-      (c) => `<li class="conn conn-${c.state}"><span class="conn-state">${STATE[c.state]}</span><div><strong>${esc(c.title)}</strong>
+      (c) => `<li class="conn conn-${c.state}"><span class="conn-state">${esc(c.label ?? STATE[c.state])}</span><div><strong>${esc(c.title)}</strong>
 <p>${esc(c.detail)}</p>${c.fix ? `<p class="conn-fix">${esc(c.fix)}</p>` : ""}</div></li>`,
     )
     .join("")}</ul>`;
@@ -243,4 +306,36 @@ export function checkButtonHTML(): string {
 /** The click handler both the step and the Settings section use. */
 export function connectionAct(act: string, ctx: AppContext): void {
   if (act === "connection-run") void runChecks(ctx);
+}
+
+// ---------- the public DNS warning in Settings ----------
+
+/**
+ * Asks the hub for its status when Settings has not lately, without running
+ * the whole check, so the public DNS warning shows when Settings opens.
+ */
+export function loadStatusIfStale(ctx: AppContext): void {
+  if (typeof document === "undefined" || loading || running) return;
+  if (latest && Date.now() - latestAt < 60_000) return;
+  loading = true;
+  call<SetupStatus>("GET", "/api/setup/status").then(
+    (s) => {
+      latest = s;
+      latestAt = Date.now();
+      loading = false;
+      ctx.render();
+    },
+    () => {
+      // The check shows the error when the user runs it.
+      latestAt = Date.now();
+      loading = false;
+    },
+  );
+}
+
+/** The warning Settings shows while public DNS gives the hub's name a public address, or "". */
+export function publicDnsWarningHTML(): string {
+  const w = latest && publicDnsWarning(latest);
+  if (!w) return "";
+  return `<div class="conn-warn" role="alert"><strong>The internet can find this hub</strong><p>${esc(w.detail)}</p><p class="conn-fix">${esc(w.fix)}</p></div>`;
 }

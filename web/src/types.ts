@@ -247,7 +247,6 @@ export interface SetupInfo {
   timeZone: string;
   /** Where the login password comes from. */
   password: "env" | "app" | "none";
-  tailscaleOnly: boolean;
 }
 
 /** GET /api/settings. */

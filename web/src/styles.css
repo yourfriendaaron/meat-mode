@@ -1480,6 +1480,13 @@ select.qa-pill {
   font-size: 13px;
   color: var(--role-soft);
 }
+.add-machine input[type="password"] {
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
+}
 .token-box {
   display: flex;
   flex-direction: column;
@@ -1688,8 +1695,7 @@ select.qa-pill {
   align-self: flex-start;
   margin-top: 6px;
 }
-.pw-form p,
-.pw-none p {
+.pw-form p {
   margin: 0;
 }
 .pw-error {
@@ -1705,13 +1711,6 @@ select.qa-pill {
 }
 .pw-where code {
   overflow-wrap: anywhere;
-}
-.pw-none {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  max-width: 460px;
 }
 
 /* ---------- name and time zone ---------- */
@@ -1794,6 +1793,20 @@ select.qa-pill {
 }
 .conn-fix {
   color: var(--role-soft);
+}
+.conn-warn {
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--role-error);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+.conn-warn strong {
+  color: var(--role-error);
+}
+.conn-warn p {
+  margin: 4px 0 0;
 }
 
 /* ---------- setup wizard: device steps ---------- */
@@ -2133,6 +2146,9 @@ select.qa-pill {
   border: 1px solid var(--role-line);
   border-radius: var(--radius);
   background: var(--role-pane);
+}
+.claim-card {
+  max-width: 440px;
 }
 .login-card h1 {
   font-size: 22px;

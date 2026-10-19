@@ -1,7 +1,9 @@
 // Agent machines, shared by Settings and the setup wizard's agent steps: the
-// repo switches under each machine, the commands that install and pair the
-// bridge, and the text that tells a machine's agents how to raise tasks.
+// repo switches under each machine, the command that lets agents work in a
+// repo, adding a machine, the commands that install and pair the bridge, and
+// the text that tells a machine's agents how to raise tasks.
 
+import { ApiError } from "./api.ts";
 import { esc } from "./html.ts";
 import { HUB_BRIDGE, repoLabel } from "./model.ts";
 import type { Bridge, Repo } from "./types.ts";
@@ -37,12 +39,29 @@ export function pairCommand(origin: string, token: string): string {
   return `meat-mode bridge pair ${origin} ${token}`;
 }
 
+/** The command, run on the agent machine, that lets agents work in a repo (docs/api.md, Agents). */
+export function agentsOnCommand(repo: string): string {
+  const name = /^[A-Za-z0-9._/@+-]+$/.test(repo) ? repo : `'${repo.replace(/'/g, "'\\''")}'`;
+  return `meat-mode bridge agents on ${name}`;
+}
+
 /**
- * The repos a machine found, each with its sync switch and, under it, the
- * switch that lets agents work there (off by default, and only for a repo
- * that syncs). A click on a switch reaches main.ts as "sync-switch" or
- * "agents-switch". idPrefix keeps the switches' ids apart where Settings and
- * the wizard are both in the page.
+ * Where agents are off: the command that switches them on at the machine,
+ * with a Copy button whose click reaches main.ts as "agents-on-copy". The
+ * app cannot switch agents on itself.
+ */
+export function agentsOnHTML(bridge: string, repo: string, id: string): string {
+  return `<p class="muted small">To let agents work here, run this on ${esc(bridge)}:</p>
+<div class="cmd-row"><code class="cmd" id="${esc(id)}">${esc(agentsOnCommand(repo))}</code><button class="btn btn-small" data-act="agents-on-copy" data-copy="${esc(id)}" aria-label="Copy the command for ${esc(repo)}">Copy</button></div>`;
+}
+
+/**
+ * The repos a machine found, each with its sync switch and, under it,
+ * whether agents may work there. Agents switch on only at the machine, so a
+ * repo with agents off shows that command (for a repo that syncs) and one
+ * with agents on shows a switch that turns them off. A click on a switch
+ * reaches main.ts as "sync-switch" or "agents-switch". idPrefix keeps the
+ * ids apart where Settings and the wizard are both in the page.
  */
 export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync-"): string {
   const list = repos.filter((r) => r.bridge === bridge).sort((a, b) => a.name.localeCompare(b.name));
@@ -51,13 +70,45 @@ export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync
     .map((r) => {
       const control = `<button class="switch" role="switch" id="${esc(`${idPrefix}${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
       const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      const agentsOn = r.agentsAllowed === true;
-      const agentsId = `${idPrefix}agents-${bridge}/${r.name}`;
-      const agents = `<button class="switch" role="switch" id="${esc(agentsId)}" aria-checked="${agentsOn}" aria-label="Agents can work in ${esc(repoLabel(r))} (${esc(r.name)})" data-act="agents-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"${r.optedIn || agentsOn ? "" : " disabled"}><span class="switch-knob" aria-hidden="true"></span></button>`;
       const agentsNote = r.agentsPending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</div><div class="m-repo-agents"><div class="m-repo-name"><div class="small">Agents can work here</div>${agentsNote}</div>${agents}</div></li>`;
+      let agents: string;
+      if (r.agentsAllowed === true) {
+        const agentsId = `${idPrefix}agents-${bridge}/${r.name}`;
+        const off = `<button class="switch" role="switch" id="${esc(agentsId)}" aria-checked="true" aria-label="Agents can work in ${esc(repoLabel(r))} (${esc(r.name)})" data-act="agents-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
+        agents = `<div class="m-repo-agents"><div class="m-repo-name"><div class="small">Agents can work here</div>${agentsNote}</div>${off}</div>`;
+      } else {
+        const how = r.optedIn && !r.agentsPending ? agentsOnHTML(bridge, r.name, `${idPrefix}agents-cmd-${bridge}/${r.name}`) : "";
+        agents = `<div class="m-repo-agents m-repo-agents-off"><div class="m-repo-name"><div class="small">Agents are off here</div>${agentsNote}${how}</div></div>`;
+      }
+      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.name)}</div>${note}</div>${control}</div>${agents}</li>`;
     })
     .join("")}</ul>`;
+}
+
+/** What the add-machine form shows after the hub refused it, and whether it now asks for the password. */
+export function addMachineError(e: unknown, sentPassword: boolean): { error: string; reauth: boolean } {
+  if (!(e instanceof ApiError)) return { error: (e as Error).message, reauth: false };
+  if (e.status === 403 && e.reauth) return { error: sentPassword ? "Wrong password." : "", reauth: true };
+  if (e.status === 429) return { error: `Too many tries. Wait ${waitText(e.retryAfter)} and try again.`, reauth: true };
+  return { error: e.message, reauth: false };
+}
+
+/** "a minute", or the seconds or minutes a Retry-After asked for. */
+export function waitText(seconds: number): string {
+  if (seconds <= 0 || seconds === 60) return "a minute";
+  if (seconds < 60) return seconds === 1 ? "1 second" : `${seconds} seconds`;
+  const m = Math.ceil(seconds / 60);
+  return m === 1 ? "a minute" : `${m} minutes`;
+}
+
+/**
+ * The password field the add-machine form gains when the hub asks for the
+ * password again. prefix keeps its id apart from the other form's.
+ */
+export function reauthFieldHTML(prefix: string): string {
+  const id = `${prefix}-password`;
+  return `<input class="sr" type="text" name="username" autocomplete="username" value="meat-mode" tabindex="-1" aria-hidden="true">
+<label for="${id}">Password</label><p class="muted small" id="${id}-hint">Enter your password to add a machine.</p><input id="${id}" name="password" type="password" autocomplete="current-password" required aria-describedby="${id}-hint">`;
 }
 
 /**

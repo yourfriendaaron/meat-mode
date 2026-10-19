@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { STORAGE_STATE } from "./world.ts";
 
 // End-to-end suite: a real hub (binary, or the image with E2E_IMAGE), two real
 // bridges and real bd repos in temp directories. The tests share one world and
@@ -20,5 +21,7 @@ export default defineConfig({
     timezoneId: "UTC",
     locale: "en-US",
     trace: "retain-on-failure",
+    // The World's login (world.ts), so a test's page opens the app logged in.
+    storageState: STORAGE_STATE,
   },
 });

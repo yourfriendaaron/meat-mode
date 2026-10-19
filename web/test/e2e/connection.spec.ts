@@ -11,10 +11,12 @@ test("a healthy connection passes every check, and Continue goes on", async ({ p
   await openWizardAt(page, hub, "connection");
   const w = wizard(page);
   await expect(w.heading).toHaveText("Connection check");
-  for (const title of ["Address", "Secure connection", "Live updates", "Clocks", "Reminder keys"]) {
+  for (const title of ["Address", "Public DNS", "Secure connection", "Live updates", "Clocks", "Reminder keys"]) {
     await expect(check(page, title).locator(".conn-state")).toHaveText("Passed");
   }
   await expect(check(page, "ntfy").locator(".conn-state")).toHaveText("Optional");
+  await expect(check(page, "Tailscale identity").locator(".conn-state")).toHaveText("Info");
+  await expect(check(page, "Tailscale identity")).toContainText("This request carried no Tailscale identity.");
   expect(hub.requests).toContain("POST /api/setup/test-event");
   await axe(page);
   await w.next.click();
@@ -78,6 +80,50 @@ test("a device clock that is off by minutes says so", async ({ page, hub }) => {
   await expect(c.locator(".conn-state")).toHaveText("Problem");
   await expect(c).toContainText(/clock is about \d+ minutes ahead of the hub's/);
   await expect(c.locator(".conn-fix")).toContainText("automatic date and time");
+});
+
+test("a public DNS record for the hub's name fails, naming the addresses and what to do", async ({ page, hub }) => {
+  hub.check.publicDns = { state: "public", addresses: ["192.0.2.10", "2001:db8::10"], checkedAt: hub.now() };
+  await openWizardAt(page, hub, "connection");
+  const c = check(page, "Public DNS");
+  await expect(c.locator(".conn-state")).toHaveText("Problem");
+  await expect(c).toContainText("the addresses 192.0.2.10, 2001:db8::10");
+  await expect(c.locator(".conn-fix")).toContainText("turn Funnel off");
+  await expect(c.locator(".conn-fix")).toContainText("remove the public DNS record");
+  await axe(page);
+});
+
+test("a check that public DNS has not answered yet is noted, not failed", async ({ page, hub }) => {
+  hub.check.publicDns = { state: "unchecked", checkedAt: null };
+  hub.check.tailscaleIdentity = true;
+  await openWizardAt(page, hub, "connection");
+  await expect(check(page, "Public DNS").locator(".conn-state")).toHaveText("Not checked");
+  await expect(check(page, "Tailscale identity")).toContainText("came through Tailscale Serve");
+  await page.locator("#wizard").getByRole("button", { name: "Check again" }).click();
+  await expect(check(page, "Address").locator(".conn-state")).toHaveText("Passed");
+});
+
+test("Settings warns at the top while public DNS gives the hub's name a public address", async ({ page, hub }) => {
+  hub.check.publicDns = { state: "public", addresses: ["203.0.113.7"], checkedAt: hub.now() };
+  await page.goto("/");
+  await expect(page.locator("#list .row").first()).toBeVisible();
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  const warn = page.locator("#settings > .conn-warn");
+  await expect(warn).toContainText("The internet can find this hub");
+  await expect(warn).toContainText("the address 203.0.113.7");
+  await expect(warn).toContainText("turn Funnel off");
+  await expect(page.locator("#settings > *").first()).toHaveClass(/conn-warn/);
+  await axe(page);
+});
+
+test("Settings shows no warning while public DNS has no public address", async ({ page, hub }) => {
+  void hub;
+  await page.goto("/");
+  await expect(page.locator("#list .row").first()).toBeVisible();
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  await expect(page.locator("#s-connection")).toBeVisible();
+  await expect.poll(() => hub.requests.filter((r) => r === "GET /api/setup/status").length).toBe(1);
+  await expect(page.locator(".conn-warn")).toHaveCount(0);
 });
 
 test("missing push keys say where the hub keeps them", async ({ page, hub }) => {

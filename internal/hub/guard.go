@@ -13,14 +13,16 @@ import (
 // app API has no credentials of its own, so it must refuse requests another
 // site makes from the user's browser (CSRF) and requests that reach it under
 // a name an attacker controls (DNS rebinding). The bridge API has bearer
-// tokens and /healthz is public, so neither is checked.
+// tokens and /healthz is public, so neither is checked for those. Every
+// request, those included, must first come from the private network.
 type guard struct {
+	net          *netGuard
 	hosts        map[string]bool // allowed Host names, lower case, no port
 	publicOrigin string          // scheme://host[:port] of MEAT_MODE_PUBLIC_URL, or ""
 }
 
 func newGuard(cfg Config) *guard {
-	g := &guard{hosts: map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}}
+	g := &guard{net: newNetGuard(cfg), hosts: map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}}
 	if u, err := url.Parse(cfg.PublicURL); err == nil && u.Host != "" {
 		g.hosts[strings.ToLower(u.Hostname())] = true
 		g.publicOrigin = strings.ToLower(u.Scheme + "://" + u.Host)
@@ -43,6 +45,9 @@ func hostOnly(h string) string {
 
 // check reports whether the request may go on, writing the refusal when not.
 func (g *guard) check(w http.ResponseWriter, r *http.Request) bool {
+	if !g.net.check(w, r) {
+		return false
+	}
 	p := r.URL.Path
 	if p == "/healthz" || strings.HasPrefix(p, "/bridge/") {
 		return true

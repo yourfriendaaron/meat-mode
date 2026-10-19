@@ -200,7 +200,17 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return fmt.Errorf("cannot reach the hub with that token: %w", err)
 	}
-	if err := cfg.Save(env.Paths.Config); err != nil {
+	// The switches may have changed since the file was read, from
+	// `meat-mode bridge agents` or a running bridge; keep theirs.
+	err = WithConfigLock(env.Paths.Config, func() error {
+		cur, err := readConfigFile(env.Paths.Config)
+		if err != nil {
+			return err
+		}
+		cfg.Agents, cfg.Sync = cur.Agents, cur.Sync
+		return cfg.Save(env.Paths.Config)
+	})
+	if err != nil {
 		return err
 	}
 	fmt.Fprintf(env.Stdout, "Paired with %s as bridge %q. Config saved to %s.\n", cfg.HubURL, reply.Bridge, env.Paths.Config)

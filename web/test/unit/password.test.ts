@@ -23,15 +23,14 @@ test("refused claims and changes say what to do in plain words", () => {
   assert.equal(changeErrorText(400, "the password must be at least 8 characters"), "The password must be at least 8 characters.");
 });
 
-test("the Secure step counts as set up with any password or the Tailscale-only choice", () => {
+test("the Secure step counts as set up with any password, and with none only never", () => {
   const step = findStep("secure")!;
   const ctx = (setup: Partial<SetupInfo> | null) =>
-    ({ setup: setup && { status: "new", user: "alex", timeZone: "", password: "none", tailscaleOnly: false, ...setup } }) as AppContext;
+    ({ setup: setup && { status: "new", user: "alex", timeZone: "", password: "none", ...setup } }) as AppContext;
   assert.equal(step.part, "hub");
   assert.equal(step.settings, "s-password");
   assert.equal(step.done!(ctx(null)), false);
   assert.equal(step.done!(ctx({})), false);
-  assert.equal(step.done!(ctx({ tailscaleOnly: true })), true);
   assert.equal(step.done!(ctx({ password: "app" })), true);
   assert.equal(step.done!(ctx({ password: "env" })), true);
 });

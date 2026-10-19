@@ -257,6 +257,24 @@
   padding-left: 12px;
   color: var(--role-soft);
 }
+.m-repo-agents-off .m-repo-name {
+  flex: 1;
+}
+.m-repo-agents-off .m-repo-name > p {
+  margin: 4px 0;
+}
+.cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cmd-row .cmd {
+  flex: 1;
+  min-width: 0;
+}
+.run-off .cmd-row {
+  margin-top: 6px;
+}
 .runs-now {
   display: flex;
   align-items: center;
