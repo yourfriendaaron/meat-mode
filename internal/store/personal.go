@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -142,6 +143,7 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 			CreatedBy: a.Author,
 			DueAt:     a.Payload.Due,
 			Parent:    a.Payload.Parent,
+			Labels:    slices.Clone(a.Payload.Labels),
 			CreatedAt: a.CreatedAt,
 			UpdatedAt: a.CreatedAt,
 		}
@@ -479,7 +481,7 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 		}
 	}
 	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: repo,
-		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat, Parent: t.Parent}}, author, func(tx *sql.Tx, a api.Action) error {
+		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat, Parent: t.Parent, Labels: t.Labels}}, author, func(tx *sql.Tx, a api.Action) error {
 		return recordOwner(tx, a.Repo, a.BeadID, bridge)
 	})
 	if err != nil {
