@@ -4,9 +4,10 @@
 // tap away. Steps live in ./steps.
 
 import type { AppContext } from "../app-context.ts";
-import { api } from "../api.ts";
+import { api, errorText } from "../api.ts";
 import { esc } from "../html.ts";
 import { remindersOn } from "../push.ts";
+import { remote } from "../remote.ts";
 import type { SetupInfo } from "../types.ts";
 import { findStep, stepsFor, type Run, type Step } from "./registry.ts";
 import {
@@ -21,7 +22,8 @@ import {
 } from "./rules.ts";
 import "./steps/index.ts";
 
-let info: SetupInfo | null = null;
+/** GET /api/setup. A failed load keeps the last answer. */
+const info = remote(() => api.setup());
 let progress: Progress | null = null;
 /** Offer this device's part in the banner. */
 let offerDevice = false;
@@ -31,16 +33,12 @@ let focusStep = false;
 
 /** GET /api/setup as last loaded, or null. */
 export function setupInfo(): SetupInfo | null {
-  return info;
+  return info.peek();
 }
 
 /** Loads GET /api/setup again; keeps the last answer when the hub cannot be reached. */
-export async function reloadSetup(): Promise<void> {
-  try {
-    info = await api.setup();
-  } catch {
-    // keep what we had
-  }
+export function reloadSetup(): Promise<void> {
+  return info.reload();
 }
 
 /**
@@ -53,7 +51,7 @@ export async function initSetup(ctx: AppContext): Promise<void> {
   await reloadSetup();
   const show = ctx.view === view;
   const saved = loadProgress();
-  const what = firstRun(info?.status ?? null, deviceRecord(), remindersOn(), saved);
+  const what = firstRun(info.peek()?.status ?? null, deviceRecord(), remindersOn(), saved);
   if (what === "resume") {
     progress = saved;
     focusStep = show;
@@ -116,9 +114,10 @@ async function complete(ctx: AppContext) {
   if (parts.includes("hub")) {
     try {
       await api.recordSetup("done");
-      if (info) info.status = "done";
+      const known = info.peek();
+      if (known) known.status = "done";
     } catch (e) {
-      ctx.toast(`Could not save the setup: ${(e as Error).message}`);
+      ctx.toast(`Could not save the setup: ${errorText(e)}`);
       return;
     }
   }
@@ -130,12 +129,13 @@ async function complete(ctx: AppContext) {
 async function dismiss(ctx: AppContext) {
   if (!progress) return;
   const parts = partsOf(progress.mode);
-  if (parts.includes("hub") && info?.status !== "done") {
+  if (parts.includes("hub") && info.peek()?.status !== "done") {
     try {
       await api.recordSetup("dismissed");
-      if (info) info.status = "dismissed";
+      const known = info.peek();
+      if (known) known.status = "dismissed";
     } catch (e) {
-      ctx.toast(`Could not save the setup: ${(e as Error).message}`);
+      ctx.toast(`Could not save the setup: ${errorText(e)}`);
     }
   }
   if (parts.includes("device") && deviceRecord() !== "done") setDeviceRecord("dismissed");

@@ -1,6 +1,7 @@
 // The instructions for agents, kept in Settings after setup.
 
-import { agentMachines, copyFrom, instructionsHTML, pickMachine } from "../agents.ts";
+import { agentMachines, instructionsHTML, pickMachine } from "../agents.ts";
+import { copyText } from "../clipboard.ts";
 import { registerSection } from "./registry.ts";
 
 /** The machine chosen when there are several. */
@@ -19,7 +20,7 @@ ${instructionsHTML(user, machines, pickMachine(machines, chosen), "set-")}`;
   },
   async act(act, el, ctx) {
     if (act !== "agents-copy") return;
-    await copyFrom(el.dataset.copy ?? "");
+    await copyText(el.dataset.copy ?? "");
     ctx.toast("Copied");
   },
   change(el, ctx) {

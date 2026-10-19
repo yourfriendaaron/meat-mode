@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { addMachineError, agentInstructions, agentMachines, agentsOnCommand, installCommand, machineReposHTML, pickMachine, PLATFORMS, waitText } from "../../src/agents.ts";
-import { ApiError, retryAfterSeconds } from "../../src/api.ts";
+import { addMachineError, agentInstructions, agentMachines, agentsOnCommand, installCommand, machineReposHTML, pickMachine, PLATFORMS } from "../../src/agents.ts";
+import { ApiError, retryAfterSeconds, waitText } from "../../src/api.ts";
 import type { Bridge, Repo } from "../../src/types.ts";
 
 test("each install download is a binary the release workflow builds", () => {

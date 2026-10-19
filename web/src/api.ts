@@ -25,6 +25,39 @@ export function retryAfterSeconds(header: string | null, now = Date.now()): numb
   return Number.isNaN(at) ? 0 : Math.max(0, Math.ceil((at - now) / 1000));
 }
 
+/** "a minute", or the seconds or minutes a Retry-After asked for. */
+export function waitText(seconds: number): string {
+  if (seconds <= 0 || seconds === 60) return "a minute";
+  if (seconds < 60) return seconds === 1 ? "1 second" : `${seconds} seconds`;
+  const m = Math.ceil(seconds / 60);
+  return m === 1 ? "a minute" : `${m} minutes`;
+}
+
+/** What one place says for the failures the hub answers in its own way. Each has a default. */
+export interface ErrorPhrases {
+  /** A 401, such as "Wrong password." Default: the hub's message. */
+  unauthorized?: string;
+  /** A 403. Default: the hub's message. */
+  forbidden?: string;
+  /** A 403 that asks for the password again (ApiError.reauth). Default: as forbidden. */
+  reauth?: string;
+  /** What a 429 says before "Wait … and try again.", which names the hub's Retry-After. Default "Too many tries". */
+  tooMany?: string;
+  /** Wraps any other failure's message, such as "Could not log in: …". Default: the message as it is. */
+  other?: (message: string) => string;
+}
+
+/** The words for a failed request or any other thrown error, the same way everywhere. */
+export function errorText(e: unknown, phrases: ErrorPhrases = {}): string {
+  const other = phrases.other ?? ((m: string) => m);
+  if (!(e instanceof ApiError)) return other(e instanceof Error ? e.message : String(e));
+  if (e.status === 429) return `${phrases.tooMany ?? "Too many tries"}. Wait ${waitText(e.retryAfter)} and try again.`;
+  if (e.status === 401 && phrases.unauthorized !== undefined) return phrases.unauthorized;
+  if (e.status === 403 && e.reauth && phrases.reauth !== undefined) return phrases.reauth;
+  if (e.status === 403 && phrases.forbidden !== undefined) return phrases.forbidden;
+  return other(e.message);
+}
+
 /** Runs when the hub answers 401 to anything but a login attempt: the session has ended. */
 let onUnauthorized: () => void = () => {};
 export function setUnauthorizedHandler(fn: () => void) {

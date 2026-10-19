@@ -5,7 +5,7 @@
 // ids and messages apart.
 
 import type { AppContext } from "./app-context.ts";
-import { ApiError, call } from "./api.ts";
+import { call, errorText } from "./api.ts";
 import { esc } from "./html.ts";
 
 /** The hub refuses a shorter password. */
@@ -33,17 +33,17 @@ export function checkPassword(password: string, repeat: string): string {
 }
 
 /** What a refused claim says under the form. */
-export function claimErrorText(status: number, message: string): string {
-  if (status === 403) return "That setup code is wrong, expired or already used. Restart the hub for a new one.";
-  if (status === 429) return "Too many wrong codes. Wait a minute and try again.";
-  return sentence(message);
+export function claimErrorText(e: unknown): string {
+  return errorText(e, {
+    forbidden: "That setup code is wrong, expired or already used. Restart the hub for a new one.",
+    tooMany: "Too many wrong codes",
+    other: sentence,
+  });
 }
 
 /** What a refused password change says under the form. */
-export function changeErrorText(status: number, message: string): string {
-  if (status === 403) return "The current password is wrong.";
-  if (status === 429) return "Too many tries. Wait a minute and try again.";
-  return sentence(message);
+export function changeErrorText(e: unknown): string {
+  return errorText(e, { forbidden: "The current password is wrong.", other: sentence });
 }
 
 function sentence(s: string): string {
@@ -131,7 +131,7 @@ async function run(place: Place, ctx: AppContext, fn: () => Promise<string>): Pr
     for (const f of document.querySelectorAll<HTMLInputElement>(`input[id^="${place}-pw-"]`)) f.value = "";
     ok = true;
   } catch (e) {
-    s.error = (e as Error).message;
+    s.error = errorText(e);
   }
   s.busy = false;
   await ctx.refresh();
@@ -159,7 +159,7 @@ function claimWith(form: HTMLFormElement): () => Promise<string> {
     try {
       await call<void>("POST", "/api/setup/claim", { code, password });
     } catch (e) {
-      throw new Error(e instanceof ApiError ? claimErrorText(e.status, e.message) : sentence((e as Error).message));
+      throw new Error(claimErrorText(e));
     }
     return "The password is set, and this device is logged in.";
   };
@@ -183,7 +183,7 @@ export async function claimScreen(form: HTMLFormElement, draw: () => void): Prom
     s.error = "";
     ok = true;
   } catch (e) {
-    s.error = (e as Error).message;
+    s.error = errorText(e);
   }
   s.busy = false;
   if (!ok) {
@@ -205,7 +205,7 @@ export function change(place: Place, form: HTMLFormElement, ctx: AppContext): Pr
     try {
       await call<void>("PUT", "/api/password", { current, password });
     } catch (e) {
-      throw new Error(e instanceof ApiError ? changeErrorText(e.status, e.message) : sentence((e as Error).message));
+      throw new Error(changeErrorText(e));
     }
     return "The password is changed. Every other device is logged out.";
   });

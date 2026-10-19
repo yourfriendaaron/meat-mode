@@ -1,4 +1,5 @@
 import type { AppContext } from "../../app-context.ts";
+import { errorText } from "../../api.ts";
 import { installPlatform, isInstalled, pushSupport } from "../../device.ts";
 import { esc } from "../../html.ts";
 import { ORDER, registerStep } from "../registry.ts";
@@ -96,7 +97,7 @@ registerStep({
       if (outcome === "accepted") installed = true;
       else message = "Not installed. You can install it later from the browser's menu.";
     } catch (e) {
-      message = `Could not install: ${(e as Error).message}`;
+      message = `Could not install: ${errorText(e)}`;
     }
     ctx.render();
   },
