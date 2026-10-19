@@ -65,7 +65,7 @@ import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } 
 import { loginErrorText, needsLogin } from "./login.ts";
 import { esc } from "./html.ts";
 import { machineReposHTML } from "./agents.ts";
-import { agentName, agentsAllowed, anyAgentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
+import { agentName, agentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
 import { appPushStatus, appStateMessage, initPush, inAndroidApp, remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
@@ -1756,7 +1756,10 @@ function setView(v: View) {
     forgetCalendarLink();
     forgetDevices();
   }
+  // A new view sets the New task list afresh: the list being viewed, else the default.
+  qaListTouched = false;
   render();
+  updateQuickAdd();
   $("#list").scrollTop = 0;
   $("#wizard").scrollTop = 0;
 }
@@ -1839,36 +1842,40 @@ function qaWakes(listKey: string): boolean {
 }
 
 /**
- * The switch "An agent starts on it", shown once any list lets agents work.
- * On a list where none may, it shows off and disabled with the reason. Add
- * turns pink when it will wake one.
+ * The Agent pill, "An agent starts on it", shown only on a list where an
+ * agent may work. While it is on, the line under the bar says what happens
+ * and Add turns pink.
  */
 function updateQaAgent(listKey: string) {
   const box = $("#qa-agent");
+  const why = $("#qa-agent-why");
   const add = $("#qa-add");
-  const show = anyAgentsAllowed(repos());
-  box.hidden = !show;
   const r = repos().find((x) => repoKey(x) === listKey);
-  const reason = noAgentReason(r);
+  const show = !!r && !noAgentReason(r);
   const on = show && qaWakes(listKey);
+  box.hidden = !show;
   setHTML(
     box,
     show
-      ? `<div class="qa-agent-text"><span id="qa-ask-label">An agent starts on it</span><span id="qa-ask-why" class="muted small">${esc(reason || `It reads the task in ${r ? repoLabel(r) : "the list"} and replies here.`)}</span></div><button type="button" class="switch" role="switch" id="qa-ask" data-act="qa-ask" aria-checked="${on}" aria-labelledby="qa-ask-label" aria-describedby="qa-ask-why"${reason ? " disabled" : ""}><span class="switch-knob" aria-hidden="true"></span></button>`
+      ? `<button type="button" class="qa-pill qa-ask" role="switch" id="qa-ask" data-act="qa-ask" aria-checked="${on}" aria-label="An agent starts on it" aria-describedby="qa-agent-why">${ICON.spark}Agent</button>`
       : "",
   );
+  why.hidden = !on;
+  why.textContent = on && r ? `It reads the task in ${repoLabel(r)} and replies here.` : "";
   add.classList.toggle("btn-agent", on);
   add.classList.toggle("btn-primary", !on);
-  setHTML(add, on ? `${ICON.spark}Add and ask agent` : `${ICON.plus}Add`);
+  setHTML(add, `${on ? ICON.spark : ICON.plus}Add`);
 }
 
 function quickLists() {
   return visibleRepos(repos()).map((r) => ({ key: repoKey(r), name: repoLabel(r) }));
 }
 
-/** The personal repo (visibleRepos sorts it first), else the first list. */
+/** The list being viewed, else the personal repo (visibleRepos sorts it first), else the first list. */
 function defaultList(): string {
   const v = visibleRepos(repos());
+  const here = S.view.startsWith("list:") ? S.view.slice("list:".length) : "";
+  if (here && v.some((r) => repoKey(r) === here)) return here;
   return v.length ? repoKey(v[0]) : "";
 }
 
@@ -2490,9 +2497,11 @@ function shell(): string {
   <div id="browse" class="browse"></div>
   <form id="qa-form" class="qa" autocomplete="off">
     <div class="qa-head"><h2>New task</h2><button type="button" class="icon-btn" data-act="qa-close" aria-label="Close">${ICON.close}</button></div>
-    <div class="qa-field"><div id="qa-backdrop" class="qa-backdrop" aria-hidden="true"></div><input id="qa-input" type="text" enterkeyhint="done" aria-label="New task" aria-describedby="qa-chips" placeholder="Add a task: Water the plants tomorrow 9am #garden"></div>
-    <div class="qa-meta"><span id="qa-chips" class="chips" aria-live="polite"></span><label class="sr" for="qa-list">List</label><select id="qa-list"></select><button id="qa-add" class="btn btn-primary" type="submit">${ICON.plus}Add</button></div>
-    <div id="qa-agent" class="qa-agent" hidden></div>
+    <div class="qa-bar">
+      <div class="qa-field"><div id="qa-backdrop" class="qa-backdrop" aria-hidden="true"></div><input id="qa-input" type="text" enterkeyhint="done" aria-label="New task" aria-describedby="qa-chips" placeholder="Add a task: Water the plants tomorrow 9am #garden"></div>
+      <div class="qa-meta"><label class="sr" for="qa-list">List</label><select id="qa-list" class="qa-pill"></select><span id="qa-agent" class="qa-agent" hidden></span><button id="qa-add" class="btn btn-primary" type="submit">${ICON.plus}Add</button></div>
+    </div>
+    <div class="qa-sub"><span id="qa-chips" class="chips" aria-live="polite"></span><span id="qa-agent-why" class="muted small" hidden></span></div>
   </form>
   <div id="dayload" class="dayload" hidden></div>
   <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>

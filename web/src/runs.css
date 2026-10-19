@@ -235,15 +235,16 @@
 /* ---------- New task ---------- */
 
 .qa-agent {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: contents;
 }
-.qa-agent-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+/* Pink belongs to the agent: the pill wears it only while it is on. */
+.qa-ask[aria-checked="true"] {
+  background-image: linear-gradient(var(--role-agent-tint), var(--role-agent-tint));
+  border-color: var(--role-agent);
+  color: var(--role-fg);
+}
+.qa-ask[aria-checked="true"] svg {
+  color: var(--role-agent);
 }
 
 /* ---------- Settings ---------- */

@@ -92,6 +92,7 @@
   --role-agent: var(--palette-pink);
   --role-agent-action: var(--palette-pink);
   --role-agent-action-fg: var(--palette-on-accent);
+  --role-agent-tint: color-mix(in srgb, var(--palette-pink) var(--palette-wash), transparent);
   --role-you: var(--palette-cyan);
 
   /* Actions and what is new. */
@@ -543,23 +544,63 @@ kbd {
   color: var(--role-soft);
   opacity: 0.85;
 }
+.qa-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .qa-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-}
-.qa-meta .chips {
-  flex: 1;
   min-width: 0;
 }
-.qa-meta select {
+.qa-meta #qa-add {
+  margin-left: auto;
+}
+.qa-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 36px;
-  max-width: 50%;
-  padding: 4px 8px;
-  border-radius: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
   border: 1px solid var(--role-line);
-  background: var(--role-raise);
+  background-color: var(--role-raise);
+  font-size: 14px;
+  font-weight: 600;
+}
+.qa-pill svg {
+  width: 15px;
+  height: 15px;
+}
+select.qa-pill {
+  min-width: 0;
+  max-width: 50%;
+  padding-right: 28px;
+  appearance: none;
+  text-overflow: ellipsis;
+  /* A caret drawn from two gradients, so it follows the theme. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--role-soft) 50%),
+    linear-gradient(135deg, var(--role-soft) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 55%,
+    calc(100% - 11px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+.qa-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.qa-sub .chips:empty {
+  display: none;
+}
+.qa-sub:not(:has(.chips:not(:empty), #qa-agent-why:not([hidden]))) {
+  display: none;
 }
 
 /* ---------- day load ---------- */
@@ -1934,27 +1975,41 @@ kbd {
     box-shadow: none;
     border-radius: 0;
   }
-  .qa,
-  .app.qa-open .qa {
+  /* One bar: the task, then its list, the Agent pill and Add inside the same border. */
+  .qa-bar {
     flex-direction: row;
-    flex-wrap: wrap;
     align-items: center;
+    gap: 8px;
+    padding-right: 6px;
+    background: var(--role-bg);
+    border: 1px solid var(--role-line);
+    border-radius: 10px;
+  }
+  .qa-bar:focus-within {
+    border-color: var(--role-focus);
   }
   .qa-field {
-    flex: 1 1 280px;
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
   }
   .qa-meta {
-    display: contents;
+    flex: none;
+    max-width: 55%;
   }
-  .qa-meta .chips {
-    order: 9;
-    flex-basis: 100%;
+  .qa-pill {
+    min-height: 32px;
+    font-size: 13px;
   }
-  .qa-meta .chips:empty {
-    display: none;
+  select.qa-pill {
+    max-width: 200px;
   }
-  .qa-meta select {
-    max-width: 160px;
+  .qa-meta #qa-add {
+    min-height: 36px;
+  }
+  .qa-sub {
+    padding-left: 13px;
   }
   .qa-backdrop,
   .qa-field input {
