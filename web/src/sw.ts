@@ -3,7 +3,7 @@
 // Every push shows a notification, since browsers revoke subscriptions that
 // receive silent pushes.
 
-import { actionBody, isPostedAction, type ButtonAction } from "./sw-actions.ts";
+import { actionBody, failureText, isPostedAction, type ButtonAction } from "./sw-actions.ts";
 
 interface PushAction {
   action: "reply" | "open" | "retry" | "done" | "snooze";
@@ -74,7 +74,7 @@ function newId(): string {
 }
 
 /** A notification button that acts: Retry asks again on the item, Done and Snooze (an hour) change it, posted as the app posts them. */
-async function post(action: ButtonAction, key: string): Promise<boolean> {
+async function post(action: ButtonAction, key: string): Promise<string | null> {
   try {
     const res = await fetch("/api/actions", {
       method: "POST",
@@ -82,9 +82,9 @@ async function post(action: ButtonAction, key: string): Promise<boolean> {
       credentials: "same-origin",
       body: JSON.stringify(actionBody(action, key, newId(), new Date())),
     });
-    return res.ok;
+    return res.ok ? null : failureText(res.status, await res.text().catch(() => ""));
   } catch {
-    return false;
+    return failureText(0, "");
   }
 }
 
@@ -93,8 +93,22 @@ sw.addEventListener("notificationclick", (e) => {
   const key: string = e.notification.data?.key || "";
   const action: string = e.action || "";
   if (isPostedAction(action) && key) {
-    // When the hub refuses, open the item so its card says why.
-    e.waitUntil(post(action, key).then((ok) => (ok ? undefined : open(`/?item=${encodeURIComponent(key)}`))));
+    const itemUrl = `/?item=${encodeURIComponent(key)}`;
+    const title: string = e.notification.title || "Meat Mode";
+    e.waitUntil(
+      post(action, key).then((reason) => {
+        if (reason === null) return undefined;
+        // Done says why in a notification, which opens the item; the other buttons open the item so its card says why.
+        if (action !== "done") return open(itemUrl);
+        return sw.registration.showNotification(title, {
+          body: reason,
+          tag: `failed:${key}`,
+          data: { url: itemUrl, key: "" },
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
+        });
+      }),
+    );
     return;
   }
   const url = action === "reply" && key ? `/?item=${encodeURIComponent(key)}&reply=1` : e.notification.data?.url || "/";

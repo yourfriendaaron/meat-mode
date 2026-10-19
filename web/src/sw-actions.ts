@@ -17,3 +17,17 @@ export function actionBody(action: ButtonAction, key: string, id: string, now: D
   if (action === "done") return { id, kind: "done", key, payload: {} };
   return { id, kind: "snooze", key, payload: { until: new Date(now.getTime() + SNOOZE_MS).toISOString(), previous: null } };
 }
+
+/** The words for a refused or failed button action: the hub's own reason, capitalised, else a plain fallback. */
+export function failureText(status: number, body: string): string {
+  let reason = "";
+  try {
+    const j = JSON.parse(body);
+    if (j && typeof j.error === "string") reason = j.error.trim();
+  } catch {
+    // Not JSON: use the fallback.
+  }
+  if (!reason) return status ? "The hub could not do that." : "Could not reach the hub.";
+  reason = reason[0].toUpperCase() + reason.slice(1);
+  return /[.!?]$/.test(reason) ? reason : `${reason}.`;
+}
