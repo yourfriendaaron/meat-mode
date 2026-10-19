@@ -42,6 +42,7 @@ import {
 import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput, ymd } from "./dates.ts";
 import { completedGroups, deletedGroups } from "./history.ts";
 import { searchGroups } from "./search.ts";
+import { hasTag, shownTags } from "./tags.ts";
 import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "./bulk.ts";
 import { snoozeOptions, typedSnooze } from "./snooze.ts";
 import { ADD_ERROR_TEXT, addAction, readQuickAdd, wakesAgent, type QuickAdd } from "./quickadd.ts";
@@ -115,6 +116,11 @@ const S = {
   view: "today" as View,
   /** The search field's text; while it holds a word, the list shows search results in place of the view. */
   query: "",
+  /**
+   * The tag the list is filtered by, or null. Like a search, it shows items
+   * from every list in place of the view, and picking a view ends it.
+   */
+  tag: null as string | null,
   /** Select mode: rows pick instead of open, and the bulk bar acts on the picks. */
   selecting: false,
   picked: new Set<string>(),
@@ -250,9 +256,16 @@ function searching(): boolean {
   return !isPage(S.view) && S.query.trim() !== "";
 }
 
+/** Whether the list shows the items with one tag, from every list. */
+function filtering(): boolean {
+  return !isPage(S.view) && S.tag !== null;
+}
+
 function currentGroups(): Group[] {
   if (isPage(S.view)) return [];
-  if (S.query.trim()) return searchGroups(items(), S.query, now());
+  const tag = S.tag;
+  if (S.query.trim()) return searchGroups(items(), S.query, now(), tag === null ? undefined : (i) => hasTag(i, tag));
+  if (tag !== null) return buildView("all", items().filter((i) => hasTag(i, tag)), now());
   if (S.view === "completed") return completedGroups(items(), now());
   if (S.view === "deleted") return deletedGroups(items());
   return buildView(S.view, items(), now());
@@ -393,7 +406,12 @@ function actionLabel(a: Action): string {
 
 // ---------- render: list ----------
 
-function chipsFor(item: Item, opts: { list: boolean; nested?: boolean }): string {
+/**
+ * An item's chips. In the detail (`detail`) a tag chip is a button that
+ * filters the list by it; on a row it sits inside the row's button, so it is
+ * text that a tap on it routes to the same filter.
+ */
+function chipsFor(item: Item, opts: { list: boolean; nested?: boolean; detail?: boolean }): string {
   const n = now();
   const agent = isAgentItem(item);
   const out: string[] = [];
@@ -428,6 +446,13 @@ function chipsFor(item: Item, opts: { list: boolean; nested?: boolean }): string
   // A sub-task on its own row names its parent; under the parent it needs not.
   const pt = item.parent && !opts.nested ? parentTitle(item, items()) : "";
   if (pt) out.push(`<span class="chip chip-parent">${ICON.subtask}${esc(`Part of ${pt}`)}</span>`);
+  for (const t of shownTags(item)) {
+    out.push(
+      opts.detail
+        ? `<button type="button" class="chip chip-tag" data-act="tag" data-tag="${esc(t)}" aria-label="${esc(`Show items tagged ${t}`)}">${ICON.tag}${esc(t)}</button>`
+        : `<span class="chip chip-tag" data-act="tag" data-tag="${esc(t)}">${ICON.tag}${esc(t)}</span>`,
+    );
+  }
   return out.join("");
 }
 
@@ -505,7 +530,7 @@ function rowHTML(item: Item, showList: boolean, nested = false): string {
 }
 
 function renderMain() {
-  const title = searching() ? "Search" : viewTitle(S.view);
+  const title = searching() ? "Search" : filtering() ? "Tagged" : viewTitle(S.view);
   setHTML($("#view-title"), esc(title));
   document.title = `${title} · Meat Mode`;
   // Search covers the task views, not Settings or setup.
@@ -563,6 +588,7 @@ function renderMain() {
   list.hidden = isPage(S.view);
   settings.hidden = S.view !== "settings";
   wizard.hidden = S.view !== "setup";
+  renderTagBar();
   if (S.view === "settings") {
     renderSettings();
     return;
@@ -582,7 +608,9 @@ function renderMain() {
   if (!groups.length) {
     const none = searching()
       ? "No matches."
-      : S.view === "today"
+      : filtering()
+        ? "Nothing has this tag."
+        : S.view === "today"
         ? "Nothing due today."
         : S.view === "completed"
           ? "Nothing completed in the last 7 days."
@@ -606,6 +634,31 @@ function renderMain() {
       })
       .join("") + (S.view === "deleted" && !searching() ? '<p class="history-note">Deleted items are removed 7 days after you delete them.</p>' : ""),
   );
+}
+
+/** The tag filter's chip, with the way back to the view; hidden with no filter. */
+function renderTagBar() {
+  const bar = $("#tagbar");
+  const on = filtering();
+  bar.hidden = !on;
+  setHTML(
+    bar,
+    on
+      ? `<span class="tagbar-chip">${ICON.tag}<span>Tag: <b>${esc(S.tag!)}</b></span><button type="button" class="tagbar-clear" data-act="tag-clear" aria-label="${esc(`Clear the tag filter ${S.tag!}`)}" title="Clear">${ICON.close}</button></span>`
+      : "",
+  );
+}
+
+/** Filters the list to the items with `tag`, from every list; null ends the filter. */
+function filterTag(tag: string | null) {
+  S.tag = tag;
+  S.selected = null;
+  S.selecting = false;
+  S.picked = new Set();
+  // The list is behind the phone's detail sheet, so the sheet makes way.
+  if (tag !== null && isPhone()) closeDetail();
+  render();
+  $("#list").scrollTop = 0;
 }
 
 function applySelection() {
@@ -711,6 +764,7 @@ ${repeatFieldsHTML(item, d)}
 <label for="edit-lead">Remind me early</label>${leadSelect("edit-lead", d.remindBefore, true)}
 <label for="edit-desc">Details</label><textarea id="edit-desc" rows="4" maxlength="${TEXT_MAX}"></textarea>
 <label for="edit-prio">Priority</label><select id="edit-prio">${prio}</select>
+<label for="edit-tags">Tags</label><input id="edit-tags" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" placeholder="garden errands" aria-describedby="edit-tags-hint"><p class="muted small tags-hint" id="edit-tags-hint">One word each, separated by spaces.</p>
 ${parentFieldHTML(item, d)}
 ${e.error ? `<p class="row-error" role="alert">${esc(e.error)}</p>` : ""}
 <div class="btn-row"><button type="submit" class="btn btn-primary">${ICON.check}Save</button><button type="button" class="btn" data-act="edit-cancel">Cancel</button></div>
@@ -937,7 +991,7 @@ function renderDetail() {
   const html = `<div class="detail-inner" role="region" aria-labelledby="d-title">
 <div class="grip" aria-hidden="true"></div>
 <div class="d-head">${checkButton(item, agent)}<h2 id="d-title" class="d-title">${esc(item.title)}</h2><button class="icon-btn" data-act="close-detail" aria-label="Close details">${ICON.close}</button></div>
-<div class="chips d-chips">${chipsFor(item, { list: true })}<code class="bead-id">${esc(item.id)}</code></div>
+<div class="chips d-chips">${chipsFor(item, { list: true, detail: true })}<code class="bead-id">${esc(item.id)}</code></div>
 ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
 ${editing ? editFormHTML(item) : why + actions}
 ${editable ? checklistHTML(item) : ""}
@@ -961,6 +1015,7 @@ ${noteBoxHTML(item, allowed)}</section>
       setValue("#edit-desc", d.description);
       setValue("#edit-interval", d.interval);
       setValue("#edit-until", d.until);
+      setValue("#edit-tags", d.tags);
     }
     if (S.noteEdit?.key === item.key) setValue("#note-edit-input", S.noteEdit.text);
   }
@@ -1294,7 +1349,7 @@ function doSnooze(keys: string[], until: Date) {
 // ---------- select mode ----------
 
 function selectable(): boolean {
-  return Boolean(S.state) && canSelect(S.view, S.query);
+  return Boolean(S.state) && (filtering() || canSelect(S.view, S.query));
 }
 
 /** Ends select mode where it no longer applies, and drops picks that left the list. */
@@ -1510,7 +1565,10 @@ function saveEdit() {
   if (err) {
     e.error = err;
     render();
-    const field = /title/i.test(err)
+    // Tag errors first: a tag may hold any of the words matched below.
+    const field = /^(The tag |An item has at most)/.test(err)
+      ? "#edit-tags"
+      : /title/i.test(err)
       ? "#edit-title"
       : /^Repeat every/.test(err)
         ? "#edit-interval"
@@ -1657,6 +1715,8 @@ function setView(v: View) {
     S.query = "";
     $<HTMLInputElement>("#search-input").value = "";
   }
+  // So does a tag filter.
+  if (!isPage(v)) S.tag = null;
   if (isPhone()) closeDetail();
   if (v !== "settings") leaveSettings();
   // A new view sets the New task list afresh: the list being viewed, else the default.
@@ -1737,7 +1797,7 @@ function selectBy(delta: number) {
 
 // ---------- quick add ----------
 
-let qa: QuickAdd = { title: "", due: null, repeat: null, list: null, tokens: [] };
+let qa: QuickAdd = { title: "", due: null, repeat: null, list: null, tags: [], tokens: [] };
 let qaListTouched = false;
 /** The New task form's agent switch as the user set it; null is its default, off, so Add wakes no agent until it is switched on. */
 let qaAsk: boolean | null = null;
@@ -1821,6 +1881,7 @@ function updateQuickAdd() {
     const r = repos().find((x) => repoKey(x) === qa.list);
     chips.push(`<span class="chip chip-list">${esc(r ? listLabel(r) : qa.list)}</span>`);
   }
+  for (const t of qa.tags) chips.push(`<span class="chip chip-tag">${ICON.tag}${esc(t)}</span>`);
   setHTML($("#qa-chips"), chips.join(""));
 }
 
@@ -1835,7 +1896,7 @@ async function submitQuickAdd() {
     zone: browserZone(),
   });
   if ("error" in add) {
-    if (add.error !== "empty") showToast(ADD_ERROR_TEXT[add.error]);
+    if (add.error !== "empty") showToast(add.why ?? ADD_ERROR_TEXT[add.error]);
     if (add.error !== "no-list") input.focus();
     return;
   }
@@ -1903,6 +1964,16 @@ function onClick(e: MouseEvent) {
   switch (btn.dataset.act) {
     case "view":
       setView(btn.dataset.view as View);
+      break;
+    case "tag": {
+      // A tag chip on a row sits inside the row's button: it filters, and the row stays shut.
+      const rowKey = btn.closest<HTMLElement>(".row")?.dataset.key;
+      if (S.selecting && rowKey) togglePick(rowKey);
+      else filterTag(btn.dataset.tag ?? null);
+      break;
+    }
+    case "tag-clear":
+      filterTag(null);
       break;
     case "open":
       // In select mode a tap on a row picks it.
@@ -2108,6 +2179,7 @@ function onKey(e: KeyboardEvent) {
     } else if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
     else if (S.selecting) endSelect();
     else if (S.open) closeDetail();
+    else if (filtering()) filterTag(null);
     else return;
     e.preventDefault();
     return;
@@ -2176,6 +2248,7 @@ function onInput(e: Event) {
       d.interval = v;
       $("#edit-unit").textContent = unitText(d);
     } else if (t.id === "edit-until") d.until = v;
+    else if (t.id === "edit-tags") d.tags = v;
   }
 }
 
@@ -2325,6 +2398,7 @@ function shell(): string {
   </form>
   <div id="dayload" class="dayload" hidden></div>
   <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>
+  <div id="tagbar" class="tagbar" role="status" hidden></div>
   <div id="list" class="list"></div>
   <div id="bulkbar" class="bulkbar" role="toolbar" aria-label="Selected tasks" hidden></div>
   <div id="settings" class="settings" hidden></div>

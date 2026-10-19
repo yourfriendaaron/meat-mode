@@ -1,0 +1,77 @@
+/* Tags: chips on rows and in the detail, and the tag filter's bar. */
+
+.chip-tag {
+  border-color: var(--role-line);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* In the detail a tag is a button that filters the list by it. */
+button.chip-tag {
+  min-height: 24px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--role-soft);
+  cursor: pointer;
+}
+button.chip-tag:hover {
+  background: var(--role-hover);
+  color: var(--role-fg);
+}
+/* On a row the chip is text inside the row's button; a tap on it filters. */
+.row .chip-tag {
+  cursor: pointer;
+}
+
+.tagbar {
+  display: flex;
+  padding: 0 16px 8px;
+}
+.tagbar[hidden] {
+  display: none;
+}
+.tagbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 0 4px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--role-action);
+  color: var(--role-fg);
+  font-size: 13px;
+}
+.tagbar-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tagbar-chip svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.tagbar-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--role-soft);
+  cursor: pointer;
+}
+.tagbar-clear:hover {
+  background: var(--role-hover);
+  color: var(--role-fg);
+}
+
+/* The edit form's hint under the Tags field sits close to it, as the due line does. */
+.tags-hint {
+  margin: 0;
+}

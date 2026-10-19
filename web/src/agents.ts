@@ -265,7 +265,7 @@ To change a to-do this machine added, by that id:
     meat-mode done mm-12
     meat-mode reopen mm-12
 
-For a to-do in a project, add --project . to each, from inside the repo. edit takes --title, --description, --due or --clear-due, --every (with --from-done) or --no-repeat, --until or --no-until, --parent ID or --no-parent to move it, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
+For a to-do in a project, add --project . to each, from inside the repo. edit takes --title, --description, --due or --clear-due, --every (with --from-done) or --no-repeat, --until or --no-until, --parent ID or --no-parent to move it, --tag or --untag (add takes --tag too), and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
 
 Keep titles short and say what to do. Put the context in the description or the note.
 `;

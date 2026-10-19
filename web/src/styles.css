@@ -7,6 +7,7 @@
 @import "./runs.css";
 @import "./markdown.css";
 @import "./attachments.css";
+@import "./tags.css";
 
 /* ---------- tokens ----------
    The one token block: the three :root rules below. Palette tokens (--palette-*) hold
@@ -128,6 +129,7 @@
   --role-hl-date: color-mix(in srgb, var(--palette-purple) 28%, transparent);
   --role-hl-list: color-mix(in srgb, var(--palette-cyan) 28%, transparent);
   --role-hl-repeat: color-mix(in srgb, var(--palette-green) 28%, transparent);
+  --role-hl-tag: color-mix(in srgb, var(--palette-orange) 28%, transparent);
 
   /* Repo dots: tell lists apart. No pink, so no repo reads as an agent. */
   --role-repo-0: var(--palette-purple);
@@ -535,6 +537,9 @@ kbd {
 }
 .qa-backdrop mark.hl-repeat {
   background: var(--role-hl-repeat);
+}
+.qa-backdrop mark.hl-tag {
+  background: var(--role-hl-tag);
 }
 .qa-field input {
   position: relative;
