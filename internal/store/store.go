@@ -152,7 +152,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 9
+const schemaVersion = 10
 
 var migrations = []string{
 	// 1: initial schema.
@@ -289,6 +289,15 @@ CREATE TABLE runs (
 	`
 ALTER TABLE sessions ADD COLUMN verified_at INTEGER NOT NULL DEFAULT 0;
 UPDATE sessions SET expires_at = MIN(expires_at, renewed_at + 1209600, created_at + 7776000);
+`,
+	// 10: trackers. A repo's tracker is the name the app shows for it, and
+	// actions the JSON list of kinds it can apply; NULL means every kind,
+	// as an older bridge and the hub's own lists have. A bridge's trackers
+	// are the JSON list of {name, version} its last hello sent.
+	`
+ALTER TABLE repos ADD COLUMN tracker TEXT NOT NULL DEFAULT '';
+ALTER TABLE repos ADD COLUMN actions TEXT;
+ALTER TABLE bridges ADD COLUMN trackers TEXT NOT NULL DEFAULT '';
 `,
 }
 

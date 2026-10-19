@@ -79,7 +79,9 @@ func TestUpgradedHubWithDataIsInUse(t *testing.T) {
 	// Back to the schema before hub settings existed.
 	_, err = s.DB().Exec(`DROP TABLE hub_settings; DROP TABLE personal_owners;
 		ALTER TABLE repos DROP COLUMN agents_allowed; DROP TABLE runs;
-		ALTER TABLE sessions DROP COLUMN verified_at; PRAGMA user_version = 3`)
+		ALTER TABLE sessions DROP COLUMN verified_at;
+		ALTER TABLE repos DROP COLUMN tracker; ALTER TABLE repos DROP COLUMN actions;
+		ALTER TABLE bridges DROP COLUMN trackers; PRAGMA user_version = 3`)
 	must(t, err)
 	must(t, s.Close())
 

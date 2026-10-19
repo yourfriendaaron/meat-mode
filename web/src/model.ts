@@ -104,6 +104,29 @@ export function isAgentItem(x: { bridge: string }): boolean {
   return kindOf(x) === "agent";
 }
 
+/**
+ * What a list's tracker can apply (docs/trackers.md, On the wire): an action
+ * kind, or "subtask" for an add under a parent.
+ */
+export type Capability = "done" | "reopen" | "snooze" | "dismiss" | "note" | "add" | "subtask" | "ask";
+
+/** Whether a list's tracker can apply `kind`. A list without `actions`, such as the personal list or one from an older machine, takes every kind. */
+export function repoCan(repo: Pick<Repo, "actions"> | undefined, kind: Capability): boolean {
+  return !repo?.actions || repo.actions.includes(kind);
+}
+
+/**
+ * The one rule for which actions the app offers on an item, on top of
+ * personal versus agent: its list's tracker must list the kind. The hub
+ * refuses the others.
+ */
+export function can(item: { bridge: string; repo: string }, kind: Capability, repos: Repo[]): boolean {
+  return repoCan(
+    repos.find((r) => repoKey(r) === repoKey(item)),
+    kind,
+  );
+}
+
 /** Deleted: a personal item closed as Dismissed. On an agent item the same close is Won't do. */
 export function isDeleted(item: Item): boolean {
   return !isOpen(item) && item.closeReason === DISMISSED && isPersonal(item);

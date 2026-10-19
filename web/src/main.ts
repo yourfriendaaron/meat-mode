@@ -3,11 +3,13 @@
 // and one delegated handler per event type.
 
 import { ApiError, api, errorText, newId, setUnauthorizedHandler } from "./api.ts";
-import { createActions, movedOn, type Handle } from "./actions.ts";
+import { createActions, inverse, movedOn, type Handle } from "./actions.ts";
 import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
+  type Capability,
   agentNewCount,
+  can,
   attention,
   buildView,
   dateChip,
@@ -33,6 +35,7 @@ import {
   tomorrowMorning,
   visibleRepos,
   appAuthor,
+  repoCan,
   type Group,
   type ViewId,
 } from "./model.ts";
@@ -153,6 +156,10 @@ function user(): string {
 }
 function byKey(key: string | null): Item | undefined {
   return key ? items().find((i) => i.key === key) : undefined;
+}
+/** Whether the item's list can apply `kind`; see can in model.ts. */
+function allows(item: Item, kind: Capability): boolean {
+  return can(item, kind, repos());
 }
 function isPhone(): boolean {
   return ($("#app").clientWidth || window.innerWidth) < PHONE_MAX;
@@ -427,6 +434,8 @@ function checkButton(item: Item, agent: boolean): string {
     const on = S.picked.has(item.key);
     return `<button class="check pick${agent ? " check-agent" : ""}${on ? " checked" : ""}" role="checkbox" aria-checked="${on}" data-act="pick" data-key="${esc(item.key)}" aria-label="${esc(`Select: ${item.title}`)}">${ICON.check}</button>`;
   }
+  // A list that cannot mark done or reopen keeps the check's place, empty.
+  if (!allows(item, open ? "done" : "reopen")) return `<span class="check check-none${agent ? " check-agent" : ""}${open ? "" : " checked"}" aria-hidden="true"></span>`;
   const gone = isDeleted(item);
   const label = open ? `Mark done: ${item.title}` : `${gone ? "Restore" : "Reopen"}: ${item.title}`;
   return `<button class="check${agent ? " check-agent" : ""}${open ? "" : " checked"}" data-act="${open ? "done" : gone ? "restore" : "reopen"}" data-key="${esc(item.key)}" aria-label="${esc(label)}">${ICON.check}</button>`;
@@ -482,9 +491,9 @@ function rowHTML(item: Item, showList: boolean, nested = false): string {
   const picked = !done && S.selecting && S.picked.has(item.key);
   const run = agent && item.run ? item.run : null;
   return `<li class="row${nested ? " row-sub" : ""}${done ? " is-done" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}${run ? " has-run" : ""}"${run ? runAttrs(item) : ""} data-key="${esc(item.key)}">
-<div class="under" aria-hidden="true"><span class="u-done">Done</span><span class="u-snooze">Snooze</span></div>
+<div class="under" aria-hidden="true">${allows(item, "done") ? '<span class="u-done">Done</span>' : ""}${allows(item, "snooze") ? '<span class="u-snooze">Snooze</span>' : ""}</div>
 <div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList && !nested, nested })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
-    done
+    done && allows(item, "reopen")
       ? isDeleted(item)
         ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
         : `<button class="btn btn-small" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>`
@@ -585,7 +594,7 @@ function renderMain() {
     groups
       .map((g) => {
         const extra =
-          g.id === "pastdue" && g.items.length > 1
+          g.id === "pastdue" && g.items.filter((i) => allows(i, "snooze")).length > 1
             ? `<button class="btn btn-small btn-ghost" data-act="snooze-all">${ICON.moon}Snooze all to tomorrow</button>`
             : "";
         return `<section class="group group-${g.id}" aria-labelledby="g-${g.id}"><div class="group-head"><h2 id="g-${g.id}">${esc(g.label)} <span class="group-count">${g.items.length}</span></h2>${extra}</div><ul class="rows">${g.items
@@ -623,9 +632,15 @@ function renderBulk() {
   // With nothing picked, the label names what Select all would pick.
   const label = bulkDismissLabel(picks.length ? picks : pickable.map(byKey).filter((i): i is Item => Boolean(i)));
   const off = picks.length ? "" : " disabled";
+  // Each action shows only when every pick's list can apply it.
+  const every = (kind: Capability) => picks.every((i) => allows(i, kind));
   setHTML(
     bar,
-    `<span class="bulk-count" aria-live="polite">${picks.length} selected</span><div class="bulk-acts"><button class="btn btn-small" data-act="bulk-done"${off}>${ICON.check}Done</button><button class="btn btn-small" data-act="bulk-snooze"${off}>${ICON.moon}Snooze…</button><button class="btn btn-small btn-danger" data-act="bulk-dismiss"${off}>${ICON.trash}${esc(label)}</button></div><div class="bulk-more"><button class="btn btn-small btn-ghost" data-act="bulk-all">Select all</button><button class="btn btn-small btn-ghost" data-act="bulk-cancel">Cancel</button></div>`,
+    `<span class="bulk-count" aria-live="polite">${picks.length} selected</span><div class="bulk-acts">${
+      every("done") ? `<button class="btn btn-small" data-act="bulk-done"${off}>${ICON.check}Done</button>` : ""
+    }${every("snooze") ? `<button class="btn btn-small" data-act="bulk-snooze"${off}>${ICON.moon}Snooze…</button>` : ""}${
+      every("dismiss") ? `<button class="btn btn-small btn-danger" data-act="bulk-dismiss"${off}>${ICON.trash}${esc(label)}</button>` : ""
+    }</div><div class="bulk-more"><button class="btn btn-small btn-ghost" data-act="bulk-all">Select all</button><button class="btn btn-small btn-ghost" data-act="bulk-cancel">Cancel</button></div>`,
   );
 }
 
@@ -782,7 +797,7 @@ function subtasksHTML(item: Item): string {
     return `<p class="d-parent">${ICON.subtask}Part of ${name}</p>`;
   }
   const subs = subtasksOf(item, items());
-  const canAdd = isOpen(item) && !item.id.startsWith("pending-");
+  const canAdd = isOpen(item) && !item.id.startsWith("pending-") && allows(item, "subtask");
   if (!subs.length && !canAdd) return "";
   const rows = subs
     .map((c) => {
@@ -806,7 +821,7 @@ function subtasksHTML(item: Item): string {
  * list, the card says so and gives the command that switches them on at the
  * list's machine, since the app cannot.
  */
-function runCardHTML(item: Item, allowed: boolean): string {
+function runCardHTML(item: Item, allowed: boolean, askable: boolean): string {
   const who = agentName(item);
   const run = item.run;
   const key = esc(item.key);
@@ -822,7 +837,8 @@ function runCardHTML(item: Item, allowed: boolean): string {
     line = '<span class="run-line run-idle">The agent reads your latest notes, then acts or replies.</span>';
     button = `<button class="btn btn-small btn-agent" data-act="ask" data-key="${key}">${ICON.spark}Ask agent</button>`;
   }
-  const off = allowed
+  // A tracker without agents has no switch to point at.
+  const off = allowed || !askable
     ? ""
     : `<div class="run-off"><p>Agents are off for this list. <button class="link-btn" data-act="agents-settings">Open Settings</button></p>${agentsOnHTML(item.bridge, item.repo, "run-agents-cmd")}</div>`;
   const live = line || button ? `<div class="run-live">${line}${button}</div>` : "";
@@ -839,6 +855,15 @@ function composeHTML(item: Item, allowed: boolean): string {
   if (!allowed) return `<button class="btn" data-act="note" data-key="${key}">${ICON.note}Save note</button>`;
   const ask = askLabel(item);
   return `<div class="compose-row"><button class="btn btn-icon" data-act="note" data-key="${key}" aria-label="Save note" title="Save the note without asking the agent">${ICON.note}</button><button class="btn btn-agent" data-act="ask-note" data-key="${key}">${ask.kind === "reply" ? ICON.reply : ICON.spark}${esc(ask.label)}</button></div>`;
+}
+
+/**
+ * The note box under the notes. A list whose tracker takes no notes has
+ * none; where it still runs agents, the run card's Ask agent wakes them.
+ */
+function noteBoxHTML(item: Item, allowed: boolean): string {
+  if (!allows(item, "note")) return "";
+  return `<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea>${composeHTML(item, allowed)}`;
 }
 
 function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): string {
@@ -873,20 +898,21 @@ function renderDetail() {
   const open = isOpen(item);
   const allowed = agent && agentsAllowed(item, repos());
   const why = agent
-    ? runCardHTML(item, allowed)
+    ? runCardHTML(item, allowed, allows(item, "ask"))
     : item.description
       ? `<div class="why"><div class="why-label">Details</div><p>${esc(item.description)}</p></div>`
       : "";
   const queued = queuedComments(item, user());
   const comments = (item.comments ?? []).map((c) => noteHTML(item, c, editable, queued.has(c.id))).join("");
+  const reopen = allows(item, "reopen");
   const actions = `<div class="d-actions">${
     open
-      ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">${ICON.check}Done</button>${
+      ? `${allows(item, "done") ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">${ICON.check}Done</button>` : ""}${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
-        }<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? `${ICON.ban}Won't do` : `${ICON.trash}Delete`}</button>`
+        }${allows(item, "dismiss") ? `<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? `${ICON.ban}Won't do` : `${ICON.trash}Delete`}</button>` : ""}`
       : isDeleted(item)
-        ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
-        : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>${
+        ? reopen ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>` : ""
+        : `${reopen ? `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>` : ""}${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
         }`
   }</div>`;
@@ -898,13 +924,13 @@ ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
 ${editing ? editFormHTML(item) : why + actions}
 ${editable ? checklistHTML(item) : ""}
 ${subtasksHTML(item)}
-${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
+${open && allows(item, "snooze") ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
-<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea>${composeHTML(item, allowed)}</section>
+${noteBoxHTML(item, allowed)}</section>
 </div>`;
   if (setHTML(el, html)) {
-    const ta = $<HTMLTextAreaElement>("#note-input", el);
-    ta.value = S.drafts.get(item.key) ?? "";
+    const ta = el.querySelector<HTMLTextAreaElement>("#note-input");
+    if (ta) ta.value = S.drafts.get(item.key) ?? "";
     const ck = el.querySelector<HTMLInputElement>("#check-input");
     if (ck) ck.value = S.checkDrafts.get(item.key) ?? "";
     const sub = el.querySelector<HTMLInputElement>("#sub-input");
@@ -1133,7 +1159,14 @@ async function post(a: NewAction): Promise<Action | null> {
 }
 
 /** The toast's Undo for what `h` posted: reverses it, then loads the state again. */
-function undoing(h: Handle): () => Promise<void> {
+function undoing(h: Handle): (() => Promise<void>) | undefined {
+  // Once applied, a close undoes by a reopen, so a list that cannot reopen gets no Undo.
+  const stuck = h.posted.some(({ sent }) => {
+    const back = inverse(sent, "");
+    const it = byKey(sent.key ?? null);
+    return back && it && !allows(it, back.kind as Capability);
+  });
+  if (stuck) return undefined;
   return async () => {
     await actions.undo(h, { onPatched: render });
     await refresh();
@@ -1164,7 +1197,7 @@ function moveSelectionOff(keys: string[]) {
  */
 async function doDone(key: string) {
   const it = byKey(key);
-  if (!it || !isOpen(it)) return;
+  if (!it || !isOpen(it) || !allows(it, "done")) return;
   const blocked = blockedBySubtasks(it);
   if (blocked) {
     showToast(blocked);
@@ -1190,7 +1223,7 @@ async function doDone(key: string) {
  */
 function doDismiss(key: string) {
   const it = byKey(key);
-  if (!it || !isOpen(it)) return;
+  if (!it || !isOpen(it) || !allows(it, "dismiss")) return;
   const agent = isAgentItem(it);
   const all = subtasksFirst([it], items(), true);
   const subs = all.length - 1;
@@ -1205,13 +1238,13 @@ function doDismiss(key: string) {
 /** Brings a deleted personal item back; Undo deletes it again. */
 async function doRestore(key: string) {
   const it = byKey(key);
-  if (!it || isOpen(it)) return;
+  if (!it || isOpen(it) || !allows(it, "reopen")) return;
   await closing([{ id: newId(), kind: "reopen", key, payload: {} }], `Restored: ${it.title}`);
 }
 
 async function doReopen(key: string) {
   const it = byKey(key);
-  if (!it || isOpen(it)) return;
+  if (!it || isOpen(it) || !allows(it, "reopen")) return;
   await actions.perform([{ id: newId(), kind: "reopen", key, payload: {} }], { onPatched: render });
   await refresh();
 }
@@ -1220,7 +1253,7 @@ function doSnooze(keys: string[], until: Date) {
   const acts: NewAction[] = [];
   for (const key of keys) {
     const it = byKey(key);
-    if (!it) continue;
+    if (!it || !allows(it, "snooze")) continue;
     const payload: Payload = { until: until.toISOString(), previous: it.deferUntil ?? null };
     acts.push({ id: newId(), kind: "snooze", key, payload });
   }
@@ -1355,6 +1388,8 @@ function bulkSnooze() {
 }
 
 async function doNote(key: string) {
+  const it = byKey(key);
+  if (!it || !allows(it, "note")) return;
   const ta = document.querySelector<HTMLTextAreaElement>("#note-input");
   const text = (ta?.value ?? "").trim();
   if (!text) return;
@@ -1375,7 +1410,7 @@ async function doNote(key: string) {
  */
 async function doAsk(key: string, withNote: boolean) {
   const it = byKey(key);
-  if (!it) return;
+  if (!it || !allows(it, "ask")) return;
   const ta = document.querySelector<HTMLTextAreaElement>("#note-input");
   const text = withNote ? (ta?.value ?? "").trim() : "";
   if (withNote && !text && isWorking(it)) {
@@ -1405,6 +1440,8 @@ async function doStop(key: string) {
 /** Tell <agent> in the undo bar: an ask with no text on the item just closed, so its agent reads why. */
 async function doTell(key: string) {
   const t = S.toast;
+  const it = byKey(key);
+  if (!it || !allows(it, "ask")) return;
   await post({ id: newId(), kind: "ask", key, payload: {} });
   await refresh();
   // The bar stays a while longer, now with Stop while the run works.
@@ -1556,7 +1593,7 @@ function removeFromChecklist(key: string, index: number) {
 async function addSubtask(key: string) {
   const it = byKey(key);
   const input = document.querySelector<HTMLInputElement>("#sub-input");
-  if (!it || !input) return;
+  if (!it || !input || !allows(it, "subtask")) return;
   const title = input.value.trim();
   if (!title) return;
   input.value = "";
@@ -1649,6 +1686,10 @@ function setURL(key: string | null) {
 
 let snoozeReturn: HTMLElement | null = null;
 function openSnooze(keys: string[]) {
+  keys = keys.filter((k) => {
+    const it = byKey(k);
+    return it && allows(it, "snooze");
+  });
   if (!keys.length) return;
   snoozeReturn = document.activeElement as HTMLElement | null;
   snoozeTyped.delete("dlg-type");
@@ -1713,6 +1754,11 @@ function updateQaAgent(listKey: string) {
   setHTML(add, `${on ? ICON.spark : ICON.plus}Add`);
 }
 
+/** The lists a new task can go to: those whose tracker takes adds. */
+function addable(): Repo[] {
+  return repos().filter((r) => repoCan(r, "add"));
+}
+
 /** The list being viewed, as a repo key, so a new task starts there. */
 function viewingList(): string | undefined {
   return S.view.startsWith("list:") ? S.view.slice("list:".length) : undefined;
@@ -1722,7 +1768,7 @@ function updateQuickAdd() {
   if (!shellUp) return;
   const input = $<HTMLInputElement>("#qa-input");
   const select = $<HTMLSelectElement>("#qa-list");
-  const opts = visibleRepos(repos())
+  const opts = visibleRepos(addable())
     .map((r) => `<option value="${esc(repoKey(r))}">${esc(listLabel(r))}</option>`)
     .join("");
   const prev = select.value;
@@ -1731,7 +1777,7 @@ function updateQuickAdd() {
   select.hidden = !opts;
   // The list the text names, else a pick the user made, else the list being
   // viewed, else the personal list; a stale pick falls back the same way.
-  const read = readQuickAdd(input.value, now(), repos(), { list: qaListTouched ? prev : undefined, viewing: viewingList() });
+  const read = readQuickAdd(input.value, now(), addable(), { list: qaListTouched ? prev : undefined, viewing: viewingList() });
   qa = read.qa;
   select.value = read.target ? repoKey(read.target) : "";
 
@@ -2159,9 +2205,9 @@ function onSubmit(e: SubmitEvent) {
   else if (shellUp) void extSubmit(form, ctx);
 }
 
-// Swipe on phone rows: right = done, left = snooze.
+// Swipe on phone rows: right = done, left = snooze, each where the row's list can apply it.
 function setupSwipe(list: HTMLElement) {
-  let start: { x: number; y: number; id: number; li: HTMLElement; fg: HTMLElement } | null = null;
+  let start: { x: number; y: number; id: number; li: HTMLElement; fg: HTMLElement; done: boolean; snooze: boolean } | null = null;
   let dx = 0;
   let swiping = false;
 
@@ -2181,7 +2227,9 @@ function setupSwipe(list: HTMLElement) {
     const fg = (e.target as HTMLElement).closest<HTMLElement>(".row-fg");
     const li = fg?.closest<HTMLElement>(".row");
     if (!fg || !li || li.classList.contains("is-done")) return;
-    start = { x: e.clientX, y: e.clientY, id: e.pointerId, li, fg };
+    const it = byKey(li.dataset.key ?? null);
+    if (!it) return;
+    start = { x: e.clientX, y: e.clientY, id: e.pointerId, li, fg, done: allows(it, "done"), snooze: allows(it, "snooze") };
     dx = 0;
     swiping = false;
   });
@@ -2203,7 +2251,8 @@ function setupSwipe(list: HTMLElement) {
         // pointer already gone
       }
     }
-    dx = mx;
+    // A direction the list cannot apply does not move.
+    dx = (mx > 0 && !start.done) || (mx < 0 && !start.snooze) ? 0 : mx;
     start.fg.style.transform = `translateX(${dx}px)`;
     start.li.dataset.swipe = dx > 0 ? "done" : "snooze";
     start.li.classList.toggle("armed", Math.abs(dx) >= SWIPE_THRESHOLD);

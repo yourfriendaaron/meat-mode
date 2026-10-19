@@ -86,6 +86,11 @@ type Scheduler struct {
 	// push. Nil means never.
 	ClosedInApp func(ctx context.Context, key string, since time.Time) (bool, error)
 
+	// Allows, when set, reports whether the item with key can take an
+	// action of kind, so a reminder leaves out the Done or Snooze button
+	// its list's tracker cannot apply. Nil means every kind.
+	Allows func(ctx context.Context, key, kind string) (bool, error)
+
 	wake chan struct{}
 }
 
@@ -229,10 +234,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 			Tag:     link,
 			Channel: notify.ChannelReminders,
 			Key:     link,
-			Actions: []notify.Action{
-				{Action: notify.ActionDone, Title: "Done"},
-				{Action: notify.ActionSnooze, Title: "Snooze 1 hour"},
-			},
+			Actions: s.buttons(ctx, link),
 		}
 
 		lead := hubLead
@@ -305,6 +307,26 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// buttons are a reminder's Done and Snooze, less any the item's list
+// cannot take. A failed check keeps the button: the hub checks the action
+// again when the button posts it.
+func (s *Scheduler) buttons(ctx context.Context, key string) []notify.Action {
+	all := []notify.Action{
+		{Action: notify.ActionDone, Title: "Done"},
+		{Action: notify.ActionSnooze, Title: "Snooze 1 hour"},
+	}
+	if s.Allows == nil {
+		return all
+	}
+	var out []notify.Action
+	for _, a := range all {
+		if ok, err := s.Allows(ctx, key, a.Action); ok || err != nil {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // record notes that the reminder for key at t was sent, and reports whether

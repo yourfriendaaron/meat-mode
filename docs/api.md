@@ -62,7 +62,7 @@ The guard only refuses. A forged header can make a request look more public, nev
 | `POST /api/devices/{id}/confirm` | `{"code": "…"}` | `200` with `{"token": "…"}`, the device token, shown once. Needs no session: the code is the credential. `403` for a wrong, used or expired code. |
 | `PUT /api/devices/self` | `PushSubscription` (`endpoint` and `keys` only) | `204`; replaces the calling device's endpoint and keys and renews it. Device token only. `400` as for `app` registration. |
 | `DELETE /api/devices/self` | | `204`; the calling device revokes itself. Device token only. |
-| `GET /api/bridges` | | `[]Bridge` |
+| `GET /api/bridges` | | `[]Bridge`: `{"name", "createdAt", "lastSeen", "version", "bdVersion", "trackers"?}`, with `trackers` the `{"name", "version"?}` list its last hello sent |
 | `POST /api/bridges` | `{"name": "…", "password"?: "…"}` | `201` with `{"name", "token"}`; the token is shown once. `403` with `"reauth": true` unless the password was entered within the last 10 minutes or `password` is right (see Login) |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |
 
@@ -190,6 +190,12 @@ A note, or the note of an ask, keeps showing on the hub's copy after it is appli
 
 The last four change personal items only. The hub refuses them on an agent's item with `400`: an agent item's title, dates and priority belong to its agent, so ask for a change in a note.
 
+### Trackers
+
+Each repo in `State` carries the task tracker its bridge found it in ([trackers.md](trackers.md)): `tracker` is the name the app shows, such as `beads` or `Backlog.md`, and `actions` the kinds that tracker can apply, from `done`, `reopen`, `snooze`, `dismiss`, `note`, `add`, `subtask` (an `add` with `parent`) and `ask`. A repo without `actions` takes every kind: the personal list never has one, and neither does a repo from a bridge that predates trackers.
+
+The app hides what a repo's tracker cannot apply, and the hub refuses it with `400` and `{"error": "<tracker> cannot <what>"}`, such as `ticket cannot snooze`: an action on an item whose repo does not list its kind, an `add` to a repo without `add`, an `add` with `parent` to one without `subtask`, and an `add` with `ask` to one without `ask`. `sync`, `agents` and `stop` are never refused this way. A Restore is a `reopen`, so a repo without `reopen` offers neither, and the app offers no Undo of a close there.
+
 ### Sub-tasks
 
 An item's `parent` is the id of the item it is a sub-task of, in the same list; a top-level item has none. `parentTitle` is the parent's title as the list's tracker last gave it, so a sub-task whose parent is not in the set (on beads, a parent not labelled `human`) can still name it. The rules are the same on the personal list and on a tracker's list:
@@ -292,7 +298,7 @@ While a run is `working` and its bridge has not been seen for 60 seconds, the hu
 
 When a run ends the hub sends one notification for it, through Web Push and ntfy as reminders go: `<agent> replied` (`waiting`), `<agent> finished` (`done`) or `<agent> stopped` with the reason in words (`stopped`). It sends one per run end, keyed on the run's `id` and state, never one per agent comment mid-run, and none for a run the user stopped or on an item the user closed (its latest done, dismiss or reopen since the run started is a done or dismiss). A run that ended more than an hour before the hub first sees it sends nothing, so a bridge's first sync does not bring a flood. Its link opens the item, and the Reply action opens it at the note box: `/?item=<key>&reply=1`.
 
-The Web Push payload is `{"title", "body", "url", "tag", "channel", "actions"?}`; `channel` is `reminders`, `agents` or `test`. `actions` is a list of `{"action", "title"}` where `action` is `reply`, `open` or `retry` (`retry` on `stopped` only) on an agent push, and `done` and `snooze` on a reminder for one item; the payload then also carries `"key"`, the item key. The service worker opens `url` for `open` and a tap on the notification, `/?item=<key>&reply=1` for `reply`, for `retry` posts `{"kind": "ask", "key"}` as a new action, for `done` posts `{"kind": "done", "key"}`, and for `snooze` posts `{"kind": "snooze", "key", "payload": {"until": <one hour from now>, "previous": null}}`, the app's "In 1 hour". A reminder that gathers several missed ones has no actions. The payload stays within Web Push's size limit: with a long key or title the hub shortens the body, then the title, never the link, the key, the tag or the actions. ntfy gets the same title, body and link, with Reply and Open as view actions.
+The Web Push payload is `{"title", "body", "url", "tag", "channel", "actions"?}`; `channel` is `reminders`, `agents` or `test`. `actions` is a list of `{"action", "title"}` where `action` is `reply`, `open` or `retry` (`retry` on `stopped` only) on an agent push, and `done` and `snooze` on a reminder for one item, each only where the item's tracker can apply it (see Trackers); the payload then also carries `"key"`, the item key. The service worker opens `url` for `open` and a tap on the notification, `/?item=<key>&reply=1` for `reply`, for `retry` posts `{"kind": "ask", "key"}` as a new action, for `done` posts `{"kind": "done", "key"}`, and for `snooze` posts `{"kind": "snooze", "key", "payload": {"until": <one hour from now>, "previous": null}}`, the app's "In 1 hour". A reminder that gathers several missed ones has no actions. The payload stays within Web Push's size limit: with a long key or title the hub shortens the body, then the title, never the link, the key, the tag or the actions. ntfy gets the same title, body and link, with Reply and Open as view actions.
 
 ## Bridge API
 
@@ -300,9 +306,9 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 
 | Method and path | Body | Response |
 |---|---|---|
-| `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
+| `POST /bridge/v1/hello` | `{"version", "bdVersion", "trackers"?}`: `trackers` lists `{"name", "version"?}` for each tracker whose check passed; `bdVersion` is beads' version, empty without beads | `{"bridge": "<name>", "serverTime"}`; updates last-seen and the bridge's `trackers` |
 | `GET /bridge/v1/settings` | | `{"name", "timeZone"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
-| `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`, `pending` and `agentsPending`): every repo the bridge found, `optedIn` true for those it syncs, `agentsAllowed` true for those whose agents switch is on | `204`; replaces this bridge's repo list |
+| `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`, `pending` and `agentsPending`): every repo the bridge found, `optedIn` true for those it syncs, `agentsAllowed` true for those whose agents switch is on, `tracker` and `actions` as its tracker declares them (see Trackers) | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. An item's `parent` must be a valid id other than its own. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
