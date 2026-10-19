@@ -1,8 +1,10 @@
 // An in-memory hub implementing the app API in docs/api.md, served to the page
 // through page.route. Fixtures are invented and pinned to NOW.
 
+import { createHash } from "node:crypto";
 import type { Page, Route } from "@playwright/test";
-import type { Action, Bridge, Device, Edit, HarnessInfo, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Attachment, Bridge, Device, Edit, HarnessInfo, Item, NewAction, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS_BYTES, MAX_ATTACHMENTS_PER_ITEM } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
 export const NOW = new Date("2026-10-14T10:00:00Z");
@@ -84,6 +86,24 @@ export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } 
       item("personal", "pe-7", "Fix the gate latch", { dueAt: at(16, 9), error: "bd: issue is locked" }),
     ],
   };
+}
+
+/** The media type the hub would sniff, for the few kinds the tests send. */
+function sniff(b: Buffer): string {
+  const starts = (sig: number[], at = 0) => sig.every((x, i) => b[at + i] === x);
+  if (starts([0x89, 0x50, 0x4e, 0x47])) return "image/png";
+  if (starts([0xff, 0xd8, 0xff])) return "image/jpeg";
+  if (starts([0x47, 0x49, 0x46, 0x38])) return "image/gif";
+  if (starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8)) return "image/webp";
+  if (starts([0x25, 0x50, 0x44, 0x46])) return "application/pdf";
+  return b.subarray(0, 512).every((x) => x >= 0x20 || x === 9 || x === 10 || x === 13) ? "text/plain" : "application/octet-stream";
+}
+
+/** An attachment's name as the hub keeps it (docs/api.md, Attachments). */
+function cleanFileName(raw: string): string {
+  let name = raw.replace(/\p{Cc}/gu, "").replace(/[/\\]/g, "_").trim();
+  while (Buffer.byteLength(name) > 255) name = [...name].slice(0, -1).join("");
+  return name || "file";
 }
 
 /**
@@ -258,6 +278,12 @@ export class FakeHub {
    * Off, the stream stays silent, as a buffering proxy would leave it.
    */
   liveEvents = false;
+  /** Every attachment the hub keeps, removed ones not yet purged included, by id. */
+  files = new Map<string, { key: string; attachment: Attachment; bytes: Buffer; removed: boolean }>();
+  /** Bytes the hub counts toward its cap besides these files, to bring a test near it. */
+  otherFileBytes = 0;
+  /** Last attachment id the hub gave out. */
+  fileSeq = 0;
 
   constructor() {
     const f = fixtures();
@@ -399,6 +425,95 @@ export class FakeHub {
     return "";
   }
 
+  /**
+   * Stores a file on an item as POST /api/items/{key}/attachments does, past
+   * no check, and returns it: `hub.attach(key, "fern.png", PNG)`.
+   */
+  attach(key: string, name: string, bytes: Buffer): Attachment {
+    const it = this.find(key);
+    if (!it) throw new Error(`no item ${key}`);
+    const attachment: Attachment = {
+      id: (++this.fileSeq).toString(16).padStart(32, "0"),
+      name,
+      type: sniff(bytes),
+      size: bytes.length,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      createdAt: this.now(),
+    };
+    this.files.set(attachment.id, { key, attachment, bytes, removed: false });
+    it.attachments = [...(it.attachments ?? []), attachment];
+    return attachment;
+  }
+
+  /** The bytes of every file the hub keeps toward its cap. */
+  private fileBytes(): number {
+    let n = this.otherFileBytes;
+    for (const f of this.files.values()) n += f.bytes.length;
+    return n;
+  }
+
+  /** The routes of docs/api.md, Attachments, or undefined for another path. */
+  private attachmentRoute(route: Route, method: string, path: string, url: URL): Promise<void> | undefined {
+    const req = route.request();
+    let m = path.match(/^\/api\/items\/([^/]+)\/attachments$/);
+    if (method === "POST" && m) {
+      const it = this.find(decodeURIComponent(m[1]));
+      if (!it) return this.json(route, 404, { error: "no such item" });
+      if (it.bridge !== HUB) return this.json(route, 400, { error: "only items of the personal list and projects take attachments" });
+      const bytes = req.postDataBuffer() ?? Buffer.alloc(0);
+      const name = cleanFileName(url.searchParams.get("name") ?? "");
+      const mb = (n: number) => (n / (1 << 20)).toFixed(1);
+      if (bytes.length > MAX_ATTACHMENT_BYTES) return this.json(route, 413, { error: `${name} is ${mb(bytes.length)} MB; a file can be at most 25 MB.` });
+      if ((it.attachments?.length ?? 0) >= MAX_ATTACHMENTS_PER_ITEM) return this.json(route, 413, { error: "An item can hold at most 20 files." });
+      const total = this.fileBytes() + bytes.length;
+      if (total > MAX_ATTACHMENTS_BYTES) return this.json(route, 413, { error: `The hub's files would come to ${(total / (1 << 30)).toFixed(2)} GB; they can be at most 1 GB.` });
+      return this.json(route, 201, this.attach(it.key, name, bytes));
+    }
+    m = path.match(/^\/api\/attachments\/([0-9a-f]{32})$/);
+    const f = m ? this.files.get(m[1]) : undefined;
+    if (method === "GET" && m) {
+      if (!f || f.removed) return this.json(route, 404, { error: "no such attachment" });
+      const inline = ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(f.attachment.type);
+      return route.fulfill({
+        status: 200,
+        headers: {
+          "Content-Type": inline ? f.attachment.type : "application/octet-stream",
+          "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(f.attachment.name)}`,
+          "Content-Security-Policy": "default-src 'none'; sandbox",
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "private, max-age=86400",
+        },
+        body: f.bytes,
+      });
+    }
+    if (method === "DELETE" && m) {
+      if (!f || f.removed) return this.json(route, 404, { error: "no such attachment" });
+      f.removed = true;
+      const it = this.find(f.key);
+      if (it) it.attachments = (it.attachments ?? []).filter((a) => a.id !== f.attachment.id);
+      return this.json(route, 204);
+    }
+    m = path.match(/^\/api\/attachments\/([0-9a-f]{32})\/restore$/);
+    if (method === "POST" && m) {
+      const f = this.files.get(m[1]);
+      if (!f) return this.json(route, 404, { error: "the attachment was removed for good" });
+      const it = this.find(f.key);
+      if (f.removed && it) {
+        if ((it.attachments?.length ?? 0) >= MAX_ATTACHMENTS_PER_ITEM) return this.json(route, 409, { error: "An item can hold at most 20 files." });
+        f.removed = false;
+        it.attachments = [...(it.attachments ?? []), f.attachment].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      }
+      return this.json(route, 200, f.attachment);
+    }
+    return undefined;
+  }
+
+  /** Purges a removed attachment at once, as the hub's sweep does a day later. */
+  purge(id: string): void {
+    const f = this.files.get(id);
+    if (f?.removed) this.files.delete(id);
+  }
+
   /** What a bridge does: replay every pending action. */
   applyAll(): void {
     for (const s of this.log) {
@@ -428,11 +543,19 @@ export class FakeHub {
     const method = req.method();
     this.requests.push(`${method} ${path}`);
 
-    // The real hub refuses a state change without a JSON content type (415).
+    // The real hub refuses a state change without a JSON content type (415);
+    // the two routes that take a file take application/octet-stream instead.
     const ctype = (await req.headerValue("content-type")) ?? "";
-    if (method !== "GET" && method !== "HEAD" && !/^application\/json(\s*;\s*charset=[^;]+)?$/i.test(ctype)) {
-      return this.json(route, 415, { error: "Content-Type must be application/json" });
+    const json = /^application\/json(\s*;\s*charset=[^;]+)?$/i.test(ctype);
+    const octets = /^application\/octet-stream$/i.test(ctype);
+    const upload = method === "POST" && /^\/api\/items\/[^/]+\/attachments$/.test(path);
+    const restore = method === "POST" && path === "/api/restore";
+    const typeOK = upload ? octets : restore ? json || octets : json;
+    if (method !== "GET" && method !== "HEAD" && !typeOK) {
+      return this.json(route, 415, { error: `Content-Type must be application/${upload ? "octet-stream" : "json"}` });
     }
+    const files = this.attachmentRoute(route, method, path, url);
+    if (files) return files;
 
     if (method === "GET" && path === "/api/session") {
       return this.json(route, 200, { login: this.login, authenticated: this.login && this.authenticated });
