@@ -14,13 +14,13 @@ import (
 
 // Limits on what the app may post.
 const (
-	MaxNoteLen  = 10000
-	MaxTitleLen = 1000
+	MaxNoteLen  = api.MaxNoteLen
+	MaxTitleLen = api.MaxTitleLen
 )
 
 // provisionalPrefix starts the id of an added item the bridge has not
 // created yet: pending-<action id>.
-const provisionalPrefix = "pending-"
+const provisionalPrefix = api.ProvisionalPrefix
 
 var uuidRE = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 

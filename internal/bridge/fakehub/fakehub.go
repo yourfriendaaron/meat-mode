@@ -224,17 +224,17 @@ func personalReply(i int) api.PersonalTodoReply {
 	return api.PersonalTodoReply{Key: "hub/personal/" + id, ID: id}
 }
 
+// putRepos checks the list with the real hub's rules and keeps it.
 func (h *Hub) putRepos(w http.ResponseWriter, r *http.Request, bridge string) {
 	var repos []api.Repo
 	if err := json.NewDecoder(r.Body).Decode(&repos); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	for _, rp := range repos {
-		if rp.Bridge != "" || rp.Name == "" {
-			writeErr(w, http.StatusBadRequest, "repo must have a name and no bridge")
-			return
-		}
+	repos, err := api.CheckRepos(repos)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	h.mu.Lock()
 	h.repos[bridge] = repos
@@ -242,52 +242,47 @@ func (h *Hub) putRepos(w http.ResponseWriter, r *http.Request, bridge string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// putItems checks the set with the real hub's rules, which refuse a repo
+// missing from the bridge's last repo list, and keeps it.
 func (h *Hub) putItems(w http.ResponseWriter, r *http.Request, bridge string) {
+	repo := r.URL.Query().Get("repo")
+	if !api.ValidRepoName(repo) {
+		writeErr(w, http.StatusBadRequest, "repo name is not valid")
+		return
+	}
 	var items []api.Item
 	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	for _, it := range items {
-		if it.Key != "" || it.Bridge != "" || it.Repo != "" || it.Pending || it.ID == "" || it.Comments == nil {
-			writeErr(w, http.StatusBadRequest, "item must have an id and comments, and no key, bridge, repo or pending")
-			return
-		}
+	if err := api.CheckItems(items); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	k := bridge + "/" + r.URL.Query().Get("repo")
+	k := bridge + "/" + repo
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !slices.ContainsFunc(h.repos[bridge], func(rp api.Repo) bool { return rp.Name == repo }) {
+		writeErr(w, http.StatusNotFound, "repo "+strconv.Quote(repo)+" is not in this bridge's repo list; send PUT /bridge/v1/repos first")
+		return
+	}
 	h.items[k] = items
 	h.itemPuts[k]++
-	h.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// putRuns checks each run as the real hub does and replaces the bridge's list.
+// putRuns checks the list with the real hub's rules and replaces the
+// bridge's list with it, cleaned as the real hub stores it.
 func (h *Hub) putRuns(w http.ResponseWriter, r *http.Request, bridge string) {
 	var runs []api.RunReport
 	if err := json.NewDecoder(r.Body).Decode(&runs); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if runs == nil {
-		writeErr(w, http.StatusBadRequest, "the run list must be a JSON array")
+	runs, err := api.CheckRuns(runs)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	for _, rn := range runs {
-		switch {
-		case rn.Repo == "" || rn.BeadID == "" || rn.ID == "" || rn.Agent == "" || rn.StartedAt.IsZero() || rn.Count < 0:
-			writeErr(w, http.StatusBadRequest, "run must have a repo, bead id, id, agent and start time")
-			return
-		case !slices.Contains([]string{api.RunWorking, api.RunWaiting, api.RunDone, api.RunStopped}, rn.State):
-			writeErr(w, http.StatusBadRequest, "unknown run state "+rn.State)
-			return
-		case (rn.State == api.RunStopped) != (rn.Reason != "") || rn.Reason == api.ReasonOffline:
-			writeErr(w, http.StatusBadRequest, "a stopped run needs a reason a bridge may send, and only a stopped run has one")
-			return
-		case (rn.State == api.RunWorking) != (rn.EndedAt == nil):
-			writeErr(w, http.StatusBadRequest, "only a working run has no end time")
-			return
-		}
 	}
 	h.mu.Lock()
 	h.runs[bridge] = runs

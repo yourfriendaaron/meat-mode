@@ -1,24 +1,18 @@
 package store
 
-import "unicode/utf8"
+import "github.com/yourfriendaaron/meat-mode/internal/api"
 
-// Length limits on the text a bridge sends, so one huge bead cannot bloat
-// the database or the state the app downloads. Longer text is truncated,
-// not rejected: one long bead must not stop a repo syncing.
+// Length limits on the text a bridge sends; see api.ItemTitleLimit. Longer
+// text is truncated, not rejected: one long bead must not stop a repo
+// syncing.
 const (
 	maxVersionLen       = 64
-	maxTitleLen         = 500
-	maxDescriptionLen   = 20000
-	maxCommentLen       = 20000
-	maxCommentAuthorLen = 200
+	maxTitleLen         = api.ItemTitleLimit
+	maxDescriptionLen   = api.ItemDescriptionLimit
+	maxCommentLen       = api.CommentLimit
+	maxCommentAuthorLen = api.CommentAuthorLimit
 	maxResultErrorLen   = 2000
 )
 
-// truncRunes cuts s to at most limit runes (never mid-rune) and appends an
-// ellipsis when it cut anything.
-func truncRunes(s string, limit int) string {
-	if utf8.RuneCountInString(s) <= limit {
-		return s
-	}
-	return string([]rune(s)[:limit]) + "…"
-}
+// truncRunes cuts s to at most limit runes; see api.TruncRunes.
+func truncRunes(s string, limit int) string { return api.TruncRunes(s, limit) }
