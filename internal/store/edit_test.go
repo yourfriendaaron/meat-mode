@@ -127,6 +127,7 @@ func TestEditRefuses(t *testing.T) {
 	agent := ItemKey("laptop", "garden", "gd-1")
 	for _, na := range []api.NewAction{
 		{Kind: api.KindEdit, Payload: api.Payload{Set: &api.Edit{Title: ptr("Water the ferns")}}},
+		{Kind: api.KindEdit, Payload: api.Payload{Set: &api.Edit{Labels: &[]string{"garden"}}}},
 		{Kind: api.KindNoteEdit, Payload: api.Payload{CommentID: "c1", Text: "Later"}},
 		{Kind: api.KindNoteDelete, Payload: api.Payload{CommentID: "c1"}},
 		{Kind: api.KindNoteRestore, Payload: api.Payload{Comment: &api.Comment{ID: "c1", Text: "Later"}}},

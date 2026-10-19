@@ -6,13 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
 // Edit runs `meat-mode edit`: it changes the title, description, due time,
-// repeat, priority or parent of a to-do this machine added to the personal
+// repeat, priority, parent or tags of a to-do this machine added to the personal
 // list or a project, and prints its
 // id. --until and --no-until apply to the --every given with them, or else
 // to the to-do's own repeat, which is sent back whole with the new end.
@@ -29,9 +30,12 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	noRepeat := fs.Bool("no-repeat", false, "stop it repeating")
 	parent := fs.String("parent", "", "make it a sub-task of this to-do, one this machine added to the same list")
 	noParent := fs.Bool("no-parent", false, "make it a to-do of its own, not a sub-task")
+	var addTags, dropTags tagFlag
+	fs.Var(&addTags, "tag", "add this tag; repeat the flag for more")
+	fs.Var(&dropTags, "untag", "remove this tag, whatever its case; repeat the flag for more")
 	author, id, project := changeFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--project NAME|.] [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N] [--parent ID | --no-parent] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--project NAME|.] [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N] [--parent ID | --no-parent] [--tag TAG]... [--untag TAG]... [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -101,9 +105,14 @@ func Edit(ctx context.Context, args []string, env Env) error {
 		return errors.New("--until and --no-until need a repeat; --clear-due stops it repeating")
 	}
 	if set.Title == nil && set.Description == nil && w.due == "" && !set.ClearDue && set.Priority == nil && w.repeat == nil && !set.ClearRepeat && !endChanged &&
-		set.Parent == nil {
+		set.Parent == nil && len(addTags) == 0 && len(dropTags) == 0 {
 		fs.Usage()
-		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat, --until, --no-until, --priority, --parent or --no-parent")
+		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat, --until, --no-until, --priority, --parent, --no-parent, --tag or --untag")
+	}
+	for _, t := range addTags {
+		if slices.ContainsFunc(dropTags, func(d string) bool { return strings.EqualFold(d, t) }) {
+			return fmt.Errorf("use --tag or --untag for %q, not both", t)
+		}
 	}
 
 	hub, err := pairedHub(env)
@@ -113,13 +122,21 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	if set.Due, set.Repeat, err = w.resolve(ctx, hub); err != nil {
 		return err
 	}
+	var it api.Item
+	if (endChanged && w.repeat == nil) || len(addTags)+len(dropTags) > 0 {
+		if it, err = hub.PersonalItem(ctx, list, item); err != nil {
+			return notOurs(item, err)
+		}
+	}
+	if len(addTags)+len(dropTags) > 0 {
+		// The hub takes the whole list, so the to-do's own tags go back
+		// with the changes.
+		labels := changeTags(it.Labels, addTags, dropTags)
+		set.Labels = &labels
+	}
 	if endChanged && w.repeat == nil {
 		// The hub takes a repeat whole, so the to-do's own goes back with
 		// the new end.
-		it, err := hub.PersonalItem(ctx, list, item)
-		if err != nil {
-			return notOurs(item, err)
-		}
 		if it.Repeat == nil {
 			return fmt.Errorf("%s does not repeat; give --every with --until", item)
 		}
@@ -137,6 +154,24 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	}
 	fmt.Fprintln(env.Stdout, item)
 	return nil
+}
+
+// changeTags returns tags without those in drop (compared without case)
+// and with those in add after them, in the order given, leaving out a
+// repeat of one already there.
+func changeTags(tags, add, drop []string) []string {
+	out := []string{}
+	for _, t := range tags {
+		if !slices.ContainsFunc(drop, func(d string) bool { return strings.EqualFold(d, t) }) {
+			out = append(out, t)
+		}
+	}
+	for _, t := range add {
+		if !slices.ContainsFunc(out, func(o string) bool { return strings.EqualFold(o, t) }) {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // Done runs `meat-mode done`: it closes a to-do this machine added.

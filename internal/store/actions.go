@@ -141,6 +141,15 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 			}
 			add.Repeat = &r
 		}
+		if len(p.Labels) > 0 {
+			labels, err := cleanLabels(p.Labels)
+			if err != nil {
+				return a, false, err
+			}
+			if len(labels) > 0 {
+				add.Labels = labels
+			}
+		}
 		p = add
 	case api.KindSync, api.KindAgents:
 		if p.On == nil {
@@ -200,6 +209,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		}
 		if a.Payload.Repeat != nil && !onHub(na.Bridge) {
 			return a, false, invalidf("only the personal list and projects take a repeat")
+		}
+		if len(a.Payload.Labels) > 0 && !onHub(na.Bridge) {
+			return a, false, invalidf("only the personal list and projects take tags; a tracker's items keep the labels their tracker gives")
 		}
 		// A bridge's own personal repo only feeds the personal list.
 		var optedIn bool

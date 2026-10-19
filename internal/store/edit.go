@@ -29,11 +29,11 @@ func personalOnly(kind string) bool {
 // checkEdit validates an edit's fields and returns them cleaned up: the
 // title trimmed, checklist texts trimmed and every entry given an id, a
 // repeat rule without the start the hub sets, the parent and sub-task ids
-// trimmed. The rules that need the list are checkEditList's.
+// trimmed, the tags cleaned by cleanLabels. The rules that need the list are checkEditList's.
 func checkEdit(e api.Edit) (api.Edit, error) {
 	if e.Title == nil && e.Description == nil && e.Due == nil && !e.ClearDue && e.Priority == nil && e.Checklist == nil &&
 		e.Repeat == nil && !e.ClearRepeat && e.RemindBefore == nil && !e.ClearRemindBefore &&
-		e.Parent == nil && len(e.SubtasksDone) == 0 {
+		e.Parent == nil && len(e.SubtasksDone) == 0 && e.Labels == nil {
 		return e, invalidf("edit needs at least one field in payload.set")
 	}
 	if e.Title != nil {
@@ -126,6 +126,13 @@ func checkEdit(e api.Edit) (api.Edit, error) {
 			}
 		}
 		e.SubtasksDone = ids
+	}
+	if e.Labels != nil {
+		labels, err := cleanLabels(*e.Labels)
+		if err != nil {
+			return e, err
+		}
+		e.Labels = &labels
 	}
 	return e, nil
 }
@@ -265,6 +272,13 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 			it.RemindBefore = nil
 			if set.RemindBefore != nil {
 				it.RemindBefore = ptr(*set.RemindBefore)
+			}
+		}
+		if set.Labels != nil {
+			was.Labels = ptr(append([]string{}, it.Labels...))
+			it.Labels = slices.Clone(*set.Labels)
+			if len(it.Labels) == 0 {
+				it.Labels = nil
 			}
 		}
 		p.Was = was
