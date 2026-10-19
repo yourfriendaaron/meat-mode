@@ -376,11 +376,11 @@ meat-mode bridge agents                       # lists the repos it finds, with t
 
 In the app, under **Settings**, **Agent machines**, a synced repo with agents off shows that command, with a **Copy** button. A repo with agents on shows an **Agents can work here** switch, which turns them off; `meat-mode bridge agents off <repo>` does the same on the machine. An ask in a repo with agents off still leaves your note, and the run shows stopped with the reason.
 
-The default agent is Claude Code, run as `claude -p` with `--permission-mode auto` and no permission prompts. **This is not a sandbox.** Auto mode lets the agent run commands as you, in your home folder, with your credentials: in testing it changed the global Git config and deleted a file in the home folder without asking. Its instructions tell it never to send, post, spend, delete or push for you, and to stop and ask in a note when it needs you, but nothing enforces that. Allow agents only in repos where you would let an agent work unattended. Before the agent even starts, the bridge creates a Git worktree of the repo for each task, which runs the repo's own Git hooks, such as `post-checkout`, as you.
+The bridge runs agents through a harness, the program that runs a coding agent: Claude Code by default, or another one from [docs/harnesses.md](harnesses.md), picked with `MEAT_MODE_AGENT_HARNESS`. Each harness has a page saying what to install, the command the bridge runs and which limits it enforces. Claude Code runs as `claude -p` with `--permission-mode auto` and no permission prompts. **This is not a sandbox.** Auto mode lets the agent run commands as you, in your home folder, with your credentials: in testing it changed the global Git config and deleted a file in the home folder without asking. Its instructions tell it never to send, post, spend, delete or push for you, and to stop and ask in a note when it needs you, but nothing enforces that. Every harness the bridge runs works unattended in the same way. Allow agents only in repos where you would let an agent work unattended. Before the agent even starts, the bridge creates a Git worktree of the repo for each task, which runs the repo's own Git hooks, such as `post-checkout`, as you.
 
 The agent machine needs:
 
-- Claude Code installed and signed in, with `claude` on your `PATH` when you run `meat-mode bridge pair`, so the service finds it (pair again after installing it).
+- The harness installed and signed in, with its program on your `PATH` when you run `meat-mode bridge pair`, so the service finds it (pair again after installing it). For Claude Code that is `claude`; see [harnesses/claude.md](harnesses/claude.md). `meat-mode bridge status` shows the harness and its version, and the app shows it under **Settings**. While its check fails, asks on that machine stop as failed and syncing carries on.
 - A Git repo with at least one commit: each task's agent works in its own Git worktree.
 
 ### Settings
@@ -389,10 +389,11 @@ The bridge reads these variables (see `.env.example`):
 
 | Variable | Default | What it sets |
 |---|---|---|
-| `MEAT_MODE_AGENT_COMMAND` | `claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages --permission-mode auto --permission-prompts none` | The agent command, split on spaces, with no shell. |
+| `MEAT_MODE_AGENT_HARNESS` | `claude` | The harness that runs agents: `claude` for Claude Code, or another name from [docs/harnesses.md](harnesses.md). The bridge refuses to start with a name it does not know. |
+| `MEAT_MODE_AGENT_COMMAND` | the harness's own | The harness's program and fixed flags, split on spaces, with no shell. The harness still adds the prompt, the session and the cap. For Claude Code the default is `claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages --permission-mode auto --permission-prompts none`. |
 | `MEAT_MODE_AGENT_NAME` | `agent` | The name shown for the agent. A task an agent created shows its creator's name instead. |
 | `MEAT_MODE_AGENT_TIMEOUT` | `30m` | The longest one run may take. |
-| `MEAT_MODE_AGENT_BUDGET_USD` | `2` | The most one run may spend, passed to the agent as `--max-budget-usd`. |
+| `MEAT_MODE_AGENT_BUDGET_USD` | `2` | The most one run may spend. A harness that caps its own spending gets it (Claude Code as `--max-budget-usd`); for one that reports its cost the bridge stops the run past it; a harness that reports no cost has the time limit only, and the app says so. |
 | `MEAT_MODE_AGENT_RUNS_PER_TASK` | `10` | How many runs one task may have, ever. Nothing resets the count. |
 | `MEAT_MODE_AGENT_CONCURRENT` | `2` | How many runs may be live at once on the machine. |
 
@@ -404,9 +405,9 @@ Environment=MEAT_MODE_AGENT_BUDGET_USD=1
 Environment=MEAT_MODE_AGENT_TIMEOUT=15m
 ```
 
-The service runs with a short `PATH`: the folders of the trackers' tools (such as `bd`) and of the agent command as `meat-mode bridge pair` found them, then the system folders. If the agent's work needs other tools, such as `go` or `pnpm`, add an `Environment=PATH=…` line the same way. On macOS, add the variables to the `EnvironmentVariables` of `~/Library/LaunchAgents/com.github.yourfriendaaron.meat-mode.bridge.plist` and restart it; pairing again rewrites that file.
+The service runs with a short `PATH`: the folders of the trackers' tools (such as `bd`) and of the harness's program as `meat-mode bridge pair` found them, then the system folders. If the agent's work needs other tools, such as `go` or `pnpm`, add an `Environment=PATH=…` line the same way. On macOS, add the variables to the `EnvironmentVariables` of `~/Library/LaunchAgents/com.github.yourfriendaaron.meat-mode.bridge.plist` and restart it; pairing again rewrites that file.
 
-Another agent command must speak Claude Code's stream-json protocol on its standard input and output (user messages in; `system`, `assistant`, `user` and `result` lines out, with `session_id`), echo each message it reads as a `user` line with `isReplay`, and accept `--max-budget-usd <dollars>` and `--resume <session id>`, which the bridge adds.
+A command set in `MEAT_MODE_AGENT_COMMAND` must speak the harness's own protocol; each harness's page says what that is. A setting written for Claude Code before harnesses keeps working unchanged.
 
 ### How a run ends
 
@@ -414,15 +415,17 @@ A run shows **working** while the agent runs. When it ends, the task shows **don
 
 - **stopped**: you stopped it. Stop ends the agent and everything it started.
 - **usage limit**: the agent's account hit its usage limit; the detail says when it resets.
-- **time limit**, **budget**: the run passed `MEAT_MODE_AGENT_TIMEOUT`, or spent `MEAT_MODE_AGENT_BUDGET_USD`.
+- **time limit**, **budget**: the run passed `MEAT_MODE_AGENT_TIMEOUT`, or spent `MEAT_MODE_AGENT_BUDGET_USD` (with a harness that reports spending).
 - **run limit**: the task has had its `MEAT_MODE_AGENT_RUNS_PER_TASK` runs.
 - **busy**: `MEAT_MODE_AGENT_CONCURRENT` runs were already live on the machine.
 - **not allowed**: agents are switched off for the repo. Switch them on at its machine with `meat-mode bridge agents on <repo>`.
 - **no reply**: the agent ended without a note or closing the bead.
-- **failed**, **crashed**: the agent command did not start or reported an error, or its process died.
+- **failed**, **crashed**: the harness is not available on the machine, the agent command did not start or reported an error, or its process died before its turn ended.
 - **restarted**: the bridge stopped while the agent ran. Stopping the bridge ends its runs; after a crash, the next start ends whatever the old one left running.
 
-Asking again on a task continues the agent's earlier conversation on it.
+Asking again on a task continues the agent's earlier conversation on it, unless the machine has switched harness since; then the next ask starts fresh.
+
+A note you add while a run is working reaches the agent at once with a harness that takes notes mid-turn, such as Claude Code. With one that does not, the note waits until the agent's turn ends, then the bridge continues the same run with it; the task shows how many notes wait. After a turn that failed or hit a limit, waiting notes stay on the task for your next ask.
 
 ### Where runs live
 
@@ -430,7 +433,7 @@ Each task's runs share a Git worktree on the branch `meat-mode/<bead id>`, in th
 
 - `worktrees/<repo>/<bead id>/`: the worktree. The agent is told never to push, so merge or push its commits yourself.
 - `logs/<repo>/<bead id>/<run id>.jsonl`: the raw stream of each run, with what the agent wrote on its error output next to it in `<run id>.stderr`.
-- `runs.json`: each task's session id, run count and latest run. To look at a finished conversation yourself, run `claude --resume <session id>` inside the worktree.
+- `runs.json`: each task's session id and the harness it belongs to, run count and latest run. To look at a finished Claude Code conversation yourself, run `claude --resume <session id>` inside the worktree.
 
 When a task leaves the synced set (7 days after it closed, or when it is deleted or loses its `human` label), the bridge removes its worktree if Git calls it clean, and its branch if it has no unmerged commits. A worktree with changes or untracked files, and a branch with unmerged commits, stay for you.
 
