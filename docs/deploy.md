@@ -447,6 +447,18 @@ If a bridge was paired with `--personal`, the hub moves that repo's items into i
 
 From then on your personal list lives on the hub. The bridge no longer treats the old beads repo as special: it shows up in Settings like any other repo, with its switch off. Leave it off, or delete the repo; switched on, its `human` beads would show a second time as agent items.
 
+## Back up
+
+The hub holds the only copy of your personal list, your projects, the history of changes and the settings you chose in the app. To back them up, open Settings, Your data, and choose Download your data. You get one JSON file, named for the day in the hub's time zone; keep it somewhere other than the hub's host.
+
+The file leaves out:
+
+- The lists from your machines' repos. Each machine's tracker stays their source, and a machine sends them again once it is paired.
+- Every secret: machine tokens, the password, login sessions, the setup code, the calendar link and the push subscriptions and keys.
+- The hub's copies of agent runs.
+
+To restore, set up a fresh hub and load the file in the setup wizard's restore step, after the password. It loads only into a hub with no items, history or machines. Then pair each machine again, make a new calendar link if you had one, and turn notifications on again on each device. The file format is in [api.md](api.md#export-and-restore).
+
 ## Updating
 
 - **Hub**: `git pull && docker compose up -d --build`. The database migrates itself on start.
