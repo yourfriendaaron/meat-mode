@@ -27,7 +27,9 @@ func TestProjectOverHTTP(t *testing.T) {
 		t.Fatalf("reply %+v", reply)
 	}
 	st := decode[api.State](t, h.do("GET", "/api/state", nil, ""))
-	if !slices.ContainsFunc(st.Repos, func(r api.Repo) bool { return r.Bridge == store.HubBridge && r.Name == "projects/garden" && !r.Personal }) {
+	if !slices.ContainsFunc(st.Repos, func(r api.Repo) bool {
+		return r.Bridge == store.HubBridge && r.Name == "projects/garden" && !r.Personal
+	}) {
 		t.Fatalf("repos %+v", st.Repos)
 	}
 
