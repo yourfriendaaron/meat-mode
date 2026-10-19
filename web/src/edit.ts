@@ -3,7 +3,7 @@
 // pass `now`.
 
 import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Edit, type Item, type NewAction, type RepeatUnit } from "./types.ts";
-import { HUB_BRIDGE } from "./model.ts";
+import { isPersonal } from "./model.ts";
 import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
 import { parseQuickAdd } from "./quickadd.ts";
 import { sameRule, type RepeatRule } from "./repeat.ts";
@@ -15,7 +15,7 @@ export const CHECKLIST_MAX = 100;
 
 /** Whether the hub takes edit actions on this item: the personal list it keeps itself. */
 export function canEdit(item: Pick<Item, "bridge">): boolean {
-  return item.bridge === HUB_BRIDGE;
+  return isPersonal(item);
 }
 
 /** The priority chip's text: 0 and 1 show on every item, the rest show nothing. */

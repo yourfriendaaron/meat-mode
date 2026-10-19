@@ -1,13 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Item, Repo } from "../../src/types.ts";
+import type { Item } from "../../src/types.ts";
 import type { Group } from "../../src/model.ts";
 import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "../../src/bulk.ts";
-
-const repos: Repo[] = [
-  { bridge: "hub", name: "personal", personal: true, optedIn: true },
-  { bridge: "home", name: "garden", personal: false, optedIn: true },
-];
 
 function item(repo: string, id: string, title: string, over: Partial<Item> = {}): Item {
   const bridge = repo === "personal" ? "hub" : "home";
@@ -44,13 +39,13 @@ test("Select shows on the task lists and on search results", () => {
 });
 
 test("the dismiss label follows whose the picks are", () => {
-  assert.equal(bulkDismissLabel([plants, porch], repos), "Delete");
-  assert.equal(bulkDismissLabel([compost, labels], repos), "Won't do");
-  assert.equal(bulkDismissLabel([plants, compost], repos), "Delete or won't do");
-  assert.equal(bulkDismissLabel([], repos), "Delete");
-  assert.equal(bulkDismissDone([plants], repos), "Deleted");
-  assert.equal(bulkDismissDone([compost], repos), "Won't do");
-  assert.equal(bulkDismissDone([porch, labels], repos), "Deleted or won't do");
+  assert.equal(bulkDismissLabel([plants, porch]), "Delete");
+  assert.equal(bulkDismissLabel([compost, labels]), "Won't do");
+  assert.equal(bulkDismissLabel([plants, compost]), "Delete or won't do");
+  assert.equal(bulkDismissLabel([]), "Delete");
+  assert.equal(bulkDismissDone([plants]), "Deleted");
+  assert.equal(bulkDismissDone([compost]), "Won't do");
+  assert.equal(bulkDismissDone([porch, labels]), "Deleted or won't do");
 });
 
 test("Select all picks each open item in the list once, in order", () => {

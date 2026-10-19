@@ -5,7 +5,7 @@
 import * as chrono from "chrono-node/en";
 import { findRepeat, firstOccurrence, type RepeatRule } from "./repeat.ts";
 import { startOfDay, ymd } from "./dates.ts";
-import { HUB_BRIDGE, repoKey, repoLabel, visibleRepos } from "./model.ts";
+import { isPersonal, repoKey, repoLabel, visibleRepos } from "./model.ts";
 import { noAgentReason } from "./runs.ts";
 import type { NewAction, Repo } from "./types.ts";
 
@@ -220,7 +220,7 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
 
 /** Whether a list takes a repeat: only the hub's personal list does, as the hub checks. */
 export function takesRepeat(r: Repo | undefined): boolean {
-  return !!r && r.bridge === HUB_BRIDGE && r.personal;
+  return !!r && isPersonal(r);
 }
 
 /** Whether an add to this list, with the agent switch at `ask`, wakes an agent. */

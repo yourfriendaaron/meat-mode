@@ -1,25 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Item, Repo } from "../../src/types.ts";
+import type { Item } from "../../src/types.ts";
 import { completedGroups, deletedGroups } from "../../src/history.ts";
 
 // Wednesday 14 October 2026, 10:00 local time.
 const now = new Date(2026, 9, 14, 10, 0);
 const t = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).toISOString();
 
-const repos: Repo[] = [
-  { bridge: "home", name: "personal", personal: true, optedIn: true },
-  { bridge: "home", name: "garden", personal: false, optedIn: true },
-];
-
 let n = 0;
 function item(over: Partial<Item>): Item {
   n++;
   const repo = over.repo ?? "personal";
   const id = over.id ?? `bd-${n}`;
+  const bridge = repo === "personal" ? "hub" : "home";
   return {
-    key: `home/${repo}/${id}`,
-    bridge: "home",
+    key: `${bridge}/${repo}/${id}`,
+    bridge,
     repo,
     id,
     title: `Task ${n}`,
@@ -45,7 +41,6 @@ test("Completed groups by local close day, newest day and item first, with day l
       done("Early today", t(14, 0, 1)),
       done("Yesterday morning", t(13, 0, 5)),
     ],
-    repos,
     now,
   );
   assert.deepEqual(groups.map((g) => [g.id, g.label]), [
@@ -66,12 +61,11 @@ test("Completed includes an agent's Won't do, leaves out deleted personal and op
       item({ title: "Still open" }),
       item({ title: "No close time", status: "closed" }),
     ],
-    repos,
     now,
   );
   assert.equal(groups.length, 1);
   assert.deepEqual(titles(groups[0].items), ["Fed the cat", "Skip the compost"]);
-  assert.deepEqual(completedGroups([item({})], repos, now), []);
+  assert.deepEqual(completedGroups([item({})], now), []);
 });
 
 test("Deleted lists only deleted personal items, newest first, in one group", () => {
@@ -84,12 +78,10 @@ test("Deleted lists only deleted personal items, newest first, in one group", ()
       done("Won't do", t(14, 8), { repo: "garden", closeReason: "Dismissed" }),
       item({ title: "Open" }),
     ],
-    repos,
-    now,
   );
   assert.equal(groups.length, 1);
   assert.equal(groups[0].id, "deleted");
   assert.equal(groups[0].label, "Deleted");
   assert.deepEqual(titles(groups[0].items), ["Third", "Second", "First"]);
-  assert.deepEqual(deletedGroups([done("Completed", t(14, 8))], repos, now), []);
+  assert.deepEqual(deletedGroups([done("Completed", t(14, 8))]), []);
 });

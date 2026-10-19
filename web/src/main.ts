@@ -3,21 +3,22 @@
 // and one delegated handler per event type.
 
 import { ApiError, api, newId, setUnauthorizedHandler } from "./api.ts";
+import { createActions, movedOn, type Handle } from "./actions.ts";
 import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type NewBridgeReply, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
-  DISMISSED,
   agentNewCount,
   attention,
   buildView,
   dateChip,
-  HUB_BRIDGE,
   isAgentItem,
+  isDeleted,
   isOpen,
+  isPersonal,
   isUnreadComment,
+  isWontDo,
   openToday,
   pastDue,
-  personalRepoKeys,
   repoColours,
   repoDetail,
   repoKey,
@@ -30,7 +31,7 @@ import {
   type ViewId,
 } from "./model.ts";
 import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput, ymd } from "./dates.ts";
-import { completedGroups, deletedGroups, isDeleted } from "./history.ts";
+import { completedGroups, deletedGroups } from "./history.ts";
 import { searchGroups } from "./search.ts";
 import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "./bulk.ts";
 import { snoozeOptions, typedSnooze } from "./snooze.ts";
@@ -44,7 +45,6 @@ import {
   TEXT_MAX,
   TITLE_MAX,
   addCheck,
-  applyEdit,
   canEdit,
   checkText,
   checklistChip,
@@ -56,9 +56,7 @@ import {
   priorityChip,
   priorityOptions,
   removeCheck,
-  restoreComment,
   toggleCheck,
-  undoOf,
   type EditDraft,
 } from "./edit.ts";
 import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } from "./theme.ts";
@@ -271,10 +269,10 @@ function searching(): boolean {
 
 function currentGroups(): Group[] {
   if (isPage(S.view)) return [];
-  if (S.query.trim()) return searchGroups(items(), repos(), S.query, now());
-  if (S.view === "completed") return completedGroups(items(), repos(), now());
-  if (S.view === "deleted") return deletedGroups(items(), repos(), now());
-  return buildView(S.view, items(), repos(), now());
+  if (S.query.trim()) return searchGroups(items(), S.query, now());
+  if (S.view === "completed") return completedGroups(items(), now());
+  if (S.view === "deleted") return deletedGroups(items());
+  return buildView(S.view, items(), now());
 }
 
 /** Keys of the rows in the current view, in display order. */
@@ -292,12 +290,12 @@ function browsing(v: View): boolean {
 function renderNav() {
   const all = items();
   const n = now();
-  const agentNew = agentNewCount(all, repos(), user());
+  const agentNew = agentNewCount(all, user());
   // While any agent works, its tab icon carries the same light as the run's row.
   const working = workingItems(all).length;
   const agentsIcon = working ? `<span class="tab-ic" data-run="working">${TRACER}${ICON.agents}</span>` : ICON.agents;
   const agentsWorking = working ? `<span class="sr">, ${working === 1 ? "an agent is" : `${working} agents are`} working</span>` : "";
-  const upcoming = buildView("upcoming", all, repos(), n).reduce((s, g) => s + g.items.length, 0);
+  const upcoming = buildView("upcoming", all, n).reduce((s, g) => s + g.items.length, 0);
   const everything = all.filter(isOpen).length;
   const entry = (v: View, label: string, icon: string, count: string) =>
     `<button class="nav-item" data-act="view" data-view="${esc(v)}"${S.view === v ? ' aria-current="page"' : ""}>${icon}<span class="nav-label">${label}</span>${count}</button>`;
@@ -366,7 +364,7 @@ function renderSync() {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
           const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : (item?.title ?? a.beadId ?? "");
           const state =
-            a.status === "applied" ? (a.bridge === HUB_BRIDGE ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
+            a.status === "applied" ? (isPersonal(a) ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
         })
         .join("") +
@@ -384,7 +382,7 @@ function actionLabel(a: Action): string {
     case "reopen":
       return "Reopen";
     case "dismiss":
-      return a.bridge === HUB_BRIDGE ? "Delete" : "Won't do";
+      return isPersonal(a) ? "Delete" : "Won't do";
     case "note":
       return "Note on";
     case "add":
@@ -414,8 +412,7 @@ function actionLabel(a: Action): string {
 
 function chipsFor(item: Item, opts: { list: boolean }): string {
   const n = now();
-  const personal = personalRepoKeys(repos());
-  const agent = isAgentItem(item, personal);
+  const agent = isAgentItem(item);
   const out: string[] = [];
   // The list comes first, so it starts at the same x on every row.
   if (opts.list) {
@@ -423,7 +420,7 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
     const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
     out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
   }
-  const att = attention(item, personal, user());
+  const att = attention(item, user());
   if (att === "new") out.push('<span class="chip chip-new">New</span>');
   if (att === "reply") out.push('<span class="chip chip-new">New reply</span>');
   const prio = priorityChip(item.priority);
@@ -431,7 +428,7 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
   const dc = dateChip(item, n);
   if (dc) out.push(`<span class="chip chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>`);
   if (item.repeat) out.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(item.repeat, n))}</span>`);
-  if (agent && !isOpen(item) && item.closeReason === DISMISSED) out.push('<span class="chip chip-wontdo">Won\'t do</span>');
+  if (isWontDo(item)) out.push('<span class="chip chip-wontdo">Won\'t do</span>');
   if (agent && item.createdBy) out.push(`<span class="chip chip-agent">${esc(item.createdBy)}</span>`);
   const notes = item.comments?.length ?? 0;
   if (notes) out.push(`<span class="chip chip-notes" aria-label="${notes} ${notes === 1 ? "note" : "notes"}">${ICON.note}${notes}</span>`);
@@ -449,7 +446,7 @@ function checkButton(item: Item, agent: boolean): string {
     const on = S.picked.has(item.key);
     return `<button class="check pick${agent ? " check-agent" : ""}${on ? " checked" : ""}" role="checkbox" aria-checked="${on}" data-act="pick" data-key="${esc(item.key)}" aria-label="${esc(`Select: ${item.title}`)}">${ICON.check}</button>`;
   }
-  const gone = isDeleted(item, personalRepoKeys(repos()));
+  const gone = isDeleted(item);
   const label = open ? `Mark done: ${item.title}` : `${gone ? "Restore" : "Reopen"}: ${item.title}`;
   return `<button class="check${agent ? " check-agent" : ""}${open ? "" : " checked"}" data-act="${open ? "done" : gone ? "restore" : "reopen"}" data-key="${esc(item.key)}" aria-label="${esc(label)}">${ICON.check}</button>`;
 }
@@ -499,8 +496,7 @@ function noteRunEnds(next: Item[]) {
 }
 
 function rowHTML(item: Item, showList: boolean): string {
-  const personal = personalRepoKeys(repos());
-  const agent = isAgentItem(item, personal);
+  const agent = isAgentItem(item);
   const done = !isOpen(item);
   const picked = !done && S.selecting && S.picked.has(item.key);
   const run = agent && item.run ? item.run : null;
@@ -508,7 +504,7 @@ function rowHTML(item: Item, showList: boolean): string {
 <div class="under" aria-hidden="true"><span class="u-done">Done</span><span class="u-snooze">Snooze</span></div>
 <div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
     done
-      ? isDeleted(item, personal)
+      ? isDeleted(item)
         ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
         : `<button class="btn btn-small" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>`
       : ""
@@ -644,7 +640,7 @@ function renderBulk() {
   const pickable = pickableKeys(currentGroups());
   const picks = [...S.picked].map(byKey).filter((i): i is Item => Boolean(i));
   // With nothing picked, the label names what Select all would pick.
-  const label = bulkDismissLabel(picks.length ? picks : pickable.map(byKey).filter((i): i is Item => Boolean(i)), repos());
+  const label = bulkDismissLabel(picks.length ? picks : pickable.map(byKey).filter((i): i is Item => Boolean(i)));
   const off = picks.length ? "" : " disabled";
   setHTML(
     bar,
@@ -860,9 +856,8 @@ function renderDetail() {
     setHTML(el, '<div class="detail-empty"><p>Select a task to see its details.</p></div>');
     return;
   }
-  const personal = personalRepoKeys(repos());
-  const agent = isAgentItem(item, personal);
-  const editable = !agent && canEdit(item);
+  const agent = isAgentItem(item);
+  const editable = canEdit(item);
   const editing = editable && S.edit?.key === item.key;
   const open = isOpen(item);
   const allowed = agent && agentsAllowed(item, repos());
@@ -878,7 +873,7 @@ function renderDetail() {
       ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">${ICON.check}Done</button>${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
         }<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? `${ICON.ban}Won't do` : `${ICON.trash}Delete`}</button>`
-      : isDeleted(item, personalRepoKeys(repos()))
+      : isDeleted(item)
         ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
         : `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>${
           editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
@@ -1072,6 +1067,7 @@ const ctx: AppContext = {
     await Promise.all([refresh(), reloadSetup(), sess]);
     render();
   },
+  perform: (acts) => actions.perform(acts),
   toast: (text) => showToast(text),
   setView: (v) => setView(v as View),
   openSettings(section) {
@@ -1182,61 +1178,31 @@ function connectEvents() {
 
 // ---------- actions ----------
 
-function patchLocal(key: string, fn: (i: Item) => void) {
-  const it = byKey(key);
-  if (!it) return;
-  fn(it);
-  // The hub applies actions on the personal list at once; nothing waits.
-  it.pending = it.bridge !== HUB_BRIDGE;
-  it.error = undefined;
-}
+const actions = createActions({
+  api,
+  newId,
+  now,
+  item: (key) => byKey(key),
+  onError: (during, e) => showToast(`Could not ${during}: ${e.message}`),
+});
 
-/** Posts an action; the hub's copy of it, or null when it failed (a toast says why). */
+/** Posts one action; the hub's copy of it, or null when it failed (a toast says why). */
 async function post(a: NewAction): Promise<Action | null> {
-  try {
-    return await api.postAction(a);
-  } catch (e) {
-    showToast(`Could not save: ${(e as Error).message}`);
-    return null;
-  }
+  return (await actions.perform([a])).posted[0]?.applied ?? null;
 }
 
-function inverse(a: NewAction): NewAction | null {
-  switch (a.kind) {
-    case "done":
-    case "dismiss":
-      return { id: newId(), kind: "reopen", key: a.key, payload: {} };
-    case "reopen":
-      return { id: newId(), kind: "dismiss", key: a.key, payload: {} };
-    case "snooze":
-      return { id: newId(), kind: "snooze", key: a.key, payload: { until: a.payload.previous ?? null, previous: a.payload.until ?? null } };
-    default:
-      return null;
-  }
+/** The toast's Undo for what `h` posted: reverses it, then loads the state again. */
+function undoing(h: Handle): () => Promise<void> {
+  return async () => {
+    await actions.undo(h, { onPatched: render });
+    await refresh();
+  };
 }
 
-async function undoAll(posted: NewAction[]) {
-  for (const a of posted) {
-    let cancelled = false;
-    try {
-      cancelled = await api.cancelAction(a.id);
-    } catch (e) {
-      showToast(`Could not undo: ${(e as Error).message}`);
-      return;
-    }
-    if (!cancelled) {
-      const inv = inverse(a);
-      if (inv) await post(inv);
-    }
-  }
-  await refresh();
-}
-
-/** Post closing actions and offer Undo. */
-async function closing(actions: NewAction[], text: string, tell?: string) {
-  const posted: NewAction[] = [];
-  for (const a of actions) if (await post(a)) posted.push(a);
-  if (posted.length) showToast(text, () => undoAll(posted), tell);
+/** Performs closing actions, drawing their local change with `draw`, and offers Undo. */
+async function closing(acts: NewAction[], text: string, opts: { tell?: string; draw?: () => void } = {}) {
+  const h = await actions.perform(acts, { onPatched: opts.draw ?? render });
+  if (h.posted.length) showToast(text, undoing(h), opts.tell);
   await refresh();
 }
 
@@ -1251,90 +1217,49 @@ function moveSelectionOff(keys: string[]) {
   S.selected = rest.find((k) => order.indexOf(k) > idx) ?? rest[rest.length - 1] ?? null;
 }
 
-function doDone(key: string) {
+/**
+ * Done on an item. A repeating personal item moves to its next date and stays
+ * open; its toast names that date once the state has it.
+ */
+async function doDone(key: string) {
   const it = byKey(key);
   if (!it || !isOpen(it)) return;
   moveSelectionOff([key]);
-  if (it.repeat && canEdit(it)) {
-    void doneRepeating(it);
-    return;
-  }
-  const t = now().toISOString();
-  patchLocal(key, (i) => {
-    i.status = "closed";
-    i.closedAt = t;
-    i.closeReason = "Done in Meat Mode";
-  });
-  render();
-  void closing([{ id: newId(), kind: "done", key, payload: {} }], `Done: ${it.title}`, offersTell(it, repos()) ? key : undefined);
-}
-
-/**
- * Done on a repeating personal item: the hub moves it to its next date and
- * keeps it open. Its Undo is the edit the reply's `was` holds, not a reopen.
- */
-async function doneRepeating(it: Item) {
-  const key = it.key;
-  render();
-  const applied = await post({ id: newId(), kind: "done", key, payload: {} });
-  await refresh();
-  if (!applied) return;
-  const u = undoOf(applied, key, newId());
-  const next = byKey(key);
-  if (!u || !next?.dueAt || !isOpen(next)) {
-    // The hub closed it after all, as when its repeat ended meanwhile.
-    showToast(`Done: ${it.title}`, () => undoAll([{ id: applied.id, kind: "done", key, payload: {} }]));
-    return;
-  }
-  showToast(`Done. Next: ${fmtWhenAt(new Date(next.dueAt), now())}`, async () => {
-    patchLocal(key, (i) => applyLocal(i, u));
-    render();
-    await post(u);
+  const h = await actions.perform([{ id: newId(), kind: "done", key, payload: {} }], { onPatched: render });
+  const p = h.posted[0];
+  if (p && movedOn(p)) {
     await refresh();
-  });
+    const next = byKey(key);
+    showToast(next?.dueAt ? `Done. Next: ${fmtWhenAt(new Date(next.dueAt), now())}` : `Done: ${it.title}`, undoing(h));
+    return;
+  }
+  if (p) showToast(`Done: ${it.title}`, undoing(h), offersTell(it, repos()) ? key : undefined);
+  await refresh();
 }
 
 /** Won't do on an agent item; Delete on a personal one, which then shows nowhere. */
 function doDismiss(key: string) {
   const it = byKey(key);
   if (!it || !isOpen(it)) return;
-  const agent = isAgentItem(it, personalRepoKeys(repos()));
+  const agent = isAgentItem(it);
   moveSelectionOff([key]);
-  const t = now().toISOString();
-  patchLocal(key, (i) => {
-    i.status = "closed";
-    i.closedAt = t;
-    i.closeReason = DISMISSED;
+  void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `${agent ? "Won't do" : "Deleted"}: ${it.title}`, {
+    tell: offersTell(it, repos()) ? key : undefined,
+    draw: () => (!agent && S.open === key ? closeDetail() : render()),
   });
-  if (!agent && S.open === key) closeDetail();
-  else render();
-  void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `${agent ? "Won't do" : "Deleted"}: ${it.title}`, offersTell(it, repos()) ? key : undefined);
 }
 
 /** Brings a deleted personal item back; Undo deletes it again. */
 async function doRestore(key: string) {
   const it = byKey(key);
   if (!it || isOpen(it)) return;
-  patchLocal(key, (i) => {
-    i.status = "open";
-    i.closedAt = null;
-    i.closeReason = undefined;
-  });
-  render();
-  const a: NewAction = { id: newId(), kind: "reopen", key, payload: {} };
-  if (await post(a)) showToast(`Restored: ${it.title}`, () => undoAll([a]));
-  await refresh();
+  await closing([{ id: newId(), kind: "reopen", key, payload: {} }], `Restored: ${it.title}`);
 }
 
 async function doReopen(key: string) {
   const it = byKey(key);
   if (!it || isOpen(it)) return;
-  patchLocal(key, (i) => {
-    i.status = "open";
-    i.closedAt = null;
-  });
-  render();
-  await post({ id: newId(), kind: "reopen", key, payload: {} });
+  await actions.perform([{ id: newId(), kind: "reopen", key, payload: {} }], { onPatched: render });
   await refresh();
 }
 
@@ -1348,15 +1273,17 @@ function doSnooze(keys: string[], until: Date) {
   }
   if (!acts.length) return;
   moveSelectionOff(keys);
-  for (const a of acts) patchLocal(a.key!, (i) => (i.deferUntil = a.payload.until));
-  S.snoozeKeys = null;
-  if (keys === bulkSnoozeKeys) {
-    bulkSnoozeKeys = null;
-    endSelect();
-  } else render();
   const label = fmtWhen(until, now());
   const text = acts.length > 1 ? `Snoozed ${acts.length} tasks to ${label}` : `Snoozed to ${label}`;
-  void closing(acts, text);
+  void closing(acts, text, {
+    draw: () => {
+      S.snoozeKeys = null;
+      if (keys === bulkSnoozeKeys) {
+        bulkSnoozeKeys = null;
+        endSelect();
+      } else render();
+    },
+  });
 }
 
 // ---------- select mode ----------
@@ -1418,52 +1345,22 @@ function pickedItems(): Item[] {
 }
 
 /**
- * Done on every pick, with one Undo. Plain items close and undo through
- * closing's reopen; repeating personal items move on as doneRepeating does
- * and undo through the edit their reply's `was` holds.
+ * Done on every pick, with one Undo: plain items reopen, repeating personal
+ * items go back to the date they moved on from.
  */
 async function bulkDone() {
   const its = pickedItems();
   if (!its.length) return;
   const keys = its.map((i) => i.key);
   moveSelectionOff(keys);
-  const repeating = its.filter((i) => i.repeat && canEdit(i));
-  const plain = its.filter((i) => !repeating.includes(i));
-  const t = now().toISOString();
-  for (const i of plain)
-    patchLocal(i.key, (x) => {
-      x.status = "closed";
-      x.closedAt = t;
-      x.closeReason = "Done in Meat Mode";
-    });
-  endSelect();
-  const posted: NewAction[] = [];
-  for (const i of plain) {
-    const a: NewAction = { id: newId(), kind: "done", key: i.key, payload: {} };
-    if (await post(a)) posted.push(a);
-  }
-  const moved: [string, Action][] = [];
-  for (const i of repeating) {
-    const applied = await post({ id: newId(), kind: "done", key: i.key, payload: {} });
-    if (applied) moved.push([i.key, applied]);
-  }
+  const h = await actions.perform(
+    keys.map((key) => ({ id: newId(), kind: "done", key, payload: {} })),
+    { onPatched: endSelect },
+  );
   await refresh();
-  const edits: NewAction[] = [];
-  for (const [key, applied] of moved) {
-    const u = undoOf(applied, key, newId());
-    const next = byKey(key);
-    // The hub closed it after all, as when its repeat ended meanwhile.
-    if (!u || !next?.dueAt || !isOpen(next)) posted.push({ id: applied.id, kind: "done", key, payload: {} });
-    else edits.push(u);
-  }
-  if (!posted.length && !edits.length) return;
-  const done = its.filter((i) => posted.some((a) => a.key === i.key) || edits.some((a) => a.key === i.key));
-  showToast(bulkToast("Done", done.map((i) => i.title)), async () => {
-    for (const u of edits) patchLocal(u.key!, (i) => applyLocal(i, u));
-    render();
-    for (const u of edits) await post(u);
-    await undoAll(posted);
-  });
+  if (!h.posted.length) return;
+  const done = its.filter((i) => h.posted.some((p) => p.sent.key === i.key));
+  showToast(bulkToast("Done", done.map((i) => i.title)), undoing(h));
 }
 
 /** Delete or Won't do on every pick, with one Undo. */
@@ -1471,22 +1368,18 @@ function bulkDismiss() {
   const its = pickedItems();
   if (!its.length) return;
   const keys = its.map((i) => i.key);
-  const verb = bulkDismissDone(its, repos());
-  const personal = personalRepoKeys(repos());
+  const verb = bulkDismissDone(its);
   moveSelectionOff(keys);
-  const t = now().toISOString();
-  for (const k of keys)
-    patchLocal(k, (i) => {
-      i.status = "closed";
-      i.closedAt = t;
-      i.closeReason = DISMISSED;
-    });
-  const openGone = S.open && keys.includes(S.open) && !isAgentItem(byKey(S.open)!, personal);
-  endSelect();
-  if (openGone) closeDetail();
+  const openGone = S.open && keys.includes(S.open) && isPersonal(byKey(S.open)!);
   void closing(
     keys.map((key) => ({ id: newId(), kind: "dismiss", key, payload: {} })),
     bulkToast(verb, its.map((i) => i.title)),
+    {
+      draw: () => {
+        endSelect();
+        if (openGone) closeDetail();
+      },
+    },
   );
 }
 
@@ -1584,44 +1477,11 @@ function closeEdit() {
   document.getElementById("d-edit")?.focus({ preventScroll: true });
 }
 
-/**
- * Posts an action on a personal item after `change` applied it locally, and
- * offers Undo with `toast` when the hub's reply says how to undo it.
- */
-async function postEdit(key: string, a: NewAction, change: (i: Item) => void, toast?: string) {
-  patchLocal(key, change);
-  render();
-  const applied = await post(a);
-  if (applied && toast) {
-    showToast(toast, async () => {
-      const u = undoOf(applied, key, newId());
-      if (!u) return;
-      patchLocal(key, (i) => applyLocal(i, u));
-      render();
-      await post(u);
-      await refresh();
-    });
-  }
+/** Performs an action on a personal item, offering Undo with `toast` when given. */
+async function postEdit(a: NewAction, toast?: string) {
+  const h = await actions.perform([a], { onPatched: render });
+  if (h.posted.length && toast) showToast(toast, undoing(h));
   await refresh();
-}
-
-/** What an action on a personal item does to the local copy before the hub answers. */
-function applyLocal(i: Item, a: NewAction) {
-  const p = a.payload;
-  switch (a.kind) {
-    case "edit":
-      if (p.set) applyEdit(i, p.set);
-      break;
-    case "note-edit":
-      i.comments = (i.comments ?? []).map((c) => (c.id === p.commentId ? { ...c, text: p.text ?? "" } : c));
-      break;
-    case "note-delete":
-      i.comments = (i.comments ?? []).filter((c) => c.id !== p.commentId);
-      break;
-    case "note-restore":
-      if (p.comment) i.comments = restoreComment(i.comments, p.comment);
-      break;
-  }
 }
 
 function saveEdit() {
@@ -1648,7 +1508,7 @@ function saveEdit() {
   closeEdit();
   if (!set) return;
   const a: NewAction = { id: newId(), kind: "edit", key: it.key, payload: { set } };
-  void postEdit(it.key, a, (i) => applyLocal(i, a), "Saved");
+  void postEdit(a, "Saved");
 }
 
 function clearDue() {
@@ -1690,20 +1550,20 @@ function saveNoteEdit() {
   closeNoteEdit();
   if (text === c.text) return;
   const a: NewAction = { id: newId(), kind: "note-edit", key: n.key, payload: { commentId: c.id, text } };
-  void postEdit(n.key, a, (i) => applyLocal(i, a), "Note saved");
+  void postEdit(a, "Note saved");
 }
 
 function deleteNote(key: string, commentId: string) {
   if (S.noteEdit?.commentId === commentId) S.noteEdit = null;
   const a: NewAction = { id: newId(), kind: "note-delete", key, payload: { commentId } };
-  void postEdit(key, a, (i) => applyLocal(i, a), "Note deleted");
+  void postEdit(a, "Note deleted");
   $<HTMLElement>("#note-input").focus({ preventScroll: true });
 }
 
 /** Posts the whole new checklist; a toast with Undo only when `toast` is given. */
 function setChecklist(key: string, next: Check[], toast?: string) {
   const a: NewAction = { id: newId(), kind: "edit", key, payload: { set: { checklist: next } } };
-  void postEdit(key, a, (i) => applyLocal(i, a), toast);
+  void postEdit(a, toast);
 }
 
 function addToChecklist(key: string) {
@@ -2319,7 +2179,7 @@ function onKey(e: KeyboardEvent) {
       else if (S.selected) {
         const it = byKey(S.selected);
         if (it && isOpen(it)) doDone(it.key);
-        else if (it && isDeleted(it, personalRepoKeys(repos()))) void doRestore(it.key);
+        else if (it && isDeleted(it)) void doRestore(it.key);
         else if (it) void doReopen(it.key);
       }
       break;

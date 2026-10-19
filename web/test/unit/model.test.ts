@@ -8,8 +8,11 @@ import {
   dateChip,
   groupOf,
   hasNewReply,
+  isDeleted,
+  isPersonal,
+  isWontDo,
+  kindOf,
   openToday,
-  personalRepoKeys,
   repoDetail,
   repoLabel,
   syncStatus,
@@ -22,7 +25,7 @@ const now = new Date(2026, 9, 14, 10, 0);
 const t = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).toISOString();
 
 const repos: Repo[] = [
-  { bridge: "home", name: "personal", personal: true, optedIn: true },
+  { bridge: "hub", name: "personal", personal: true, optedIn: true },
   { bridge: "home", name: "garden", personal: false, optedIn: true },
   { bridge: "home", name: "attic", personal: false, optedIn: false },
 ];
@@ -32,9 +35,10 @@ function item(over: Partial<Item>): Item {
   n++;
   const repo = over.repo ?? "personal";
   const id = over.id ?? `bd-${n}`;
+  const bridge = repo === "personal" ? "hub" : "home";
   return {
-    key: `home/${repo}/${id}`,
-    bridge: "home",
+    key: `${bridge}/${repo}/${id}`,
+    bridge,
     repo,
     id,
     title: `Task ${n}`,
@@ -81,7 +85,7 @@ test("Today view: today's agenda from every list, then the rest of the personal 
     item({ title: "Undated" }),
     item({ title: "Agent undated", repo: "garden" }),
   ];
-  const groups = buildView("today", items, repos, now);
+  const groups = buildView("today", items, now);
   assert.deepEqual(
     groups.map((g) => [g.label, g.items.map((i) => i.title)]),
     [
@@ -96,29 +100,51 @@ test("Today view: today's agenda from every list, then the rest of the personal 
   assert.equal(openToday(items, now), 4);
 });
 
+test("the kind of an item, repo or action is its bridge: the hub's own is personal, any other is an agent's", () => {
+  assert.equal(kindOf(item({})), "personal");
+  assert.equal(kindOf(item({ repo: "garden" })), "agent");
+  assert.equal(kindOf(repos[0]), "personal");
+  assert.equal(kindOf(repos[1]), "agent");
+  assert.equal(kindOf({ bridge: "hub" }), "personal");
+  // A bridge's own personal repo is an agent machine's repo; the hub keeps the personal list.
+  const bridgePersonal: Repo = { bridge: "home", name: "personal", personal: true, optedIn: true };
+  assert.equal(isPersonal(bridgePersonal), false);
+});
+
+test("Dismissed is Deleted on a personal item and Won't do on an agent item", () => {
+  const gone = item({ status: "closed", closedAt: t(14, 9), closeReason: "Dismissed" });
+  const wontDo = item({ status: "closed", closedAt: t(14, 9), closeReason: "Dismissed", repo: "garden" });
+  const done = item({ status: "closed", closedAt: t(14, 9), closeReason: "Done in Meat Mode" });
+  assert.deepEqual([isDeleted(gone), isWontDo(gone)], [true, false]);
+  assert.deepEqual([isDeleted(wontDo), isWontDo(wontDo)], [false, true]);
+  assert.deepEqual([isDeleted(done), isWontDo(done)], [false, false]);
+  // An open item is neither, whatever reason it last closed with.
+  assert.equal(isDeleted(item({ closeReason: "Dismissed" })), false);
+});
+
 test("a deleted personal item shows nowhere; an agent item's Won't do shows in Done today", () => {
   const items = [
     item({ title: "Deleted", status: "closed", closedAt: t(14, 9), closeReason: "Dismissed" }),
     item({ title: "Won't do", status: "closed", closedAt: t(14, 9), closeReason: "Dismissed", repo: "garden" }),
   ];
-  for (const view of ["today", "all", "list:home/personal"] as const) {
-    const titles = buildView(view, items, repos, now).flatMap((g) => g.items.map((i) => i.title));
+  for (const view of ["today", "all", "list:hub/personal"] as const) {
+    const titles = buildView(view, items, now).flatMap((g) => g.items.map((i) => i.title));
     assert.ok(!titles.includes("Deleted"), view);
   }
-  assert.deepEqual(buildView("today", items, repos, now).flatMap((g) => g.items.map((i) => i.title)), ["Won't do"]);
+  assert.deepEqual(buildView("today", items, now).flatMap((g) => g.items.map((i) => i.title)), ["Won't do"]);
 });
 
 test("Upcoming groups by tomorrow, this week, later", () => {
   const items = [item({ title: "A", dueAt: t(15, 9) }), item({ title: "B", dueAt: t(17, 9) }), item({ title: "C", dueAt: t(30, 9) })];
-  const groups = buildView("upcoming", items, repos, now);
+  const groups = buildView("upcoming", items, now);
   assert.deepEqual(groups.map((g) => g.label), ["Tomorrow", "This week", "Later"]);
 });
 
 test("Everything adds No date; agents and list views filter", () => {
   const items = [item({ title: "Mine" }), item({ title: "Theirs", repo: "garden" })];
-  assert.deepEqual(buildView("all", items, repos, now).map((g) => g.label), ["No date"]);
-  assert.deepEqual(buildView("agents", items, repos, now)[0].items.map((i) => i.title), ["Theirs"]);
-  assert.deepEqual(buildView("list:home/personal", items, repos, now)[0].items.map((i) => i.title), ["Mine"]);
+  assert.deepEqual(buildView("all", items, now).map((g) => g.label), ["No date"]);
+  assert.deepEqual(buildView("agents", items, now)[0].items.map((i) => i.title), ["Theirs"]);
+  assert.deepEqual(buildView("list:hub/personal", items, now)[0].items.map((i) => i.title), ["Mine"]);
 });
 
 test("date chips", () => {
@@ -133,10 +159,9 @@ test("date chips", () => {
 });
 
 test("New is for agent items never opened; New reply needs a newer comment by someone else", () => {
-  const personal = personalRepoKeys(repos);
   const fresh = item({ repo: "garden" });
-  assert.equal(attention(fresh, personal, "alex"), "new");
-  assert.equal(attention(item({}), personal, "alex"), null);
+  assert.equal(attention(fresh, "alex"), "new");
+  assert.equal(attention(item({}), "alex"), null);
 
   const seen = item({
     repo: "garden",
@@ -148,8 +173,8 @@ test("New is for agent items never opened; New reply needs a newer comment by so
   });
   assert.equal(hasNewReply(seen, "alex"), false);
   seen.comments!.push({ id: "c3", author: "planner", text: "Answer", createdAt: t(14, 9, 30) });
-  assert.equal(attention(seen, personal, "alex"), "reply");
-  assert.equal(agentNewCount([fresh, seen, item({})], repos, "alex"), 2);
+  assert.equal(attention(seen, "alex"), "reply");
+  assert.equal(agentNewCount([fresh, seen, item({})], "alex"), 2);
 });
 
 test("sync status", () => {
@@ -192,7 +217,7 @@ test("repo labels are folder names, with the path where they repeat", () => {
     { bridge: "laptop", name: "work/garden", personal: false, optedIn: true },
     { bridge: "desk", name: "projects/garden", personal: false, optedIn: true },
     { bridge: "laptop", name: "projects/kitchen", personal: false, optedIn: true },
-    { bridge: "laptop", name: "personal", personal: true, optedIn: true },
+    { bridge: "hub", name: "personal", personal: true, optedIn: true },
   ];
   assert.equal(repoLabel(repos[0]), "garden");
   assert.equal(repoLabel(repos[4]), "personal");
@@ -202,7 +227,7 @@ test("repo labels are folder names, with the path where they repeat", () => {
   assert.equal(repoDetail(repos[2], repos), "projects/garden on desk");
   assert.deepEqual(
     visibleRepos(repos).map((r) => `${r.bridge}:${r.name}`),
-    ["laptop:personal", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],
+    ["hub:personal", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],
   );
 });
 

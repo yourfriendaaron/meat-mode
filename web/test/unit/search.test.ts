@@ -1,25 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Item, Repo } from "../../src/types.ts";
+import type { Item } from "../../src/types.ts";
 import { searchGroups } from "../../src/search.ts";
 
 // Wednesday 14 October 2026, 10:00 local time.
 const now = new Date(2026, 9, 14, 10, 0);
 const t = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).toISOString();
 
-const repos: Repo[] = [
-  { bridge: "home", name: "personal", personal: true, optedIn: true },
-  { bridge: "home", name: "garden", personal: false, optedIn: true },
-];
-
 let n = 0;
 function item(over: Partial<Item>): Item {
   n++;
   const repo = over.repo ?? "personal";
   const id = over.id ?? `bd-${n}`;
+  const bridge = repo === "personal" ? "hub" : "home";
   return {
-    key: `home/${repo}/${id}`,
-    bridge: "home",
+    key: `${bridge}/${repo}/${id}`,
+    bridge,
     repo,
     id,
     title: `Task ${n}`,
@@ -32,12 +28,12 @@ function item(over: Partial<Item>): Item {
   };
 }
 
-const titles = (q: string, items: Item[]) => searchGroups(items, repos, q, now).map((g) => [g.id, g.items.map((i) => i.title)]);
+const titles = (q: string, items: Item[]) => searchGroups(items, q, now).map((g) => [g.id, g.items.map((i) => i.title)]);
 
 test("a blank query finds nothing", () => {
   const items = [item({ title: "Water the plants" })];
-  assert.deepEqual(searchGroups(items, repos, "", now), []);
-  assert.deepEqual(searchGroups(items, repos, "  \t ", now), []);
+  assert.deepEqual(searchGroups(items, "", now), []);
+  assert.deepEqual(searchGroups(items, "  \t ", now), []);
 });
 
 test("matches ignore case and accents, in the query and in the item", () => {
@@ -76,7 +72,7 @@ test("groups Open, Done and Deleted in that order, dropping empty ones", () => {
     ["found-deleted", ["Move the plants"]],
   ]);
   assert.deepEqual(titles("move", [deleted, wontDo, done, open]), [["found-deleted", ["Move the plants"]]]);
-  assert.deepEqual(searchGroups([done], repos, "plants", now).map((g) => g.label), ["Done"]);
+  assert.deepEqual(searchGroups([done], "plants", now).map((g) => g.label), ["Done"]);
 });
 
 test("Done and Deleted run newest close first", () => {

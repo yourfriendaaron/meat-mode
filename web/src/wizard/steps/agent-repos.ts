@@ -4,7 +4,7 @@
 
 import { agentMachines, machineReposHTML } from "../../agents.ts";
 import { esc } from "../../html.ts";
-import { HUB_BRIDGE } from "../../model.ts";
+import { isPersonal } from "../../model.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
 registerStep({
@@ -14,7 +14,7 @@ registerStep({
   order: ORDER.agents + 1,
   settings: "s-mach",
   applies: (ctx) => agentMachines(ctx.state?.bridges).length > 0,
-  done: (ctx) => (ctx.state?.repos ?? []).some((r) => r.bridge !== HUB_BRIDGE && r.optedIn),
+  done: (ctx) => (ctx.state?.repos ?? []).some((r) => !isPersonal(r) && r.optedIn),
   render(ctx) {
     const repos = ctx.state?.repos ?? [];
     const machines = agentMachines(ctx.state?.bridges)
