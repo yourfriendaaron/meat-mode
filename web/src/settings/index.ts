@@ -6,6 +6,7 @@ import "./agents.ts";
 import "./appearance.ts";
 import "./calendar.ts";
 import "./connection.ts";
+import "./data.ts";
 import "./devices.ts";
 import "./lead.ts";
 import "./machines.ts";
