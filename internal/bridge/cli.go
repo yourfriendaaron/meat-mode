@@ -18,15 +18,17 @@ import (
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 )
 
 // Env is what the bridge commands touch outside the process. Tests replace
 // the paths, the service manager and the executable.
 type Env struct {
 	Paths      Paths
-	Service    Service // nil: the platform's user service manager
-	Executable string  // "": this process's executable
-	LookPath   func(string) (string, error)
+	Service    Service                      // nil: the platform's user service manager
+	Executable string                       // "": this process's executable
+	LookPath   func(string) (string, error) // nil: exec.LookPath
+	Getenv     func(string) string          // nil: os.Getenv
 	HTTP       *http.Client
 	Resolver   Resolver  // nil: the system resolver
 	Stdin      io.Reader // nil: no input
@@ -41,7 +43,7 @@ func DefaultEnv(version string) (Env, error) {
 	if err != nil {
 		return Env{}, err
 	}
-	return Env{Paths: p, LookPath: exec.LookPath, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Version: version}, nil
+	return Env{Paths: p, LookPath: exec.LookPath, Getenv: os.Getenv, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Version: version}, nil
 }
 
 func (e Env) service() (Service, error) {
@@ -62,10 +64,22 @@ func (e Env) executable() (string, error) {
 	return filepath.EvalSymlinks(exe)
 }
 
-// hub returns the client for c's hub. c comes from LoadConfig, which has
-// checked trustedNetworks; a bad value here leaves only the private set.
-func (e Env) hub(c Config) *Hub {
-	allowed, _ := c.Allowed()
+func (e Env) lookPath(name string) (string, error) {
+	if e.LookPath != nil {
+		return e.LookPath(name)
+	}
+	return exec.LookPath(name)
+}
+
+func (e Env) getenv() func(string) string {
+	if e.Getenv != nil {
+		return e.Getenv
+	}
+	return os.Getenv
+}
+
+// hub returns the client for c's hub, which may dial the addresses in allowed.
+func (e Env) hub(c Config, allowed netguard.Set) *Hub {
 	return &Hub{URL: c.HubURL, Token: c.Token, HTTP: e.HTTP, Allowed: allowed, Resolver: e.Resolver}
 }
 
@@ -141,10 +155,12 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) == 1 {
-		if t := strings.TrimSpace(os.Getenv("MEAT_MODE_BRIDGE_TOKEN")); t != "" {
-			pos = append(pos, t)
-		}
+	s, err := LoadSettings(env)
+	if err != nil {
+		return err
+	}
+	if len(pos) == 1 && s.Token != "" {
+		pos = append(pos, s.Token)
 	}
 	if len(pos) != 2 {
 		fs.Usage()
@@ -157,14 +173,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 	}
 	// Start from the file as saved: environment overrides apply to this
 	// command's own checks but are never written back.
-	cfg, err := readConfigFile(env.Paths.Config)
-	if err != nil {
-		return err
-	}
-	effective, err := LoadConfig(env.Paths.Config)
-	if err != nil {
-		return err
-	}
+	cfg, effective := s.Saved, s.Config
 	cfg.HubURL, cfg.Token = strings.TrimRight(pos[0], "/"), pos[1]
 	// The trusted networks the hub is checked against are saved, so the
 	// service, which does not get this shell's environment, checks the same.
@@ -196,7 +205,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 		return err
 	}
 	cfg.BD = bd
-	reply, err := env.hub(cfg).Hello(ctx, api.Hello{Version: env.Version, BdVersion: ver})
+	reply, err := env.hub(cfg, s.Allowed).Hello(ctx, api.Hello{Version: env.Version, BdVersion: ver})
 	if err != nil {
 		return fmt.Errorf("cannot reach the hub with that token: %w", err)
 	}
@@ -226,7 +235,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if err := svc.Install(exe, ServicePath(bd, agentPath(env))); err != nil {
+	if err := svc.Install(exe, ServicePath(bd, agentPath(s))); err != nil {
 		return err
 	}
 	fmt.Fprintf(env.Stdout, "Installed and started the user service (%s).\n", svc.File())
@@ -235,16 +244,8 @@ func pair(ctx context.Context, args []string, env Env) error {
 
 // agentPath is the agent command's absolute path as this shell finds it, so
 // the service finds it too; "" when it is not found.
-func agentPath(env Env) string {
-	c, err := AgentConfigFromEnv(os.Getenv)
-	if err != nil {
-		return ""
-	}
-	look := env.LookPath
-	if look == nil {
-		look = exec.LookPath
-	}
-	p, err := look(c.Command[0])
+func agentPath(s Settings) string {
+	p, err := s.env.lookPath(s.Agent.Command[0])
 	if err != nil {
 		return ""
 	}
@@ -259,11 +260,7 @@ func agentPath(env Env) string {
 func findBD(ctx context.Context, configured string, env Env) (path, version string, err error) {
 	path = configured
 	if path == "" {
-		look := env.LookPath
-		if look == nil {
-			look = exec.LookPath
-		}
-		if path, err = look("bd"); err != nil {
+		if path, err = env.lookPath("bd"); err != nil {
 			return "", "", errors.New("bd is not on PATH; install beads 1.3.0 or newer first")
 		}
 	}
@@ -280,27 +277,16 @@ func findBD(ctx context.Context, configured string, env Env) (path, version stri
 	return path, version, nil
 }
 
-// New builds a bridge from a config.
-func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
-	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
+// New builds a bridge from the settings.
+func New(s Settings, log *slog.Logger) (*Bridge, error) {
+	if err := s.Paired(); err != nil {
 		return nil, err
 	}
-	if cfg.Token == "" {
-		return nil, errors.New("no token is set; run `meat-mode bridge pair <url> <token>`")
+	if s.runErr != nil {
+		return nil, s.runErr
 	}
-	poll, err := pollOverride(os.Getenv("MEAT_MODE_BRIDGE_POLL"))
-	if err != nil {
-		return nil, err
-	}
-	agents, err := AgentConfigFromEnv(os.Getenv)
-	if err != nil {
-		return nil, err
-	}
-	look := env.LookPath
-	if look == nil {
-		look = exec.LookPath
-	}
-	if _, err := look(agents.Command[0]); err != nil {
+	env, cfg, agents := s.env, s.Config, s.Agent
+	if _, err := env.lookPath(agents.Command[0]); err != nil {
 		// A service written before the agent was installed has a PATH
 		// without it, and every ask would end as failed with no other hint.
 		log.Warn("the agent command is not on this bridge's PATH, so asks will fail; see \"Wake an agent on a task\" in docs/deploy.md",
@@ -319,10 +305,10 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		return nil, fmt.Errorf("open agent journal: %w", err)
 	}
 	return &Bridge{
-		Hub:      env.hub(cfg),
+		Hub:      s.Hub(),
 		Beads:    bd,
 		Journal:  j,
-		Roots:    cfg.ResolveRoots(env.Paths.Home),
+		Roots:    s.Roots,
 		Home:     env.Paths.Home,
 		Switches: cfg.Sync,
 		SaveSwitch: func(repo string, on bool) error {
@@ -336,7 +322,7 @@ func New(cfg Config, env Env, log *slog.Logger) (*Bridge, error) {
 		Runner:  runner,
 		Version: env.Version,
 		Log:     log,
-		Poll:    poll,
+		Poll:    s.Poll,
 	}, nil
 }
 
@@ -354,11 +340,11 @@ func pollOverride(v string) (time.Duration, error) {
 }
 
 func run(ctx context.Context, env Env) error {
-	cfg, err := LoadConfig(env.Paths.Config)
+	s, err := LoadSettings(env)
 	if err != nil {
 		return err
 	}
-	b, err := New(cfg, env, slog.New(slog.NewTextHandler(env.Stderr, nil)))
+	b, err := New(s, slog.New(slog.NewTextHandler(env.Stderr, nil)))
 	if err != nil {
 		return err
 	}
@@ -368,10 +354,11 @@ func run(ctx context.Context, env Env) error {
 
 func status(ctx context.Context, env Env) error {
 	out := env.Stdout
-	cfg, err := LoadConfig(env.Paths.Config)
+	s, err := LoadSettings(env)
 	if err != nil {
 		return err
 	}
+	cfg := s.Config
 	fmt.Fprintf(out, "Config:   %s\n", env.Paths.Config)
 	if cfg.HubURL == "" {
 		fmt.Fprintln(out, "Hub:      not paired; run `meat-mode bridge pair <url> <token>`")
@@ -389,42 +376,44 @@ func status(ctx context.Context, env Env) error {
 	} else {
 		fmt.Fprintf(out, "Service:  %s\n", svc.Status())
 	}
-	roots := cfg.ResolveRoots(env.Paths.Home)
-	fmt.Fprintf(out, "Roots:    %s\n", orNone(strings.Join(roots, ", ")))
-	repos := Discover(roots, env.Paths.Home, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	fmt.Fprintf(out, "Roots:    %s\n", orNone(strings.Join(s.Roots, ", ")))
+	repos := s.Repos()
 	fmt.Fprintf(out, "Repos:    %d found\n", len(repos))
 	for _, r := range repos {
-		if on, ok := cfg.Sync[r.Name]; ok {
-			r.Switch = &on
-		}
-		state := "synced"
-		switch {
-		case r.Switch != nil && *r.Switch:
-			state = "synced (switched on in Settings)"
-		case r.Switch != nil:
-			state = "not synced (switched off in Settings)"
-		case r.OptedIn:
-			state = "synced (meat-mode.sync: true in .beads/config.yaml)"
-		default:
-			state = "not synced (switch it on in Settings)"
-		}
-		fmt.Fprintf(out, "  %-24s %s\n  %-24s %s\n", r.Name, state, "", r.Dir)
+		fmt.Fprintf(out, "  %-24s %s\n  %-24s %s\n", r.Name, syncState(r), "", r.Dir)
 	}
 	if cfg.HubURL == "" {
 		return nil
 	}
-	if err := CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP); err != nil {
+	if err := s.Paired(); err != nil {
 		fmt.Fprintf(out, "Hub check: %v\n", err)
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if r, err := env.hub(cfg).Hello(ctx, api.Hello{Version: env.Version, BdVersion: bdVersion}); err != nil {
+	if r, err := s.Hub().Hello(ctx, api.Hello{Version: env.Version, BdVersion: bdVersion}); err != nil {
 		fmt.Fprintf(out, "Hub check: unreachable: %v\n", err)
 	} else {
 		fmt.Fprintf(out, "Hub check: reachable, this bridge is %q\n", r.Bridge)
 	}
 	return nil
+}
+
+// syncState says whether r is synced and which switch or file decides it.
+func syncState(r Repo) string {
+	why := "switch it on in Settings"
+	switch {
+	case r.Switch != nil && *r.Switch:
+		why = "switched on in Settings"
+	case r.Switch != nil:
+		why = "switched off in Settings"
+	case r.OptedIn:
+		why = "meat-mode.sync: true in .beads/config.yaml"
+	}
+	if r.Synced() {
+		return "synced (" + why + ")"
+	}
+	return "not synced (" + why + ")"
 }
 
 func orNone(s string) string {

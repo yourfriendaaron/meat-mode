@@ -215,26 +215,7 @@ func (r *AgentRunner) save() error {
 	if err != nil {
 		return err
 	}
-	tmp := r.path() + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(append(b, '\n')); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, r.path()); err != nil {
-		return err
-	}
-	return syncDir(r.Dir)
+	return writeFileAtomic(r.path(), append(b, '\n'), 0o600)
 }
 
 // saveOrLog saves and logs a failure. Callers hold mu.

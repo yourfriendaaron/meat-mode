@@ -144,18 +144,18 @@ func TestPairSavesTrustedNetworks(t *testing.T) {
 }
 
 func TestRunReadsTrustedNetworksFromEnvThenFile(t *testing.T) {
-	path := t.TempDir() + "/bridge.json"
-	must(t, Config{HubURL: "https://hub.example.com", Token: "t", TrustedNetworks: "198.51.100.0/24"}.Save(path))
-	c, err := LoadConfig(path)
-	if err != nil || c.TrustedNetworks != "198.51.100.0/24" {
-		t.Fatalf("saved value = %+v, %v", c, err)
+	env := Env{Paths: Paths{Config: t.TempDir() + "/bridge.json"}}
+	must(t, Config{HubURL: "https://hub.example.com", Token: "t", TrustedNetworks: "198.51.100.0/24"}.Save(env.Paths.Config))
+	s, err := LoadSettings(env)
+	if err != nil || s.Config.TrustedNetworks != "198.51.100.0/24" {
+		t.Fatalf("saved value = %+v, %v", s.Config, err)
 	}
 	t.Setenv(netguard.EnvTrusted, "203.0.113.0/24")
-	if c, _ = LoadConfig(path); c.TrustedNetworks != "203.0.113.0/24" {
-		t.Errorf("env value = %q, want it to win", c.TrustedNetworks)
+	if s, _ = LoadSettings(env); s.Config.TrustedNetworks != "203.0.113.0/24" || s.Saved.TrustedNetworks != "198.51.100.0/24" {
+		t.Errorf("env value = %q, saved %q; want the env to win and the saved value kept", s.Config.TrustedNetworks, s.Saved.TrustedNetworks)
 	}
 	t.Setenv(netguard.EnvTrusted, "0.0.0.0/0")
-	if _, err = LoadConfig(path); err == nil {
+	if _, err = LoadSettings(env); err == nil {
 		t.Error("a trusted network wider than /16 was accepted")
 	}
 }

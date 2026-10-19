@@ -80,36 +80,29 @@ func stateDir(goos, home, xdg string) string {
 	return filepath.Join(home, ".local", "state", "meat-mode")
 }
 
-// LoadConfig reads the config file and applies the MEAT_MODE_HUB_URL,
-// MEAT_MODE_ALLOW_INSECURE_HTTP and MEAT_MODE_TRUSTED_NETWORKS overrides. A missing file gives an empty
-// config. It logs a warning when the file, which holds the token, is
-// readable by anyone but its owner.
-func LoadConfig(path string) (Config, error) {
-	c, err := readConfigFile(path)
-	if err != nil {
-		return c, err
-	}
-	if v := os.Getenv("MEAT_MODE_HUB_URL"); v != "" {
+// applyOverrides returns c with the MEAT_MODE_HUB_URL,
+// MEAT_MODE_ALLOW_INSECURE_HTTP and MEAT_MODE_TRUSTED_NETWORKS overrides
+// from getenv applied.
+func applyOverrides(c Config, getenv func(string) string) (Config, error) {
+	if v := getenv("MEAT_MODE_HUB_URL"); v != "" {
 		c.HubURL = v
 	}
-	if v := os.Getenv("MEAT_MODE_ALLOW_INSECURE_HTTP"); v != "" {
+	if v := getenv("MEAT_MODE_ALLOW_INSECURE_HTTP"); v != "" {
 		on, err := strconv.ParseBool(v)
 		if err != nil {
 			return c, fmt.Errorf("MEAT_MODE_ALLOW_INSECURE_HTTP must be true or false, not %q", v)
 		}
 		c.AllowInsecureHTTP = on
 	}
-	if v := os.Getenv(netguard.EnvTrusted); v != "" {
+	if v := getenv(netguard.EnvTrusted); v != "" {
 		c.TrustedNetworks = v
-	}
-	if _, err := c.Allowed(); err != nil {
-		return c, err
 	}
 	return c, nil
 }
 
 // readConfigFile reads the config file as saved, without the environment
-// overrides. A missing file gives an empty config.
+// overrides. A missing file gives an empty config. It logs a warning when
+// the file, which holds the token, is readable by anyone but its owner.
 func readConfigFile(path string) (Config, error) {
 	var c Config
 	b, err := os.ReadFile(path)
@@ -191,14 +184,7 @@ func (c Config) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return writeFileAtomic(path, append(b, '\n'), 0o600)
 }
 
 // ResolveRoots returns the scan roots with ~ expanded. With no roots set it

@@ -72,7 +72,7 @@ func TestPair(t *testing.T) {
 	if fi.Mode().Perm() != 0o600 {
 		t.Errorf("config mode %v", fi.Mode().Perm())
 	}
-	cfg, err := LoadConfig(env.Paths.Config)
+	cfg, err := readConfigFile(env.Paths.Config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestPairMakesRootsAbsolute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	cfg, err := LoadConfig(env.Paths.Config)
+	cfg, err := readConfigFile(env.Paths.Config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestPairTokenSources(t *testing.T) {
 			if err := Main(context.Background(), append([]string{"pair"}, c.args...), env); err != nil {
 				t.Fatalf("%v\n%s", err, out)
 			}
-			cfg, err := LoadConfig(env.Paths.Config)
+			cfg, err := readConfigFile(env.Paths.Config)
 			if err != nil || cfg.Token != token {
 				t.Fatalf("config token = %q, %v", cfg.Token, err)
 			}
@@ -174,18 +174,19 @@ func TestPairTokenSources(t *testing.T) {
 	})
 }
 
-// TestLoadConfigWarnsOnBroadMode: a config others can read leaks the token.
-func TestLoadConfigWarnsOnBroadMode(t *testing.T) {
+// TestSettingsWarnOnBroadMode: a config others can read leaks the token.
+func TestSettingsWarnOnBroadMode(t *testing.T) {
 	var logs bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	path := filepath.Join(t.TempDir(), "bridge.json")
+	env := Env{Paths: Paths{Config: path}}
 	if err := (Config{HubURL: "https://meat-mode.example.com", Token: token}).Save(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadConfig(path); err != nil {
+	if _, err := LoadSettings(env); err != nil {
 		t.Fatal(err)
 	}
 	if logs.Len() != 0 {
@@ -194,9 +195,9 @@ func TestLoadConfigWarnsOnBroadMode(t *testing.T) {
 	if err := os.Chmod(path, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := LoadConfig(path)
-	if err != nil || cfg.Token != token {
-		t.Fatalf("LoadConfig = %+v, %v; want it to load anyway", cfg, err)
+	s, err := LoadSettings(env)
+	if err != nil || s.Config.Token != token {
+		t.Fatalf("LoadSettings = %+v, %v; want it to load anyway", s.Config, err)
 	}
 	if !strings.Contains(logs.String(), "chmod 600") {
 		t.Errorf("no warning for a 0644 config: %q", logs.String())
@@ -251,8 +252,11 @@ func TestRunRefusesPlainHTTP(t *testing.T) {
 		t.Fatalf("run = %v", err)
 	}
 	t.Setenv("MEAT_MODE_ALLOW_INSECURE_HTTP", "1")
-	cfg, _ := LoadConfig(env.Paths.Config)
-	b, err := New(cfg, env, quiet)
+	s, err := LoadSettings(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := New(s, quiet)
 	if err != nil {
 		t.Fatalf("with the opt-in: %v", err)
 	}
@@ -261,7 +265,7 @@ func TestRunRefusesPlainHTTP(t *testing.T) {
 
 func TestNewWarnsWhenTheAgentIsNotOnPATH(t *testing.T) {
 	env, _, _ := testEnv(t, fakeBD(t, "1.3.1"))
-	cfg := Config{HubURL: "https://meat-mode.example.com", Token: token}
+	must(t, Config{HubURL: "https://meat-mode.example.com", Token: token}.Save(env.Paths.Config))
 	for _, found := range []bool{true, false} {
 		env.LookPath = func(name string) (string, error) {
 			if name == "claude" && !found {
@@ -270,7 +274,11 @@ func TestNewWarnsWhenTheAgentIsNotOnPATH(t *testing.T) {
 			return "/usr/bin/" + name, nil
 		}
 		var logs bytes.Buffer
-		b, err := New(cfg, env, slog.New(slog.NewTextHandler(&logs, nil)))
+		s, err := LoadSettings(env)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := New(s, slog.New(slog.NewTextHandler(&logs, nil)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -303,18 +311,7 @@ func TestStatus(t *testing.T) {
 	}
 }
 
-func TestPollOverride(t *testing.T) {
-	if d, err := pollOverride(""); err != nil || d != 0 {
-		t.Fatalf("empty: got %v, %v", d, err)
-	}
-	if d, err := pollOverride("200ms"); err != nil || d != 200*time.Millisecond {
-		t.Fatalf("200ms: got %v, %v", d, err)
-	}
-	for _, bad := range []string{"fast", "0s", "-1s"} {
-		if _, err := pollOverride(bad); err == nil {
-			t.Errorf("%q: want an error", bad)
-		}
-	}
+func TestPollIntervals(t *testing.T) {
 	b := &Bridge{}
 	if b.actionEvery() != ActionEvery || b.syncEvery() != SyncEvery || b.scanEvery() != ScanEvery {
 		t.Error("zero Poll should keep the defaults")
