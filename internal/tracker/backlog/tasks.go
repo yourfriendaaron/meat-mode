@@ -355,7 +355,7 @@ func toIssue(t taskJSON, statuses []string) tracker.Issue {
 		}
 	}
 	for _, c := range t.Comments {
-		cm := tracker.Comment{ID: strconv.Itoa(c.Index), Author: deref(c.Author), Text: c.Body}
+		cm := tracker.Comment{ID: strconv.Itoa(c.Index), Author: deref(c.Author), Text: readRule(c.Body)}
 		if at := parseTime(c.CreatedAt); at != nil {
 			cm.CreatedAt = *at
 		}

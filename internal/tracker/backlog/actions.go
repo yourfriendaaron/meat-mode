@@ -67,20 +67,29 @@ func (b *Tracker) openStatus(ctx context.Context, dir string, statuses []string)
 }
 
 // ruleLine is a line of only ---, which Backlog.md reserves to separate
-// comments and refuses in one.
-var ruleLine = regexp.MustCompile(`(?m)^([ \t]*)---[ \t]*$`)
+// comments and refuses in one. spacedRule is the - - - written in its place.
+var (
+	ruleLine   = regexp.MustCompile(`(?m)^([ \t]*)---([ \t]*)$`)
+	spacedRule = regexp.MustCompile(`(?m)^([ \t]*)- - -([ \t]*)$`)
+)
 
 // AddComment implements tracker.Tracker with a comment that records author.
 // A line of only --- becomes - - -, the same rule in Markdown, since
-// Backlog.md refuses the first.
+// Backlog.md refuses the first; readRule turns it back, so the note reads as
+// sent and a replay finds it already written.
 func (b *Tracker) AddComment(ctx context.Context, dir, id, author, text string) error {
 	if err := checkID(id); err != nil {
 		return err
 	}
-	args := []string{"task", "edit", "--comment=" + ruleLine.ReplaceAllString(text, "$1- - -")}
+	args := []string{"task", "edit", "--comment=" + ruleLine.ReplaceAllString(text, "$1- - -$2")}
 	if author != "" {
 		args = append(args, "--comment-author="+author)
 	}
 	_, err := b.run(ctx, dir, append(args, "--", id)...)
 	return err
+}
+
+// readRule undoes AddComment's - - - for a comment read back.
+func readRule(text string) string {
+	return spacedRule.ReplaceAllString(text, "$1---$2")
 }

@@ -129,7 +129,8 @@ func Run(t *testing.T, name string, setup Setup) {
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Pick up the parcel", Actor: "alex"})
 		before := listed(t, tr, dir, id).Version
-		text := "It is at the post office.\n\nBring an ID."
+		// The rule line is one Backlog.md reserves; it must still read back.
+		text := "It is at the post office.\n\n---\n\nBring an ID."
 		if !check(t, tr, api.KindNote, tr.AddComment(ctx, dir, id, "sam-app", text)) {
 			return
 		}

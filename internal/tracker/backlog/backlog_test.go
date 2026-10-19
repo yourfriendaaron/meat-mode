@@ -185,7 +185,7 @@ func TestNoteWithRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := tr.Show(ctx, dir, id)
-	if err != nil || len(got.Comments) != 1 || got.Comments[0].Text != "Before\n- - -\nAfter" {
+	if err != nil || len(got.Comments) != 1 || got.Comments[0].Text != "Before\n---\nAfter" {
 		t.Fatalf("Show = %+v, %v", got.Comments, err)
 	}
 }
