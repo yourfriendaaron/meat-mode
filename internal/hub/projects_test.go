@@ -62,3 +62,43 @@ func TestHelloKeepsTrackerTitleAndRaise(t *testing.T) {
 		t.Fatalf("bridges %+v", bs)
 	}
 }
+
+// An agent adds a sub-task only under an open top-level item its machine
+// added to the same list; any other parent is one it cannot see.
+func TestAgentAddsSubtaskOverHTTP(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	w := h.do("POST", "/api/bridges", map[string]string{"name": "desk"}, "")
+	h.expect(w, http.StatusCreated)
+	other := decode[api.NewBridgeReply](t, w).Token
+	add := func(token, project string, todo api.PersonalTodo, want int) string {
+		t.Helper()
+		q := ""
+		if project != "" {
+			q = "?project=" + project
+		}
+		w := h.do("POST", "/bridge/v1/personal"+q, todo, token)
+		h.expect(w, want)
+		if want != http.StatusCreated {
+			return ""
+		}
+		return decode[api.PersonalTodoReply](t, w).ID
+	}
+	trip := add(h.token, "", api.PersonalTodo{Title: "Plan the trip"}, http.StatusCreated)
+	tickets := add(h.token, "", api.PersonalTodo{Title: "Book the tickets", Parent: trip}, http.StatusCreated)
+	it := decode[api.Item](t, h.do("GET", "/bridge/v1/personal/"+tickets, nil, h.token))
+	if it.Parent != trip {
+		t.Fatalf("sub-task %+v", it)
+	}
+
+	theirs := add(other, "", api.PersonalTodo{Title: "Pack the bags"}, http.StatusCreated)
+	garden := add(h.token, "projects/garden", api.PersonalTodo{Title: "Plant the beans"}, http.StatusCreated)
+	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: theirs}, http.StatusNotFound)
+	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: garden}, http.StatusNotFound)
+	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: "mm-404"}, http.StatusNotFound)
+	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: tickets}, http.StatusBadRequest)
+	h.expect(h.do("POST", "/bridge/v1/personal/"+tickets+"/actions", api.PersonalChange{Kind: api.KindDone}, h.token), http.StatusCreated)
+	h.expect(h.do("POST", "/bridge/v1/personal/"+trip+"/actions", api.PersonalChange{Kind: api.KindDone}, h.token), http.StatusCreated)
+	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: trip}, http.StatusBadRequest)
+	add(h.token, "projects/garden", api.PersonalTodo{Title: "Water the beans", Parent: garden}, http.StatusCreated)
+}
