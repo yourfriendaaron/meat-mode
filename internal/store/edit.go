@@ -290,18 +290,34 @@ func agentAuthor(name, fallback string) (string, error) {
 	return author, nil
 }
 
-// recordOwner records that bridge's token added the personal item id. A
-// second record for the same item changes nothing.
-func recordOwner(tx *sql.Tx, id, bridge string) error {
-	_, err := tx.Exec(`INSERT OR IGNORE INTO personal_owners (item_id, bridge) VALUES (?, ?)`, id, bridge)
+// recordOwner records that bridge's token added item id to the hub's list
+// repo. A second record for the same item changes nothing.
+func recordOwner(tx *sql.Tx, repo, id, bridge string) error {
+	_, err := tx.Exec(`INSERT OR IGNORE INTO personal_owners (repo, item_id, bridge) VALUES (?, ?, ?)`, repo, id, bridge)
 	return err
 }
 
-// ownedPersonal returns the personal item id when bridge's token added it
-// and the app still shows it. Every other case is the same not-found
-// error, so an agent cannot learn which ids exist.
-func (s *Store) ownedPersonal(bridge, id string) (api.Item, error) {
-	gone := notFoundf("no personal to-do %q added from this machine", id)
+// ProjectRepo returns the hub list an agent's post names with project: the
+// personal list when it is empty, else the project of that name. A
+// project's name is a repo name, and PersonalRepo is kept for the personal
+// list.
+func ProjectRepo(project string) (string, error) {
+	switch {
+	case project == "":
+		return PersonalRepo, nil
+	case strings.EqualFold(project, PersonalRepo):
+		return "", invalidf("the project name %q is kept for the personal list; leave the project out to use it", project)
+	case !ValidRepoName(project):
+		return "", invalidf("project must be a repo name, such as projects/garden")
+	}
+	return project, nil
+}
+
+// ownedPersonal returns item id of the hub's list repo when bridge's token
+// added it and the app still shows it. Every other case is the same
+// not-found error, so an agent cannot learn which ids exist.
+func (s *Store) ownedPersonal(bridge, repo, id string) (api.Item, error) {
+	gone := notFoundf("no to-do %q added from this machine", id)
 	if !validSegment(id) {
 		return api.Item{}, gone
 	}
@@ -311,31 +327,39 @@ func (s *Store) ownedPersonal(bridge, id string) (api.Item, error) {
 	}
 	defer tx.Rollback()
 	var owner string
-	err = tx.QueryRow(`SELECT bridge FROM personal_owners WHERE item_id = ?`, id).Scan(&owner)
+	err = tx.QueryRow(`SELECT bridge FROM personal_owners WHERE repo = ? AND item_id = ?`, repo, id).Scan(&owner)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && owner != bridge) {
 		return api.Item{}, gone
 	}
 	if err != nil {
 		return api.Item{}, err
 	}
-	it, err := hubItem(tx, id)
+	it, err := hubItem(tx, repo, id)
 	if errors.Is(err, ErrNotFound) || (err == nil && hiddenClosed(it, s.now())) {
 		return api.Item{}, gone
 	}
 	return it, err
 }
 
-// PersonalItem returns a personal to-do that bridge's token added, for its
-// agents to read.
-func (s *Store) PersonalItem(bridge, id string) (api.Item, error) {
-	return s.ownedPersonal(bridge, id)
+// PersonalItem returns a to-do that bridge's token added to the personal
+// list, or to the project when it is not empty, for its agents to read.
+func (s *Store) PersonalItem(bridge, project, id string) (api.Item, error) {
+	repo, err := ProjectRepo(project)
+	if err != nil {
+		return api.Item{}, err
+	}
+	return s.ownedPersonal(bridge, repo, id)
 }
 
-// ChangePersonal applies an agent's change to a personal to-do its
-// machine's token added. The author is c.Author, or the machine's name
-// when it is empty. A repeated c.ID returns the action it made and changes
-// nothing.
-func (s *Store) ChangePersonal(bridge, id string, c api.PersonalChange) (api.Action, bool, error) {
+// ChangePersonal applies an agent's change to a to-do its machine's token
+// added to the personal list, or to the project when it is not empty. The
+// author is c.Author, or the machine's name when it is empty. A repeated
+// c.ID returns the action it made and changes nothing.
+func (s *Store) ChangePersonal(bridge, project, id string, c api.PersonalChange) (api.Action, bool, error) {
+	repo, err := ProjectRepo(project)
+	if err != nil {
+		return api.Action{}, false, err
+	}
 	switch c.Kind {
 	case api.KindEdit, api.KindDone, api.KindReopen, api.KindDismiss, api.KindNote:
 	case "":
@@ -347,18 +371,18 @@ func (s *Store) ChangePersonal(bridge, id string, c api.PersonalChange) (api.Act
 	if err != nil {
 		return api.Action{}, false, err
 	}
-	if _, err := s.ownedPersonal(bridge, id); err != nil {
+	if _, err := s.ownedPersonal(bridge, repo, id); err != nil {
 		return api.Action{}, false, err
 	}
 	if c.ID == "" {
 		c.ID = uuid.NewString()
 	}
 	a, created, err := s.AppendAction(api.NewAction{ID: c.ID, Kind: c.Kind,
-		Key: ItemKey(HubBridge, PersonalRepo, id), Payload: c.Payload}, author)
+		Key: ItemKey(HubBridge, repo, id), Payload: c.Payload}, author)
 	if err != nil {
 		return a, false, err
 	}
-	if !created && (a.Kind != c.Kind || !isHubRepo(a.Bridge, a.Repo) || a.BeadID != id) {
+	if !created && (a.Kind != c.Kind || !onHub(a.Bridge) || a.Repo != repo || a.BeadID != id) {
 		return api.Action{}, false, conflictf("action %q is not a %s of %q", c.ID, c.Kind, id)
 	}
 	return a, created, nil

@@ -2,6 +2,8 @@ package bridge
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -166,5 +168,78 @@ func TestAddWithDueOnAHubWithoutSettings(t *testing.T) {
 	ps := hub.Personals()
 	if want := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC); len(ps) != 1 || ps[0].Due == nil || !ps[0].Due.Equal(want) {
 		t.Fatalf("got %+v, want one due %v", ps, want)
+	}
+}
+
+// --project sends the add, and later changes, to a project; "." names the
+// current folder's repo as the bridge names repos, from any worktree of it.
+func TestAddToProject(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	env, _, out := testEnv(t, "")
+	if err := (Config{HubURL: hub.URL, Token: token}).Save(env.Paths.Config); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	repo := filepath.Join(env.Paths.Home, "projects", "garden")
+	sub := filepath.Join(repo, "docs")
+	wt := filepath.Join(repo, ".worktrees", "beds")
+	for _, d := range []string{filepath.Join(repo, ".git", "worktrees", "beds"), sub, wt} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: "+filepath.Join(repo, ".git", "worktrees", "beds")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Add(ctx, []string{"Approve the footer text", "--project", "projects/shed"}, env); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{sub, wt} {
+		env.Getwd = func() (string, error) { return dir, nil }
+		if err := Add(ctx, []string{"Pick a colour", "--project", "."}, env); err != nil {
+			t.Fatalf("from %s: %v", dir, err)
+		}
+	}
+	ps := hub.Personals()
+	if len(ps) != 3 || ps[0].Project != "projects/shed" || ps[1].Project != "projects/garden" || ps[2].Project != "projects/garden" {
+		t.Fatalf("todos = %+v", ps)
+	}
+
+	// The change goes to the project the to-do is in, by flag or by key.
+	out.Reset()
+	if err := Done(ctx, []string{"mm-2", "--project", "."}, env); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if err := Reopen(ctx, []string{"hub/projects/shed/mm-1"}, env); err != nil {
+		t.Fatal(err)
+	}
+	if err := Edit(ctx, []string{"mm-1", "--project", "projects/shed", "--title", "Approve the header text"}, env); err != nil {
+		t.Fatal(err)
+	}
+	cs := hub.Changes()
+	if len(cs) != 3 || cs[0].Project != "projects/garden" || cs[0].Item != "mm-2" ||
+		cs[1].Project != "projects/shed" || cs[1].Item != "mm-1" || cs[2].Project != "projects/shed" {
+		t.Fatalf("changes = %+v", cs)
+	}
+	// Without --project the to-do is looked for on the personal list.
+	if err := Done(ctx, []string{"mm-2"}, env); err == nil || !strings.Contains(err.Error(), "this machine added") {
+		t.Errorf("done without the project: %v", err)
+	}
+	if err := Done(ctx, []string{"hub/projects/shed/mm-1", "--project", "."}, env); err == nil {
+		t.Error("a key in another project than --project was taken")
+	}
+
+	// Outside a Git repo, and with a name the hub refuses, nothing is sent.
+	env.Getwd = func() (string, error) { return env.Paths.Home, nil }
+	if err := Add(ctx, []string{"Water the plants", "--project", "."}, env); err == nil || !strings.Contains(err.Error(), "Git repo") {
+		t.Errorf("outside a repo: %v", err)
+	}
+	if err := Add(ctx, []string{"Water the plants", "--project", "../x"}, env); err == nil {
+		t.Error("a bad project name was taken")
+	}
+	if len(hub.Personals()) != 3 {
+		t.Error("a refused add reached the hub")
 	}
 }

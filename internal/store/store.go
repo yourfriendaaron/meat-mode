@@ -152,7 +152,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 10
+const schemaVersion = 11
 
 var migrations = []string{
 	// 1: initial schema.
@@ -298,6 +298,20 @@ UPDATE sessions SET expires_at = MIN(expires_at, renewed_at + 1209600, created_a
 ALTER TABLE repos ADD COLUMN tracker TEXT NOT NULL DEFAULT '';
 ALTER TABLE repos ADD COLUMN actions TEXT;
 ALTER TABLE bridges ADD COLUMN trackers TEXT NOT NULL DEFAULT '';
+`,
+	// 11: projects, more lists the hub keeps (personal.go). personal_owners
+	// gains the list of each item an agent added, as an id is unique only
+	// within one list.
+	`
+CREATE TABLE hub_owners (
+	repo    TEXT NOT NULL,
+	item_id TEXT NOT NULL,
+	bridge  TEXT NOT NULL,
+	PRIMARY KEY (repo, item_id)
+);
+INSERT INTO hub_owners (repo, item_id, bridge) SELECT 'personal', item_id, bridge FROM personal_owners;
+DROP TABLE personal_owners;
+ALTER TABLE hub_owners RENAME TO personal_owners;
 `,
 }
 

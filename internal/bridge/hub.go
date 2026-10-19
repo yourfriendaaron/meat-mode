@@ -204,25 +204,37 @@ func (h *Hub) Result(ctx context.Context, id string, r api.ActionResult) error {
 	return h.do(ctx, http.MethodPost, "/bridge/v1/actions/"+url.PathEscape(id)+"/result", r, nil)
 }
 
-// AddPersonal adds a to-do to the hub's personal list.
-func (h *Hub) AddPersonal(ctx context.Context, t api.PersonalTodo) (api.PersonalTodoReply, error) {
+// AddPersonal adds a to-do to the hub's personal list, or to project when
+// it is not empty.
+func (h *Hub) AddPersonal(ctx context.Context, project string, t api.PersonalTodo) (api.PersonalTodoReply, error) {
 	var r api.PersonalTodoReply
-	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal", t, &r)
+	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal"+projectQuery(project), t, &r)
 	return r, err
 }
 
-// PersonalItem reads a personal to-do this machine's token added.
-func (h *Hub) PersonalItem(ctx context.Context, id string) (api.Item, error) {
+// PersonalItem reads a to-do this machine's token added to the personal
+// list or project.
+func (h *Hub) PersonalItem(ctx context.Context, project, id string) (api.Item, error) {
 	var it api.Item
-	err := h.do(ctx, http.MethodGet, "/bridge/v1/personal/"+url.PathEscape(id), nil, &it)
+	err := h.do(ctx, http.MethodGet, "/bridge/v1/personal/"+url.PathEscape(id)+projectQuery(project), nil, &it)
 	return it, err
 }
 
-// ChangePersonal changes a personal to-do this machine's token added.
-func (h *Hub) ChangePersonal(ctx context.Context, id string, c api.PersonalChange) (api.Action, error) {
+// ChangePersonal changes a to-do this machine's token added to the
+// personal list or project.
+func (h *Hub) ChangePersonal(ctx context.Context, project, id string, c api.PersonalChange) (api.Action, error) {
 	var a api.Action
-	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal/"+url.PathEscape(id)+"/actions", c, &a)
+	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal/"+url.PathEscape(id)+"/actions"+projectQuery(project), c, &a)
 	return a, err
+}
+
+// projectQuery is the query that names a project; none for the personal
+// list.
+func projectQuery(project string) string {
+	if project == "" {
+		return ""
+	}
+	return "?" + url.Values{"project": {project}}.Encode()
 }
 
 // PutRuns replaces this bridge's run list.

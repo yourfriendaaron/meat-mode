@@ -312,7 +312,7 @@ The feed works only for calendar apps on your own devices, such as Apple Calenda
 
 ## Let agents add to your personal list
 
-An agent on a paired machine puts a to-do on your personal list with one command. It uses the hub address and token in the bridge's config, so it needs no token of its own and works whether or not the bridge service is running:
+An agent on a paired machine puts a to-do on your personal list, or on a repo's project (see [Projects](#projects-for-repos-with-no-tracker)), with one command. It uses the hub address and token in the bridge's config, so it needs no token of its own and works whether or not the bridge service is running:
 
 ```sh
 meat-mode add "Renew the library card" --due 2026-03-02 --note "It expires on Friday." --author planner
@@ -339,9 +339,21 @@ meat-mode reopen mm-12
 - Each takes `--author` and `--id` as `add` does, and prints the to-do's id.
 - A to-do you added in the app, or one another machine added, is not the agent's to change: the command says the hub has no such to-do from this machine. A closed to-do can be changed for the 7 days the app still shows it.
 
+### Projects, for repos with no tracker
+
+A repo whose agents use no task tracker can still raise tasks for you: each such repo gets a project, a list the hub keeps for it. `--project` puts a to-do there instead of on your personal list, and `--project .` names the project after the Git repo the command runs in, the way the bridge names repos (its folder's path from your home folder, such as `projects/garden`; a worktree counts as its main checkout):
+
+```sh
+cd ~/projects/garden
+meat-mode add "Approve the footer text" --project . --note "What is needed, why, and where to find it." --author planner
+meat-mode done mm-14 --project .
+```
+
+The first add makes the project, and it shows in the app as its own list, beside your personal list and the repos your machines sync, and in quick add. Its to-dos work like personal ones: you can edit them, make them repeat, add notes and checklists, and they come to the calendar feed. Agents cannot be asked to work on them. `edit`, `done` and `reopen` take `--project` too, and an agent changes only what its own machine added there. A project is named like a repo (`personal` is kept for the personal list). There is nothing to delete: a project leaves the app once nothing in it is open and nothing closed in the last 7 days.
+
 The name set in the app (or `MEAT_MODE_USER` until you set one) is the name your notes are signed with, as `<name>-app`, so agents can tell your replies from their own.
 
-To tell your agents about all this, copy the text from the setup wizard's **Tell your agents** step, or from **Settings**, **Instructions for agents**, into the instruction file they read on that machine, such as `AGENTS.md` or `CLAUDE.md`. It covers raising a task for you with `bd create … -l human` and adding to your list with `meat-mode add`, names the machine, and holds no token or address.
+To tell your agents about all this, copy the text from the setup wizard's **Tell your agents** step, or from **Settings**, **Instructions for agents**, into the instruction file they read on that machine, such as `AGENTS.md` or `CLAUDE.md`. It covers raising a task for you with the command of each tracker the machine runs (such as `bd create … -l human`), or with `meat-mode add --project .` in a repo with no tracker, and adding to your list with `meat-mode add`, names the machine, and holds no token or address. Until the machine's bridge has connected and said which trackers it runs, the text uses beads.
 
 The fields and the HTTP calls behind these commands are in [api.md](api.md#agents-adding-to-the-personal-list). Revoking the machine in Settings takes its agents' access back too.
 

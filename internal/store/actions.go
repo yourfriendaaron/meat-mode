@@ -72,7 +72,7 @@ func (s *Store) Action(id string) (api.Action, error) {
 }
 
 // AppendAction validates na and appends it to the log as pending, routed to
-// the bridge that owns its repo. An action on the personal list is applied
+// the bridge that owns its repo. An action on a list the hub keeps is applied
 // at once and logged as applied. If an action with the same id exists, it
 // returns that one unchanged and created is false.
 func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, created bool, err error) {
@@ -198,8 +198,8 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
 			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
 		}
-		if a.Payload.Repeat != nil && !isHubRepo(na.Bridge, na.Repo) {
-			return a, false, invalidf("only the personal list takes a repeat")
+		if a.Payload.Repeat != nil && !onHub(na.Bridge) {
+			return a, false, invalidf("only the personal list and projects take a repeat")
 		}
 		// A bridge's own personal repo only feeds the personal list.
 		var optedIn bool
@@ -222,9 +222,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 			}
 		}
 		switch {
-		case na.Kind == api.KindSync && isHubRepo(na.Bridge, na.Repo):
-			return a, false, invalidf("the personal list is kept on the hub and always shows")
-		case na.Kind == api.KindAgents && isHubRepo(na.Bridge, na.Repo):
+		case na.Kind == api.KindSync && onHub(na.Bridge):
+			return a, false, invalidf("the personal list and projects are kept on the hub and have no sync switch")
+		case na.Kind == api.KindAgents && onHub(na.Bridge):
 			return a, false, invalidf(noPersonalAgents)
 		case na.Kind == api.KindAgents && *a.Payload.On:
 			// A hub that is taken over must not widen what agents may do.
@@ -232,7 +232,7 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		case na.Kind == api.KindAdd && !optedIn:
 			return a, false, invalidf("repo %q is not synced with Meat Mode", na.Repo)
 		case na.Kind == api.KindAdd && a.Payload.Ask:
-			if isHubRepo(na.Bridge, na.Repo) {
+			if onHub(na.Bridge) {
 				return a, false, invalidf(noPersonalAgents)
 			}
 			if err := checkAgentsAllowed(tx, na.Bridge, na.Repo); err != nil {
@@ -250,10 +250,10 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		if !ok {
 			return a, false, invalidf("%s needs the item key", na.Kind)
 		}
-		if personalOnly(na.Kind) && !isHubRepo(b, r) {
+		if personalOnly(na.Kind) && !onHub(b) {
 			return a, false, invalidf("an agent's item is changed by its agent; to ask for a change, add a note")
 		}
-		if na.Kind == api.KindAsk && isHubRepo(b, r) {
+		if na.Kind == api.KindAsk && onHub(b) {
 			return a, false, invalidf(noPersonalAgents)
 		}
 		if strings.HasPrefix(id, provisionalPrefix) {
@@ -298,7 +298,7 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		return a, false, err
 	}
 	var newItems []string
-	if isHubRepo(a.Bridge, a.Repo) {
+	if onHub(a.Bridge) {
 		if newItems, err = s.applyHub(tx, &a); err != nil {
 			return a, false, err
 		}
@@ -312,14 +312,14 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		return a, false, err
 	}
 	s.emit(Change{Kind: "actions", Bridge: a.Bridge, Repo: a.Repo})
-	if isHubRepo(a.Bridge, a.Repo) {
+	if onHub(a.Bridge) {
 		s.emit(Change{Kind: "items", Bridge: a.Bridge, Repo: a.Repo, NewItems: newItems})
 	}
 	return a, true, nil
 }
 
-// noPersonalAgents refuses an agent on the personal list.
-const noPersonalAgents = "the personal list has no agents"
+// noPersonalAgents refuses an agent on a list the hub keeps.
+const noPersonalAgents = "the personal list and projects have no agents"
 
 // checkAgentsAllowed refuses an ask in a repo whose agents switch is off.
 func checkAgentsAllowed(tx *sql.Tx, bridge, repo string) error {

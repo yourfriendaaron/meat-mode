@@ -170,7 +170,25 @@ func (s *Store) State() (api.State, error) {
 		}
 		fold(&st.Items[i], a, s.isApplying(a))
 	}
+	st.Repos = withoutEmptyProjects(st.Repos, st.Items)
 	return st, nil
+}
+
+// withoutEmptyProjects leaves out the projects with no item to show: none
+// open and none closed recently enough to stay in the app.
+func withoutEmptyProjects(repos []api.Repo, items []api.Item) []api.Repo {
+	used := map[string]bool{}
+	for _, it := range items {
+		used[it.Bridge+"/"+it.Repo] = true
+	}
+	out := repos[:0]
+	for _, r := range repos {
+		if onHub(r.Bridge) && r.Name != PersonalRepo && !used[r.Bridge+"/"+r.Name] {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // provisional is the item an add shows until the bridge reports the bead.

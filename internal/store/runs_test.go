@@ -45,7 +45,7 @@ func repoOf(t *testing.T, st api.State, name string) api.Repo {
 func TestAskRefusals(t *testing.T) {
 	s, _ := open(t)
 	seed(t, s)
-	hubKey, _, err := s.AddPersonal(api.PersonalTodo{ID: id6, Title: "Water the plants"}, "laptop")
+	hubKey, _, err := s.AddPersonal(api.PersonalTodo{ID: id6, Title: "Water the plants"}, "laptop", "")
 	must(t, err)
 	garden := ItemKey("laptop", "garden", "gd-1")
 	on := true
@@ -332,7 +332,7 @@ func TestReplaceRuns(t *testing.T) {
 		t.Errorf("gd-9 run %+v", r)
 	}
 	// The personal list never shows a run, even one a bridge names.
-	hubKey, _, err := s.AddPersonal(api.PersonalTodo{ID: id6, Title: "Call Sam"}, "laptop")
+	hubKey, _, err := s.AddPersonal(api.PersonalTodo{ID: id6, Title: "Call Sam"}, "laptop", "")
 	must(t, err)
 	if it := item(t, mustState(t, s), hubKey); it.Run != nil {
 		t.Errorf("personal run %+v", it.Run)

@@ -93,7 +93,7 @@ export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync
  * ticket". A machine from before trackers names only bd's version.
  */
 export function trackersText(b: Bridge): string {
-  if (b.trackers?.length) return b.trackers.map((t) => (t.version ? `${t.name} ${t.version}` : t.name)).join(" · ");
+  if (b.trackers?.length) return b.trackers.map((t) => [t.title || t.name, t.version].filter(Boolean).join(" ")).join(" · ");
   return b.bdVersion ? `bd ${b.bdVersion}` : "";
 }
 
@@ -113,23 +113,51 @@ export function reauthFieldHTML(prefix: string): string {
 <label for="${id}">Password</label><p class="muted small" id="${id}-hint">Enter your password to add a machine.</p><input id="${id}" name="password" type="password" autocomplete="current-password" required aria-describedby="${id}-hint">`;
 }
 
+/** The beads command an older machine's text names, from before machines said how each tracker raises a task. */
+const BEADS_RAISE = 'bd create "Approve the footer text" -l human -d "What is needed, why, and where to find it."';
+
+/**
+ * How the text says to raise a task: one command per tracker the machine
+ * runs, or the beads wording for a machine that has not said which it runs
+ * (an older bridge, or one not connected yet).
+ */
+function raiseText(who: string, machine: Pick<Bridge, "trackers">): string {
+  const trackers = (machine.trackers ?? []).filter((t) => t.raise);
+  if (!trackers.length) {
+    return `When you need ${who} to do something only a person can do, such as a decision, a login, a payment or a review, raise a bead labelled human in the repo you are working in:
+
+    ${BEADS_RAISE}
+
+It reaches ${who} when that repo is switched on in Meat Mode. Beads without the human label stay out of their list. What they do comes back to the bead: done closes it and a note becomes a comment, so check the bead before asking again.`;
+  }
+  const lines = trackers.map((t) => `In a repo that uses ${t.title || t.name}:\n\n    ${t.raise}`).join("\n\n");
+  return `When you need ${who} to do something only a person can do, such as a decision, a login, a payment or a review, raise a task for them in the tracker of the repo you are working in.
+
+${lines}
+
+It reaches ${who} when that repo is switched on in Meat Mode. Tasks raised any other way stay out of their list. What they do comes back to the task: done closes it and a note becomes a comment, so check the task before asking again.`;
+}
+
 /**
  * Text for an agent instruction file (AGENTS.md, CLAUDE.md and the like) on
- * one machine: how to raise a task for the user and how to add to their
- * personal list. It holds no address and no token; meat-mode add reads both
- * from the bridge's config.
+ * one machine: how to raise a task for the user with each tracker the
+ * machine runs, or in a repo's project where it has none, and how to add to
+ * their personal list. It holds no address and no token; meat-mode add
+ * reads both from the bridge's config.
  */
-export function agentInstructions(user: string, machine: string): string {
+export function agentInstructions(user: string, machine: Pick<Bridge, "name" | "trackers">): string {
   const who = user.trim() || "the user";
   return `## Tasks for ${who}
 
-${who} gets tasks from agents in Meat Mode, a to-do app on their phone and computer. This machine is paired with it as "${machine}".
+${who} gets tasks from agents in Meat Mode, a to-do app on their phone and computer. This machine is paired with it as "${machine.name}".
 
-When you need ${who} to do something only a person can do, such as a decision, a login, a payment or a review, raise a bead labelled human in the repo you are working in:
+${raiseText(who, machine)}
 
-    bd create "Approve the footer text" -l human -d "What is needed, why, and where to find it."
+In a repo with no tracker, add the task to that repo's project in Meat Mode instead, from inside the repo:
 
-It reaches ${who} when that repo is switched on in Meat Mode. Beads without the human label stay out of their list. What they do comes back to the bead: done closes it, a note becomes a comment and a snooze defers it, so check the bead before asking again.
+    meat-mode add "Approve the footer text" --project . --note "What is needed, why, and where to find it." --author <your name>
+
+--project . names the project after the repo. ${who} sees it as its own list, and what they do comes back to the to-do, so check it with the commands below before asking again.
 
 To put something on ${who}'s personal to-do list instead, not tied to a repo:
 
@@ -145,7 +173,7 @@ To change a to-do this machine added, by that id:
     meat-mode done mm-12
     meat-mode reopen mm-12
 
-edit takes --title, --description, --due or --clear-due, --every (with --from-done) or --no-repeat, --until or --no-until, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
+For a to-do in a project, add --project . to each, from inside the repo. edit takes --title, --description, --due or --clear-due, --every (with --from-done) or --no-repeat, --until or --no-until, and --priority (0 highest to 4, 2 is normal). These work only on to-dos added from this machine.
 
 Keep titles short and say what to do. Put the context in the description or the note.
 `;
@@ -164,7 +192,8 @@ export function instructionsHTML(user: string, machines: Bridge[], machine: stri
           .map((b) => `<option value="${esc(b.name)}"${b.name === machine ? " selected" : ""}>${esc(b.name)}</option>`)
           .join("")}</select></div>`
       : "";
-  return `${pick}<pre class="cmd agents-text" id="${prefix}agents-text" tabindex="0" aria-label="Instructions for agents on ${esc(machine)}">${esc(agentInstructions(user, machine))}</pre>
+  const bridge = machines.find((b) => b.name === machine) ?? { name: machine };
+  return `${pick}<pre class="cmd agents-text" id="${prefix}agents-text" tabindex="0" aria-label="Instructions for agents on ${esc(machine)}">${esc(agentInstructions(user, bridge))}</pre>
 <button class="btn agents-copy" data-act="agents-copy" data-copy="${prefix}agents-text">Copy instructions</button>`;
 }
 

@@ -16,11 +16,12 @@ test("each install download is a binary the release workflow builds", () => {
 });
 
 test("the instructions name the user and the machine, and say how to raise and add tasks", () => {
-  const text = agentInstructions("Sam", "desk");
+  const text = agentInstructions("Sam", { name: "desk" });
   assert.match(text, /^## Tasks for Sam\n/);
   assert.match(text, /paired with it as "desk"/);
   assert.match(text, /bd create "[^"]+" -l human/);
-  assert.match(text, /meat-mode add "[^"]+"/);
+  assert.match(text, /meat-mode add "[^"]+" --project \. /);
+  assert.match(text, /meat-mode add "Renew the library card"/);
   assert.match(text, /meat-mode edit mm-12 --due/);
   assert.match(text, /meat-mode done mm-12/);
   assert.match(text, /meat-mode reopen mm-12/);
@@ -30,7 +31,43 @@ test("the instructions name the user and the machine, and say how to raise and a
   assert.match(text, /--until 2026-11-26 ends the repeat/);
   assert.match(text, /--no-until/);
   assert.doesNotMatch(text, /https?:\/\//);
-  assert.match(agentInstructions(" ", "desk"), /^## Tasks for the user\n/);
+  assert.match(agentInstructions(" ", { name: "desk" }), /^## Tasks for the user\n/);
+});
+
+const raises = {
+  beads: { name: "beads", title: "beads", version: "0.40.0", raise: 'bd create "Approve the footer text" -l human' },
+  backlog: { name: "backlog", title: "Backlog.md", raise: 'backlog task create "Approve the footer text" --labels human' },
+  ticket: { name: "ticket", title: "ticket", raise: 'tk create "Approve the footer text" --tags human' },
+};
+
+test("a machine that has not said which trackers it runs gets the beads wording and the project line", () => {
+  for (const trackers of [undefined, [], [{ name: "beads", version: "0.40.0" }]]) {
+    const text = agentInstructions("Sam", { name: "desk", trackers });
+    assert.match(text, /raise a bead labelled human/);
+    assert.match(text, /check the bead before asking again/);
+    assert.match(text, /In a repo with no tracker, .*\n\n    meat-mode add "[^"]+" --project \. /);
+    assert.doesNotMatch(text, /In a repo that uses/);
+  }
+});
+
+test("one tracker gets its own raise command", () => {
+  const text = agentInstructions("Sam", { name: "desk", trackers: [raises.ticket] });
+  assert.match(text, /In a repo that uses ticket:\n\n    tk create "Approve the footer text" --tags human\n/);
+  assert.doesNotMatch(text, /bd create/);
+  assert.match(text, /comes back to the task: done closes it and a note becomes a comment, so check the task before asking again/);
+  assert.match(text, /--project \./);
+  assert.match(text, /personal to-do list instead/);
+});
+
+test("several trackers get one raise line each, by the name the app shows", () => {
+  const text = agentInstructions("Sam", { name: "desk", trackers: [raises.beads, raises.backlog, raises.ticket] });
+  const uses = [...text.matchAll(/In a repo that uses ([^:]+):\n\n    (.+)/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(uses, [
+    ["beads", raises.beads.raise],
+    ["Backlog.md", raises.backlog.raise],
+    ["ticket", raises.ticket.raise],
+  ]);
+  assert.match(text, /In a repo with no tracker/);
 });
 
 const b = (name: string, createdAt: string): Bridge => ({ name, createdAt });

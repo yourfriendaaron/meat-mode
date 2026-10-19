@@ -12,7 +12,8 @@ import (
 )
 
 // Edit runs `meat-mode edit`: it changes the title, description, due time,
-// repeat or priority of a personal to-do this machine added, and prints its
+// repeat or priority of a to-do this machine added to the personal list or
+// a project, and prints its
 // id. --until and --no-until apply to the --every given with them, or else
 // to the to-do's own repeat, which is sent back whole with the new end.
 func Edit(ctx context.Context, args []string, env Env) error {
@@ -26,16 +27,16 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	every, fromDone, until := repeatFlags(fs)
 	noUntil := fs.Bool("no-until", false, "let its repeat go on for good")
 	noRepeat := fs.Bool("no-repeat", false, "stop it repeating")
-	author, id := changeFlags(fs)
+	author, id, project := changeFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--project NAME|.] [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err
 	}
-	item, err := itemArg(fs, "edit", pos)
+	list, item, err := itemArg(fs, env, "edit", pos, *project)
 	if err != nil {
 		return err
 	}
@@ -101,7 +102,7 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	if endChanged && w.repeat == nil {
 		// The hub takes a repeat whole, so the to-do's own goes back with
 		// the new end.
-		it, err := hub.PersonalItem(ctx, item)
+		it, err := hub.PersonalItem(ctx, list, item)
 		if err != nil {
 			return notOurs(item, err)
 		}
@@ -112,17 +113,17 @@ func Edit(ctx context.Context, args []string, env Env) error {
 		r.Start, r.Until = nil, w.until
 		set.Repeat = &r
 	}
-	return change(ctx, hub, env, item, api.PersonalChange{ID: *id, Kind: api.KindEdit,
+	return change(ctx, hub, env, list, item, api.PersonalChange{ID: *id, Kind: api.KindEdit,
 		Payload: api.Payload{Set: &set}, Author: *author})
 }
 
-// Done runs `meat-mode done`: it closes a personal to-do this machine added.
+// Done runs `meat-mode done`: it closes a to-do this machine added.
 func Done(ctx context.Context, args []string, env Env) error {
 	return closeOrReopen(ctx, api.KindDone, args, env)
 }
 
-// Reopen runs `meat-mode reopen`: it opens a closed personal to-do this
-// machine added again.
+// Reopen runs `meat-mode reopen`: it opens a closed to-do this machine
+// added again.
 func Reopen(ctx context.Context, args []string, env Env) error {
 	return closeOrReopen(ctx, api.KindReopen, args, env)
 }
@@ -130,9 +131,9 @@ func Reopen(ctx context.Context, args []string, env Env) error {
 func closeOrReopen(ctx context.Context, kind string, args []string, env Env) error {
 	fs := flag.NewFlagSet(kind, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
-	author, id := changeFlags(fs)
+	author, id, project := changeFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintf(env.Stderr, "usage: meat-mode %s <id> [--author NAME] [--id UUID]\n", kind)
+		fmt.Fprintf(env.Stderr, "usage: meat-mode %s <id> [--project NAME|.] [--author NAME] [--id UUID]\n", kind)
 		fmt.Fprintf(env.Stderr, "Marks a to-do this machine added as %s.\n", map[string]string{api.KindDone: "done", api.KindReopen: "open"}[kind])
 		fs.PrintDefaults()
 	}
@@ -140,7 +141,7 @@ func closeOrReopen(ctx context.Context, kind string, args []string, env Env) err
 	if err != nil {
 		return err
 	}
-	item, err := itemArg(fs, kind, pos)
+	list, item, err := itemArg(fs, env, kind, pos, *project)
 	if err != nil {
 		return err
 	}
@@ -148,29 +149,45 @@ func closeOrReopen(ctx context.Context, kind string, args []string, env Env) err
 	if err != nil {
 		return err
 	}
-	return change(ctx, hub, env, item, api.PersonalChange{ID: *id, Kind: kind, Author: *author})
+	return change(ctx, hub, env, list, item, api.PersonalChange{ID: *id, Kind: kind, Author: *author})
 }
 
 // changeFlags adds the flags every change takes.
-func changeFlags(fs *flag.FlagSet) (author, id *string) {
+func changeFlags(fs *flag.FlagSet) (author, id, project *string) {
 	author = fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id = fs.String("id", "", "a UUID for this change; sending the same id again changes nothing")
-	return author, id
+	return author, id, projectFlag(fs)
 }
 
-// itemArg reads the one item id a change takes. The item's key
-// (hub/personal/<id>) works too.
-func itemArg(fs *flag.FlagSet, cmd string, pos []string) (string, error) {
+// itemArg reads the one item id a change takes, and the list it is in:
+// the personal list, or the project --project names. The item's key
+// (hub/personal/<id>, hub/<project>/<id>) works too, and names its list.
+func itemArg(fs *flag.FlagSet, env Env, cmd string, pos []string, project string) (list, item string, err error) {
 	if len(pos) != 1 || strings.TrimSpace(pos[0]) == "" {
 		fs.Usage()
-		return "", fmt.Errorf("%s needs the id of one to-do, as `meat-mode add` printed it", cmd)
+		return "", "", fmt.Errorf("%s needs the id of one to-do, as `meat-mode add` printed it", cmd)
 	}
-	return strings.TrimPrefix(strings.TrimSpace(pos[0]), "hub/personal/"), nil
+	if list, err = resolveProject(env, project); err != nil {
+		return "", "", err
+	}
+	item = strings.TrimSpace(pos[0])
+	if rest, ok := strings.CutPrefix(item, "hub/"); ok && strings.Contains(rest, "/") {
+		keyList := rest[:strings.LastIndex(rest, "/")]
+		item = rest[len(keyList)+1:]
+		if keyList == "personal" {
+			keyList = ""
+		}
+		if given(fs, "project") && keyList != list {
+			return "", "", fmt.Errorf("the key %s is not in the project --project names", pos[0])
+		}
+		list = keyList
+	}
+	return list, item, nil
 }
 
 // change posts c and prints the item's id.
-func change(ctx context.Context, hub *Hub, env Env, item string, c api.PersonalChange) error {
-	if _, err := hub.ChangePersonal(ctx, item, c); err != nil {
+func change(ctx context.Context, hub *Hub, env Env, list, item string, c api.PersonalChange) error {
+	if _, err := hub.ChangePersonal(ctx, list, item, c); err != nil {
 		return notOurs(item, err)
 	}
 	fmt.Fprintln(env.Stdout, item)

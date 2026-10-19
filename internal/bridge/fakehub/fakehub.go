@@ -49,14 +49,16 @@ type Hello struct {
 
 // Personal is one personal to-do the hub received.
 type Personal struct {
-	Bridge string
+	Bridge  string
+	Project string // the project parameter; "" for the personal list
 	api.PersonalTodo
 }
 
 // Change is one change an agent posted to a personal to-do.
 type Change struct {
-	Bridge string
-	Item   string // the to-do's id
+	Bridge  string
+	Project string
+	Item    string // the to-do's id
 	api.PersonalChange
 }
 
@@ -136,7 +138,8 @@ func (h *Hub) settings(w http.ResponseWriter, _ *http.Request, _ string) {
 }
 
 // addPersonal keeps each to-do once by id, as the real hub does, and
-// replies with a key of the reserved hub bridge's personal repo.
+// replies with a key of the reserved hub bridge's personal repo, or of the
+// project its project parameter names.
 func (h *Hub) addPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
 	var t api.PersonalTodo
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
@@ -151,21 +154,22 @@ func (h *Hub) addPersonal(w http.ResponseWriter, r *http.Request, bridge string)
 	defer h.mu.Unlock()
 	for i, p := range h.personal {
 		if t.ID != "" && p.ID == t.ID {
-			writeJSON(w, personalReply(i))
+			writeJSON(w, h.personalReply(i))
 			return
 		}
 	}
-	h.personal = append(h.personal, Personal{Bridge: bridge, PersonalTodo: t})
+	h.personal = append(h.personal, Personal{Bridge: bridge, Project: r.URL.Query().Get("project"), PersonalTodo: t})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(personalReply(len(h.personal) - 1))
+	_ = json.NewEncoder(w).Encode(h.personalReply(len(h.personal) - 1))
 }
 
-// ownTodo returns the index of the personal to-do id that bridge added, or
-// -1, which the hub answers with 404 whatever the reason.
-func (h *Hub) ownTodo(bridge, id string) int {
+// ownTodo returns the index of the to-do id that bridge added to project,
+// or -1, which the hub answers with 404 whatever the reason.
+func (h *Hub) ownTodo(bridge, project, id string) int {
 	n, err := strconv.Atoi(strings.TrimPrefix(id, "mm-"))
-	if err != nil || !strings.HasPrefix(id, "mm-") || n < 1 || n > len(h.personal) || h.personal[n-1].Bridge != bridge {
+	if err != nil || !strings.HasPrefix(id, "mm-") || n < 1 || n > len(h.personal) ||
+		h.personal[n-1].Bridge != bridge || h.personal[n-1].Project != project {
 		return -1
 	}
 	return n - 1
@@ -174,13 +178,13 @@ func (h *Hub) ownTodo(bridge, id string) int {
 func (h *Hub) getPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	i := h.ownTodo(bridge, r.PathValue("id"))
+	i := h.ownTodo(bridge, r.URL.Query().Get("project"), r.PathValue("id"))
 	if i < 0 {
 		writeErr(w, http.StatusNotFound, "no personal to-do added from this machine")
 		return
 	}
 	p := h.personal[i]
-	it := api.Item{Key: "hub/personal/" + r.PathValue("id"), ID: r.PathValue("id"), Title: p.Title, DueAt: p.Due,
+	it := api.Item{Key: h.personalReply(i).Key, ID: r.PathValue("id"), Title: p.Title, DueAt: p.Due,
 		Status: "open", Priority: 2, CreatedBy: p.Author, Comments: []api.Comment{}}
 	if p.Repeat != nil && p.Due != nil {
 		// The hub starts the rule at the due time.
@@ -201,11 +205,12 @@ func (h *Hub) changePersonal(w http.ResponseWriter, r *http.Request, bridge stri
 	id := r.PathValue("id")
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.ownTodo(bridge, id) < 0 {
+	project := r.URL.Query().Get("project")
+	if h.ownTodo(bridge, project, id) < 0 {
 		writeErr(w, http.StatusNotFound, "no personal to-do added from this machine")
 		return
 	}
-	a := api.Action{ID: c.ID, Kind: c.Kind, Bridge: "hub", Repo: "personal", BeadID: id, Payload: c.Payload,
+	a := api.Action{ID: c.ID, Kind: c.Kind, Bridge: "hub", Repo: listOf(project), BeadID: id, Payload: c.Payload,
 		Author: c.Author, Status: api.StatusApplied}
 	for _, o := range h.changes {
 		if c.ID != "" && o.ID == c.ID {
@@ -213,15 +218,23 @@ func (h *Hub) changePersonal(w http.ResponseWriter, r *http.Request, bridge stri
 			return
 		}
 	}
-	h.changes = append(h.changes, Change{Bridge: bridge, Item: id, PersonalChange: c})
+	h.changes = append(h.changes, Change{Bridge: bridge, Project: project, Item: id, PersonalChange: c})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(a)
 }
 
-func personalReply(i int) api.PersonalTodoReply {
+func (h *Hub) personalReply(i int) api.PersonalTodoReply {
 	id := "mm-" + strconv.Itoa(i+1)
-	return api.PersonalTodoReply{Key: "hub/personal/" + id, ID: id}
+	return api.PersonalTodoReply{Key: "hub/" + listOf(h.personal[i].Project) + "/" + id, ID: id}
+}
+
+// listOf is the hub repo a project parameter names.
+func listOf(project string) string {
+	if project == "" {
+		return "personal"
+	}
+	return project
 }
 
 // putRepos checks the list with the real hub's rules and keeps it.

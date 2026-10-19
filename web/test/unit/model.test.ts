@@ -220,6 +220,7 @@ test("repo labels are folder names, with the path where they repeat", () => {
     { bridge: "desk", name: "projects/garden", personal: false, optedIn: true },
     { bridge: "laptop", name: "projects/kitchen", personal: false, optedIn: true },
     { bridge: "hub", name: "personal", personal: true, optedIn: true },
+    { bridge: "hub", name: "projects/attic", personal: false, optedIn: true },
   ];
   assert.equal(repoLabel(repos[0]), "garden");
   assert.equal(repoLabel(repos[4]), "personal");
@@ -229,7 +230,7 @@ test("repo labels are folder names, with the path where they repeat", () => {
   assert.equal(repoDetail(repos[2], repos), "projects/garden on desk");
   assert.deepEqual(
     visibleRepos(repos).map((r) => `${r.bridge}:${r.name}`),
-    ["hub:personal", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],
+    ["hub:personal", "hub:projects/attic", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],
   );
 });
 

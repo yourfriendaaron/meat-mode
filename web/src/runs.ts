@@ -122,7 +122,7 @@ export function runEnded(before: RunState | undefined, after: RunState | undefin
 /** Why an item takes no ask, for the New task switch: "" when it can. */
 export function noAgentReason(list: Repo | undefined): string {
   if (!list) return "";
-  if (isPersonal(list)) return "Personal to-dos have no agent.";
+  if (isPersonal(list)) return list.personal ? "Personal to-dos have no agent." : "Projects have no agent.";
   if (!repoCan(list, "ask")) return `${list.tracker || "This list's tracker"} has no agents.`;
   if (!list.agentsAllowed) return "Agents are off for this list. They switch on at its machine.";
   return "";

@@ -19,6 +19,7 @@ const (
 	maxActionLen  = 32
 	maxActions    = 32
 	maxTrackers   = 32
+	maxRaiseLen   = 1000
 )
 
 // cleanActions trims a repo's action kinds, drops empty and repeated ones,
@@ -65,7 +66,9 @@ func encodeTrackers(in []api.TrackerVersion) (string, error) {
 	var out []api.TrackerVersion
 	for _, t := range in {
 		t.Name = truncRunes(strings.TrimSpace(t.Name), maxTrackerLen)
+		t.Title = truncRunes(strings.TrimSpace(t.Title), maxTrackerLen)
 		t.Version = truncRunes(strings.TrimSpace(t.Version), maxVersionLen)
+		t.Raise = truncRunes(strings.TrimSpace(t.Raise), maxRaiseLen)
 		if t.Name == "" {
 			continue
 		}
