@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # What CI runs, on this machine: run it once before a merge to main or a
 # deploy. Only gitleaks and the container image build, with its end-to-end
-# run and smoke test, stay in CI. Needs bd on PATH for the end-to-end suite,
-# and docker for the screenshot baselines.
+# run and smoke test, stay in CI. Needs bd on PATH for the end-to-end suite;
+# backlog and tk on PATH run the Backlog.md and ticket suites, which skip
+# without them (CI installs all three). Needs docker for the screenshot
+# baselines.
 # The android step builds in ghcr.io/cirruslabs/android-sdk:36 and needs docker.
 # E2E_PORT sets the web suite's port, so parallel worktrees don't collide.
 set -euo pipefail

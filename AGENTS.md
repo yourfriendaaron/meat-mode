@@ -34,6 +34,7 @@ How to work within that:
 - While building, run targeted tests: one Go package, one Playwright spec.
 - Before a merge to main or a deploy, run `scripts/check.sh` once. It runs what CI runs, the `e2e/` suite included, except gitleaks and the container image build with its end-to-end run, and must pass.
 - Parallel worktrees set their own `E2E_PORT` for the web suite.
+- Each tracker's conformance suite runs against its real tool: `bd`, `backlog` and `tk` on PATH. A missing one skips its suite, so a green check without them has not tested that tracker; CI installs all three.
 - Screenshot baselines live in `web/test/visual/__screenshots__`. `pnpm --dir web test:visual` checks them inside the Playwright container that CI uses, so the fonts match; after an intended layout change, run `pnpm --dir web test:visual:update` and look at every changed PNG before committing it. The container has no bold weight for the app's system font stack, so baselines catch layout changes but not font-weight changes.
 
 ## Work tracking
