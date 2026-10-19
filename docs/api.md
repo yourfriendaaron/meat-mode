@@ -6,6 +6,7 @@ The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges a
 
 - A **bridge** has a unique name chosen when it is added (`[a-z0-9-]{1,32}`). The name `hub` is reserved.
 - The **personal list** belongs to the hub itself: it is repo `personal` of the reserved bridge `hub`, with `personal: true`. The hub stores its items and applies every action on them at once, so it works with no bridge running. Its items are keyed `hub/personal/<id>`; the hub gives a new item the id `mm-<n>`, and keeps the bead id of an item moved from a bridge (see below).
+- A **project** is another list the hub keeps, for a repo with no tracker: repo `<name>` of the bridge `hub`, with `personal: false`, so its items are keyed `hub/<name>/<id>`. Its name is a repo name, such as `projects/garden`; `personal` is kept for the personal list. An agent's first add to it makes it (see Agents: projects). Its items behave like personal ones in every way below: every action is applied at once, `ask` is refused, and they can be edited, repeat and reach the calendar feed. A project with no open item and none closed in the last 7 days is left out of `State`.
 - A **repo** is named by the bridge with its folder's path relative to the home folder, such as `projects/garden` (for a `--root` outside the home folder, relative to that root's parent). Repo names are unique per bridge, so two folders called `garden` stay apart. A name is up to 512 bytes of `/`-separated segments; each segment is 1 to 128 bytes with no control character, is not `.` or `..`, and does not start with `-`. The app shows the last segment, and the path where two repos share it.
 - An **item key** is `<bridge>/<repo>/<bead id>`, for example `laptop/projects/garden/gd-1`. Bridge names and bead ids hold no `/`, so the repo is everything between the first and the last `/`. In URL paths the key is percent-encoded as one segment. Bead ids may not start with `-`; the bridge passes bead ids to `bd` only when they match `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`.
 - A hub that stored repos under an older bridge's folder names (`garden`) moves each one, with its items, actions and reminders, to the one new name that ends in it (`projects/garden`) when the bridge first sends its new list. A folder name that two new names end in is dropped instead.
@@ -176,11 +177,11 @@ Releases: one signed universal APK per tag `vX.Y.Z`, named `meat-mode-android-vX
 | `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
-| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true, "parent"?: "<item id>"}` (`repeat` on the personal list only; `ask` only where agents are allowed; `parent` makes it a sub-task, see Sub-tasks) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs), and the provisional item shows a `working` run at once. |
-| `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list. |
+| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true, "parent"?: "<item id>"}` (`repeat` on the personal list and projects only; `ask` only where agents are allowed; `parent` makes it a sub-task, see Sub-tasks) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs), and the provisional item shows a `working` run at once. |
+| `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list or a project. |
 | `ask` | `key` | `{"text"?: "…"}` | wakes an agent on the item (see Agent runs). With `text`, appends it as a note first, as `note` does, in the same action. The item's `run` shows `working` at once; on a live run it counts the note in `queued` instead. |
 | `stop` | `key` | `{}` | ends the item's live run; `run` shows `stopped` with reason `stopped` at once |
-| `agents` | `bridge` + `repo` | `{"on": false}` | the repo shows `agentsAllowed: false` with `agentsPending: true` until the bridge reports its repo list again. `{"on": true}` answers `400` naming the command that switches agents on at the agent machine (see below). Not allowed on the personal list. |
+| `agents` | `bridge` + `repo` | `{"on": false}` | the repo shows `agentsAllowed: false` with `agentsPending: true` until the bridge reports its repo list again. `{"on": true}` answers `400` naming the command that switches agents on at the agent machine (see below). Not allowed on the personal list or a project. |
 | `edit` | `key` | `{"set": Edit}` | sets each field `set` names; the hub records the old values as `was` |
 | `note-edit` | `key` | `{"commentId": "…", "text": "…"}` | replaces that comment's text, up to 10000 characters; the hub records the comment as it was in `comment` |
 | `note-delete` | `key` | `{"commentId": "…"}` | removes that comment; the hub records it as `comment` |
@@ -260,9 +261,9 @@ The hub can serve the open items with a due date, from every list, as an iCalend
 - Each open dated item is one `VEVENT` at its current due time, 15 minutes long, whose `UID` is the item key, so a calendar keeps one event per item as it changes. A repeating item shows its next occurrence only, because the hub moves it on when it is done. Calendar apps fetch the feed on their own schedule, from every hour to once a day.
 - The event's summary is the item's title and its link opens the item in the app.
 
-On the personal list (`hub/personal`) every action is applied by the hub when it is posted: the response already has status `applied`, the item never shows `pending`, and an `add` returns the new item's id as `beadId`. A closed personal item leaves the app 7 days after it closed, as a closed bead leaves a bridge's set.
+On the personal list (`hub/personal`) and on a project, every action is applied by the hub when it is posted: the response already has status `applied`, the item never shows `pending`, and an `add` returns the new item's id as `beadId`. A closed personal item leaves the app 7 days after it closed, as a closed bead leaves a bridge's set.
 
-Undo is the client's job: it cancels the closing action when it is still unapplied, or else posts the inverse (`reopen`, or `snooze` back to `previous`). Actions on the personal list are always applied, so their Undo is always the inverse.
+Undo is the client's job: it cancels the closing action when it is still unapplied, or else posts the inverse (`reopen`, or `snooze` back to `previous`). Actions on the personal list and projects are always applied, so their Undo is always the inverse.
 
 An action's `status` is `pending`, `applied`, `failed` or `cancelled`. `failed` carries `error`; the app shows it on the item, and for a failed `add`, whose bead never existed, in Recent actions with the title that was typed. A bridge fails an action on a bead it does not list in that repo with the error `unknown bead`.
 
@@ -313,7 +314,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
 | `PUT /bridge/v1/runs` | `[]RunReport`: `{"repo", "beadId", …Run, "applying"?}` for every run the bridge knows, live and the latest settled one per bead; `applying` is the id of an ask or stop already applied to that run whose result the bridge has not posted yet | `204`; replaces this bridge's run list. The hub shows each on the item it names (see Agent runs) and ignores one whose item it does not hold. |
-| `POST /bridge/v1/personal` | `PersonalTodo` | `201` with `{"key", "id"}` of the new personal item, or `200` with the same for a repeated `id` |
+| `POST /bridge/v1/personal[?project=<name>]` | `PersonalTodo` | `201` with `{"key", "id"}` of the new item on the personal list or the project, or `200` with the same for a repeated `id` |
 
 The bridge sends its run list whenever a run changes, at most once a second, and with every full push. It also sends it right before the result of an ask or stop, naming that action in `applying`: the hub then shows the action's note but not its effect on the run, which the list already holds. It keeps a bead's latest settled run while the bead is in its set.
 
@@ -347,7 +348,7 @@ An agent can read and change a personal to-do that its machine's token added, an
 | `GET /bridge/v1/personal/{id}` | | `200` with the `Item`, including a closed one still shown |
 | `POST /bridge/v1/personal/{id}/actions` | `PersonalChange` | `201` with the applied `Action`, or `200` with the same for a repeated `id` |
 
-Like the add, these calls leave the bridge's last-seen time alone. On a paired machine, `meat-mode edit`, `meat-mode done` and `meat-mode reopen` make them with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
+Like the add, these calls leave the bridge's last-seen time alone, and take `?project=<name>` for a to-do in a project. On a paired machine, `meat-mode edit`, `meat-mode done` and `meat-mode reopen` make them with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
 
 `PersonalChange` is `{"id"?, "kind", "payload", "author"?}`. `kind` is `edit` (payload `{"set": Edit}`), `done`, `reopen`, `dismiss` or `note` (payload `{"text"}`), with the rules of the app's actions above. `id` and `author` work as for `PersonalTodo`.
 
@@ -356,6 +357,18 @@ curl -fsS https://meat-mode.example.com/bridge/v1/personal/mm-12/actions \
   -H "Authorization: Bearer $MEAT_MODE_TOKEN" -H 'Content-Type: application/json' \
   -d '{"kind": "edit", "payload": {"set": {"due": "2026-03-09T09:00:00Z"}}, "author": "planner"}'
 ```
+
+### Agents: projects
+
+`POST /bridge/v1/personal?project=<name>`, `GET /bridge/v1/personal/{id}?project=<name>` and `POST /bridge/v1/personal/{id}/actions?project=<name>` work as above on the project `<name>` instead of the personal list. Without `project` they use the personal list. The first add to a project makes it, and a machine reads and changes only what its own token added there, as on the personal list; an item in another project, or on the personal list, answers `404`. A name that is not a repo name, or is `personal`, answers `400`. On a paired machine, `meat-mode add`, `edit`, `done` and `reopen` take `--project <name>`, and `--project .` names the project after the Git repo of the current folder as the bridge names repos (see Identity), a linked worktree answering for its main checkout.
+
+```sh
+curl -fsS 'https://meat-mode.example.com/bridge/v1/personal?project=projects/garden' \
+  -H "Authorization: Bearer $MEAT_MODE_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title": "Approve the footer text", "note": "What is needed, why, and where to find it.", "author": "planner"}'
+```
+
+The reply's `key` is `hub/projects/garden/<id>`. There is no call to rename or delete a project; one leaves the app once nothing in it is left to show.
 
 ### Moving a bridge's personal repo to the hub
 
