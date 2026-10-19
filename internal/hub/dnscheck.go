@@ -2,13 +2,18 @@ package hub
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/net/dns/dnsmessage"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
@@ -32,45 +37,147 @@ var publicResolvers = []string{
 type dnsLookup func(ctx context.Context, host string) ([]netip.Addr, error)
 
 // lookupPublic asks every public resolver at once and takes the first
-// answer, within dnsTimeout. It asks them directly rather than through the
-// system's resolver, which may be MagicDNS or a LAN's own DNS.
+// answer, within dnsTimeout.
 func lookupPublic(ctx context.Context, host string) ([]netip.Addr, error) {
+	return lookupVia(ctx, publicResolvers, host)
+}
+
+// errNotFound is a resolver's NXDOMAIN.
+var errNotFound = errors.New("no such host")
+
+// lookupVia asks each of servers at once and takes the first answer. It
+// sends its own queries rather than going through the system's resolver,
+// which may be MagicDNS or a LAN's own DNS, or through net.Resolver, which
+// answers a name in /etc/hosts from that file and never asks DNS.
+func lookupVia(ctx context.Context, servers []string, host string) ([]netip.Addr, error) {
 	ctx, cancel := context.WithTimeout(ctx, dnsTimeout)
 	defer cancel()
-	// A trailing dot keeps the resolver from trying the system's search
-	// domains.
-	name := strings.TrimSuffix(host, ".") + "."
+	// A fully qualified name keeps the system's search domains out of it.
+	name, err := dnsmessage.NewName(strings.TrimSuffix(host, ".") + ".")
+	if err != nil {
+		return nil, err
+	}
 	type result struct {
 		addrs []netip.Addr
 		err   error
 	}
-	results := make(chan result, len(publicResolvers))
-	for _, server := range publicResolvers {
-		r := &net.Resolver{
-			PreferGo: true,
-			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-				var d net.Dialer
-				return d.DialContext(ctx, network, server)
-			},
-		}
+	results := make(chan result, len(servers))
+	for _, server := range servers {
 		go func() {
-			addrs, err := r.LookupNetIP(ctx, "ip", name)
+			addrs, err := askServer(ctx, server, name)
 			results <- result{addrs, err}
 		}()
 	}
 	var last error
-	for range publicResolvers {
+	for range servers {
 		res := <-results
-		var dnsErr *net.DNSError
 		switch {
 		case res.err == nil:
 			return res.addrs, nil
-		case errors.As(res.err, &dnsErr) && dnsErr.IsNotFound:
+		case errors.Is(res.err, errNotFound):
 			return nil, nil
 		}
 		last = res.err
 	}
 	return nil, last
+}
+
+// askServer asks one resolver for the A and AAAA records of name.
+func askServer(ctx context.Context, server string, name dnsmessage.Name) ([]netip.Addr, error) {
+	var out []netip.Addr
+	for _, t := range []dnsmessage.Type{dnsmessage.TypeA, dnsmessage.TypeAAAA} {
+		addrs, err := query(ctx, server, name, t)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, addrs...)
+	}
+	return out, nil
+}
+
+// query sends one question over UDP, and again over TCP when the answer
+// comes back truncated.
+func query(ctx context.Context, server string, name dnsmessage.Name, t dnsmessage.Type) ([]netip.Addr, error) {
+	id := uint16(rand.Uint32())
+	q := dnsmessage.Question{Name: name, Type: t, Class: dnsmessage.ClassINET}
+	msg, err := (&dnsmessage.Message{
+		Header:    dnsmessage.Header{ID: id, RecursionDesired: true},
+		Questions: []dnsmessage.Question{q},
+	}).Pack()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := exchange(ctx, "udp", server, msg)
+	if err == nil && resp.Truncated {
+		resp, err = exchange(ctx, "tcp", server, msg)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if resp.ID != id || len(resp.Questions) != 1 || resp.Questions[0] != q {
+		return nil, fmt.Errorf("%s answered a different question", server)
+	}
+	switch resp.RCode {
+	case dnsmessage.RCodeSuccess:
+	case dnsmessage.RCodeNameError:
+		return nil, errNotFound
+	default:
+		return nil, fmt.Errorf("%s answered %s", server, resp.RCode)
+	}
+	var out []netip.Addr
+	for _, a := range resp.Answers {
+		switch b := a.Body.(type) {
+		case *dnsmessage.AResource:
+			out = append(out, netip.AddrFrom4(b.A))
+		case *dnsmessage.AAAAResource:
+			out = append(out, netip.AddrFrom16(b.AAAA))
+		}
+	}
+	return out, nil
+}
+
+// exchange sends msg to server and reads one reply. Over TCP each message
+// carries a two-byte length first.
+func exchange(ctx context.Context, network, server string, msg []byte) (*dnsmessage.Message, error) {
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, network, server)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(deadline)
+	}
+	buf := make([]byte, 65535)
+	var n int
+	if network == "tcp" {
+		if _, err := conn.Write(binary.BigEndian.AppendUint16(nil, uint16(len(msg)))); err != nil {
+			return nil, err
+		}
+		if _, err := conn.Write(msg); err != nil {
+			return nil, err
+		}
+		var size [2]byte
+		if _, err := io.ReadFull(conn, size[:]); err != nil {
+			return nil, err
+		}
+		n = int(binary.BigEndian.Uint16(size[:]))
+		if _, err := io.ReadFull(conn, buf[:n]); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, err := conn.Write(msg); err != nil {
+			return nil, err
+		}
+		if n, err = conn.Read(buf); err != nil {
+			return nil, err
+		}
+	}
+	var resp dnsmessage.Message
+	if err := resp.Unpack(buf[:n]); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // checkPublicDNS checks the host of publicURL against public DNS. It sets
