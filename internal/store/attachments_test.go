@@ -202,7 +202,7 @@ func TestAttachmentCaps(t *testing.T) {
 		attach(t, s, key, "note.txt", []byte{byte('a' + i)})
 	}
 	_, err = s.AddAttachment(key, "one-more.txt", 1, strings.NewReader("z"))
-	if !errors.Is(err, ErrTooLarge) || !strings.Contains(err.Error(), "at most 20") {
+	if !errors.Is(err, ErrTooLarge) || err.Error() != "An item can hold at most 20 files." {
 		t.Fatalf("count: %v", err)
 	}
 }
@@ -253,7 +253,7 @@ func TestRemoveRestoreAndPurge(t *testing.T) {
 	for range api.MaxAttachmentsPerItem - 1 {
 		attach(t, s, key, "note.txt", []byte("x"))
 	}
-	if _, err := s.RestoreAttachment(a.ID); !errors.Is(err, ErrConflict) {
+	if _, err := s.RestoreAttachment(a.ID); !errors.Is(err, ErrConflict) || err.Error() != "An item can hold at most 20 files." {
 		t.Fatalf("restore past the cap: %v", err)
 	}
 

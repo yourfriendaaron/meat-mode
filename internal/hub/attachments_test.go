@@ -205,7 +205,7 @@ func TestAttachmentUploadRefusals(t *testing.T) {
 	}
 	w = h.send("POST", uploadPath(key, "one-more.txt"), "application/octet-stream", []byte("x"))
 	h.expect(w, http.StatusRequestEntityTooLarge)
-	if !strings.Contains(w.Body.String(), "at most 20") {
+	if msg := decode[map[string]string](t, w)["error"]; msg != "An item can hold at most 20 files." {
 		t.Fatalf("413 says %s", w.Body)
 	}
 	// Putting a removed one back past that cap is a conflict.

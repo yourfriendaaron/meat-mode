@@ -241,7 +241,7 @@ func attachmentRoom(q rowQuerier, repo, itemID, name string, size int64) error {
 		return err
 	}
 	if n >= api.MaxAttachmentsPerItem {
-		return tooLargef("This item already has %d files; an item can hold at most %d.", n, api.MaxAttachmentsPerItem)
+		return tooLargef("An item can hold at most %d files.", api.MaxAttachmentsPerItem)
 	}
 	var total int64
 	if err := q.QueryRow(`SELECT COALESCE(SUM(size), 0) FROM attachments`).Scan(&total); err != nil {
@@ -403,7 +403,7 @@ func (s *Store) RestoreAttachment(id string) (api.Attachment, error) {
 		return a, err
 	}
 	if n >= api.MaxAttachmentsPerItem {
-		return a, conflictf("This item already has %d files; an item can hold at most %d, so %s cannot be put back.", n, api.MaxAttachmentsPerItem, a.Name)
+		return a, conflictf("An item can hold at most %d files.", api.MaxAttachmentsPerItem)
 	}
 	if _, err := tx.Exec(`UPDATE attachments SET removed_at = NULL WHERE id = ?`, id); err != nil {
 		return a, err
