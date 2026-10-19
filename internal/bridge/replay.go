@@ -328,7 +328,7 @@ func fail(err error) api.ActionResult {
 }
 
 func newIssue(a api.Action, title, actor string) beads.NewIssue {
-	return beads.NewIssue{Title: title, Due: a.Payload.Due, ActionID: a.ID, Actor: actor}
+	return beads.NewIssue{Title: title, Due: a.Payload.Due, Parent: a.Payload.Parent, ActionID: a.ID, Actor: actor}
 }
 
 // stop applies a stop: it ends the item's live run and is applied once the

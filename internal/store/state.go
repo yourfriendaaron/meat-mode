@@ -187,6 +187,7 @@ func provisional(a api.Action) api.Item {
 		Labels:    []string{"human"},
 		CreatedBy: a.Author,
 		DueAt:     a.Payload.Due,
+		Parent:    a.Payload.Parent,
 		CreatedAt: a.CreatedAt,
 		UpdatedAt: a.CreatedAt,
 		Comments:  []api.Comment{},

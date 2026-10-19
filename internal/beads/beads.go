@@ -27,6 +27,10 @@ const ClosedWindow = 7 * 24 * time.Hour
 // ErrNotFound is returned when a bead id does not exist.
 var ErrNotFound = errors.New("bead not found")
 
+// ErrOpenChildren is returned when a close is refused because the bead has
+// an open child.
+var ErrOpenChildren = errors.New("it has open sub-tasks; finish or remove them first")
+
 // Beads is the bridge's view of beads. Every method takes the repo directory
 // (the one holding .beads/). actor names who made a change.
 type Beads interface {
@@ -55,6 +59,7 @@ type Beads interface {
 type NewIssue struct {
 	Title    string
 	Due      *time.Time
+	Parent   string // the new bead's parent bead, made with --parent; empty for none
 	ActionID string // stored in metadata under ActionMetaKey
 	Actor    string
 }
@@ -77,6 +82,38 @@ type Issue struct {
 	Metadata     json.RawMessage `json:"metadata,omitempty"`
 	CommentCount int             `json:"comment_count"`
 	Comments     []Comment       `json:"comments,omitempty"`
+	// Parent is the bead this one is a child of (bd's parent-child
+	// dependency). bd list and bd show both print it.
+	Parent       string       `json:"parent,omitempty"`
+	Dependencies []Dependency `json:"dependencies,omitempty"`
+}
+
+// Dependency is one entry of a bead's dependencies. bd show prints the
+// other bead with its title and dependency_type; bd list prints only
+// depends_on_id and type.
+type Dependency struct {
+	ID             string `json:"id,omitempty"`
+	Title          string `json:"title,omitempty"`
+	DependencyType string `json:"dependency_type,omitempty"`
+	DependsOnID    string `json:"depends_on_id,omitempty"`
+	Type           string `json:"type,omitempty"`
+}
+
+// parentChild is bd's dependency type for a parent.
+const parentChild = "parent-child"
+
+// ParentTitle returns the parent's title as bd show printed it; empty from
+// bd list, or with no parent.
+func (i Issue) ParentTitle() string {
+	if i.Parent == "" {
+		return ""
+	}
+	for _, d := range i.Dependencies {
+		if d.ID == i.Parent && d.DependencyType == parentChild {
+			return d.Title
+		}
+	}
+	return ""
 }
 
 // Comment is one bead comment as bd prints it.
@@ -95,12 +132,13 @@ func (i Issue) Fingerprint() string {
 	slices.Sort(labels)
 	b, _ := json.Marshal(struct {
 		ID, Title, Status string
+		Parent            string
 		Due, Defer        *time.Time
 		Labels            []string
 		Metadata          json.RawMessage
 		Updated           time.Time
 		Comments          int
-	}{i.ID, i.Title, i.Status, i.DueAt, i.DeferUntil, labels, i.Metadata, i.UpdatedAt, i.CommentCount})
+	}{i.ID, i.Title, i.Status, i.Parent, i.DueAt, i.DeferUntil, labels, i.Metadata, i.UpdatedAt, i.CommentCount})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -121,6 +159,8 @@ func (i Issue) Item() api.Item {
 		CreatedAt:   i.CreatedAt.UTC(),
 		UpdatedAt:   i.UpdatedAt.UTC(),
 		ClosedAt:    utc(i.ClosedAt),
+		Parent:      i.Parent,
+		ParentTitle: i.ParentTitle(),
 		Comments:    make([]api.Comment, 0, len(i.Comments)),
 	}
 	if i.CloseReason != nil {

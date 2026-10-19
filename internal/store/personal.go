@@ -138,6 +138,7 @@ func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 			Priority:  2,
 			CreatedBy: a.Author,
 			DueAt:     a.Payload.Due,
+			Parent:    a.Payload.Parent,
 			CreatedAt: a.CreatedAt,
 			UpdatedAt: a.CreatedAt,
 		}

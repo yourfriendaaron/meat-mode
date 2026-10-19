@@ -23,8 +23,14 @@ type Item struct {
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	ClosedAt    *time.Time `json:"closedAt,omitempty"`
 	Comments    []Comment  `json:"comments"`
-	Checklist   []Check    `json:"checklist,omitempty"` // personal items only
-	Repeat      *Repeat    `json:"repeat,omitempty"`    // personal items only
+	// Parent is the id of the item this one is a sub-task of, in the same
+	// list; empty for a top-level item. ParentTitle is the parent's title
+	// as the list's tracker last gave it, so a sub-task whose parent is not
+	// synced (a tracker item not meant for the user) can still name it.
+	Parent      string  `json:"parent,omitempty"`
+	ParentTitle string  `json:"parentTitle,omitempty"`
+	Checklist   []Check `json:"checklist,omitempty"` // personal items only
+	Repeat      *Repeat `json:"repeat,omitempty"`    // personal items only
 	// RemindBefore is how many minutes before the due time an early
 	// reminder comes; nil uses the hub's ReminderLead. Personal items only.
 	RemindBefore *int `json:"remindBefore,omitempty"`
@@ -228,6 +234,7 @@ type Payload struct {
 	Repeat   *Repeat    `json:"repeat,omitempty"`   // add, personal list only; needs Due
 	On       *bool      `json:"on,omitempty"`       // sync and agents
 	Ask      bool       `json:"ask,omitempty"`      // add: an agent starts on the new item
+	Parent   string     `json:"parent,omitempty"`   // add: the id of the item the new one is a sub-task of
 	Set      *Edit      `json:"set,omitempty"`      // edit
 	// Was is filled in by the hub. On edit it holds the fields Set changed,
 	// as they were; on done of a repeating item, the due time and checklist

@@ -124,7 +124,10 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		if utf8.RuneCountInString(title) > MaxTitleLen {
 			return a, false, invalidf("title is longer than %d characters", MaxTitleLen)
 		}
-		add := api.Payload{Title: title, Due: p.Due, Ask: p.Ask}
+		add := api.Payload{Title: title, Due: p.Due, Ask: p.Ask, Parent: strings.TrimSpace(p.Parent)}
+		if add.Parent != "" && !validSegment(add.Parent) {
+			return a, false, invalidf("payload.parent is not a valid item id")
+		}
 		if p.Repeat != nil {
 			if p.Due == nil {
 				return a, false, invalidf("a repeat needs payload.due")
@@ -228,6 +231,11 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 				return a, false, err
 			}
 		}
+		if na.Kind == api.KindAdd && a.Payload.Parent != "" {
+			if err := checkParent(tx, na.Bridge, na.Repo, a.Payload.Parent); err != nil {
+				return a, false, err
+			}
+		}
 		a.Bridge, a.Repo = na.Bridge, na.Repo
 	} else {
 		b, r, id, ok := SplitKey(na.Key)
@@ -254,6 +262,11 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		}
 		if na.Kind == api.KindAsk {
 			if err := checkAgentsAllowed(tx, b, r); err != nil {
+				return a, false, err
+			}
+		}
+		if na.Kind == api.KindDone || na.Kind == api.KindDismiss {
+			if err := checkCloses(tx, b, r, id); err != nil {
 				return a, false, err
 			}
 		}

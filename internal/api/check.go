@@ -139,7 +139,11 @@ func CheckItems(items []Item) error {
 		seen[it.ID] = true
 		it.Key, it.Bridge, it.Repo = "", "", ""
 		it.Pending, it.SeenAt, it.Error, it.FirstSeen, it.Run = false, nil, "", time.Time{}, nil
+		if it.Parent != "" && (!ValidSegment(it.Parent) || it.Parent == it.ID) {
+			return Invalidf("item %q has a parent %q that is not valid", it.ID, it.Parent)
+		}
 		it.Title = TruncRunes(it.Title, ItemTitleLimit)
+		it.ParentTitle = TruncRunes(it.ParentTitle, ItemTitleLimit)
 		it.Description = TruncRunes(it.Description, ItemDescriptionLimit)
 		for j := range it.Comments {
 			it.Comments[j].Text = TruncRunes(it.Comments[j].Text, CommentLimit)

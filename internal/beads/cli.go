@@ -227,6 +227,9 @@ func (c *CLI) Close(ctx context.Context, dir, id, reason, actor string) error {
 		return err
 	}
 	_, err := c.run(ctx, dir, "close", "--reason="+reason, "--actor="+actor, "--json", "--", id)
+	if err != nil && strings.Contains(err.Error(), "open child issue") {
+		return ErrOpenChildren
+	}
 	return err
 }
 
@@ -280,6 +283,12 @@ func (c *CLI) Create(ctx context.Context, dir string, in NewIssue) (string, erro
 	}
 	if in.Due != nil {
 		args = append(args, "--due="+in.Due.UTC().Format(time.RFC3339))
+	}
+	if in.Parent != "" {
+		if err := CheckID(in.Parent); err != nil {
+			return "", err
+		}
+		args = append(args, "--parent="+in.Parent)
 	}
 	out, err := c.run(ctx, dir, args...)
 	if err != nil {

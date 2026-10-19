@@ -58,6 +58,68 @@ func TestFingerprintChanges(t *testing.T) {
 	if a.Fingerprint() == b.Fingerprint() {
 		t.Error("a new comment did not change the fingerprint")
 	}
+	c := a
+	c.Parent = "x-0"
+	if a.Fingerprint() == c.Fingerprint() {
+		t.Error("a new parent did not change the fingerprint")
+	}
+}
+
+// TestCLISubtasks checks what the bridge relies on for sub-tasks against a
+// real bd: create with a parent, the parent in list and show, its title in
+// show, and the close of a parent refused while a child is open.
+func TestCLISubtasks(t *testing.T) {
+	dir := beadstest.NewRepo(t, "", "garden")
+	ctx := context.Background()
+	c := &beads.CLI{}
+
+	parent, err := c.Create(ctx, dir, beads.NewIssue{Title: "Plant the beds", ActionID: "act-p", Actor: "alex-app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := c.Create(ctx, dir, beads.NewIssue{Title: "Buy seedlings", Parent: parent, ActionID: "act-c", Actor: "alex-app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A child of a bead not labelled human: the list holds the child only.
+	epic := strings.TrimSpace(beadstest.Run(t, dir, "bd", "create", "Garden plan", "--silent"))
+	other, err := c.Create(ctx, dir, beads.NewIssue{Title: "Pick a fence", Parent: epic, ActionID: "act-o", Actor: "alex-app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := c.ListHuman(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parents := map[string]string{}
+	for _, i := range list {
+		parents[i.ID] = i.Parent
+	}
+	if len(list) != 3 || parents[parent] != "" || parents[child] != parent || parents[other] != epic {
+		t.Fatalf("ListHuman parents = %v", parents)
+	}
+
+	got, err := c.Show(ctx, dir, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it := got.Item(); it.Parent != epic || it.ParentTitle != "Garden plan" {
+		t.Fatalf("Item parent = %q %q", it.Parent, it.ParentTitle)
+	}
+
+	if err := c.Close(ctx, dir, parent, "Done in Meat Mode", "alex-app"); !errors.Is(err, beads.ErrOpenChildren) {
+		t.Fatalf("closing a parent with an open child: %v; want ErrOpenChildren", err)
+	}
+	if err := c.Close(ctx, dir, child, "Done in Meat Mode", "alex-app"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Close(ctx, dir, parent, "Done in Meat Mode", "alex-app"); err != nil {
+		t.Fatalf("close after the child closed: %v", err)
+	}
+	if _, err := c.Create(ctx, dir, beads.NewIssue{Title: "x", Parent: "--force"}); !errors.Is(err, beads.ErrBadID) {
+		t.Fatalf("a flag as parent: %v", err)
+	}
 }
 
 // TestCLI runs every method against a real bd in a temp repo.

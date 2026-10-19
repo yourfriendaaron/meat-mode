@@ -176,7 +176,7 @@ Releases: one signed universal APK per tag `vX.Y.Z`, named `meat-mode-android-vX
 | `snooze` | `key` | `{"until": time or null, "previous": time or null}` | `deferUntil = until`; no `until` clears the snooze |
 | `dismiss` | `key` | `{}` | status `closed`, close reason `Dismissed` |
 | `note` | `key` | `{"text": "…"}` | appends a comment by `<name>-app`, the name kept in Settings |
-| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true}` (`repeat` on the personal list only; `ask` only where agents are allowed) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs), and the provisional item shows a `working` run at once. |
+| `add` | `bridge` + `repo` | `{"title": "…", "due": time or null, "repeat"?: Repeat, "ask"?: true, "parent"?: "<item id>"}` (`repeat` on the personal list only; `ask` only where agents are allowed; `parent` makes it a sub-task, see Sub-tasks) | inserts a provisional item keyed `<bridge>/<repo>/pending-<action id>`; replaced by the real bead when the bridge reports it. With `ask`, an agent starts on the new bead (see Agent runs), and the provisional item shows a `working` run at once. |
 | `sync` | `bridge` + `repo` | `{"on": true or false}` | the repo shows `optedIn: on` with `pending: true` until the bridge reports its repo list again; switching off drops the repo's items then. Not allowed on the personal list. |
 | `ask` | `key` | `{"text"?: "…"}` | wakes an agent on the item (see Agent runs). With `text`, appends it as a note first, as `note` does, in the same action. The item's `run` shows `working` at once; on a live run it counts the note in `queued` instead. |
 | `stop` | `key` | `{}` | ends the item's live run; `run` shows `stopped` with reason `stopped` at once |
@@ -189,6 +189,14 @@ Releases: one signed universal APK per tag `vX.Y.Z`, named `meat-mode-android-vX
 A note, or the note of an ask, keeps showing on the hub's copy after it is applied, until the bridge sends that repo's set again with the bead's own comment.
 
 The last four change personal items only. The hub refuses them on an agent's item with `400`: an agent item's title, dates and priority belong to its agent, so ask for a change in a note.
+
+### Sub-tasks
+
+An item's `parent` is the id of the item it is a sub-task of, in the same list; a top-level item has none. `parentTitle` is the parent's title as the list's tracker last gave it, so a sub-task whose parent is not in the set (on beads, a parent not labelled `human`) can still name it. The rules are the same on the personal list and on a tracker's list:
+
+- An `add` with `parent` needs that item open, in the same list, and top-level: sub-tasks go one level deep. A tracker item that is deeper is shown as it comes.
+- `done` and `dismiss` on an item answer `409` while any of its sub-tasks is open. A sub-task with a pending `done` or `dismiss` counts as closed and one with a pending `reopen` as open, so the app may send the sub-tasks' closes and then the parent's together; the bridge applies them in that order. A sub-task still being added counts as open.
+- A snooze changes only the item it names. The app shows sub-tasks under their parent, so they move with it.
 
 `Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?}`. A field left out stays as it is.
 
@@ -295,7 +303,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 | `POST /bridge/v1/hello` | `{"version", "bdVersion"}` | `{"bridge": "<name>", "serverTime"}`; updates last-seen |
 | `GET /bridge/v1/settings` | | `{"name", "timeZone"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
 | `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`, `pending` and `agentsPending`): every repo the bridge found, `optedIn` true for those it syncs, `agentsAllowed` true for those whose agents switch is on | `204`; replaces this bridge's repo list |
-| `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. |
+| `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. An item's `parent` must be a valid id other than its own. |
 | `GET /bridge/v1/actions` | | `[]Action` for this bridge with status `pending`, oldest first |
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
 | `PUT /bridge/v1/runs` | `[]RunReport`: `{"repo", "beadId", …Run, "applying"?}` for every run the bridge knows, live and the latest settled one per bead; `applying` is the id of an ask or stop already applied to that run whose result the bridge has not posted yet | `204`; replaces this bridge's run list. The hub shows each on the item it names (see Agent runs) and ignores one whose item it does not hold. |

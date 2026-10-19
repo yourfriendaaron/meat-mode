@@ -601,3 +601,43 @@ func TestSyncSwitch(t *testing.T) {
 		}
 	})
 }
+
+// TestSubtasks adds a sub-task through the bridge, syncs the parent link to
+// the hub, and reports a close the tracker refuses while a child is open in
+// plain words.
+func TestSubtasks(t *testing.T) {
+	both(t, func(t *testing.T, w *world) {
+		dir := w.repo("garden", true)
+		water := w.seed(dir, "Water the plants")
+		acts := []api.Action{
+			action("s-add", api.KindAdd, "garden", "", api.Payload{Title: "Fill the can", Parent: water}),
+			action("s-done", api.KindDone, "garden", water, api.Payload{}),
+		}
+		for _, a := range acts {
+			w.hub.Enqueue(us, a)
+		}
+		b := w.start()
+		w.tick(b)
+		child := w.oneOK(aid("s-add")).BeadID
+		if got := w.show(dir, child).Parent; got != water {
+			t.Fatalf("child parent = %q, want %q", got, water)
+		}
+		rs := w.hub.Results(aid("s-done"))
+		if len(rs) != 1 || rs[0].OK || rs[0].Error != beads.ErrOpenChildren.Error() {
+			t.Fatalf("done on a parent with an open child = %+v", rs)
+		}
+		items, _ := w.hub.Items(us, "garden")
+		var found bool
+		for _, it := range items {
+			if it.ID == child {
+				found = true
+				if it.Parent != water || it.ParentTitle != "Water the plants" {
+					t.Errorf("hub copy of the child = %+v", it)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("child missing from hub items %+v", items)
+		}
+	})
+}

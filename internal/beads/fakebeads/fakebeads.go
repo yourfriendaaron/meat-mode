@@ -91,6 +91,7 @@ func clone(i *beads.Issue) beads.Issue {
 	c := *i
 	c.Labels = slices.Clone(i.Labels)
 	c.Comments = slices.Clone(i.Comments)
+	c.Dependencies = slices.Clone(i.Dependencies)
 	c.CommentCount = len(i.Comments)
 	return c
 }
@@ -137,16 +138,27 @@ func (f *Fake) Show(_ context.Context, dir, id string) (beads.Issue, error) {
 	if err != nil {
 		return beads.Issue{}, err
 	}
-	return clone(i), nil
+	c := clone(i)
+	if p, ok := f.repos[dir][c.Parent]; ok {
+		// bd show prints the parent among the dependencies, with its title.
+		c.Dependencies = []beads.Dependency{{ID: p.ID, Title: p.Title, DependencyType: "parent-child"}}
+	}
+	return c, nil
 }
 
-// Close implements beads.Beads.
+// Close implements beads.Beads. Like bd, it refuses a bead with an open
+// child.
 func (f *Fake) Close(_ context.Context, dir, id, reason, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	i, err := f.issue(dir, id)
 	if err != nil {
 		return err
+	}
+	for _, c := range f.repos[dir] {
+		if c.Parent == id && c.Status != "closed" {
+			return beads.ErrOpenChildren
+		}
 	}
 	f.Calls = append(f.Calls, "close "+dir+" "+id)
 	now := f.Now().UTC()
@@ -244,7 +256,7 @@ func (f *Fake) Create(_ context.Context, dir string, in beads.NewIssue) (string,
 		due = &d
 	}
 	f.Put(dir, beads.Issue{ID: id, Title: in.Title, Status: "open", Priority: 2, Labels: []string{beads.HumanLabel},
-		CreatedBy: in.Actor, DueAt: due, Metadata: meta})
+		CreatedBy: in.Actor, DueAt: due, Metadata: meta, Parent: in.Parent})
 	return id, nil
 }
 
