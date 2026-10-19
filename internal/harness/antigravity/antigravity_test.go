@@ -70,8 +70,8 @@ func TestReadCount(t *testing.T) {
 			}
 		}
 	}
-	if !slices.Equal(reads, []int{1, 2}) {
-		t.Fatalf("reads = %v, want [1 2]", reads)
+	if !slices.Equal(reads, []int{1, 1}) {
+		t.Fatalf("reads = %v, want [1 1]", reads)
 	}
 }
 

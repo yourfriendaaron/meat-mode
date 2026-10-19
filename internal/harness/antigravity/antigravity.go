@@ -135,7 +135,6 @@ type result struct {
 
 type decoder struct {
 	seen map[int]bool // tool steps already reported, by step index
-	read int          // user lines agy has taken in
 	now  func() time.Time
 }
 
@@ -165,8 +164,7 @@ func (d *decoder) step(s *step) []harness.Event {
 		if s.State != "DONE" {
 			return nil
 		}
-		d.read++
-		return []harness.Event{{Session: s.ConversationID, Read: d.read}}
+		return []harness.Event{{Session: s.ConversationID, Read: 1}}
 	case "tool":
 		if d.seen[s.Index] {
 			return nil
