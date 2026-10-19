@@ -14,11 +14,13 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
+
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
 // Errors the hub maps to HTTP statuses. Wrapped errors carry a plain message.
 var (
-	ErrInvalid      = errors.New("invalid request")
+	ErrInvalid      = api.ErrInvalid
 	ErrNotFound     = errors.New("not found")
 	ErrConflict     = errors.New("conflict")
 	ErrUnauthorized = errors.New("unauthorized")

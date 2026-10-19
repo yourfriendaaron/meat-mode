@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
-	"strings"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -19,89 +18,9 @@ const OfflineAfter = 60 * time.Second
 // OfflineDetail is the detail of a run the hub shows as offline.
 const OfflineDetail = "The machine running the agent stopped reporting, so the hub cannot tell whether the agent is still at work."
 
-// Length limits on what a bridge reports about a run; longer text is
-// truncated, as an item's is.
-const (
-	maxRunIDLen     = 200
-	maxAgentNameLen = 200
-	maxActivityLen  = 500
-	maxDetailLen    = 2000
-)
-
-// maxRunCount bounds the counts a bridge may report: real ones stay far
-// below it, and a huge one would only be noise.
-const maxRunCount = 1000000
-
 // startingActivity is the activity of a run the hub shows before the bridge
 // has started it.
 const startingActivity = "Starting"
-
-// bridgeReasons are the reasons a bridge may report; offline is the hub's.
-var bridgeReasons = map[string]bool{
-	api.ReasonStopped: true, api.ReasonUsageLimit: true, api.ReasonTimeout: true,
-	api.ReasonBudget: true, api.ReasonRunLimit: true, api.ReasonBusy: true,
-	api.ReasonNotAllowed: true, api.ReasonNoReply: true, api.ReasonFailed: true,
-	api.ReasonCrashed: true, api.ReasonRestarted: true,
-}
-
-// checkRun validates one reported run and returns it trimmed to the limits.
-func checkRun(r api.RunReport) (api.Run, error) {
-	run := r.Run
-	if !ValidRepoName(r.Repo) {
-		return run, invalidf("run repo %q is not valid", r.Repo)
-	}
-	if !validSegment(r.BeadID) || strings.HasPrefix(r.BeadID, provisionalPrefix) {
-		return run, invalidf("run beadId %q is not valid", r.BeadID)
-	}
-	if strings.TrimSpace(run.ID) == "" {
-		return run, invalidf("the run on %q needs an id", r.BeadID)
-	}
-	switch run.State {
-	case api.RunWorking, api.RunWaiting, api.RunDone:
-		run.Reason = ""
-	case api.RunStopped:
-		if !bridgeReasons[run.Reason] {
-			return run, invalidf("the run on %q has unknown reason %q", r.BeadID, run.Reason)
-		}
-	default:
-		return run, invalidf("the run on %q has unknown state %q", r.BeadID, run.State)
-	}
-	if run.StartedAt.IsZero() {
-		return run, invalidf("the run on %q needs startedAt", r.BeadID)
-	}
-	// Only a working run is open; every settled one says when it ended, so
-	// the push check can tell a fresh end from an old one.
-	if run.State == api.RunWorking && run.EndedAt != nil {
-		return run, invalidf("the working run on %q has endedAt", r.BeadID)
-	}
-	if run.State != api.RunWorking && run.EndedAt == nil {
-		return run, invalidf("the settled run on %q needs endedAt", r.BeadID)
-	}
-	if run.EndedAt != nil && run.EndedAt.Before(run.StartedAt) {
-		return run, invalidf("the run on %q ended before it started", r.BeadID)
-	}
-	if run.Count < 0 || run.Queued < 0 {
-		return run, invalidf("the run on %q has a negative count", r.BeadID)
-	}
-	if run.Count > maxRunCount || run.Queued > maxRunCount {
-		return run, invalidf("the run on %q has a count too large to be real", r.BeadID)
-	}
-	run.ID = truncRunes(run.ID, maxRunIDLen)
-	run.Agent = truncRunes(run.Agent, maxAgentNameLen)
-	run.Activity = truncRunes(run.Activity, maxActivityLen)
-	run.Detail = truncRunes(run.Detail, maxDetailLen)
-	run = normaliseRun(run)
-	return run, nil
-}
-
-func normaliseRun(r api.Run) api.Run {
-	r.StartedAt = r.StartedAt.UTC()
-	if r.EndedAt != nil {
-		t := r.EndedAt.UTC()
-		r.EndedAt = &t
-	}
-	return r
-}
 
 // ReplaceRuns replaces a bridge's run list. Runs on beads the hub does not
 // hold are kept, so they show once the bead arrives, but State leaves them
@@ -110,26 +29,19 @@ func (s *Store) ReplaceRuns(bridge string, reports []api.RunReport) error {
 	type target struct{ repo, bead string }
 	want := map[target]string{}
 	applying := map[string]bool{}
+	reports, err := api.CheckRuns(reports)
+	if err != nil {
+		return err
+	}
 	for _, r := range reports {
-		run, err := checkRun(r)
-		if err != nil {
-			return err
-		}
 		if r.Applying != "" {
-			if !validSegment(r.Applying) {
-				return invalidf("the run on %q has a bad applying id", r.BeadID)
-			}
 			applying[r.Applying] = true
 		}
-		t := target{r.Repo, r.BeadID}
-		if _, dup := want[t]; dup {
-			return invalidf("bead %q in repo %q has two runs", r.BeadID, r.Repo)
-		}
-		data, err := json.Marshal(run)
+		data, err := json.Marshal(r.Run)
 		if err != nil {
 			return err
 		}
-		want[t] = string(data)
+		want[target{r.Repo, r.BeadID}] = string(data)
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"flag"
 	"slices"
 	"strings"
 	"testing"
@@ -219,5 +220,73 @@ func TestRepeatFlagsRefuse(t *testing.T) {
 	}
 	if len(hub.Personals()) != before || len(hub.Changes()) != 0 {
 		t.Fatal("a refused add or edit reached the hub")
+	}
+}
+
+// parseWhen refuses what it can before the hub is asked; resolve reads the
+// due time and the rule in the hub's zone, and asks only when there is one.
+func TestWhen(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	hub.SetTimeZone("America/New_York")
+	env, _ := pairedEnv(t, hub)
+	h, err := pairedHub(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	parse := func(due, every string, fromDone bool, until ...string) (when, error) {
+		fs := flag.NewFlagSet("t", flag.ContinueOnError)
+		u := fs.String("until", "", "")
+		if len(until) > 0 {
+			if err := fs.Set("until", until[0]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return parseWhen(fs, due, every, fromDone, *u)
+	}
+
+	w, err := parse("2026-03-02 20:30", "2 weeks", false, "2026-11-26")
+	if err != nil {
+		t.Fatal(err)
+	}
+	due, r, err := w.resolve(ctx, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 3, 3, 1, 30, 0, 0, time.UTC); due == nil || !due.Equal(want) {
+		t.Errorf("due %v, want %v", due, want)
+	}
+	if r == nil || r.Every != api.EveryWeek || r.Interval != 2 || r.Until != "2026-11-26" || r.TimeZone != "America/New_York" {
+		t.Errorf("repeat %+v", r)
+	}
+
+	// Nothing to read asks nothing of the hub, which may be down.
+	hub.SetDown(true)
+	if w, err = parse("", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if due, r, err := w.resolve(ctx, h); err != nil || due != nil || r != nil {
+		t.Errorf("empty: %v, %v, %v", due, r, err)
+	}
+	if w, err = parse("", "", false, "2026-11-26"); err != nil || !w.untilGiven || w.until != "2026-11-26" || w.repeat != nil {
+		t.Errorf("until alone: %+v, %v", w, err)
+	}
+
+	for name, tc := range map[string]struct {
+		due, every string
+		fromDone   bool
+		until      []string
+		want       string
+	}{
+		"bad due":         {due: "soon", want: "--due"},
+		"from-done alone": {fromDone: true, want: "--every"},
+		"bad rule":        {every: "fortnight", want: "--every"},
+		"101 days":        {every: "101 days", want: "1 to 100"},
+		"bad until":       {every: "day", until: []string{"26 November"}, want: "--until"},
+	} {
+		if _, err := parse(tc.due, tc.every, tc.fromDone, tc.until...); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
 	}
 }

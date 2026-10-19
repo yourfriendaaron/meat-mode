@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
@@ -42,14 +41,12 @@ func SplitKey(key string) (bridge, repo, id string, ok bool) {
 // (projects/garden), with its items, actions and reminders; see
 // renameRepo.
 func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
+	repos, err := api.CheckRepos(repos)
+	if err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	for _, r := range repos {
-		if !ValidRepoName(r.Name) {
-			return invalidf("repo name %q is not valid", r.Name)
-		}
-		if seen[r.Name] {
-			return invalidf("repo %q is listed twice", r.Name)
-		}
 		seen[r.Name] = true
 	}
 	tx, err := s.db.Begin()
@@ -190,31 +187,12 @@ func (s *Store) Repos() ([]api.Repo, error) {
 // first-seen times. The set of a personal repo, which only an older bridge
 // sends, goes to the personal list instead; see TransferPersonal.
 func (s *Store) ReplaceItems(bridge, repo string, items []api.Item) error {
+	if err := api.CheckItems(items); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
-	for i := range items {
-		it := &items[i]
-		if !validSegment(it.ID) {
-			return invalidf("item id %q is not valid", it.ID)
-		}
-		if strings.HasPrefix(it.ID, provisionalPrefix) {
-			return invalidf("item id %q uses the reserved prefix %q", it.ID, provisionalPrefix)
-		}
-		if seen[it.ID] {
-			return invalidf("item %q is listed twice", it.ID)
-		}
+	for _, it := range items {
 		seen[it.ID] = true
-		// Hub-only fields never come from a bridge.
-		it.Key, it.Bridge, it.Repo = "", "", ""
-		it.Pending, it.SeenAt, it.Error, it.FirstSeen, it.Run = false, nil, "", time.Time{}, nil
-		it.Title = truncRunes(it.Title, maxTitleLen)
-		it.Description = truncRunes(it.Description, maxDescriptionLen)
-		for j := range it.Comments {
-			it.Comments[j].Text = truncRunes(it.Comments[j].Text, maxCommentLen)
-			it.Comments[j].Author = truncRunes(it.Comments[j].Author, maxCommentAuthorLen)
-		}
-		if it.Comments == nil {
-			it.Comments = []api.Comment{}
-		}
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

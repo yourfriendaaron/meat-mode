@@ -16,8 +16,8 @@ func checkRepeat(r api.Repeat) (api.Repeat, error) {
 	default:
 		return r, invalidf("repeat.every must be day, week, month or year")
 	}
-	if r.Interval < 0 || r.Interval > api.MaxRepeatInterval {
-		return r, invalidf("repeat.interval must be 1 to %d", api.MaxRepeatInterval)
+	if err := api.CheckRepeatInterval(r.Interval); err != nil {
+		return r, err
 	}
 	if len(r.Weekdays) > 0 {
 		if r.Every != api.EveryWeek {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
@@ -58,46 +57,36 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	if *due != "" && set.ClearDue {
 		return errors.New("use --due or --clear-due, not both")
 	}
-	if set.Title != nil && strings.TrimSpace(*set.Title) == "" {
-		return errors.New("--title cannot be empty")
-	}
-	if set.Priority != nil && (*set.Priority < 0 || *set.Priority > 4) {
-		return errors.New("--priority must be 0 to 4")
-	}
-	if *due != "" {
-		if _, err := ParseDue(*due, time.UTC); err != nil {
-			return err
+	if set.Title != nil {
+		if _, err := api.CheckTitle(*set.Title); err != nil {
+			return fmt.Errorf("--title: %w", err)
 		}
 	}
-	repeat, err := repeatArg(*every, *fromDone)
+	if set.Priority != nil {
+		if err := api.CheckPriority(*set.Priority); err != nil {
+			return fmt.Errorf("--priority: %w", err)
+		}
+	}
+	w, err := parseWhen(fs, *due, *every, *fromDone, *until)
 	if err != nil {
 		return err
 	}
-	if repeat != nil && set.ClearRepeat {
+	if w.repeat != nil && set.ClearRepeat {
 		return errors.New("use --every or --no-repeat, not both")
 	}
-	if repeat != nil && set.ClearDue {
+	if w.repeat != nil && set.ClearDue {
 		return errors.New("--every needs a due time; --clear-due also stops it repeating")
 	}
-	// newUntil is the end the repeat gets when endChanged; "" for none.
-	var newUntil string
-	endChanged := given(fs, "until") || *noUntil
+	endChanged := w.untilGiven || *noUntil
 	switch {
-	case given(fs, "until") && *noUntil:
+	case w.untilGiven && *noUntil:
 		return errors.New("use --until or --no-until, not both")
 	case endChanged && set.ClearRepeat:
 		return errors.New("use --until or --no-until with a repeat, not with --no-repeat")
 	case endChanged && set.ClearDue:
 		return errors.New("--until and --no-until need a repeat; --clear-due stops it repeating")
-	case given(fs, "until"):
-		if newUntil, err = ParseUntil(*until); err != nil {
-			return err
-		}
 	}
-	if repeat != nil {
-		repeat.Until = newUntil
-	}
-	if set.Title == nil && set.Description == nil && *due == "" && !set.ClearDue && set.Priority == nil && repeat == nil && !set.ClearRepeat && !endChanged {
+	if set.Title == nil && set.Description == nil && w.due == "" && !set.ClearDue && set.Priority == nil && w.repeat == nil && !set.ClearRepeat && !endChanged {
 		fs.Usage()
 		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat, --until, --no-until or --priority")
 	}
@@ -106,26 +95,10 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if *due != "" || repeat != nil {
-		loc, err := hubZone(ctx, hub)
-		if err != nil {
-			return err
-		}
-		if *due != "" {
-			d, err := ParseDue(*due, loc)
-			if err != nil {
-				return err
-			}
-			set.Due = &d
-		}
-		if repeat != nil {
-			if repeat.TimeZone, err = zoneName(loc); err != nil {
-				return err
-			}
-			set.Repeat = repeat
-		}
+	if set.Due, set.Repeat, err = w.resolve(ctx, hub); err != nil {
+		return err
 	}
-	if endChanged && repeat == nil {
+	if endChanged && w.repeat == nil {
 		// The hub takes a repeat whole, so the to-do's own goes back with
 		// the new end.
 		it, err := hub.PersonalItem(ctx, item)
@@ -136,7 +109,7 @@ func Edit(ctx context.Context, args []string, env Env) error {
 			return fmt.Errorf("%s does not repeat; give --every with --until", item)
 		}
 		r := *it.Repeat
-		r.Start, r.Until = nil, newUntil
+		r.Start, r.Until = nil, w.until
 		set.Repeat = &r
 	}
 	return change(ctx, hub, env, item, api.PersonalChange{ID: *id, Kind: api.KindEdit,

@@ -35,12 +35,9 @@ func checkEdit(e api.Edit) (api.Edit, error) {
 		return e, invalidf("edit needs at least one field in payload.set")
 	}
 	if e.Title != nil {
-		title := strings.TrimSpace(*e.Title)
-		if title == "" {
-			return e, invalidf("title cannot be empty")
-		}
-		if utf8.RuneCountInString(title) > MaxTitleLen {
-			return e, invalidf("title is longer than %d characters", MaxTitleLen)
+		title, err := api.CheckTitle(*e.Title)
+		if err != nil {
+			return e, err
 		}
 		e.Title = &title
 	}
@@ -57,8 +54,10 @@ func checkEdit(e api.Edit) (api.Edit, error) {
 	if e.Due != nil && e.ClearDue {
 		return e, invalidf("send either due or clearDue, not both")
 	}
-	if e.Priority != nil && (*e.Priority < 0 || *e.Priority > 4) {
-		return e, invalidf("priority must be 0 to 4")
+	if e.Priority != nil {
+		if err := api.CheckPriority(*e.Priority); err != nil {
+			return e, err
+		}
 	}
 	if e.Checklist != nil {
 		in := *e.Checklist
