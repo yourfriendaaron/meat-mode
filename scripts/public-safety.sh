@@ -62,7 +62,8 @@ scan "Tailnet hostnames:" '[A-Za-z0-9-]+\.ts\.net'
 scan "Private IPv6 addresses (unique-local fd00::/8 and link-local fe80::):" \
   '(^|[^0-9a-fA-F:])([fF][dD][0-9a-fA-F]{2}|[fF][eE]80):'
 scan "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([^A-Za-z0-9._-]|$)' '^(env|mise|public-safety)\.local'
-scan "MAC addresses:" '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}'
+# Exactly six pairs: a certificate fingerprint (32 pairs) is public, not a MAC.
+scan "MAC addresses:" '(^|[^0-9A-Fa-f:])([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}([^0-9A-Fa-f:]|$)'
 scan "Email addresses outside example and noreply domains:" \
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
   '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com|anthropic\.com)'

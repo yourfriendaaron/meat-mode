@@ -8,7 +8,7 @@ Style guide for this page.
 - Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec (not committed) at deviceScaleFactor 2, phone 390x844 and desktop 1280 wide, with element shots of the new task bar (#qa-form) and the detail pane (#detail), and reduced to 8-bit PNGs; they are not the visual test baselines. The agent images set runs with the fake hub's allowAgents and setRun. Retake them when the screens they show change, and give each alt text that says what it shows.
 - Private network only: the hub is reached over Tailscale (Serve or a Tailscale Service) or a LAN reverse proxy, never the internet, and always has a password; the hub refuses internet requests and the bridge refuses a public hub. Login, session limits and password-again rules follow docs/api.md "Login". Never suggest Funnel, Cloudflare Tunnel, port forwards or a public calendar feed; detail lives in docs/deploy.md, "Private network only".
 - Agent runs: keep the "This is not a sandbox" caution in "Hand a task to an agent" whenever that section exists. Limits and defaults quoted there follow the table in docs/deploy.md, "Wake an agent on a task".
-- Android app: the install section names the Obtainium badge link, APK filter and package ID. The badge link is an apps.obtainium.imranr.dev redirect carrying an obtainium://app/ config (double URL-encoded) with the APK filter and the certificate SHA-256; rebuild it when either changes. The badge image is Obtainium's assets/graphics/badge_obtainium.png, trimmed; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate row stays a marked placeholder until the first signed release.
+- Android app: the install section names the Obtainium badge link, APK filter and package ID. The badge link is an apps.obtainium.imranr.dev redirect carrying an obtainium://app/ config (double URL-encoded) with the APK filter and the certificate SHA-256; rebuild it when either changes. The badge image is Obtainium's assets/graphics/badge_obtainium.png, trimmed; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate row holds the release key's SHA-256 and changes only with the key.
 - Nothing else in the repo depends on this page's headings. The Start here links depend on docs/deploy.md's headings.
 -->
 # Meat Mode
@@ -117,7 +117,7 @@ Check what you installed with [AppVerifier](https://github.com/soupslurpr/AppVer
 | | |
 |---|---|
 | Package ID | `io.github.yourfriendaaron.meatmode` |
-| Certificate SHA-256 | `TO BE FILLED IN AT THE FIRST SIGNED RELEASE` |
+| Certificate SHA-256 | `D9:96:CE:79:AB:03:BC:39:67:5C:6F:69:09:ED:88:87:7F:2C:CA:12:B5:79:36:09:28:75:D0:68:FF:65:39:90` |
 
 Reminders on Android need one of two things: Google Play Services on the phone, or a [UnifiedPush](https://unifiedpush.org) distributor app such as [ntfy](https://ntfy.sh) or Sunup. The app asks you to pick one when you turn reminders on. Maintainers set up the signing key with [docs/android-release.md](docs/android-release.md).
 
