@@ -10,7 +10,7 @@ Supported trackers, each with its own page:
 | [Backlog.md](https://github.com/MrLesk/Backlog.md) | [trackers/backlog.md](trackers/backlog.md) | the label `human` |
 | [ticket](https://github.com/wedow/ticket) | [trackers/ticket.md](trackers/ticket.md) | the tag `human` |
 
-Why these three, and why not Tasks.md or Task Master yet: [research/0004-trackers](research/0004-trackers/RESEARCH.md).
+Why these three: [research/0004-trackers](research/0004-trackers/RESEARCH.md). Other trackers, such as Tasks.md or Task Master, are not planned; a pull request that adds one by the steps below is welcome.
 
 ## Add a tracker
 
