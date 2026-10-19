@@ -16,7 +16,15 @@ func TestConformance(t *testing.T) {
 			Tools:   []harness.Tool{{Kind: harness.ToolShell, Command: "ls"}},
 			End:     harness.End{Text: "done"},
 		}},
-		{File: "testdata/codex-0.163.0-edit.jsonl", Source: "from source, codex 0.163.0", Want: harnesstest.Want{
+		{File: "testdata/codex-0.163.0-edit.jsonl", Source: "live, codex 0.163.0", Want: harnesstest.Want{
+			Session: "01a15571-3c2e-7d40-8a6b-5e7f9a0b1c2d",
+			Tools: []harness.Tool{
+				{Kind: harness.ToolShell, Command: "sed -n '1,120p' notes.txt"},
+				{Kind: harness.ToolEdit, File: "/repo/notes.txt"},
+			},
+			End: harness.End{Text: "done"},
+		}},
+		{File: "testdata/codex-0.163.0-items.jsonl", Source: "from source, codex 0.163.0", Want: harnesstest.Want{
 			Session: "0199b7e4-2c1a-7d30-9f4e-5a6b7c8d9e0f",
 			Tools: []harness.Tool{
 				{Kind: harness.ToolPlan},

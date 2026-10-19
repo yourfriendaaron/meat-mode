@@ -1,0 +1,12 @@
+{"type":"thread.started","thread_id":"0199b7e4-2c1a-7d30-9f4e-5a6b7c8d9e0f"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"todo_list","items":[{"text":"Add the watering note","completed":false}]}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'cat notes.txt'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'cat notes.txt'","aggregated_output":"Water the plants.\n","exit_code":0,"status":"completed"}}
+{"type":"error","message":"Reconnecting... 1/5 (stream disconnected before completion)"}
+{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"/repo/notes.txt","kind":"update"},{"path":"/repo/garden.md","kind":"add"}],"status":"completed"}}
+{"type":"item.started","item":{"id":"item_3","type":"web_search","id":"item_3","query":"how often to water basil","action":{"type":"search","query":"how often to water basil"}}}
+{"type":"item.started","item":{"id":"item_4","type":"mcp_tool_call","server":"calendar","tool":"add_event","arguments":{"title":"Water the plants"},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_5","type":"agent_message","text":"Added the watering note."}}
+{"type":"item.completed","item":{"id":"item_0","type":"todo_list","items":[{"text":"Add the watering note","completed":true}]}}
+{"type":"turn.completed","usage":{"input_tokens":41200,"cached_input_tokens":30100,"cache_write_input_tokens":0,"output_tokens":310,"reasoning_output_tokens":64}}

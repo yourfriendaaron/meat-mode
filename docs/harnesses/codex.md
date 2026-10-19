@@ -48,4 +48,4 @@ codex exec --json --sandbox workspace-write --skip-git-repo-check -C <repo> resu
 
 ## Version
 
-Built and tested against Codex 0.163.0. The shell-command fixture is a live run of 0.163.0; the file-change and usage-limit fixtures are written from its source.
+Built and tested against Codex 0.163.0. The shell-command and file-edit fixtures are live runs of 0.163.0, scrubbed. The usage-limit fixture, and one that covers the other item types (to-do list, web search, MCP call, a reconnect notice, an added file), are written from its source, since a limit cannot be reached on demand.

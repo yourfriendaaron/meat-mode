@@ -16,15 +16,20 @@ func TestConformance(t *testing.T) {
 			Tools:   []harness.Tool{{Kind: harness.ToolShell, Command: "ls"}},
 			End:     harness.End{Text: "done"},
 		}},
-		{File: "testdata/claude-2.1.303-error.jsonl", Source: "from source, claude 2.1.303", Want: harnesstest.Want{
+		{File: "testdata/claude-2.1.303-error.jsonl", Source: "live, claude 2.1.303", Want: harnesstest.Want{
+			Session: "4e1b7c93-0a2d-4f58-9c36-8d2e5a7f1b04",
+			End: harness.End{Error: true, Text: "There's an issue with the selected model (claude-garden-9). " +
+				"It may not exist or you may not have access to it. Run --model to pick a different model."},
+		}},
+		{File: "testdata/claude-2.1.303-limit.jsonl", Source: "from source, claude 2.1.303", Want: harnesstest.Want{
 			Session: "2a6f0d8e-91c3-4b57-a4e2-6b8d0f1c9e35",
 			Tools:   []harness.Tool{{Kind: harness.ToolRead, File: "/repo/notes.txt"}, {Kind: harness.ToolSearch}},
 			Limit:   true,
 			End:     harness.End{Error: true, Text: "You've hit your usage limit · resets 3pm"},
 		}},
-		{File: "testdata/claude-2.1.303-budget.jsonl", Source: "from source, claude 2.1.303", Want: harnesstest.Want{
-			Session: "9d4b7e21-3c6a-4f08-b5d1-8e2a6c0f7b93",
-			Tools:   []harness.Tool{{Kind: harness.ToolPlan}, {Kind: harness.ToolWrite, File: "/repo/plan.md"}},
+		{File: "testdata/claude-2.1.303-budget.jsonl", Source: "live, claude 2.1.303", Want: harnesstest.Want{
+			Session: "8c3f1a27-6d4e-4b90-a5c2-1f7e9b3d0a58",
+			Tools:   []harness.Tool{{Kind: harness.ToolRead, File: "/repo/notes.txt"}},
 			End:     harness.End{Error: true, Budget: true},
 		}},
 	})
