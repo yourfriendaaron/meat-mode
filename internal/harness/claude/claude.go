@@ -84,10 +84,23 @@ func (c *Claude) Launch(s harness.Spec) (harness.Launch, error) {
 	if harness.ValidSession(s.Session) {
 		args = append(args, "--resume", s.Session)
 	}
-	return harness.Launch{Args: args, Stdin: userLine(s.Prompt), KeepStdin: true}, nil
+	return harness.Launch{Args: args, Stdin: userLine(plain(s.Prompt)), KeepStdin: true}, nil
 }
 
-func (*Claude) Note(text string) []byte { return userLine(text) }
+func (*Claude) Note(text string) []byte { return userLine(plain(text)) }
+
+// plain keeps a message that starts with "/" from being run as one of
+// Claude Code's own commands (/cost, /clear), which it answers itself and
+// never sends to the model, so a run could end with no turn. A leading space
+// is enough for those. It does not stop a user's own command or skill of the
+// same name: Claude Code trims the space first, and the only switch,
+// --disable-slash-commands, would also remove every skill from the run.
+func plain(text string) string {
+	if strings.HasPrefix(text, "/") {
+		return " " + text
+	}
+	return text
+}
 
 func (*Claude) NewDecoder() harness.Decoder { return decoder{} }
 

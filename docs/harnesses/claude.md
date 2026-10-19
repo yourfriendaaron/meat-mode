@@ -33,6 +33,10 @@ The bridge writes the task's prompt to standard input as a stream-json user mess
 - **Time limit, runs per task, runs at once**: the bridge's, as for every harness.
 - **Permissions**: `--permission-mode auto` with no prompts lets the agent run commands as you without asking. It is not a sandbox; see [Wake an agent on a task](../deploy.md#wake-an-agent-on-a-task).
 
+## Things to know
+
+- Claude Code answers a message that starts with `/` itself when it names one of its own commands (`/cost`, `/clear`): no model turn runs and the run ends with nothing done. The bridge sends such a prompt or note with a leading space, which keeps those commands plain. Claude Code trims the space before it looks for your own commands and skills, so a prompt that starts with `/` and the name of one of those still expands. `--disable-slash-commands` would stop that too, but it removes every skill from the run, so the bridge does not pass it.
+
 ## Fixtures
 
 The conformance fixtures in `internal/harness/claude/testdata` come from Claude Code 2.1.303. Three were recorded live and scrubbed: the turn that runs a shell command, the turn that spent its cap (`--max-budget-usd 0.001`), and the failed turn on a model name that does not exist. The turn that hits a usage limit is written from the stream-json format, since a limit cannot be reached on demand.

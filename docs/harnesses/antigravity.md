@@ -31,6 +31,7 @@ agy --input-format stream-json --output-format stream-json --dangerously-skip-pe
 
 ## Things to know
 
+- agy answers a message that starts with `/` as a command of its own. With stream-json input it refuses most of them, for example `/help`, and ends the turn with an error and no model turn. agy trims a leading space, so the bridge sends such a prompt or note after a zero-width space (U+200B), which agy passes to the model. `--disable-slash-commands` also works, but it removes skills from the run.
 - agy is closed source. The decoder is built from its headless docs, its changelog and live runs, not from its code. agy documents no tool names, but its `init` line lists every tool the run has; the mapping covers the file, shell, search, web, browser and helper-agent tools in agy 1.4.2's list. A live run on 1.4.2 read a file with `view_file` and listed a folder with `run_command` (`ls`), not `list_dir`. A tool the mapping does not name shows as a generic activity line.
 - Stopping agy with an interrupt ends the turn with status `ERROR` and the error `interrupted`, which the bridge shows as a failed run. `CANCELED` is what agy reports when it lost the turn itself.
 - A turn that ends `SUCCESS` with no answer is counted as failed. agy can end a long turn that way, or as `CANCELED`, when it lost the turn ([antigravity-cli#902](https://github.com/google-antigravity/antigravity-cli/issues/902)), and can end a turn while a command it started is still running ([#1044](https://github.com/google-antigravity/antigravity-cli/issues/1044)).
