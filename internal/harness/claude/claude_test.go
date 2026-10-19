@@ -57,6 +57,22 @@ func TestLaunch(t *testing.T) {
 	}
 }
 
+// A prompt or note that starts with "/" goes in with a leading space, so
+// Claude Code sends it to the model instead of running its own command.
+func TestSlashIsPlain(t *testing.T) {
+	h, _ := New(harness.Env{})
+	l, _ := h.Launch(harness.Spec{Prompt: "/tmp holds the seed list.", BudgetUSD: 1})
+	if want := `{"message":{"content":" /tmp holds the seed list.","role":"user"},"type":"user"}` + "\n"; string(l.Stdin) != want {
+		t.Fatalf("Stdin = %q", l.Stdin)
+	}
+	if got := string(h.Note("/cost")); got != `{"message":{"content":" /cost","role":"user"},"type":"user"}`+"\n" {
+		t.Fatalf("Note = %q", got)
+	}
+	if got := plain("Water the /garden plants."); got != "Water the /garden plants." {
+		t.Fatalf("plain = %q", got)
+	}
+}
+
 func TestTools(t *testing.T) {
 	for _, c := range []struct {
 		name, input string

@@ -73,6 +73,22 @@ func TestLaunch(t *testing.T) {
 	}
 }
 
+// A prompt or note that starts with "/" goes in after a zero-width space, so
+// agy sends it to the model instead of answering it as a command.
+func TestSlashIsPlain(t *testing.T) {
+	a := &Antigravity{command: command}
+	l, _ := a.Launch(harness.Spec{Dir: "/repo", Prompt: "/tmp holds the seed list."})
+	if want := "{\"event\":\"user\",\"message\":{\"content\":\"\u200b/tmp holds the seed list.\"}}\n"; string(l.Stdin) != want {
+		t.Fatalf("Stdin = %q", l.Stdin)
+	}
+	if got := string(a.Note("/help")); got != "{\"event\":\"user\",\"message\":{\"content\":\"\u200b/help\"}}\n" {
+		t.Fatalf("Note = %q", got)
+	}
+	if got := plain("Water the /garden plants."); got != "Water the /garden plants." {
+		t.Fatalf("plain = %q", got)
+	}
+}
+
 // Each user_input step is agy taking in one more line from stdin.
 func TestReadCount(t *testing.T) {
 	d := (&Antigravity{}).NewDecoder()

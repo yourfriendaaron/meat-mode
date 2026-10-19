@@ -90,12 +90,25 @@ func (a *Antigravity) Launch(s harness.Spec) (harness.Launch, error) {
 	if harness.ValidSession(s.Session) {
 		args = append(args, "--conversation", s.Session)
 	}
-	return harness.Launch{Args: args, Stdin: userLine(s.Prompt), KeepStdin: true}, nil
+	return harness.Launch{Args: args, Stdin: userLine(plain(s.Prompt)), KeepStdin: true}, nil
 }
 
 // Note is one more user line. agy runs it as the next turn once the current
 // one ends, as it does for prompts piped in together.
-func (*Antigravity) Note(text string) []byte { return userLine(text) }
+func (*Antigravity) Note(text string) []byte { return userLine(plain(text)) }
+
+// plain keeps a message that starts with "/" from being run as an agy
+// command. agy answers those itself and, with stream-json input, ends the
+// turn with an error ("/help is answered by the CLI itself"). It trims
+// spaces, so the text starts with a zero-width space instead, which agy
+// passes to the model. --disable-slash-commands would also work but removes
+// skills from the run.
+func plain(text string) string {
+	if strings.HasPrefix(text, "/") {
+		return "\u200b" + text
+	}
+	return text
+}
 
 func userLine(text string) []byte {
 	b, _ := json.Marshal(map[string]any{"event": "user", "message": map[string]string{"content": text}})
