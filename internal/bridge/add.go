@@ -16,9 +16,10 @@ import (
 // app's quick add.
 const defaultDueHour = 9
 
-// Add runs `meat-mode add`: it puts a to-do on the hub's personal list with
-// the hub URL and token of this machine's bridge config, and prints its id
-// for `meat-mode edit`, `done` and `reopen`.
+// Add runs `meat-mode add`: it puts a to-do on the hub's personal list, or
+// on the project --project names, with the hub URL and token of this
+// machine's bridge config, and prints its id for `meat-mode edit`, `done`
+// and `reopen`.
 func Add(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -27,8 +28,9 @@ func Add(ctx context.Context, args []string, env Env) error {
 	author := fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id := fs.String("id", "", "a UUID for this to-do; adding the same id again changes nothing")
 	every, fromDone, until := repeatFlags(fs)
+	project := projectFlag(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--due TIME [--every RULE [--from-done] [--until DATE]]] [--note TEXT] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--project NAME|.] [--due TIME [--every RULE [--from-done] [--until DATE]]] [--note TEXT] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -54,6 +56,10 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if w.repeat != nil && w.due == "" {
 		return errors.New("--every needs --due, the first time it is due")
 	}
+	list, err := resolveProject(env, *project)
+	if err != nil {
+		return err
+	}
 
 	hub, err := pairedHub(env)
 	if err != nil {
@@ -62,7 +68,7 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if t.Due, t.Repeat, err = w.resolve(ctx, hub); err != nil {
 		return err
 	}
-	reply, err := hub.AddPersonal(ctx, t)
+	reply, err := hub.AddPersonal(ctx, list, t)
 	if err != nil {
 		return err
 	}

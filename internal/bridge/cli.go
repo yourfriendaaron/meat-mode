@@ -32,8 +32,9 @@ type Env struct {
 	LookPath   func(string) (string, error) // nil: exec.LookPath
 	Getenv     func(string) string          // nil: os.Getenv
 	HTTP       *http.Client
-	Resolver   Resolver  // nil: the system resolver
-	Stdin      io.Reader // nil: no input
+	Resolver   Resolver               // nil: the system resolver
+	Getwd      func() (string, error) // nil: os.Getwd
+	Stdin      io.Reader              // nil: no input
 	Stdout     io.Writer
 	Stderr     io.Writer
 	Version    string
@@ -71,6 +72,13 @@ func (e Env) lookPath(name string) (string, error) {
 		return e.LookPath(name)
 	}
 	return exec.LookPath(name)
+}
+
+func (e Env) getwd() (string, error) {
+	if e.Getwd != nil {
+		return e.Getwd()
+	}
+	return os.Getwd()
 }
 
 func (e Env) getenv() func(string) string {

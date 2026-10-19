@@ -22,7 +22,7 @@ func runBridge(args []string) error {
 }
 
 // runPersonal runs `meat-mode add`, `edit`, `done` or `reopen`, which
-// change the personal list with this machine's bridge config.
+// change the personal list or a project with this machine's bridge config.
 func runPersonal(cmd string, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
