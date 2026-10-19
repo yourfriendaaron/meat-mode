@@ -5,8 +5,8 @@ Style guide for this page.
 - Public repo: invented examples only (Alex, Sam, example.com, "Water the plants"). Deployment wording stays generic: "an always-on host", "a Tailscale Service", never one operator's names, paths or ports.
 - Shape: name and bold line, screenshot, picture of how it fits, why it exists, what you can do (one heading and one picture or example each), is this for you, start here table, reference (getting started, contributing, licence).
 - Setup detail lives in docs/deploy.md and the wire contract in docs/api.md; link to them, do not copy. The wizard step list under "Get started" follows web/src/wizard/steps and the step table in docs/deploy.md.
-- Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec at deviceScaleFactor 2 and reduced to 8-bit PNGs; they are not the visual test baselines. The agent images set runs with the fake hub's allowAgents and setRun. Retake them when the screens they show change, and give each alt text that says what it shows.
-- Private network only: the hub is reached over Tailscale (Serve or a Tailscale Service) or a LAN reverse proxy, never the internet, and always has a password. Never suggest Funnel, Cloudflare Tunnel, port forwards or a public calendar feed; detail lives in docs/deploy.md, "Private network only".
+- Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec (not committed) at deviceScaleFactor 2, phone 390x844 and desktop 1280 wide, with element shots of the new task bar (#qa-form) and the detail pane (#detail), and reduced to 8-bit PNGs; they are not the visual test baselines. The agent images set runs with the fake hub's allowAgents and setRun. Retake them when the screens they show change, and give each alt text that says what it shows.
+- Private network only: the hub is reached over Tailscale (Serve or a Tailscale Service) or a LAN reverse proxy, never the internet, and always has a password; the hub refuses internet requests and the bridge refuses a public hub. Login, session limits and password-again rules follow docs/api.md "Login". Never suggest Funnel, Cloudflare Tunnel, port forwards or a public calendar feed; detail lives in docs/deploy.md, "Private network only".
 - Agent runs: keep the "This is not a sandbox" caution in "Hand a task to an agent" whenever that section exists. Limits and defaults quoted there follow the table in docs/deploy.md, "Wake an agent on a task".
 - Android app: the install section names the Obtainium link, APK filter and package ID; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate row stays a marked placeholder until the first signed release.
 - Nothing else in the repo depends on this page's headings. The Start here links depend on docs/deploy.md's headings.
@@ -15,11 +15,11 @@ Style guide for this page.
 
 **One to-do list for the things only you can do: your own to-dos and the tasks your AI agents hand you, on your phone and your desktop.**
 
-![The Today list on a desktop: personal to-dos such as "Water the plants" and "Call Sam about the weekend" sit beside a task from an agent, "Approve the new footer text", whose details are open with the agent's reason, Done and Won't do buttons, snooze choices and the notes between you and the agent.](docs/images/desktop-today-detail.png)
+![The Today list on a desktop: personal to-dos such as "Water the plants" and "Call Sam about the weekend" sit beside a task from an agent, "Approve the new footer text", whose details are open with the agent's reason, the command that lets agents work in that repo, Done and Won't do buttons and snooze choices.](docs/images/desktop-today-detail.png)
 
 Your AI agents work in [beads](https://github.com/gastownhall/beads), an issue tracker that lives in your code repos. When an agent needs you for something it cannot do itself (approve a text, sign in somewhere, make a call), it files a task labelled `human`. Meat Mode gathers those tasks from every repo and every machine into one list, next to your own to-dos. You tick them off, snooze them, say no, or reply with a note, and your answer goes back to the agent in beads. In the repos you allow, one tap also wakes an agent to work on a task, and you watch how it goes on the task itself.
 
-You host it yourself. It runs as one container on any always-on machine you have, such as a home server, a NAS or a Raspberry Pi, so your list and your reminders keep working while the computer your agents run on is asleep. It stays on your private network, your tailnet or your home LAN, and asks for a password.
+You host it yourself. It runs as one container on any always-on machine you have, such as a home server, a NAS or a Raspberry Pi, so your list and your reminders keep working while the computer your agents run on is asleep. It stays on your private network, your tailnet or your home LAN, refuses requests from the internet, and always asks for a password.
 
 ## How it fits together
 
@@ -63,11 +63,11 @@ When a task is work an agent can do, wake one from the app. Write a note and tap
 | **done**, when the agent closed the task | Nothing; it is off your list. |
 | **stopped**, with the reason (you stopped it, a time, budget or usage limit, an error) | **Retry**. |
 
-In **New task**, the **An agent starts on it** switch hands a task you add straight to an agent. It starts off every time. **Stop all** in Settings ends every run at once. When a run you did not stop ends, you get one notification saying the agent replied, finished or stopped, with **Reply** and **Open** buttons.
+When you add a task to a list where agents may work, the **Agent** button in the new task bar hands it straight to an agent. It starts off every time. **Stop all** in Settings ends every run at once. When a run you did not stop ends, you get one notification saying the agent replied, finished or stopped, with **Reply** and **Open** buttons.
 
 <p>
   <img src="docs/images/agent-run-sheet.png" width="300" alt="The agent task &quot;Approve the new footer text&quot; open on a desktop. Its card reads &quot;planner replied: Asked which wording to use&quot;, and under the notes a pink button reads Reply to planner.">
-  <img src="docs/images/new-task-agent.png" width="450" alt="The New task form with &quot;Find a cheaper soil sensor&quot; typed in, the garden list chosen and the switch &quot;An agent starts on it&quot; turned on, so the Add button reads Add and ask agent.">
+  <img src="docs/images/new-task-agent.png" width="450" alt="The new task bar with &quot;Find a cheaper soil sensor&quot; typed in, the garden list chosen and the Agent button turned on, so the Add button turns pink and the line below reads &quot;It reads the task in garden and replies here.&quot;">
 </p>
 
 Agents work only where you let them. They start off in every repo, and you switch them on at the agent machine itself, with `meat-mode bridge agents on <repo>`; the app shows that command and can switch agents off again, but never on. Only your own taps start an agent, and personal to-dos have none. The bridge runs one agent per task, by default Claude Code, and gives each task its own Git worktree (a separate checkout of the repo). It stops a run after 30 minutes or $2 of usage, allows 10 runs per task and 2 at once on the machine; you can change each limit.
@@ -82,7 +82,7 @@ Quick add reads dates, times and repeats as you type and shows you what it under
 
 ### Get reminded on every device
 
-A reminder comes at the due time and when a snooze ends, as a notification on each phone and computer you turned them on for, and through [ntfy](https://ntfy.sh) if you use it. You can ask for an early reminder too, up to a week ahead. If the hub was off when something came due, it catches up when it is back.
+A reminder comes at the due time and when a snooze ends, as a notification on each phone and computer you turned them on for, and through [ntfy](https://ntfy.sh) if you use it. You can ask for an early reminder too, up to a week ahead. A reminder for one to-do has **Done** and **Snooze 1 hour** buttons that act without opening the app. If the hub was off when something came due, it catches up when it is back. **Settings**, **Devices** lists every browser and phone that gets reminders, and you can revoke any of them.
 
 ### Let agents put things on your list
 
@@ -131,7 +131,7 @@ It is not:
 
 - A shared or team list. It has one user.
 - A hosted service. You run it yourself.
-- Something to put on the internet. It answers only on your private network, so Tailscale Funnel, Cloudflare Tunnel and router port forwards are out.
+- Something to put on the internet. It answers only on your private network, so Tailscale Funnel, Cloudflare Tunnel and router port forwards are out. The hub refuses requests from the internet, and the bridge refuses a hub at a public address.
 - A project tracker. Agents keep their own work in beads; Meat Mode shows only the tasks that need you.
 
 ## Start here
@@ -150,7 +150,7 @@ It is not:
 
 ## Get started
 
-Start the hub container ([docs/deploy.md](docs/deploy.md#1-run-the-hub)) and open it in your browser. The first visit asks for a one-time setup code, which the hub prints in its log, and the password you choose. Then setup walks you through the rest:
+Start the hub container ([docs/deploy.md](docs/deploy.md#1-run-the-hub)) and open it in your browser. The first visit asks for a one-time setup code, which the hub prints in its log, and the password you choose; until then the hub shows nothing else. Then setup walks you through the rest:
 
 1. **Connection check**: is the app reached the way the hub expects, so reminders and live updates work, and does the internet not know its name?
 2. **Secure the hub**: confirms the hub has its password.
@@ -159,9 +159,11 @@ Start the hub container ([docs/deploy.md](docs/deploy.md#1-run-the-hub)) and ope
 5. **Reminders**: allow notifications and get a test reminder on this device, and on ntfy if you use it.
 6. **Appearance**: dark, light, or follow the device.
 7. **First to-do**: type `Water the plants tomorrow 6pm` and watch quick add read the date.
-8. **Agent machines** (optional): pair the machine your agents work on (it asks for your password again), choose which repos show up, see the command that lets agents work in one, and copy instructions that tell your agents how to raise tasks for you.
+8. **Agent machines** (optional): pair the machine your agents work on (it asks for your password again unless you entered it in the last 10 minutes), choose which repos show up, see the command that lets agents work in one, and copy instructions that tell your agents how to raise tasks for you.
 
 Skip any step; each one is also in Settings, where you can run setup again. Other devices get just the device steps.
+
+Each device logs in with your password. A login lasts until it goes unused for 14 days, and 90 days at most. Changing the password takes the current one.
 
 ## Contributing
 
