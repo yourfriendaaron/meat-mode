@@ -44,7 +44,7 @@ The bridge parses the files itself, since `tk` prints no JSON for a title or not
 - Frontmatter keys sit at column 0 and arrays are inline (`tags: [human, garden]`), the shape `tk` itself reads. Only the lines between the first two `---` count, so a body line starting `status:` is not a field.
 - The title is the first `# ` heading; the description is the text after it, up to a `## Design`, `## Acceptance Criteria` or `## Notes` heading.
 - Status: `open` is open, `in_progress` is in progress, `closed` and `done` are closed. ticket keeps no close time, so a closed task's close time is the file's last write.
-- Notes are the `**<UTC time>**` blocks under `## Notes`. ticket records no author, so a note Meat Mode writes starts with a line `by <author>:`, which the app strips off again. A note without that line, from `tk` or an agent, shows as written by "agent".
+- Notes are the `**<UTC time>**` blocks under `## Notes`. ticket records no author, so a note Meat Mode writes starts with a line `by <author>:`, which the app strips off again. A note without that line, from `tk` or an agent, shows as written by "agent". `tk show` prints the file as it is, so an agent reading the task sees the line too; any mark that names the author would show there, and the line tells the agent which notes are yours.
 - The version is a hash of the file's bytes.
 
 ## Things to know
