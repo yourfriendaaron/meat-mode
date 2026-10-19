@@ -217,8 +217,11 @@ func (d *decoder) result(r *result) []harness.Event {
 	return append(evs, e)
 }
 
-// toolCall maps one of agy's tools onto a tool kind. Tools that only wait
-// on or check an earlier call are not activity of their own.
+// toolCall maps one of agy's tools onto a tool kind. The names are those
+// agy 1.4.2 lists in its init line; a live run confirmed view_file (with
+// AbsolutePath) and run_command (with CommandLine), and listed a folder
+// with run_command. Tools that only wait on, check or feed an earlier call
+// are not activity of their own. Any other name is a generic activity.
 func toolCall(name string, params map[string]any) *harness.Tool {
 	file := firstString(params, "TargetFile", "AbsolutePath", "FilePath", "File", "Path")
 	switch name {
@@ -226,18 +229,23 @@ func toolCall(name string, params map[string]any) *harness.Tool {
 		return &harness.Tool{Kind: harness.ToolShell, Command: firstString(params, "CommandLine", "Command")}
 	case "write_to_file":
 		return &harness.Tool{Kind: harness.ToolWrite, File: file}
-	case "replace_file_content", "multi_replace_file_content", "edit_file", "sed_file":
+	case "replace_file_content", "multi_replace_file_content", "sed_file", "notebook_edit":
 		return &harness.Tool{Kind: harness.ToolEdit, File: file}
-	case "view_file", "view_file_outline", "view_code_item", "read_file":
+	case "view_file":
 		return &harness.Tool{Kind: harness.ToolRead, File: file}
-	case "grep_search", "find_by_name", "list_dir", "codebase_search":
+	case "grep_search", "find_by_name", "list_dir":
 		return &harness.Tool{Kind: harness.ToolSearch}
-	case "read_url_content", "search_web", "web_search":
+	case "read_url_content", "search_web":
 		return &harness.Tool{Kind: harness.ToolWeb}
-	case "invoke_subagent":
+	case "invoke_subagent", "browser_subagent":
 		return &harness.Tool{Kind: harness.ToolAgent}
-	case "ask_permission", "command_status", "wait", "wait_5_seconds":
+	case "ask_permission", "command_status", "send_command_input", "wait", "wait_5_seconds", "finish":
 		return nil
+	}
+	if strings.Contains(name, "browser") {
+		// open_browser_url, read_browser_page, browser_click_element and the
+		// rest of agy's browser tools.
+		return &harness.Tool{Kind: harness.ToolWeb}
 	}
 	return &harness.Tool{Kind: harness.ToolOther, File: file}
 }

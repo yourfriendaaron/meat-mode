@@ -35,4 +35,4 @@ The bridge writes the task's prompt to standard input as a stream-json user mess
 
 ## Fixtures
 
-The conformance fixtures in `internal/harness/claude/testdata` come from Claude Code 2.1.303: the turn that runs a shell command was recorded live and scrubbed; the failed turn (a usage limit) and the turn that spent its cap are written from the stream-json format.
+The conformance fixtures in `internal/harness/claude/testdata` come from Claude Code 2.1.303. Three were recorded live and scrubbed: the turn that runs a shell command, the turn that spent its cap (`--max-budget-usd 0.001`), and the failed turn on a model name that does not exist. The turn that hits a usage limit is written from the stream-json format, since a limit cannot be reached on demand.

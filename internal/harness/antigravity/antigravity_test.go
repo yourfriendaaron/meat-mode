@@ -17,6 +17,19 @@ func TestConformance(t *testing.T) {
 			Tools:   []harness.Tool{{Kind: harness.ToolShell, Command: "sleep 10 && ls"}},
 			End:     harness.End{Text: "blue"},
 		}},
+		{File: "testdata/antigravity-1.4.2-read.jsonl", Source: "live, agy 1.4.2", Want: harnesstest.Want{
+			Session: "6b2d8f14-7c3a-4e95-8a1b-0c4d7e9f2a36",
+			Tools: []harness.Tool{
+				{Kind: harness.ToolRead, File: "/repo/notes.txt"},
+				{Kind: harness.ToolShell, Command: "ls -la garden"},
+			},
+			End: harness.End{Text: "done"},
+		}},
+		{File: "testdata/antigravity-1.4.2-interrupted.jsonl", Source: "live, agy 1.4.2", Want: harnesstest.Want{
+			Session: "9e7c5a31-2f4b-4d86-b0a9-3c1e5f7d8b42",
+			Tools:   []harness.Tool{{Kind: harness.ToolShell, Command: "sleep 30"}},
+			End:     harness.End{Error: true, Text: "interrupted"},
+		}},
 		{File: "testdata/antigravity-1.4.2-tool.jsonl", Source: "from source, agy 1.4.2", Want: harnesstest.Want{
 			Session: "5f1c2b9e-3a47-4d8e-9b10-2c6f7a8d9e01",
 			Tools: []harness.Tool{
@@ -77,6 +90,25 @@ func TestReadCount(t *testing.T) {
 	}
 	if !slices.Equal(reads, []int{1, 1}) {
 		t.Fatalf("reads = %v, want [1 1]", reads)
+	}
+}
+
+func TestToolKinds(t *testing.T) {
+	for name, want := range map[string]string{
+		"run_command": harness.ToolShell, "write_to_file": harness.ToolWrite, "replace_file_content": harness.ToolEdit,
+		"notebook_edit": harness.ToolEdit, "view_file": harness.ToolRead, "list_dir": harness.ToolSearch,
+		"search_web": harness.ToolWeb, "open_browser_url": harness.ToolWeb, "browser_click_element": harness.ToolWeb,
+		"invoke_subagent": harness.ToolAgent, "browser_subagent": harness.ToolAgent,
+		"generate_image": harness.ToolOther, "a_tool_agy_adds_later": harness.ToolOther,
+	} {
+		if got := toolCall(name, nil); got == nil || got.Kind != want {
+			t.Errorf("%s: %+v, want kind %s", name, got, want)
+		}
+	}
+	for _, name := range []string{"command_status", "send_command_input", "wait", "finish"} {
+		if got := toolCall(name, nil); got != nil {
+			t.Errorf("%s: %+v, want no activity", name, got)
+		}
 	}
 }
 

@@ -42,16 +42,20 @@ func TestLive(t *testing.T) { harnesstest.Live(t, Name) }
 
 func TestLaunch(t *testing.T) {
 	h := &OpenCode{command: command}
-	l, err := h.Launch(harness.Spec{Dir: "/repo", Prompt: "Water the plants.", Session: "ses_abc"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"opencode", "run", "--format", "json", "--auto", "--dir", "/repo", "-s", "ses_abc", "Water the plants."}
-	if !slices.Equal(l.Args, want) {
-		t.Fatalf("Args = %q, want %q", l.Args, want)
-	}
-	if l.KeepStdin || len(l.Stdin) != 0 {
-		t.Fatalf("a run that reads its prompt from the arguments keeps no stdin: %+v", l)
+	for _, prompt := range []string{"Water the plants.", "-n Water the plants.", "--help"} {
+		l, err := h.Launch(harness.Spec{Dir: "/repo", Prompt: prompt, Session: "ses_abc"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"opencode", "run", "--format", "json", "--auto", "--dir", "/repo", "-s", "ses_abc"}
+		if !slices.Equal(l.Args, want) {
+			t.Fatalf("Args = %q, want %q", l.Args, want)
+		}
+		// The prompt goes in on stdin, which closes after it, so one that
+		// starts with a dash never reaches the flag parser.
+		if string(l.Stdin) != prompt || l.KeepStdin {
+			t.Fatalf("Stdin = %q, keep %v; want %q, then closed", l.Stdin, l.KeepStdin, prompt)
+		}
 	}
 }
 

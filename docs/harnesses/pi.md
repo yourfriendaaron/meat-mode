@@ -43,7 +43,7 @@ A run's activity line comes from Pi's `tool_execution_start` events: `bash`, `re
 ## Things to know
 
 - Pi reads `AGENTS.md`, and falls back to `CLAUDE.md`.
-- A message that starts with `/` is read as a skill or prompt-template command.
+- Pi reads a message that starts with `/` as an extension command, a `/skill:` command or a prompt template, and checks only the first character. The bridge sends such a prompt or note with a leading space, so Pi passes it to the model as written.
 - The bridge removes `PI_CODING_AGENT` and `AI_AGENT`, which Pi sets for itself, from the environment of a run. Settings such as `PI_CODING_AGENT_DIR` stay.
 - Pi's JSON events changed shape in 0.84.0 (`message_update` carries deltas). The decoder reads only `message_end`, so it does not depend on that.
 - Pi's repository is `earendil-works/pi` (formerly `badlogic/pi-mono`). GitHub releases and the npm package agree on the 1.x line: 1.3.0 was the latest when this was written. The 0.84.x line in older notes is the earlier numbering.

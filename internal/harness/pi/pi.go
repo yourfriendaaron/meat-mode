@@ -90,14 +90,26 @@ func (p *Pi) Launch(s harness.Spec) (harness.Launch, error) {
 		args = append(args, "--session-id", s.Session)
 	}
 	stdin := cmd(map[string]any{"id": "state", "type": "get_state"})
-	stdin = append(stdin, cmd(map[string]any{"id": "prompt", "type": "prompt", "message": s.Prompt})...)
+	stdin = append(stdin, cmd(map[string]any{"id": "prompt", "type": "prompt", "message": plain(s.Prompt)})...)
 	return harness.Launch{Args: args, Stdin: stdin, KeepStdin: true}, nil
 }
 
 // Note queues a steering message: Pi delivers it after the current turn's
 // tool calls and before the next model call.
 func (p *Pi) Note(text string) []byte {
-	return cmd(map[string]any{"type": "steer", "message": text})
+	return cmd(map[string]any{"type": "steer", "message": plain(text)})
+}
+
+// plain keeps a message that starts with "/" from being read as an
+// extension command, a /skill:name or a prompt template. Pi checks only
+// the first character (core/agent-session.ts), passes RPC messages on
+// untrimmed and has no flag to skip the check for one message, so a
+// leading space makes the text plain.
+func plain(text string) string {
+	if strings.HasPrefix(text, "/") {
+		return " " + text
+	}
+	return text
 }
 
 func (p *Pi) NewDecoder() harness.Decoder { return &decoder{} }
