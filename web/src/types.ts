@@ -70,6 +70,10 @@ export interface Edit {
   remindBefore?: number;
   /** Goes back to the hub's reminderLead; never sent with `remindBefore`. */
   clearRemindBefore?: boolean;
+  /** Moves the item under this parent's id; "" makes it top-level. */
+  parent?: string;
+  /** Ids of the item's sub-tasks to mark done; the hub fills it into a repeating done's `was`. */
+  subtasksDone?: string[];
 }
 
 export type RepeatUnit = "day" | "week" | "month" | "year";

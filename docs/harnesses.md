@@ -12,7 +12,7 @@ Supported harnesses, each with its own page:
 | [Antigravity CLI](https://antigravity.google/docs/cli/overview/) | [harnesses/antigravity.md](harnesses/antigravity.md) | `antigravity` | none | at once |
 | [Pi](https://github.com/earendil-works/pi) | [harnesses/pi.md](harnesses/pi.md) | `pi` | the bridge's | at once |
 
-Why these, and why not Gemini CLI yet: [research/0005-harnesses](research/0005-harnesses/RESEARCH.md).
+Why these, and why not Gemini CLI: [research/0005-harnesses](research/0005-harnesses/RESEARCH.md).
 
 ## Add a harness
 

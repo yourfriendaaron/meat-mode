@@ -219,6 +219,8 @@ An item's `parent` is the id of the item it is a sub-task of, in the same list; 
 - An `add` with `parent` needs that item open, in the same list, and top-level: sub-tasks go one level deep. A tracker item that is deeper is shown as it comes.
 - `done` and `dismiss` on an item answer `409` while any of its sub-tasks is open. A sub-task with a pending `done` or `dismiss` counts as closed and one with a pending `reopen` as open, so the app may send the sub-tasks' closes and then the parent's together; the bridge applies them in that order. A sub-task still being added counts as open, until the bridge has sent it.
 - A snooze changes only the item it names. The app shows sub-tasks under their parent, so they move with it.
+- On the personal list and projects, an `edit` with `parent` moves an item: under another item by the `add` rules, or to the top level with `""`. An item with sub-tasks of its own, open or closed, cannot become a sub-task, and an item cannot be its own parent. An agent's item is moved in its tracker (on beads, `bd update --parent`), and the bridge sends the new `parent`.
+- `done` on a repeating parent reopens the sub-tasks it closed with `done` when the parent moves on to its next date, as it unchecks the checklist. Dismissed sub-tasks stay closed.
 
 `Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?}`. A field left out stays as it is.
 
@@ -229,6 +231,8 @@ An item's `parent` is the id of the item it is a sub-task of, in the same list; 
 - `checklist` replaces the whole list of `{"id", "text", "done"}`. The hub gives an entry with no `id` a new one and refuses a repeated `id`. `text` is trimmed, not empty, up to 1000 characters; the list holds at most 100 entries. `[]` clears it.
 - `repeat` sets the item's `Repeat` (see Repeating to-dos); `"clearRepeat": true` ends it. Sending both is refused, and so is a `repeat` on an item that has no due date and gets none in the same edit.
 - `remindBefore` is the item's own lead time in minutes, `0` to `10080`, where `0` means no early reminder; `"clearRemindBefore": true` goes back to the hub's `reminderLead`. Sending both is refused.
+- `parent` moves the item (see Sub-tasks); `""` makes it top-level.
+- `subtasksDone` lists ids of the item's own sub-tasks to mark done. The hub puts it in the `was` of a repeating `done`, so that Undo closes the sub-tasks the repeat reopened; ids that are not the item's sub-tasks are refused.
 
 The applied `edit` action carries `was`, an `Edit` with the same fields as `set` holding the values before it (`clearDue: true` for a due date that was not set, `clearRepeat: true` for no repeat, `clearRemindBefore: true` for no lead time of its own; an edit that clears the due date of a repeating item records its `repeat` too). Its Undo is an `edit` with `set` = `was`. The Undo of `note-edit` is a `note-edit` back to the text of the `comment` the applied action carries; the Undo of `note-delete` is `note-restore` with the `comment` the applied action carries.
 
@@ -248,7 +252,8 @@ A personal item can repeat: "Water the plants every day at 8:30pm". `Repeat` is 
 - The due time becomes the next occurrence after both the current due time and now, so occurrences missed while it sat overdue are skipped, never stacked. With `fromDone`, it is the done day plus `interval` units, at the rule's time of day.
 - When that next date falls after `until`, the series is over: `done` closes the item like any other, with no `was`, so its Undo is a `reopen`. The item keeps its `repeat`, so a `reopen` brings the series back at its last due time.
 - Its snooze is cleared and every checklist entry is unchecked.
-- The applied `done` carries `was`: `{"due", "checklist"}` as they were. Its Undo is an `edit` with `set` = `was`, not a `reopen`; the app tells the two apart by `was`.
+- Its sub-tasks closed with `done` are reopened (see Sub-tasks).
+- The applied `done` carries `was`: `{"due", "checklist"}` as they were, and `subtasksDone` with the sub-tasks it reopened. Its Undo is an `edit` with `set` = `was`, not a `reopen`; the app tells the two apart by `was`.
 - `dismiss` closes it and ends the series. `reopen` on a closed repeating item opens it at its last due time.
 
 ### Reminders
@@ -339,11 +344,12 @@ The bridge sends the full set per repo whenever any fingerprint in it changed. T
 
 An agent adds a personal to-do with `POST /bridge/v1/personal` and the bridge token of its machine. No bridge needs to run, and the post leaves the bridge's last-seen time alone, so an agent's add never makes a stopped bridge look online. On a paired machine, `meat-mode add` makes this call with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
 
-`PersonalTodo` is `{"id"?, "title", "due"?, "repeat"?, "note"?, "author"?}`:
+`PersonalTodo` is `{"id"?, "title", "due"?, "repeat"?, "parent"?, "note"?, "author"?}`:
 
 - `title` is required, up to 1000 characters.
 - `due` is an RFC 3339 time.
 - `repeat` is a `Repeat` (see Repeating to-dos) and needs `due`.
+- `parent` is the `id` of an item this machine added to the same list, open and top-level; the new item is its sub-task (see Sub-tasks). Any other id answers `404`; a closed parent or a sub-task `400`.
 - `note`, up to 10000 characters, becomes the item's first comment.
 - `author` is the agent's name, shown as the item's creator and the note's author. It defaults to the token's machine name.
 - `id` is a UUID the agent generates. Posting the same `id` again returns the item it added and changes nothing, so an agent can retry safely.

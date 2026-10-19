@@ -75,6 +75,13 @@ type Edit struct {
 	// back to the hub's ReminderLead.
 	RemindBefore      *int `json:"remindBefore,omitempty"`
 	ClearRemindBefore bool `json:"clearRemindBefore,omitempty"`
+	// Parent moves the item under another item in its list; "" makes it
+	// top-level. The sub-task rules apply (see internal/store/subtasks.go).
+	Parent *string `json:"parent,omitempty"`
+	// SubtasksDone marks these sub-tasks of the item done. The hub fills it
+	// into the Was of a repeating done that reopened them, so its Undo
+	// closes them again.
+	SubtasksDone []string `json:"subtasksDone,omitempty"`
 }
 
 // Repeat units.
@@ -289,7 +296,7 @@ type Payload struct {
 	Set      *Edit      `json:"set,omitempty"`      // edit
 	// Was is filled in by the hub. On edit it holds the fields Set changed,
 	// as they were; on done of a repeating item, the due time and checklist
-	// before it moved on.
+	// before it moved on, and the sub-tasks it reopened as SubtasksDone.
 	Was *Edit `json:"was,omitempty"`
 	// note-edit, note-delete and note-restore. note-edit takes Text. The
 	// hub fills in Comment on note-edit and note-delete with the comment as
@@ -422,6 +429,7 @@ type PersonalTodo struct {
 	Title  string     `json:"title"`
 	Due    *time.Time `json:"due,omitempty"`
 	Repeat *Repeat    `json:"repeat,omitempty"` // needs Due
+	Parent string     `json:"parent,omitempty"` // id of an item this machine added to the same list; the new one is its sub-task
 	Note   string     `json:"note,omitempty"`   // added as the first comment, by Author
 	Author string     `json:"author,omitempty"` // the agent's name; defaults to the token's machine name
 }
