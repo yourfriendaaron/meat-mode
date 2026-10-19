@@ -2,7 +2,9 @@ package bridge
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -629,7 +631,7 @@ func TestAgentWorktreeGoesWithTheBead(t *testing.T) {
 
 	// Both beads leave the set: the clean worktree and its merged branch
 	// go, the one with a new file stays.
-	b.Runner.Listed("garden", map[string]bool{})
+	b.Runner.Listed("garden", map[string]string{})
 	if _, err := os.Stat(wt); !os.IsNotExist(err) {
 		t.Errorf("clean worktree still there: %v", err)
 	}
@@ -639,10 +641,174 @@ func TestAgentWorktreeGoesWithTheBead(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dirty, "draft.txt")); err != nil {
 		t.Errorf("the worktree with changes was removed: %v", err)
 	}
-	if rs := b.Runner.Reports(); len(rs) != 0 {
-		t.Errorf("runs of beads out of the set are still reported: %+v", rs)
+	p := &putStub{}
+	if err := b.Runner.Flush(w.ctx, p.put, true); err != nil || len(p.sent) != 1 || len(p.sent[0]) != 0 {
+		t.Errorf("runs of beads out of the set are still reported: %+v, %v", p.sent, err)
 	}
 	if rec := runOf(b, id); rec.Count != 1 || rec.Session != "" {
 		t.Errorf("record after removal = %+v", rec)
+	}
+}
+
+// putStub records each run list put, and fails while fail is set.
+type putStub struct {
+	sent [][]api.RunReport
+	fail bool
+}
+
+func (p *putStub) put(_ context.Context, list []api.RunReport) error {
+	if p.fail {
+		return errors.New("hub down")
+	}
+	p.sent = append(p.sent, list)
+	return nil
+}
+
+// reportingRunner is a runner with a settled run on water and on feed in
+// garden, on a clock the test moves.
+func reportingRunner(t *testing.T) (*AgentRunner, *time.Time) {
+	t.Helper()
+	now := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	r := &AgentRunner{Dir: t.TempDir(), Log: quiet, Now: func() time.Time { return now }}
+	r.mu.Lock()
+	r.init()
+	r.record("garden", "water").Run = &api.Run{ID: "run-1", State: api.RunDone}
+	r.record("garden", "feed").Run = &api.Run{ID: "run-2", State: api.RunStopped}
+	r.notify()
+	r.mu.Unlock()
+	return r, &now
+}
+
+func (r *AgentRunner) testChange() {
+	r.mu.Lock()
+	r.notify()
+	r.mu.Unlock()
+}
+
+func TestFlushThrottlesAndRetries(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	r, now := reportingRunner(t)
+	p := &putStub{}
+	flush := func(force bool) {
+		t.Helper()
+		if err := r.Flush(ctx, p.put, force); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	flush(false)
+	if len(p.sent) != 1 || len(p.sent[0]) != 2 {
+		t.Fatalf("first flush sent %+v", p.sent)
+	}
+	// A change within RunsEvery of the last send waits; after it, it goes.
+	r.testChange()
+	*now = now.Add(RunsEvery - time.Millisecond)
+	flush(false)
+	if len(p.sent) != 1 {
+		t.Fatalf("sent within RunsEvery: %+v", p.sent)
+	}
+	*now = now.Add(time.Millisecond)
+	flush(false)
+	if len(p.sent) != 2 {
+		t.Fatalf("not sent after RunsEvery: %+v", p.sent)
+	}
+
+	// An unchanged list is not sent again.
+	*now = now.Add(RunsEvery)
+	flush(false)
+	if len(p.sent) != 2 {
+		t.Fatalf("an unchanged list was sent again: %+v", p.sent)
+	}
+
+	// force sends at once, changed or not.
+	flush(true)
+	if len(p.sent) != 3 {
+		t.Fatalf("force did not send: %+v", p.sent)
+	}
+
+	// A failed send goes again with the next flush, with no new change.
+	r.testChange()
+	*now = now.Add(RunsEvery)
+	p.fail = true
+	if err := r.Flush(ctx, p.put, false); err == nil {
+		t.Fatal("a failed put returned no error")
+	}
+	p.fail = false
+	flush(false)
+	if len(p.sent) != 4 {
+		t.Fatalf("the failed list was not sent again: %+v", p.sent)
+	}
+}
+
+func TestReportApplyingNamesTheAction(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	r, now := reportingRunner(t)
+	p := &putStub{}
+	if err := r.ReportApplying(ctx, p.put, "act-1", "garden", "water"); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.sent) != 1 || len(p.sent[0]) != 2 {
+		t.Fatalf("sent %+v", p.sent)
+	}
+	for _, rr := range p.sent[0] {
+		if want := map[string]string{"water": "act-1"}[rr.BeadID]; rr.Applying != want {
+			t.Errorf("%s applying = %q, want %q", rr.BeadID, rr.Applying, want)
+		}
+	}
+	// It counts as the send: the list is clean afterwards.
+	*now = now.Add(RunsEvery)
+	if err := r.Flush(ctx, p.put, false); err != nil || len(p.sent) != 1 {
+		t.Fatalf("flush after applying sent %+v, %v", p.sent, err)
+	}
+	// A failed one leaves the list to send again.
+	p.fail = true
+	if err := r.ReportApplying(ctx, p.put, "act-2", "garden", "feed"); err == nil {
+		t.Fatal("a failed put returned no error")
+	}
+	p.fail = false
+	if err := r.Flush(ctx, p.put, false); err != nil || len(p.sent) != 2 {
+		t.Fatalf("flush after a failed applying send sent %+v, %v", p.sent, err)
+	}
+	if got := p.sent[1]; got[0].Applying != "" || got[1].Applying != "" {
+		t.Errorf("a later flush still names an action: %+v", got)
+	}
+}
+
+func TestWaitTurn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	r, now := reportingRunner(t)
+	if err := r.Flush(ctx, (&putStub{}).put, true); err != nil {
+		t.Fatal(err)
+	}
+	*now = now.Add(RunsEvery)
+	start := time.Now()
+	r.WaitTurn(ctx)
+	if d := time.Since(start); d > RunsEvery/2 {
+		t.Errorf("waited %v after RunsEvery had passed", d)
+	}
+	*now = now.Add(-RunsEvery)
+	cctx, cancel := context.WithCancel(ctx)
+	cancel()
+	start = time.Now()
+	r.WaitTurn(cctx)
+	if d := time.Since(start); d > RunsEvery/2 {
+		t.Errorf("waited %v with ctx ended", d)
+	}
+}
+
+func TestFlushReportsOnlyListedBeads(t *testing.T) {
+	t.Parallel()
+	r, _ := reportingRunner(t)
+	p := &putStub{}
+	// Before garden is listed every run shows; after, only listed beads.
+	r.Listed("garden", map[string]string{"water": "fp"})
+	if err := r.Flush(context.Background(), p.put, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.sent[0]; len(got) != 1 || got[0].BeadID != "water" {
+		t.Errorf("reported %+v", got)
 	}
 }
