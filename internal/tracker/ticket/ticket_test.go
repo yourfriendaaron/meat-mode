@@ -1,9 +1,11 @@
 package ticket
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,5 +132,26 @@ func TestDetect(t *testing.T) {
 		os.WriteFile(filepath.Join(d, storeDir, "notes.txt"), nil, 0o644)
 	}) {
 		t.Error(".tickets with only other files should not match")
+	}
+}
+
+// TestCreateDashTitle checks the file itself: tk keeps the space the title
+// went in behind, and Create takes it off again.
+func TestCreateDashTitle(t *testing.T) {
+	if _, err := exec.LookPath("tk"); err != nil {
+		t.Skip("tk is not installed")
+	}
+	dir := t.TempDir()
+	tr := &Ticket{bin: "tk", look: exec.LookPath}
+	id, err := tr.Create(context.Background(), dir, tracker.NewIssue{Title: "-v Water the plants", Actor: "alex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, storeDir, id+".md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "\n# -v Water the plants\n") {
+		t.Errorf("file:\n%s", data)
 	}
 }

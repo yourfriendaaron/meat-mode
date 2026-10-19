@@ -35,6 +35,8 @@ Put `sync: true` in `.meat-mode.yaml` at the repo root, or turn the repo's switc
 
 A due date has no `tk` flag. The bridge adds a `due: <time>` line to the task's frontmatter after the create, through a temp file and a rename, and reads it back.
 
+`tk create` has no `--` and reads any word starting with `-` as an option. A title that starts with `-` goes to `tk` behind a space, which the same rewrite takes off the `# ` heading.
+
 ## How a task reads
 
 The bridge parses the files itself, since `tk` prints no JSON for a title or notes.

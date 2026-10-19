@@ -71,6 +71,14 @@ func Run(t *testing.T, name string, setup Setup) {
 		}
 	})
 
+	t.Run("a title starting with a dash", func(t *testing.T) {
+		tr, dir := setup(t)
+		id := create(t, tr, dir, tracker.NewIssue{Title: "-v Water the plants", Actor: "alex"})
+		if got := listed(t, tr, dir, id); got.Title != "-v Water the plants" {
+			t.Fatalf("title %q; want it as given", got.Title)
+		}
+	})
+
 	t.Run("close and reopen", func(t *testing.T) {
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Book the dentist", Actor: "alex"})
