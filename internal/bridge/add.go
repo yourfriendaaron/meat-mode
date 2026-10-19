@@ -35,31 +35,23 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	title := strings.TrimSpace(strings.Join(pos, " "))
+	title, err := api.CheckTitle(strings.Join(pos, " "))
 	if title == "" {
 		fs.Usage()
 		return errors.New("add needs a title")
 	}
-	t := api.PersonalTodo{ID: *id, Title: title, Note: *note, Author: *author}
-	if *due != "" {
-		// Checked before the hub is asked for its time zone.
-		if _, err := ParseDue(*due, time.UTC); err != nil {
-			return err
-		}
-	}
-	repeat, err := repeatArg(*every, *fromDone)
 	if err != nil {
 		return err
 	}
-	if given(fs, "until") {
-		if repeat == nil {
-			return errors.New("--until goes with --every")
-		}
-		if repeat.Until, err = ParseUntil(*until); err != nil {
-			return err
-		}
+	t := api.PersonalTodo{ID: *id, Title: title, Note: *note, Author: *author}
+	w, err := parseWhen(fs, *due, *every, *fromDone, *until)
+	if err != nil {
+		return err
 	}
-	if repeat != nil && *due == "" {
+	if w.untilGiven && w.repeat == nil {
+		return errors.New("--until goes with --every")
+	}
+	if w.repeat != nil && w.due == "" {
 		return errors.New("--every needs --due, the first time it is due")
 	}
 
@@ -67,22 +59,8 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if *due != "" {
-		loc, err := hubZone(ctx, hub)
-		if err != nil {
-			return err
-		}
-		d, err := ParseDue(*due, loc)
-		if err != nil {
-			return err
-		}
-		t.Due = &d
-		if repeat != nil {
-			if repeat.TimeZone, err = zoneName(loc); err != nil {
-				return err
-			}
-			t.Repeat = repeat
-		}
+	if t.Due, t.Repeat, err = w.resolve(ctx, hub); err != nil {
+		return err
 	}
 	reply, err := hub.AddPersonal(ctx, t)
 	if err != nil {
@@ -107,20 +85,74 @@ func given(fs *flag.FlagSet, name string) bool {
 	return set
 }
 
-// repeatArg reads --every and --from-done: nil when it does not repeat.
-// The time zone is left for the caller.
-func repeatArg(every string, fromDone bool) (*api.Repeat, error) {
+// when is the due time and repeat rule a command was given, checked as far
+// as this machine can before the hub's time zone reads them.
+type when struct {
+	due        string      // --due as given; "" for none
+	repeat     *api.Repeat // --every and --from-done, ending on until; nil when it does not repeat
+	until      string      // --until; "" for none
+	untilGiven bool
+}
+
+// parseWhen reads --due, --every, --from-done and --until. --due is read in
+// UTC here only to check it; resolve reads it in the hub's zone.
+func parseWhen(fs *flag.FlagSet, due, every string, fromDone bool, until string) (when, error) {
+	w := when{due: due, untilGiven: given(fs, "until")}
+	if due != "" {
+		if _, err := ParseDue(due, time.UTC); err != nil {
+			return w, err
+		}
+	}
 	if every == "" {
 		if fromDone {
-			return nil, errors.New("--from-done goes with --every")
+			return w, errors.New("--from-done goes with --every")
 		}
-		return nil, nil
+	} else {
+		r, err := ParseEvery(every, fromDone)
+		if err != nil {
+			return w, err
+		}
+		w.repeat = &r
 	}
-	r, err := ParseEvery(every, fromDone)
+	if w.untilGiven {
+		var err error
+		if w.until, err = ParseUntil(until); err != nil {
+			return w, err
+		}
+	}
+	if w.repeat != nil {
+		w.repeat.Until = w.until
+	}
+	return w, nil
+}
+
+// resolve reads w in the hub's time zone: the due time, and the repeat rule
+// keeping that zone. It asks the hub only when w has either.
+func (w when) resolve(ctx context.Context, hub *Hub) (*time.Time, *api.Repeat, error) {
+	if w.due == "" && w.repeat == nil {
+		return nil, nil, nil
+	}
+	loc, err := hubZone(ctx, hub)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &r, nil
+	var due *time.Time
+	if w.due != "" {
+		d, err := ParseDue(w.due, loc)
+		if err != nil {
+			return nil, nil, err
+		}
+		due = &d
+	}
+	var repeat *api.Repeat
+	if w.repeat != nil {
+		r := *w.repeat
+		if r.TimeZone, err = zoneName(loc); err != nil {
+			return nil, nil, err
+		}
+		repeat = &r
+	}
+	return due, repeat, nil
 }
 
 // hubZone is the hub's time zone, which reads a date or time without one:

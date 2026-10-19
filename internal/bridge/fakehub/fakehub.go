@@ -143,8 +143,8 @@ func (h *Hub) addPersonal(w http.ResponseWriter, r *http.Request, bridge string)
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if strings.TrimSpace(t.Title) == "" {
-		writeErr(w, http.StatusBadRequest, "title is required")
+	if _, err := api.CheckTitle(t.Title); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	h.mu.Lock()

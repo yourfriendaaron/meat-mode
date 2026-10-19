@@ -41,7 +41,7 @@ func ParseEvery(s string, fromDone bool) (api.Repeat, error) {
 			if err != nil {
 				return r, bad
 			}
-			if n < 1 || n > api.MaxRepeatInterval {
+			if n < 1 || api.CheckRepeatInterval(n) != nil {
 				return r, fmt.Errorf("--every repeats every 1 to %d days, weeks, months or years", api.MaxRepeatInterval)
 			}
 			if n > 1 {
