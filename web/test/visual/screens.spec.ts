@@ -326,6 +326,8 @@ for (const size of Object.keys(SIZES) as Size[]) {
         test("settings with the agents switch", async ({ page, hub }) => {
           hub.allowAgents("website");
           hub.setRun("home/website/we-1", { state: "working", activity: "Shortening the second line" });
+          // A harness with every limits phrase, so the baseline holds the longest line.
+          hub.bridges[0].harness = { name: "pi", title: "Pi", version: "1.2.0", instructionFile: "AGENTS.md", budget: "none", timeoutSeconds: 1800 };
           await openApp(page);
           await goToSettings(page, size);
           await expect(page.locator("[data-section=runs]")).toContainText("1 agent working");

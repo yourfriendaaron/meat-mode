@@ -97,6 +97,71 @@ export function trackersText(b: Bridge): string {
   return b.bdVersion ? `bd ${b.bdVersion}` : "";
 }
 
+/** The harness a machine's agents run in, by the name the app shows. A bridge that sends none predates harnesses and runs Claude Code. */
+export function harnessTitle(b: Pick<Bridge, "harness">): string {
+  return b.harness ? b.harness.title || b.harness.name : "Claude Code";
+}
+
+/** The harness with its version, as "Codex 0.50.0". */
+export function harnessText(b: Pick<Bridge, "harness">): string {
+  return [harnessTitle(b), b.harness?.version].filter(Boolean).join(" ");
+}
+
+/** A time limit in words: "45 seconds", "30 minutes", "1 hour 30 minutes". */
+export function durationText(seconds: number): string {
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+  if (seconds < 60) return plural(seconds, "second");
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return plural(mins, "minute");
+  const h = Math.floor(mins / 60);
+  return mins % 60 ? `${plural(h, "hour")} ${plural(mins % 60, "minute")}` : plural(h, "hour");
+}
+
+/** A cap in dollars: "$2", "$2.50". */
+function dollars(usd: number): string {
+  return Number.isInteger(usd) ? `$${usd}` : `$${usd.toFixed(2)}`;
+}
+
+/**
+ * The limits a machine's harness keeps on each run, in plain words joined by
+ * " · ": the time limit, the spending cap or that it has none, and that notes
+ * wait for the turn where they cannot reach a live run. Empty for a bridge
+ * that sends no harness, whose limits the app does not know.
+ */
+export function limitsText(b: Pick<Bridge, "harness">): string {
+  const h = b.harness;
+  if (!h) return "";
+  const out: string[] = [];
+  if (h.timeoutSeconds) out.push(`Time limit: ${durationText(h.timeoutSeconds)} a run`);
+  if (h.budget === "none") out.push("No spending cap: a run stops at its time limit");
+  else if (h.budgetUsd) out.push(`Stops at ${dollars(h.budgetUsd)} a run`);
+  if (!h.steer) out.push("Notes wait until the agent finishes its turn");
+  return out.join(" · ");
+}
+
+/**
+ * A machine's harness and its limits as two small lines, for Settings. Empty
+ * for a machine never seen, which has not said which harness it runs.
+ */
+export function harnessLinesHTML(b: Bridge): string {
+  if (!b.lastSeen) return "";
+  const limits = limitsText(b);
+  return `<div class="muted small m-harness">Agents run in ${esc(harnessText(b))}</div>${limits ? `<div class="muted small m-limits">${esc(limits)}</div>` : ""}`;
+}
+
+/** Where the harness is picked; the app cannot change it. */
+export const HARNESS_PICK = "Each machine picks the harness its agents run in: set MEAT_MODE_AGENT_HARNESS there and restart its bridge.";
+
+/**
+ * The instruction file a machine's harness reads and the harness's name, or
+ * null for a machine that has not said (an older bridge, or one not
+ * connected yet), whose text names AGENTS.md or CLAUDE.md.
+ */
+export function instructionFile(b: Pick<Bridge, "harness"> | undefined): { file: string; harness: string } | null {
+  const file = b?.harness?.instructionFile;
+  return b && file ? { file, harness: harnessTitle(b) } : null;
+}
+
 /** What the add-machine form shows after the hub refused it, and whether it now asks for the password. */
 export function addMachineError(e: unknown, sentPassword: boolean): { error: string; reauth: boolean } {
   const reauth = e instanceof ApiError && ((e.status === 403 && e.reauth) || e.status === 429);

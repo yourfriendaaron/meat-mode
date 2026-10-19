@@ -269,7 +269,7 @@ test.describe("desktop", () => {
     await expect(website.locator("code")).toHaveText("meat-mode bridge agents on website");
     await expect(website.getByRole("switch", { name: /Agents can work/ })).toHaveCount(0);
     await expect(page.locator("[data-section=runs]")).toContainText(
-      "Agents start only from your pink taps, one per task, and each run has a time limit set on its machine.",
+      "Agents start only from your pink taps, one per task, and each run keeps the limits its machine sets.",
     );
     await expect(page.locator("[data-section=runs]")).toContainText("No agent is working now.");
     await axe(page);

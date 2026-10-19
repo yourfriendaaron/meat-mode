@@ -1,7 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { addMachineError, agentInstructions, agentMachines, agentsOnCommand, installCommand, machineReposHTML, pickMachine, PLATFORMS } from "../../src/agents.ts";
+import {
+  addMachineError,
+  agentInstructions,
+  agentMachines,
+  agentsOnCommand,
+  durationText,
+  harnessLinesHTML,
+  harnessText,
+  installCommand,
+  instructionFile,
+  limitsText,
+  machineReposHTML,
+  pickMachine,
+  PLATFORMS,
+} from "../../src/agents.ts";
 import { ApiError, retryAfterSeconds, waitText } from "../../src/api.ts";
 import type { Bridge, Repo } from "../../src/types.ts";
 
@@ -118,4 +132,43 @@ test("adding a machine asks for the password again on the hub's word, and says w
   assert.equal(retryAfterSeconds("30"), 30);
   assert.equal(retryAfterSeconds(null), 0);
   assert.equal(retryAfterSeconds(new Date(90_000).toUTCString(), 0), 90);
+});
+
+test("a machine's harness shows with its version and its limits in plain words", () => {
+  const codex: Bridge = {
+    name: "desk",
+    createdAt: "2026-03-01T09:00:00Z",
+    lastSeen: "2026-03-01T09:05:00Z",
+    harness: { name: "codex", title: "Codex", version: "0.50.0", instructionFile: "AGENTS.md", budget: "none", timeoutSeconds: 1800 },
+  };
+  assert.equal(harnessText(codex), "Codex 0.50.0");
+  assert.equal(limitsText(codex), "Time limit: 30 minutes a run · No spending cap: a run stops at its time limit · Notes wait until the agent finishes its turn");
+  assert.deepEqual(instructionFile(codex), { file: "AGENTS.md", harness: "Codex" });
+
+  const claude: Bridge = {
+    ...codex,
+    harness: { name: "claude", title: "Claude Code", instructionFile: "CLAUDE.md", budget: "native", budgetUsd: 2, timeoutSeconds: 5400, steer: true },
+  };
+  assert.equal(limitsText(claude), "Time limit: 1 hour 30 minutes a run · Stops at $2 a run");
+  assert.equal(limitsText({ harness: { name: "pi", budget: "metered", budgetUsd: 0.5, steer: true } }), "Stops at $0.50 a run");
+  assert.match(harnessLinesHTML(codex), /Agents run in Codex 0\.50\.0.*class="muted small m-limits">Time limit/);
+});
+
+test("a machine that sends no harness runs Claude Code, with no limits line and the old instruction wording", () => {
+  const old: Bridge = { name: "desk", createdAt: "2026-03-01T09:00:00Z", lastSeen: "2026-03-01T09:05:00Z" };
+  assert.equal(harnessText(old), "Claude Code");
+  assert.equal(limitsText(old), "");
+  assert.equal(instructionFile(old), null);
+  assert.equal(harnessLinesHTML(old), '<div class="muted small m-harness">Agents run in Claude Code</div>');
+  // A machine never seen has not said which harness it runs.
+  assert.equal(harnessLinesHTML({ ...old, lastSeen: null }), "");
+  // A harness that names no file keeps the old wording too.
+  assert.equal(instructionFile({ harness: { name: "pi" } }), null);
+});
+
+test("time limits read in seconds, minutes or hours", () => {
+  assert.equal(durationText(45), "45 seconds");
+  assert.equal(durationText(60), "1 minute");
+  assert.equal(durationText(3600), "1 hour");
+  assert.equal(durationText(7260), "2 hours 1 minute");
 });

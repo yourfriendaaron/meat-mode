@@ -14,6 +14,9 @@ async function noHorizontalScroll(page: Page) {
 }
 
 /** What Finish says of one step. */
+/** A harness that cannot reach a live run and has no spending cap. */
+const PI = { name: "pi", title: "Pi", version: "1.2.0", instructionFile: "AGENTS.md", budget: "none", timeoutSeconds: 1800 } as const;
+
 function outcome(page: Page, title: string) {
   return page.locator(".wiz-summary li", { has: page.locator(".wiz-sum-title", { hasText: new RegExp(`^${title}$`) }) }).locator(".wiz-outcome");
 }
@@ -78,6 +81,8 @@ test.describe("desktop", () => {
 
     await w.next.click();
     await expect(w.heading).toHaveText("Tell your agents");
+    // A bridge that sends no harness runs Claude Code, and may read either file.
+    await expect(w.region).toContainText("Add this to the instruction file your agents read on that machine, such as AGENTS.md or CLAUDE.md.");
     const text = page.locator("#wiz-agents-text");
     await expect(text).toContainText('This machine is paired with it as "laptop".');
     await expect(text).toContainText('bd create "Approve the footer text" -l human');
@@ -193,6 +198,34 @@ test.describe("desktop", () => {
     await expect(page.getByLabel("Machine", { exact: true })).toBeFocused();
     await axe(page);
   });
+
+  test("Settings shows each machine's harness and its limits, and the instructions name its file", async ({ page, hub }) => {
+    hub.bridges.push({ name: "desk", createdAt: hub.now() });
+    hub.hello("desk", [], PI);
+    await openApp(page);
+    await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+
+    const desk = page.locator(".machine", { has: page.locator(".m-name", { hasText: /^desk$/ }) });
+    await expect(desk.locator(".m-harness")).toHaveText("Agents run in Pi 1.2.0");
+    await expect(desk.locator(".m-limits")).toHaveText(
+      "Time limit: 30 minutes a run · No spending cap: a run stops at its time limit · Notes wait until the agent finishes its turn",
+    );
+    // An older bridge runs Claude Code and says nothing of its limits.
+    const home = page.locator(".machine", { has: page.locator(".m-name", { hasText: /^home$/ }) });
+    await expect(home.locator(".m-harness")).toHaveText("Agents run in Claude Code");
+    await expect(home.locator(".m-limits")).toHaveCount(0);
+
+    const runs = page.locator("[data-section=runs]");
+    await expect(runs.locator(".runs-machines li", { hasText: "desk" })).toContainText("Agents run in Pi 1.2.0");
+    await expect(runs.locator(".runs-machines li", { hasText: "desk" }).locator(".m-limits")).toContainText("No spending cap");
+    await expect(runs).toContainText("Each machine picks the harness its agents run in: set MEAT_MODE_AGENT_HARNESS there and restart its bridge.");
+
+    const lead = page.locator("[data-section=agents] > p.muted").first();
+    await expect(lead).toHaveText("Add this to AGENTS.md, the file Pi reads on that machine, so agents there know how to raise tasks for you.");
+    await page.getByLabel("Machine", { exact: true }).selectOption("home");
+    await expect(lead).toHaveText("Add this to the instruction file your agents read, such as AGENTS.md or CLAUDE.md, so they know how to raise tasks for you.");
+    await axe(page);
+  });
 });
 
 test.describe("phone", () => {
@@ -208,11 +241,12 @@ test.describe("phone", () => {
     await noHorizontalScroll(page);
     await axe(page);
 
-    hub.hello("laptop", ["projects/garden"]);
+    hub.hello("laptop", ["projects/garden"], PI);
     await expect(w.region.getByRole("status")).toContainText("Connected");
     await w.next.click();
     await w.next.click();
     await expect(w.heading).toHaveText("Tell your agents");
+    await expect(w.region).toContainText("Add this to AGENTS.md, the file Pi reads on that machine.");
     await noHorizontalScroll(page);
     await axe(page);
   });

@@ -1,6 +1,7 @@
 // The instructions for agents, kept in Settings after setup.
 
-import { agentMachines, instructionsHTML, pickMachine } from "../agents.ts";
+import { agentMachines, instructionFile, instructionsHTML, pickMachine } from "../agents.ts";
+import { esc } from "../html.ts";
 import { copyText } from "../clipboard.ts";
 import { registerSection } from "./registry.ts";
 
@@ -14,9 +15,14 @@ registerSection({
   applies: (ctx) => agentMachines(ctx.state?.bridges).length > 0,
   render(ctx) {
     const machines = agentMachines(ctx.state?.bridges);
+    const machine = pickMachine(machines, chosen);
     const user = ctx.setup?.user || ctx.state?.user || "";
-    return `<p class="muted">Add this to the instruction file your agents read, such as AGENTS.md or CLAUDE.md, so they know how to raise tasks for you.</p>
-${instructionsHTML(user, machines, pickMachine(machines, chosen), "set-")}`;
+    const known = instructionFile(machines.find((b) => b.name === machine));
+    const lead = known
+      ? `Add this to ${esc(known.file)}, the file ${esc(known.harness)} reads on that machine, so agents there know how to raise tasks for you.`
+      : "Add this to the instruction file your agents read, such as AGENTS.md or CLAUDE.md, so they know how to raise tasks for you.";
+    return `<p class="muted">${lead}</p>
+${instructionsHTML(user, machines, machine, "set-")}`;
   },
   async act(act, el, ctx) {
     if (act !== "agents-copy") return;
