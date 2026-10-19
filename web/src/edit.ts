@@ -3,7 +3,7 @@
 // pass `now`.
 
 import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Edit, type Item, type NewAction, type RepeatUnit } from "./types.ts";
-import { isPersonal } from "./model.ts";
+import { isOpen, isPersonal, repoKey } from "./model.ts";
 import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
 import { parseQuickAdd } from "./quickadd.ts";
 import { sameRule, type RepeatRule } from "./repeat.ts";
@@ -67,6 +67,8 @@ export interface EditDraft {
   timeZone: string;
   /** Minutes; null uses the hub's reminderLead. */
   remindBefore: number | null;
+  /** The id of the item it is a sub-task of; "" for top-level. */
+  parent: string;
 }
 
 export function draftOf(item: Item, timeZone = ""): EditDraft {
@@ -84,7 +86,23 @@ export function draftOf(item: Item, timeZone = ""): EditDraft {
     until: r?.until ?? "",
     timeZone,
     remindBefore: item.remindBefore ?? null,
+    parent: item.parent ?? "",
   };
+}
+
+/**
+ * The items a personal item can move under (docs/api.md, Sub-tasks): open,
+ * top-level and saved items of its own list, never itself. An item with
+ * sub-tasks of its own, open or closed, can move under none.
+ */
+export function moveTargets(item: Item, items: Item[]): Item[] {
+  if (!canEdit(item)) return [];
+  const list = repoKey(item);
+  const same = items.filter((i) => repoKey(i) === list);
+  if (same.some((i) => i.parent === item.id)) return [];
+  return same
+    .filter((i) => i.id !== item.id && isOpen(i) && !i.parent && !i.id.startsWith("pending-"))
+    .sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /** The repeat the form sets, or null for none. Undefined when its interval is not one the hub takes. */
@@ -148,6 +166,7 @@ export function diffEdit(item: Item, d: EditDraft, now: Date): Edit | null {
     if (d.remindBefore === null) set.clearRemindBefore = true;
     else set.remindBefore = d.remindBefore;
   }
+  if (d.parent !== (item.parent ?? "")) set.parent = d.parent;
   return Object.keys(set).length ? set : null;
 }
 
@@ -166,6 +185,10 @@ export function applyEdit(item: Item, set: Edit): void {
   if (set.clearRepeat) item.repeat = null;
   if (set.remindBefore !== undefined) item.remindBefore = set.remindBefore;
   if (set.clearRemindBefore) item.remindBefore = null;
+  if (set.parent !== undefined) {
+    item.parent = set.parent || undefined;
+    item.parentTitle = undefined;
+  }
 }
 
 /** "2/5": done entries out of all, or "" for an empty checklist. */

@@ -9,6 +9,7 @@ import {
   diffEdit,
   draftOf,
   editError,
+  moveTargets,
   priorityChip,
   priorityOptions,
   removeCheck,
@@ -256,4 +257,36 @@ test("applyEdit follows repeat and lead fields, and clearDue ends the repeat", (
   applyEdit(it, { due, repeat: daily });
   applyEdit(it, { clearRepeat: true });
   assert.equal(it.repeat, null);
+});
+
+test("moving sends parent only when it changed, \"\" for the top level, and applyEdit follows it", () => {
+  const it = item();
+  assert.equal(draftOf(it).parent, "");
+  assert.equal(diffEdit(it, draftOf(it), now), null);
+  assert.deepEqual(diffEdit(it, { ...draftOf(it), parent: "pe-3" }, now), { parent: "pe-3" });
+  const sub = item({ parent: "pe-3" });
+  assert.equal(draftOf(sub).parent, "pe-3");
+  assert.deepEqual(diffEdit(sub, { ...draftOf(sub), parent: "" }, now), { parent: "" });
+  applyEdit(it, { parent: "pe-3" });
+  assert.equal(it.parent, "pe-3");
+  applyEdit(it, { parent: "" });
+  assert.equal(it.parent, undefined);
+});
+
+test("an item moves only under open top-level items of its own list, and not at all with sub-tasks", () => {
+  const it = item();
+  const other = (id: string, over: Partial<Item> = {}) => item({ key: `hub/personal/${id}`, id, title: `Task ${id}`, ...over });
+  const all = [
+    it,
+    other("pe-3", { title: "Call Sam" }),
+    other("pe-2", { title: "Buy seeds" }),
+    other("pe-4", { status: "closed" }),
+    other("pe-5", { parent: "pe-3" }),
+    other("pending-1"),
+    item({ key: "hub/house/ho-1", repo: "house", id: "ho-1" }),
+  ];
+  assert.deepEqual(moveTargets(it, all).map((i) => i.id), ["pe-2", "pe-3"]);
+  // Its own sub-task, even a closed one, keeps it top-level.
+  assert.deepEqual(moveTargets(it, [...all, other("pe-6", { parent: "pe-1", status: "closed" })]), []);
+  assert.deepEqual(moveTargets(item({ key: "home/garden/ga-1", bridge: "home", repo: "garden", id: "ga-1" }), all), []);
 });
