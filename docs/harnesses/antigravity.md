@@ -41,4 +41,4 @@ agy --input-format stream-json --output-format stream-json --dangerously-skip-pe
 
 ## Version
 
-Built against agy 1.4.2's headless docs and changelog. One fixture is a live run with a note sent mid-turn (`live, agy 1.3.6`); the others are written from those docs (`from source, agy 1.4.2`) and should be recorded again from a live run.
+Built against agy 1.4.2's headless docs and changelog. One fixture is a live run with a note sent mid-turn (`live, agy 1.3.6`), and `harnesstest.Live` (a new run, then a resume with `--conversation`) passed on agy 1.3.6; the others are written from those docs (`from source, agy 1.4.2`) and should be recorded again from a live run.
