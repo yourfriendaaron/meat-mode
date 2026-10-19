@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
-	"github.com/yourfriendaaron/meat-mode/internal/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // actionIDPattern is the UUID form the hub gives every action id.
@@ -19,7 +19,8 @@ var actionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-f
 // defaultActor is used when an action carries no author.
 const defaultActor = "meat-mode-app"
 
-// maxErrorLen caps a failed action's error text (bd output can be long), so
+// maxErrorLen caps a failed action's error text (a tracker's output can be
+// long), so
 // a result always fits in one replay journal line. The hub keeps the same
 // length.
 const maxErrorLen = 2000
@@ -63,6 +64,8 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 			res = api.ActionResult{Error: "this bridge does not run agents"}
 		} else if st == nil || !st.Synced() {
 			res = api.ActionResult{Error: ErrNotSynced}
+		} else if missing := unsupported(st.Tracker.Info(), a); missing != "" {
+			res = cannot(st.Tracker, missing)
 		} else if ok, lerr := b.known(ctx, st, a, listed); lerr != nil || !ok {
 			res = api.ActionResult{Error: ErrUnknownBead}
 			if lerr != nil {
@@ -102,6 +105,20 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 		}
 	}
 	return touched, nil
+}
+
+// unsupported is the capability a needs that the tracker does not list, or
+// "". An add under a parent needs CapSubtask, and an add with ask needs ask.
+func unsupported(info tracker.Info, a api.Action) string {
+	switch {
+	case !info.Can(a.Kind):
+		return a.Kind
+	case a.Kind == api.KindAdd && a.Payload.Parent != "" && !info.Can(tracker.CapSubtask):
+		return tracker.CapSubtask
+	case a.Kind == api.KindAdd && a.Payload.Ask && !info.Can(api.KindAsk):
+		return api.KindAsk
+	}
+	return ""
 }
 
 // changesRun reports whether applying a starts, follows up or stops a run.
@@ -170,7 +187,7 @@ func (b *Bridge) known(ctx context.Context, st *repoState, a api.Action, listed 
 	}
 	ids, ok := listed[st.Name]
 	if !ok {
-		list, err := b.Beads.ListHuman(ctx, st.Dir)
+		list, err := st.Tracker.List(ctx, st.Dir)
 		if err != nil {
 			return false, err
 		}
@@ -184,12 +201,12 @@ func (b *Bridge) known(ctx context.Context, st *repoState, a api.Action, listed 
 }
 
 // apply runs one action through the replay journal. An error means the
-// journal could not be written (or a simulated crash); bd failures become a
-// failed result.
+// journal could not be written (or a simulated crash); tracker failures
+// become a failed result.
 func (b *Bridge) apply(ctx context.Context, a api.Action, r Repo) (api.ActionResult, error) {
 	e, seen := b.Journal.Get(a.ID)
 	if seen && e.Done() {
-		return e.Result, nil // bd ran; only the hub report was lost
+		return e.Result, nil // the tracker wrote; only the hub report was lost
 	}
 	resumed := seen
 	intent := e.Intent
@@ -199,9 +216,9 @@ func (b *Bridge) apply(ctx context.Context, a api.Action, r Repo) (api.ActionRes
 			return api.ActionResult{}, fmt.Errorf("write replay journal: %w", err)
 		}
 	}
-	res := b.runBD(ctx, a, r, resumed, intent)
-	if b.afterBD != nil {
-		if err := b.afterBD(a); err != nil {
+	res := b.write(ctx, a, r, resumed, intent)
+	if b.afterWrite != nil {
+		if err := b.afterWrite(a); err != nil {
 			return api.ActionResult{}, err
 		}
 	}
@@ -211,10 +228,10 @@ func (b *Bridge) apply(ctx context.Context, a api.Action, r Repo) (api.ActionRes
 	return res, nil
 }
 
-// runBD runs the bd command for an action, after the replay check from
-// docs/decisions/0001-stack.md. resumed is set when an earlier run wrote the
-// intent but not the outcome.
-func (b *Bridge) runBD(ctx context.Context, a api.Action, r Repo, resumed bool, intent time.Time) api.ActionResult {
+// write applies an action through the repo's tracker, after the replay
+// check from docs/decisions/0001-stack.md. resumed is set when an earlier run
+// wrote the intent but not the outcome.
+func (b *Bridge) write(ctx context.Context, a api.Action, r Repo, resumed bool, intent time.Time) api.ActionResult {
 	actor := a.Author
 	if actor == "" {
 		actor = defaultActor
@@ -222,22 +239,23 @@ func (b *Bridge) runBD(ctx context.Context, a api.Action, r Repo, resumed bool, 
 	if a.Kind != api.KindAdd && a.BeadID == "" {
 		return fail(errors.New("action has no bead id"))
 	}
+	t := r.Tracker
 	var err error
 	switch a.Kind {
 	case api.KindDone:
-		if closed, e := b.isClosed(ctx, r.Dir, a.BeadID); e != nil || !closed {
-			err = firstErr(e, func() error { return b.Beads.Close(ctx, r.Dir, a.BeadID, DoneReason, actor) })
+		if closed, e := isClosed(ctx, t, r.Dir, a.BeadID); e != nil || !closed {
+			err = firstErr(e, func() error { return t.Close(ctx, r.Dir, a.BeadID, DoneReason, actor) })
 		}
 	case api.KindReopen:
-		if closed, e := b.isClosed(ctx, r.Dir, a.BeadID); e != nil || closed {
-			err = firstErr(e, func() error { return b.Beads.Reopen(ctx, r.Dir, a.BeadID, actor) })
+		if closed, e := isClosed(ctx, t, r.Dir, a.BeadID); e != nil || closed {
+			err = firstErr(e, func() error { return t.Reopen(ctx, r.Dir, a.BeadID, actor) })
 		}
 	case api.KindDismiss:
-		if closed, e := b.isClosed(ctx, r.Dir, a.BeadID); e != nil || !closed {
-			err = firstErr(e, func() error { return b.Beads.Dismiss(ctx, r.Dir, a.BeadID, actor) })
+		if closed, e := isClosed(ctx, t, r.Dir, a.BeadID); e != nil || !closed {
+			err = firstErr(e, func() error { return t.Dismiss(ctx, r.Dir, a.BeadID, actor) })
 		}
 	case api.KindSnooze:
-		err = b.Beads.Defer(ctx, r.Dir, a.BeadID, a.Payload.Until, actor)
+		err = t.Defer(ctx, r.Dir, a.BeadID, a.Payload.Until, actor)
 	case api.KindNote, api.KindAsk:
 		text := a.Payload.Text
 		if strings.TrimSpace(text) == "" {
@@ -247,7 +265,7 @@ func (b *Bridge) runBD(ctx context.Context, a api.Action, r Repo, resumed bool, 
 			return fail(errors.New("note is empty"))
 		}
 		if resumed {
-			found, e := b.hasComment(ctx, r.Dir, a.BeadID, actor, text, intent)
+			found, e := hasComment(ctx, t, r.Dir, a.BeadID, actor, text, intent)
 			if e != nil {
 				return fail(e)
 			}
@@ -255,7 +273,7 @@ func (b *Bridge) runBD(ctx context.Context, a api.Action, r Repo, resumed bool, 
 				return api.ActionResult{OK: true}
 			}
 		}
-		err = b.Beads.AddComment(ctx, r.Dir, a.BeadID, actor, text)
+		err = t.AddComment(ctx, r.Dir, a.BeadID, actor, text)
 	case api.KindAdd:
 		return b.add(ctx, a, r, actor, resumed)
 	default:
@@ -273,7 +291,7 @@ func (b *Bridge) add(ctx context.Context, a api.Action, r Repo, actor string, re
 		return fail(errors.New("title is empty"))
 	}
 	if resumed {
-		id, err := b.Beads.FindByActionID(ctx, r.Dir, a.ID)
+		id, err := r.Tracker.FindByActionID(ctx, r.Dir, a.ID)
 		if err != nil {
 			return fail(err)
 		}
@@ -281,25 +299,26 @@ func (b *Bridge) add(ctx context.Context, a api.Action, r Repo, actor string, re
 			return api.ActionResult{OK: true, BeadID: id}
 		}
 	}
-	id, err := b.Beads.Create(ctx, r.Dir, newIssue(a, title, actor))
+	id, err := r.Tracker.Create(ctx, r.Dir, newIssue(a, title, actor))
 	if err != nil {
 		return fail(err)
 	}
 	return api.ActionResult{OK: true, BeadID: id}
 }
 
-func (b *Bridge) isClosed(ctx context.Context, dir, id string) (bool, error) {
-	i, err := b.Beads.Show(ctx, dir, id)
+func isClosed(ctx context.Context, t tracker.Tracker, dir, id string) (bool, error) {
+	i, err := t.Show(ctx, dir, id)
 	if err != nil {
 		return false, err
 	}
-	return i.Status == "closed", nil
+	return i.Status == tracker.StatusClosed, nil
 }
 
-// hasComment reports whether the bead has a comment by author with this text
-// made at or after the intent. bd stores comment times to the second.
-func (b *Bridge) hasComment(ctx context.Context, dir, id, author, text string, intent time.Time) (bool, error) {
-	i, err := b.Beads.Show(ctx, dir, id)
+// hasComment reports whether the task has a comment by author with this
+// text made at or after the intent. Trackers may store comment times to the
+// second.
+func hasComment(ctx context.Context, t tracker.Tracker, dir, id, author, text string, intent time.Time) (bool, error) {
+	i, err := t.Show(ctx, dir, id)
 	if err != nil {
 		return false, err
 	}
@@ -327,8 +346,8 @@ func fail(err error) api.ActionResult {
 	return api.ActionResult{Error: msg}
 }
 
-func newIssue(a api.Action, title, actor string) beads.NewIssue {
-	return beads.NewIssue{Title: title, Due: a.Payload.Due, Parent: a.Payload.Parent, ActionID: a.ID, Actor: actor}
+func newIssue(a api.Action, title, actor string) tracker.NewIssue {
+	return tracker.NewIssue{Title: title, Due: a.Payload.Due, Parent: a.Payload.Parent, ActionID: a.ID, Actor: actor}
 }
 
 // stop applies a stop: it ends the item's live run and is applied once the
@@ -344,9 +363,10 @@ func (b *Bridge) stop(a api.Action) api.ActionResult {
 }
 
 // ask hands an applied ask, or an add with ask, to the runner, once its note
-// is on the bead. No other action ever starts a run.
+// is on the task. No other action ever starts a run, and only a tracker that
+// implements tracker.Agent runs one.
 func (b *Bridge) ask(ctx context.Context, a api.Action, st *repoState, res api.ActionResult) {
-	if b.Runner == nil {
+	if b.Runner == nil || agentOf(st.Tracker) == nil {
 		return
 	}
 	actor := a.Author
@@ -363,7 +383,7 @@ func (b *Bridge) ask(ctx context.Context, a api.Action, st *repoState, res api.A
 		}
 		if it, ok := st.items[a.BeadID]; ok {
 			req.Creator = it.CreatedBy
-		} else if i, err := b.Beads.Show(ctx, st.Dir, a.BeadID); err == nil {
+		} else if i, err := st.Tracker.Show(ctx, st.Dir, a.BeadID); err == nil {
 			req.Creator = i.CreatedBy
 		}
 	case a.Kind == api.KindAdd && a.Payload.Ask && res.BeadID != "":

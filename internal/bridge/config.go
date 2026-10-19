@@ -1,5 +1,6 @@
-// Package bridge runs on the agent machine. It finds beads repos, sends their
-// human items to the hub and replays the hub's actions with bd.
+// Package bridge runs on the agent machine. It finds the repos of every task
+// tracker it has (internal/tracker), sends their tasks for the person to the
+// hub and replays the hub's actions through the repo's tracker.
 package bridge
 
 import (
@@ -22,14 +23,19 @@ import (
 type Config struct {
 	HubURL string `json:"hubURL"`
 	Token  string `json:"token"`
-	// Roots are the directories scanned for beads repos. Absent (null) means
+	// Roots are the directories scanned for repos. Absent (null) means
 	// the home folder; an empty list means none.
 	Roots             []string `json:"roots"`
 	AllowInsecureHTTP bool     `json:"allowInsecureHTTP,omitempty"`
-	// BD is the bd executable; found on PATH when empty.
+	// BD is beads' bd executable; found on PATH when empty. TrackerBins
+	// wins over it.
 	BD string `json:"bd,omitempty"`
+	// TrackerBins are tracker tools by tracker name, such as
+	// {"backlog": "/opt/backlog/bin/backlog"}; a tracker not named here
+	// finds its tool on PATH.
+	TrackerBins map[string]string `json:"trackerBins,omitempty"`
 	// Sync holds the sync switches set in the app, by repo name. A switch
-	// overrides the repo's own meat-mode.sync line.
+	// overrides the repo's own opt-in file.
 	Sync map[string]bool `json:"sync,omitempty"`
 	// Agents holds the agents switches set in the app, by repo name. Agents
 	// run only in a repo switched on here; no repo file can do it.
@@ -38,6 +44,17 @@ type Config struct {
 	// networks outside the private set that the hub may be in. The
 	// environment, when set, wins at run time.
 	TrustedNetworks string `json:"trustedNetworks,omitempty"`
+}
+
+// trackerBin is the tool path the config gives the named tracker, or "".
+func (c Config) trackerBin(name string) string {
+	if p := c.TrackerBins[name]; p != "" {
+		return p
+	}
+	if name == beadsName {
+		return c.BD
+	}
+	return ""
 }
 
 // Allowed is the set of addresses the hub may have: the private set plus the

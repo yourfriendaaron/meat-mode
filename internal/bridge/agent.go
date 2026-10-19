@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // DefaultAgentCommand is Claude Code headless, speaking stream-json on stdin
-// and stdout. The bridge adds --max-budget-usd and, to continue a bead's
+// and stdout. The bridge adds --max-budget-usd and, to continue a task's
 // earlier conversation, --resume.
 const DefaultAgentCommand = "claude -p --input-format stream-json --output-format stream-json --verbose " +
 	"--replay-user-messages --permission-mode auto --permission-prompts none"
@@ -32,11 +34,11 @@ type AgentConfig struct {
 	// with no shell. It must speak Claude Code's stream-json protocol and
 	// accept --max-budget-usd and --resume.
 	Command []string
-	// Name is shown for the agent when the bead's creator is not one.
+	// Name is shown for the agent when the task's creator is not one.
 	Name        string
 	Timeout     time.Duration // wall clock for one run
 	BudgetUSD   float64       // spending cap for one run
-	RunsPerTask int           // lifetime runs per bead
+	RunsPerTask int           // lifetime runs per task
 	Concurrent  int           // runs live at once on this machine
 }
 
@@ -102,22 +104,6 @@ func (c AgentConfig) args(session string) []string {
 	return out
 }
 
-// agentPrompt is the first message of every run. The bead's own notes carry
-// the task and the user's latest words, so the prompt only says where to
-// look and the rules.
-func agentPrompt(id string) string {
-	return "You are working on the task in bead " + id + ". Run `bd show " + id + "` and read its comments for the latest state. " +
-		"Then do the work and close the bead with `bd close " + id + "` when it is done, or reply with `bd comment " + id + " \"...\"`. " +
-		"Follow this repository's own instruction files. " +
-		"When something is denied or needs the user, stop and say what you need in a comment. " +
-		"Never send, post, spend, delete or push anything for the user."
-}
-
-// followUp is the stdin message for a note the user added to a live run.
-func followUp(id, text string) string {
-	return "New note from the user on bead " + id + ":\n\n" + text
-}
-
 // userLine is one stream-json user message.
 func userLine(text string) []byte {
 	b, _ := json.Marshal(map[string]any{
@@ -129,18 +115,25 @@ func userLine(text string) []byte {
 
 // agentEnv is the agent's environment: the bridge's own, without its
 // MEAT_MODE_* settings (the hub token among them) and without the variables
-// of a Claude Code session the bridge may have been started from, plus
-// BEADS_ACTOR so the agent's notes carry its name.
-func agentEnv(env []string, actor string) []string {
-	out := make([]string, 0, len(env)+1)
+// of a Claude Code session the bridge may have been started from, plus the
+// tracker's own, such as BEADS_ACTOR, so the agent's notes carry its name.
+// An inherited variable the tracker sets is dropped.
+func agentEnv(env []string, actor string, ag tracker.Agent) []string {
+	extra := ag.Env(actor)
+	set := make(map[string]bool, len(extra))
+	for _, kv := range extra {
+		k, _, _ := strings.Cut(kv, "=")
+		set[k] = true
+	}
+	out := make([]string, 0, len(env)+len(extra))
 	for _, kv := range env {
 		k, _, _ := strings.Cut(kv, "=")
-		if strings.HasPrefix(k, "MEAT_MODE_") || k == "CLAUDECODE" || strings.HasPrefix(k, "CLAUDE_CODE_") || k == "BEADS_ACTOR" {
+		if strings.HasPrefix(k, "MEAT_MODE_") || k == "CLAUDECODE" || strings.HasPrefix(k, "CLAUDE_CODE_") || set[k] {
 			continue
 		}
 		out = append(out, kv)
 	}
-	return append(out, "BEADS_ACTOR="+actor)
+	return append(out, extra...)
 }
 
 // maxActivity caps an activity line.
@@ -157,8 +150,9 @@ var subcommands = map[string]bool{
 
 // describeTool turns one tool call into a short line in plain words, such as
 // "Editing notes.txt" or "Running go test". It never shows more of a command
-// than its first word or two, nor any path but a file's base name.
-func describeTool(name string, input json.RawMessage) string {
+// than its first word or two, nor any path but a file's base name. ag names
+// the tracker's own commands.
+func describeTool(name string, input json.RawMessage, ag tracker.Agent) string {
 	var in struct {
 		Command  string `json:"command"`
 		FilePath string `json:"file_path"`
@@ -171,7 +165,7 @@ func describeTool(name string, input json.RawMessage) string {
 	}
 	switch name {
 	case "Bash":
-		return describeCommand(in.Command)
+		return describeCommand(in.Command, ag)
 	case "Edit", "MultiEdit", "NotebookEdit":
 		return orWork("Editing ", file, "Editing a file")
 	case "Write":
@@ -210,9 +204,9 @@ func fileName(p string) string {
 }
 
 // describeCommand names a shell command by its first word or two. A leading
-// `cd dir &&` and variable assignments are skipped; bd commands are named
-// for what they do to the bead.
-func describeCommand(cmd string) string {
+// `cd dir &&` and variable assignments are skipped; the tracker's own
+// commands are named as its Describe says.
+func describeCommand(cmd string, ag tracker.Agent) string {
 	words := strings.Fields(cmd)
 skip:
 	for len(words) > 0 {
@@ -235,25 +229,14 @@ skip:
 	if !plainWord.MatchString(first) {
 		return "Running a command"
 	}
+	if ag != nil {
+		if d := ag.Describe(words); d != "" {
+			return clip(d)
+		}
+	}
 	second := ""
 	if len(words) > 1 && plainWord.MatchString(words[1]) && !strings.HasPrefix(words[1], "-") {
 		second = words[1]
-	}
-	if first == "bd" {
-		switch second {
-		case "comments":
-			if len(words) > 2 && words[2] == "add" {
-				return "Writing a note"
-			}
-			return "Reading the bead"
-		case "show", "list", "ready", "search":
-			return "Reading the bead"
-		case "comment":
-			return "Writing a note"
-		case "close":
-			return "Closing the bead"
-		}
-		return "Updating the bead"
 	}
 	if subcommands[first] && second != "" {
 		return clip("Running " + first + " " + second)

@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/bridge/fakehub"
 )
 
@@ -76,14 +78,15 @@ func TestPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.HubURL != hub.URL || cfg.Token != token || cfg.BD != bd ||
+	if cfg.HubURL != hub.URL || cfg.Token != token ||
 		len(cfg.Roots) != 1 || cfg.Roots[0] != filepath.Join(env.Paths.Home, "code") {
 		t.Errorf("config = %+v", cfg)
 	}
 	if !svc.installed || svc.exe != "/opt/meat-mode/meat-mode" || !strings.HasPrefix(svc.path, filepath.Dir(bd)+":") {
 		t.Errorf("service = %+v", svc)
 	}
-	if hs := hub.Hellos(); len(hs) != 1 || hs[0].BdVersion != "1.3.1" {
+	if hs := hub.Hellos(); len(hs) != 1 || hs[0].BdVersion != "1.3.1" ||
+		!reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "beads", Version: "1.3.1"}}) {
 		t.Errorf("hellos = %+v", hs)
 	}
 	if !strings.Contains(out.String(), `as bridge "desk"`) {
@@ -304,7 +307,7 @@ func TestStatus(t *testing.T) {
 	if err := Main(context.Background(), []string{"status"}, env); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Hub:      " + hub.URL, "bd:       1.3.1", "garden", "synced", "kitchen", "not synced (switch it on in Settings)", journal, `reachable, this bridge is "desk"`} {
+	for _, want := range []string{"Hub:      " + hub.URL, "Trackers:\n  beads                    1.3.1\n", "garden", "synced", "kitchen", "not synced (switch it on in Settings)", journal, `reachable, this bridge is "desk"`} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out)
 		}

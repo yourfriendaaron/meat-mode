@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
 const agentsUsage = "usage: meat-mode bridge agents [on|off <repo>]"
@@ -19,7 +21,10 @@ func agentsCommand(args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	repos := s.Repos()
+	repos, err := s.Repos()
+	if err != nil {
+		return err
+	}
 	switch {
 	case len(args) == 0:
 		listAgents(env.Stdout, repos, s.Config.Agents)
@@ -30,6 +35,9 @@ func agentsCommand(args []string, env Env) error {
 			return err
 		}
 		on := args[0] == "on"
+		if on && agentOf(r.Tracker) == nil {
+			return errors.New(cannot(r.Tracker, api.KindAsk).Error)
+		}
 		if err := SaveAgents(env.Paths.Config, r.Name, on); err != nil {
 			return err
 		}
@@ -47,7 +55,7 @@ func agentsCommand(args []string, env Env) error {
 
 func listAgents(out io.Writer, repos []Repo, switches map[string]bool) {
 	if len(repos) == 0 {
-		fmt.Fprintln(out, "This bridge finds no beads repos.")
+		fmt.Fprintln(out, "This bridge finds no repos.")
 		return
 	}
 	sort.Slice(repos, func(i, j int) bool { return repos[i].Name < repos[j].Name })

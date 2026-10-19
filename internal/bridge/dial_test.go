@@ -166,7 +166,7 @@ func TestRunLoopRetriesARefusedHub(t *testing.T) {
 	_, urlFor := hubAt(t)
 	h := &Hub{URL: urlFor("hub.example.com"), Token: "t", Resolver: &fakeResolver{addrs: []netip.Addr{publicAddr}}}
 	b := &Bridge{Hub: h}
-	b.bdVersion = "1.3.1"
+	b.checked = true
 	err := b.Tick(context.Background(), false)
 	if err == nil || !strings.Contains(err.Error(), "outside the private network") {
 		t.Fatalf("Tick = %v", err)

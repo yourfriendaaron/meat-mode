@@ -8,17 +8,19 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
-	"github.com/yourfriendaaron/meat-mode/internal/beads"
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // Env is what the bridge commands touch outside the process. Tests replace
@@ -143,7 +145,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
 	var roots multiFlag
-	fs.Var(&roots, "root", "a directory to scan for beads repos instead of the home folder (repeatable)")
+	fs.Var(&roots, "root", "a directory to scan for repos instead of the home folder (repeatable)")
 	insecure := fs.Bool("allow-insecure-http", false, "allow plain HTTP to a hub that is not on this machine")
 	noService := fs.Bool("no-service", false, "save the config without installing the user service")
 	fs.Usage = func() {
@@ -200,12 +202,35 @@ func pair(ctx context.Context, args []string, env Env) error {
 		return errors.New("the service does not get MEAT_MODE_ALLOW_INSECURE_HTTP from this shell; " +
 			"pass --allow-insecure-http to save it, or --no-service")
 	}
-	bd, ver, err := findBD(ctx, cfg.BD, env)
+	// The service gets a short PATH, so it holds the folder of every tool a
+	// tracker found on this shell's PATH or in the config.
+	var tools []string
+	look := func(name string) (string, error) {
+		p, err := env.lookPath(name)
+		if err == nil {
+			if abs, aerr := filepath.Abs(p); aerr == nil {
+				tools = append(tools, abs)
+			}
+		}
+		return p, err
+	}
+	ts, err := buildTrackers(cfg, env.getenv(), look)
 	if err != nil {
 		return err
 	}
-	cfg.BD = bd
-	reply, err := env.hub(cfg, s.Allowed).Hello(ctx, api.Hello{Version: env.Version, BdVersion: ver})
+	checks := checkTrackers(ctx, ts)
+	_, versions, err := passed(checks)
+	if err != nil {
+		return err
+	}
+	for _, c := range checks {
+		if c.Err != nil {
+			fmt.Fprintf(env.Stdout, "%s is not available, so its repos are skipped: %v\n", c.Tracker.Info().Title, c.Err)
+		}
+	}
+	tools = append(tools, configuredBins(cfg)...)
+	hello := api.Hello{Version: env.Version, BdVersion: beadsVersion(versions), Trackers: versions}
+	reply, err := env.hub(cfg, s.Allowed).Hello(ctx, hello)
 	if err != nil {
 		return fmt.Errorf("cannot reach the hub with that token: %w", err)
 	}
@@ -235,7 +260,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if err := svc.Install(exe, ServicePath(bd, agentPath(s))); err != nil {
+	if err := svc.Install(exe, ServicePath(append(tools, agentPath(s))...)); err != nil {
 		return err
 	}
 	fmt.Fprintf(env.Stdout, "Installed and started the user service (%s).\n", svc.File())
@@ -256,25 +281,15 @@ func agentPath(s Settings) string {
 	return abs
 }
 
-// findBD resolves bd to an absolute path and checks its version.
-func findBD(ctx context.Context, configured string, env Env) (path, version string, err error) {
-	path = configured
-	if path == "" {
-		if path, err = env.lookPath("bd"); err != nil {
-			return "", "", errors.New("bd is not on PATH; install beads 1.3.0 or newer first")
+// configuredBins are the absolute tool paths the config names.
+func configuredBins(cfg Config) []string {
+	var out []string
+	for _, p := range append([]string{cfg.BD}, slices.Sorted(maps.Values(cfg.TrackerBins))...) {
+		if abs, err := filepath.Abs(p); p != "" && err == nil {
+			out = append(out, abs)
 		}
 	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-	version, err = (&beads.CLI{Bin: path}).Version(ctx)
-	if err != nil {
-		return "", "", fmt.Errorf("cannot run bd: %w", err)
-	}
-	if err := beads.CheckVersion(version); err != nil {
-		return "", "", err
-	}
-	return path, version, nil
+	return out
 }
 
 // New builds a bridge from the settings.
@@ -296,17 +311,21 @@ func New(s Settings, log *slog.Logger) (*Bridge, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open replay journal: %w", err)
 	}
-	bd := &beads.CLI{Bin: cfg.BD}
+	ts, err := s.Trackers()
+	if err != nil {
+		j.Close()
+		return nil, err
+	}
 	// The runner opens after the journal, whose lock keeps a second bridge
 	// from ending this one's runs as left behind.
-	runner, err := OpenAgentRunner(filepath.Join(env.Paths.State, "agents"), agents, bd, log)
+	runner, err := OpenAgentRunner(filepath.Join(env.Paths.State, "agents"), agents, log)
 	if err != nil {
 		j.Close()
 		return nil, fmt.Errorf("open agent journal: %w", err)
 	}
 	return &Bridge{
 		Hub:      s.Hub(),
-		Beads:    bd,
+		Trackers: ts,
 		Journal:  j,
 		Roots:    s.Roots,
 		Home:     env.Paths.Home,
@@ -365,11 +384,19 @@ func status(ctx context.Context, env Env) error {
 	} else {
 		fmt.Fprintf(out, "Hub:      %s\n", cfg.HubURL)
 	}
-	bd, bdVersion, err := findBD(ctx, cfg.BD, env)
+	ts, err := s.Trackers()
 	if err != nil {
-		fmt.Fprintf(out, "bd:       %v\n", err)
-	} else {
-		fmt.Fprintf(out, "bd:       %s (%s)\n", bdVersion, bd)
+		return err
+	}
+	checks := checkTrackers(ctx, ts)
+	_, versions, _ := passed(checks)
+	fmt.Fprintln(out, "Trackers:")
+	for _, c := range checks {
+		if c.Err != nil {
+			fmt.Fprintf(out, "  %-24s not available: %v\n", c.Tracker.Info().Name, c.Err)
+		} else {
+			fmt.Fprintf(out, "  %-24s %s\n", c.Tracker.Info().Name, orNone(c.Version))
+		}
 	}
 	if svc, err := env.service(); err != nil {
 		fmt.Fprintf(out, "Service:  %v\n", err)
@@ -377,10 +404,13 @@ func status(ctx context.Context, env Env) error {
 		fmt.Fprintf(out, "Service:  %s\n", svc.Status())
 	}
 	fmt.Fprintf(out, "Roots:    %s\n", orNone(strings.Join(s.Roots, ", ")))
-	repos := s.Repos()
+	repos, err := s.Repos()
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(out, "Repos:    %d found\n", len(repos))
 	for _, r := range repos {
-		fmt.Fprintf(out, "  %-24s %s\n  %-24s %s\n", r.Name, syncState(r), "", r.Dir)
+		fmt.Fprintf(out, "  %-24s %s\n  %-24s %s (%s)\n", r.Name, syncState(r), "", r.Dir, r.Tracker.Info().Title)
 	}
 	if cfg.HubURL == "" {
 		return nil
@@ -391,7 +421,7 @@ func status(ctx context.Context, env Env) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if r, err := s.Hub().Hello(ctx, api.Hello{Version: env.Version, BdVersion: bdVersion}); err != nil {
+	if r, err := s.Hub().Hello(ctx, api.Hello{Version: env.Version, BdVersion: beadsVersion(versions), Trackers: versions}); err != nil {
 		fmt.Fprintf(out, "Hub check: unreachable: %v\n", err)
 	} else {
 		fmt.Fprintf(out, "Hub check: reachable, this bridge is %q\n", r.Bridge)
@@ -407,8 +437,10 @@ func syncState(r Repo) string {
 		why = "switched on in Settings"
 	case r.Switch != nil:
 		why = "switched off in Settings"
+	case r.OptedIn && tracker.RepoOptIn(r.Dir):
+		why = "sync: true in " + tracker.OptInFile
 	case r.OptedIn:
-		why = "meat-mode.sync: true in .beads/config.yaml"
+		why = "opted in by its " + r.Tracker.Info().Title + " config"
 	}
 	if r.Synced() {
 		return "synced (" + why + ")"

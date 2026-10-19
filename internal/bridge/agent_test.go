@@ -6,6 +6,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/fake"
 )
 
 func TestAgentConfigFromEnv(t *testing.T) {
@@ -70,16 +74,22 @@ func TestValidSessionID(t *testing.T) {
 func TestAgentEnv(t *testing.T) {
 	got := agentEnv([]string{
 		"PATH=/usr/bin", "HOME=/srv/alex", "CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=x", "CLAUDE_CONFIG_DIR=/c",
-		"MEAT_MODE_BRIDGE_TOKEN=secret", "BEADS_ACTOR=someone",
-	}, "planner")
-	want := []string{"PATH=/usr/bin", "HOME=/srv/alex", "CLAUDE_CONFIG_DIR=/c", "BEADS_ACTOR=planner"}
+		"MEAT_MODE_BRIDGE_TOKEN=secret", "BEADS_ACTOR=someone", "FAKE_ACTOR=someone",
+	}, "planner", &beads.CLI{})
+	want := []string{"PATH=/usr/bin", "HOME=/srv/alex", "CLAUDE_CONFIG_DIR=/c", "FAKE_ACTOR=someone", "BEADS_ACTOR=planner"}
 	if !slices.Equal(got, want) {
 		t.Errorf("env = %q, want %q", got, want)
+	}
+	// Another tracker's variables are its own; BEADS_ACTOR passes through.
+	got = agentEnv([]string{"PATH=/usr/bin", "BEADS_ACTOR=someone", "FAKE_ACTOR=someone"}, "planner", fake.New().Tracker().(tracker.Agent))
+	want = []string{"PATH=/usr/bin", "BEADS_ACTOR=someone", "FAKE_ACTOR=planner"}
+	if !slices.Equal(got, want) {
+		t.Errorf("env with the fake = %q, want %q", got, want)
 	}
 }
 
 func TestAgentPrompt(t *testing.T) {
-	p := agentPrompt("tst-1")
+	p := (&beads.CLI{}).Prompt("tst-1")
 	for _, want := range []string{"bd show tst-1", "bd close tst-1", "bd comment tst-1", "instruction files", "needs the user", "Never send, post, spend, delete or push"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, p)
@@ -117,12 +127,19 @@ func TestDescribeTool(t *testing.T) {
 		{"WebFetch", `{"url":"https://example.com/?key=abc"}`, "Searching the web"},
 		{"mcp__thing__do", `{}`, "Working"},
 	} {
-		if got := describeTool(c.name, json.RawMessage(c.input)); got != c.want {
+		if got := describeTool(c.name, json.RawMessage(c.input), &beads.CLI{}); got != c.want {
 			t.Errorf("%s %s = %q, want %q", c.name, c.input, got, c.want)
 		}
 	}
 	long := strings.Repeat("a", 100) + ".txt"
-	if got := describeTool("Edit", json.RawMessage(`{"file_path":"`+long+`"}`)); len([]rune(got)) != maxActivity {
+	if got := describeTool("Edit", json.RawMessage(`{"file_path":"`+long+`"}`), nil); len([]rune(got)) != maxActivity {
 		t.Errorf("long name = %q", got)
+	}
+	// Each tracker names its own commands; another tracker's are commands.
+	ag := fake.New().Tracker().(tracker.Agent)
+	for cmd, want := range map[string]string{"fk show 1": "Using the fake tracker", "bd show tst-1": "Running bd"} {
+		if got := describeTool("Bash", json.RawMessage(`{"command":"`+cmd+`"}`), ag); got != want {
+			t.Errorf("%q with the fake = %q, want %q", cmd, got, want)
+		}
 	}
 }

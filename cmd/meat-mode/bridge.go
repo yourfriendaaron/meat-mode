@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/yourfriendaaron/meat-mode/internal/bridge"
+	_ "github.com/yourfriendaaron/meat-mode/internal/tracker/all" // every tracker the bridge ships
 )
 
 // runBridge runs `meat-mode bridge <command>`.

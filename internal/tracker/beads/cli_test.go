@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourfriendaaron/meat-mode/internal/beads"
-	"github.com/yourfriendaaron/meat-mode/internal/beads/beadstest"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads/beadstest"
 )
 
 func TestCheckVersion(t *testing.T) {
@@ -32,13 +33,13 @@ func TestKeepHuman(t *testing.T) {
 	recent := now.Add(-time.Hour)
 	cases := []struct {
 		name string
-		i    beads.Issue
+		i    beads.Bead
 		want bool
 	}{
-		{"labelled open", beads.Issue{Status: "open", Labels: []string{"human"}}, true},
-		{"unlabelled open", beads.Issue{Status: "open"}, false},
-		{"recently closed", beads.Issue{Status: "closed", Labels: []string{"human"}, ClosedAt: &recent}, true},
-		{"closed long ago", beads.Issue{Status: "closed", Labels: []string{"human"}, ClosedAt: &old}, false},
+		{"labelled open", beads.Bead{Status: "open", Labels: []string{"human"}}, true},
+		{"unlabelled open", beads.Bead{Status: "open"}, false},
+		{"recently closed", beads.Bead{Status: "closed", Labels: []string{"human"}, ClosedAt: &recent}, true},
+		{"closed long ago", beads.Bead{Status: "closed", Labels: []string{"human"}, ClosedAt: &old}, false},
 	}
 	for _, c := range cases {
 		if got := beads.KeepHuman(c.i, now); got != c.want {
@@ -48,7 +49,7 @@ func TestKeepHuman(t *testing.T) {
 }
 
 func TestFingerprintChanges(t *testing.T) {
-	a := beads.Issue{ID: "x-1", Title: "Water the plants", Status: "open", Labels: []string{"b", "a"}}
+	a := beads.Bead{ID: "x-1", Title: "Water the plants", Status: "open", Labels: []string{"b", "a"}}
 	b := a
 	b.Labels = []string{"a", "b"}
 	if a.Fingerprint() != b.Fingerprint() {
@@ -73,22 +74,22 @@ func TestCLISubtasks(t *testing.T) {
 	ctx := context.Background()
 	c := &beads.CLI{}
 
-	parent, err := c.Create(ctx, dir, beads.NewIssue{Title: "Plant the beds", ActionID: "act-p", Actor: "alex-app"})
+	parent, err := c.Create(ctx, dir, tracker.NewIssue{Title: "Plant the beds", ActionID: "act-p", Actor: "alex-app"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := c.Create(ctx, dir, beads.NewIssue{Title: "Buy seedlings", Parent: parent, ActionID: "act-c", Actor: "alex-app"})
+	child, err := c.Create(ctx, dir, tracker.NewIssue{Title: "Buy seedlings", Parent: parent, ActionID: "act-c", Actor: "alex-app"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// A child of a bead not labelled human: the list holds the child only.
 	epic := strings.TrimSpace(beadstest.Run(t, dir, "bd", "create", "Garden plan", "--silent"))
-	other, err := c.Create(ctx, dir, beads.NewIssue{Title: "Pick a fence", Parent: epic, ActionID: "act-o", Actor: "alex-app"})
+	other, err := c.Create(ctx, dir, tracker.NewIssue{Title: "Pick a fence", Parent: epic, ActionID: "act-o", Actor: "alex-app"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	list, err := c.ListHuman(ctx, dir)
+	list, err := c.List(ctx, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func TestCLISubtasks(t *testing.T) {
 		parents[i.ID] = i.Parent
 	}
 	if len(list) != 3 || parents[parent] != "" || parents[child] != parent || parents[other] != epic {
-		t.Fatalf("ListHuman parents = %v", parents)
+		t.Fatalf("List parents = %v", parents)
 	}
 
 	got, err := c.Show(ctx, dir, other)
@@ -108,7 +109,7 @@ func TestCLISubtasks(t *testing.T) {
 		t.Fatalf("Item parent = %q %q", it.Parent, it.ParentTitle)
 	}
 
-	if err := c.Close(ctx, dir, parent, "Done in Meat Mode", "alex-app"); !errors.Is(err, beads.ErrOpenChildren) {
+	if err := c.Close(ctx, dir, parent, "Done in Meat Mode", "alex-app"); !errors.Is(err, tracker.ErrOpenChildren) {
 		t.Fatalf("closing a parent with an open child: %v; want ErrOpenChildren", err)
 	}
 	if err := c.Close(ctx, dir, child, "Done in Meat Mode", "alex-app"); err != nil {
@@ -117,7 +118,7 @@ func TestCLISubtasks(t *testing.T) {
 	if err := c.Close(ctx, dir, parent, "Done in Meat Mode", "alex-app"); err != nil {
 		t.Fatalf("close after the child closed: %v", err)
 	}
-	if _, err := c.Create(ctx, dir, beads.NewIssue{Title: "x", Parent: "--force"}); !errors.Is(err, beads.ErrBadID) {
+	if _, err := c.Create(ctx, dir, tracker.NewIssue{Title: "x", Parent: "--force"}); !errors.Is(err, beads.ErrBadID) {
 		t.Fatalf("a flag as parent: %v", err)
 	}
 }
@@ -137,7 +138,7 @@ func TestCLI(t *testing.T) {
 	}
 
 	due := time.Date(2026, 12, 1, 10, 0, 0, 0, time.UTC)
-	id, err := c.Create(ctx, dir, beads.NewIssue{Title: "-Water the plants", Due: &due, ActionID: "act-1", Actor: "alex-app"})
+	id, err := c.Create(ctx, dir, tracker.NewIssue{Title: "-Water the plants", Due: &due, ActionID: "act-1", Actor: "alex-app"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,14 +152,14 @@ func TestCLI(t *testing.T) {
 		t.Fatalf("FindByActionID for unknown action = %q", found)
 	}
 
-	list, err := c.ListHuman(ctx, dir)
+	list, err := c.List(ctx, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 1 || list[0].ID != id {
-		t.Fatalf("ListHuman = %+v", list)
+		t.Fatalf("List = %+v", list)
 	}
-	fp := list[0].Fingerprint()
+	fp := list[0].Version
 
 	if err := c.AddComment(ctx, dir, id, "alex-app", "--Bought soil"); err != nil {
 		t.Fatal(err)
@@ -167,8 +168,8 @@ func TestCLI(t *testing.T) {
 	if err := c.Defer(ctx, dir, id, &until, "alex-app"); err != nil {
 		t.Fatal(err)
 	}
-	list, _ = c.ListHuman(ctx, dir)
-	if len(list) != 1 || list[0].Status != "deferred" || list[0].Fingerprint() == fp || list[0].CommentCount != 1 {
+	list, _ = c.List(ctx, dir)
+	if len(list) != 1 || list[0].Status != "deferred" || list[0].Version == fp {
 		t.Fatalf("after comment and defer: %+v", list)
 	}
 
@@ -208,7 +209,7 @@ func TestCLI(t *testing.T) {
 	if it := got.Item(); it.Status != "closed" || it.CloseReason != "Done in Meat Mode" || it.ClosedAt == nil {
 		t.Fatalf("after close: %+v", it)
 	}
-	if list, _ := c.ListHuman(ctx, dir); len(list) != 1 {
+	if list, _ := c.List(ctx, dir); len(list) != 1 {
 		t.Fatalf("recently closed item missing from list: %+v", list)
 	}
 
@@ -222,14 +223,14 @@ func TestCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = c.Show(ctx, dir, id)
-	if got.Status != "closed" || got.CloseReason == nil || *got.CloseReason != "Dismissed" {
+	if got.Status != "closed" || got.CloseReason != "Dismissed" {
 		t.Fatalf("after dismiss: %+v", got)
 	}
 	if err := c.Dismiss(ctx, dir, id, "alex-app"); err == nil {
 		t.Fatal("dismissing a closed bead should fail like bd does")
 	}
 
-	if _, err := c.Show(ctx, dir, "tst-nope"); !errors.Is(err, beads.ErrNotFound) {
+	if _, err := c.Show(ctx, dir, "tst-nope"); !errors.Is(err, tracker.ErrNotFound) {
 		t.Fatalf("Show unknown id: %v", err)
 	}
 }
@@ -252,7 +253,7 @@ func TestCLIRefusesFlagIDs(t *testing.T) {
 	dir := beadstest.NewRepo(t, "", "plants")
 	ctx := context.Background()
 	c := &beads.CLI{}
-	id, err := c.Create(ctx, dir, beads.NewIssue{Title: "Water the plants", ActionID: "act-1", Actor: "alex-app"})
+	id, err := c.Create(ctx, dir, tracker.NewIssue{Title: "Water the plants", ActionID: "act-1", Actor: "alex-app"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +306,7 @@ func TestCLIRefusesFlagIDs(t *testing.T) {
 	}
 	got, _ = c.Show(ctx, dir, id)
 	if len(got.Comments) != 1 || got.Comments[0].Text != "--mem-profile="+profile || got.Comments[0].Author != "-falex" ||
-		got.CloseReason == nil || *got.CloseReason != "--db="+profile {
+		got.CloseReason != "--db="+profile {
 		t.Errorf("flag-shaped values: %+v", got)
 	}
 	if _, err := os.Stat(profile); err == nil {
@@ -364,7 +365,7 @@ func TestCLIToleratesPermissionsWarning(t *testing.T) {
 			cli := &beads.CLI{Bin: fakeBD(t, c.stdout, c.stderr, 0), Now: func() time.Time {
 				return time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)
 			}}
-			list, err := cli.ListHuman(context.Background(), t.TempDir())
+			list, err := cli.List(context.Background(), t.TempDir())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -379,7 +380,7 @@ func TestCLIToleratesPermissionsWarning(t *testing.T) {
 // warning beside it.
 func TestCLIRealFailureStillFails(t *testing.T) {
 	cli := &beads.CLI{Bin: fakeBD(t, "", permWarning+"Error: no beads database found\n", 1)}
-	if _, err := cli.ListHuman(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "no beads database found") {
+	if _, err := cli.List(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "no beads database found") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -398,7 +399,7 @@ func TestCLIHidesBridgeEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	cli := &beads.CLI{Bin: bin}
-	if _, err := cli.ListHuman(context.Background(), t.TempDir()); err != nil {
+	if _, err := cli.List(context.Background(), t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(seen)

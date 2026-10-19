@@ -37,7 +37,7 @@ type JournalEntry struct {
 	Intent time.Time        `json:"-"` // when the intent was written
 }
 
-// Done reports whether the bd step finished.
+// Done reports whether the tracker write finished.
 func (e JournalEntry) Done() bool { return e.Phase == "done" }
 
 // errLocked means another bridge process holds the journal.
@@ -157,12 +157,12 @@ func (j *Journal) Get(id string) (JournalEntry, bool) {
 	return *e, true
 }
 
-// Intent records that the bridge is about to run bd for a.
+// Intent records that the bridge is about to write a through the tracker.
 func (j *Journal) Intent(a api.Action, at time.Time) error {
 	return j.write(JournalEntry{ID: a.ID, Phase: "intent", At: at.UTC(), Kind: a.Kind, Repo: a.Repo, BeadID: a.BeadID})
 }
 
-// Done records the outcome of the bd step for an action.
+// Done records the outcome of the tracker write for an action.
 func (j *Journal) Done(id string, r api.ActionResult, at time.Time) error {
 	return j.write(JournalEntry{ID: id, Phase: "done", At: at.UTC(), Result: r})
 }

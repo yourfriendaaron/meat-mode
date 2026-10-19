@@ -5,31 +5,15 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/fake"
 )
 
-func TestYAMLLine(t *testing.T) {
-	cases := []struct {
-		line   string
-		key    string
-		val    string
-		parsed bool
-	}{
-		{"meat-mode.sync: true", "meat-mode.sync", "true", true},
-		{`"meat-mode.sync": "true"`, "meat-mode.sync", "true", true},
-		{`'meat-mode.sync' : 'true'  # keep syncing`, "meat-mode.sync", "true", true},
-		{"meat-mode.sync: true# not a comment", "meat-mode.sync", "true# not a comment", true},
-		{`meat-mode.sync: "a # b"`, "meat-mode.sync", "a # b", true},
-		{"# meat-mode.sync: true", "", "", false},
-		{"  meat-mode.sync: true", "", "", false},
-		{"no colon here", "", "", false},
-	}
-	for _, c := range cases {
-		k, v, ok := yamlLine(c.line)
-		if ok != c.parsed || k != c.key || v != c.val {
-			t.Errorf("yamlLine(%q) = %q, %q, %v", c.line, k, v, ok)
-		}
-	}
-}
+// beadsOnly is the tracker list for walks over beads repos. Detect and
+// OptedIn read files only, so bd need not be installed.
+var beadsOnly = []tracker.Tracker{&beads.CLI{}}
 
 func writeRepo(t *testing.T, dir, config string) {
 	t.Helper()
@@ -108,7 +92,7 @@ func TestDiscoverWalksTheHomeFolder(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(locked, 0o755) })
 
-	got := repoDirs(Discover(Config{}.ResolveRoots(home), home, quiet))
+	got := repoDirs(Discover(Config{}.ResolveRoots(home), home, beadsOnly, quiet))
 	want := []string{
 		in(".notes/house/todo"),
 		in("notes/deep/down/journal"),
@@ -131,12 +115,12 @@ func TestDiscoverRootOverride(t *testing.T) {
 	writeRepo(t, filepath.Join(home, "projects", "garden"), "")
 	writeRepo(t, filepath.Join(home, "notes", "journal"), "")
 	roots := Config{Roots: []string{"~/notes"}}.ResolveRoots(home)
-	got := repoDirs(Discover(roots, home, quiet))
+	got := repoDirs(Discover(roots, home, beadsOnly, quiet))
 	if !slices.Equal(got, []string{filepath.Join(home, "notes", "journal")}) {
 		t.Errorf("found %v, want only the repo under --root", got)
 	}
 	// Overlapping roots find a repo once.
-	got = repoDirs(Discover([]string{home, filepath.Join(home, "notes")}, home, quiet))
+	got = repoDirs(Discover([]string{home, filepath.Join(home, "notes")}, home, beadsOnly, quiet))
 	if len(got) != 2 {
 		t.Errorf("overlapping roots found %v", got)
 	}
@@ -159,12 +143,12 @@ func TestDiscover(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "notes.txt"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := Discover([]string{root, filepath.Join(root, "missing")}, root, quiet)
+	got := Discover([]string{root, filepath.Join(root, "missing")}, root, beadsOnly, quiet)
 	want := []Repo{
-		{Name: "attic", Dir: filepath.Join(root, "attic")},
-		{Name: "garden", Dir: filepath.Join(root, "garden"), OptedIn: true},
-		{Name: "kitchen", Dir: filepath.Join(root, "kitchen")},
-		{Name: "quoted", Dir: filepath.Join(root, "quoted"), OptedIn: true},
+		{Name: "attic", Dir: filepath.Join(root, "attic"), Tracker: beadsOnly[0]},
+		{Name: "garden", Dir: filepath.Join(root, "garden"), Tracker: beadsOnly[0], OptedIn: true},
+		{Name: "kitchen", Dir: filepath.Join(root, "kitchen"), Tracker: beadsOnly[0]},
+		{Name: "quoted", Dir: filepath.Join(root, "quoted"), Tracker: beadsOnly[0], OptedIn: true},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("Discover = %+v", got)
@@ -187,11 +171,36 @@ func TestRepoNamesArePaths(t *testing.T) {
 
 	roots := []string{home, filepath.Join(outside, "repos"), filepath.Join(outside, "solo")}
 	var got []string
-	for _, r := range Discover(roots, home, quiet) {
+	for _, r := range Discover(roots, home, beadsOnly, quiet) {
 		got = append(got, r.Name)
 	}
 	want := []string{"personal", "projects/garden", "repos/shed", "solo", "work/garden"}
 	if !slices.Equal(got, want) {
 		t.Errorf("names %v, want %v", got, want)
+	}
+}
+
+// TestDiscoverTrackers: each folder goes to the first tracker that detects
+// it, every tracker's store is pruned, and a tracker's own opt-in applies.
+func TestDiscoverTrackers(t *testing.T) {
+	root := t.TempDir()
+	writeRepo(t, filepath.Join(root, "garden"), "meat-mode.sync: true\n")
+	writeFile(t, filepath.Join(root, "garden", fake.Store, "tasks"), "")
+	writeFile(t, filepath.Join(root, "shed", fake.Store, "tasks"), "")
+	writeFile(t, filepath.Join(root, "shed", tracker.OptInFile), "sync: true\n")
+	// A repo inside a store is never reached.
+	writeRepo(t, filepath.Join(root, "shed", fake.Store, "inner"), "")
+	f := fake.New()
+	f.Inf.Rank = 10
+	ft := f.Tracker()
+	ts := []tracker.Tracker{ft, beadsOnly[0]}
+	tracker.Sort(ts)
+	got := Discover([]string{root}, root, ts, quiet)
+	want := []Repo{
+		{Name: "garden", Dir: filepath.Join(root, "garden"), Tracker: beadsOnly[0], OptedIn: true},
+		{Name: "shed", Dir: filepath.Join(root, "shed"), Tracker: ft, OptedIn: true},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Discover = %+v\nwant %+v", got, want)
 	}
 }
