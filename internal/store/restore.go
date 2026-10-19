@@ -364,10 +364,9 @@ func checkExportItem(it *api.ExportItem) error {
 			return fail("a checklist entry is longer than %d characters", MaxTitleLen)
 		}
 	}
+	// A comment from a bridge's bead keeps the id its tracker gave it, which
+	// may be empty, so only its size is checked.
 	for _, c := range it.Comments {
-		if strings.TrimSpace(c.ID) == "" {
-			return fail("a comment has no id")
-		}
 		if utf8.RuneCountInString(c.Text) > maxCommentLen {
 			return fail("comment %s is longer than %d characters", c.ID, maxCommentLen)
 		}
