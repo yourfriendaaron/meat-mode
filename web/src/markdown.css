@@ -1,1 +1,90 @@
-/* Markdown in descriptions and notes (markdown.ts). */
+/* Markdown in descriptions and notes (markdown.ts). A plain-text description
+   looks as it did before: paragraphs keep their spaces and break where the
+   text does, with a blank line's gap between them. The div.md selectors
+   outweigh styles.css's .why p and .note p. */
+
+div.md {
+  overflow-wrap: anywhere;
+}
+.note div.md {
+  margin-top: 2px;
+}
+div.md p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+div.md :is(p, ul, ol, pre, blockquote, table, hr) {
+  margin-block: 0;
+}
+div.md :is(p, ul, ol, pre, blockquote, table, hr):not(:first-child) {
+  margin-top: 1lh;
+}
+div.md .md-h {
+  font-weight: 700;
+}
+div.md ul,
+div.md ol {
+  padding-left: 1.4em;
+}
+div.md li + li {
+  margin-top: 2px;
+}
+div.md blockquote {
+  margin-inline: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--role-line);
+  color: var(--role-soft);
+}
+div.md code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--role-sunk);
+}
+div.md pre {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--role-sunk);
+  overflow-x: auto;
+  white-space: pre;
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+div.md pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+/* A link keeps the text's colour: no role means "link", and the underline
+   tells it apart. */
+div.md a {
+  color: inherit;
+  text-decoration: underline;
+}
+div.md hr {
+  border: 0;
+  border-top: 1px solid var(--role-line);
+}
+/* A wide table scrolls inside the detail rather than widening it. */
+div.md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+div.md th,
+div.md td {
+  padding: 4px 8px;
+  border: 1px solid var(--role-line);
+  overflow-wrap: normal;
+}
+div.md .md-left {
+  text-align: left;
+}
+div.md .md-center {
+  text-align: center;
+}
+div.md .md-right {
+  text-align: right;
+}

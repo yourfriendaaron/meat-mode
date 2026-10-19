@@ -1,6 +1,6 @@
 // Thin client for the hub's app API (docs/api.md).
 
-import type { Action, Bridge, Device, NewAction, NewBridgeReply, Session, SetupInfo, State } from "./types.ts";
+import type { Action, Attachment, Bridge, Device, NewAction, NewBridgeReply, Session, SetupInfo, State } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -77,6 +77,26 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(15000),
   });
+  return reply<T>(res, path);
+}
+
+/**
+ * Sends a file's bytes as they are, for the two routes that take one
+ * (docs/api.md, App API): an attachment and a restore. `timeout` is in ms,
+ * 0 for none; the hub allows 30 minutes to read either body.
+ */
+export async function sendFile<T>(path: string, file: Blob, timeout = 30 * 60 * 1000): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: file,
+    signal: timeout ? AbortSignal.timeout(timeout) : undefined,
+  });
+  return reply<T>(res, path);
+}
+
+/** A hub reply's JSON (undefined for 204), or ApiError with the hub's message. */
+async function reply<T>(res: Response, path: string): Promise<T> {
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     let reauth = false;
@@ -93,6 +113,11 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/** Where the hub serves an attachment's bytes; an <img> or a link loads it as the page's own origin. */
+export function attachmentURL(id: string): string {
+  return `/api/attachments/${encodeURIComponent(id)}`;
 }
 
 export const api = {
@@ -118,6 +143,13 @@ export const api = {
   revokeBridge: (name: string) => call<void>("DELETE", `/api/bridges/${encodeURIComponent(name)}`),
   setup: () => call<SetupInfo>("GET", "/api/setup"),
   recordSetup: (status: "done" | "dismissed") => call<void>("POST", "/api/setup", { status }),
+  /** Attaches a file to an item of the hub's own lists (docs/api.md, Attachments). The hub sniffs its type. */
+  attach: (key: string, file: File) =>
+    sendFile<Attachment>(`/api/items/${encodeURIComponent(key)}/attachments?name=${encodeURIComponent(file.name)}`, file),
+  /** Removes an attachment; restoreAttachment puts it back until the hub purges it. */
+  removeAttachment: (id: string) => call<void>("DELETE", attachmentURL(id)),
+  /** Throws ApiError 404 once the attachment is purged, 409 when putting it back would pass a cap. */
+  restoreAttachment: (id: string) => call<Attachment>("POST", `${attachmentURL(id)}/restore`),
 };
 
 /** A fresh action id. randomUUID needs a secure context, so plain-HTTP LAN use falls back to getRandomValues. */
