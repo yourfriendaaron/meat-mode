@@ -28,10 +28,12 @@ func Add(ctx context.Context, args []string, env Env) error {
 	author := fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id := fs.String("id", "", "a UUID for this to-do; adding the same id again changes nothing")
 	parent := fs.String("parent", "", "the id of an open to-do this machine added to the same list; the new one is its sub-task")
+	var tags tagFlag
+	fs.Var(&tags, "tag", "a tag for it, one word; repeat the flag for more")
 	every, fromDone, until := repeatFlags(fs)
 	project := projectFlag(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME [--every RULE [--from-done] [--until DATE]]] [--note TEXT] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME [--every RULE [--from-done] [--until DATE]]] [--tag TAG]... [--note TEXT] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -46,7 +48,7 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	t := api.PersonalTodo{ID: *id, Title: title, Parent: strings.TrimSpace(*parent), Note: *note, Author: *author}
+	t := api.PersonalTodo{ID: *id, Title: title, Parent: strings.TrimSpace(*parent), Note: *note, Labels: tags, Author: *author}
 	if given(fs, "parent") && t.Parent == "" {
 		return errors.New("--parent needs the id of a to-do, as `meat-mode add` printed it")
 	}
@@ -80,6 +82,18 @@ func Add(ctx context.Context, args []string, env Env) error {
 		return err
 	}
 	fmt.Fprintln(env.Stdout, reply.ID)
+	return nil
+}
+
+// tagFlag collects the tags of a repeated --tag or --untag flag.
+type tagFlag []string
+
+func (t *tagFlag) String() string { return strings.Join(*t, ",") }
+func (t *tagFlag) Set(v string) error {
+	if v = strings.TrimSpace(v); v == "" {
+		return errors.New("a tag cannot be empty")
+	}
+	*t = append(*t, v)
 	return nil
 }
 

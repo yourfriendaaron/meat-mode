@@ -189,7 +189,7 @@ func (h *Hub) getPersonal(w http.ResponseWriter, r *http.Request, bridge string)
 	}
 	p := h.personal[i]
 	it := api.Item{Key: h.personalReply(i).Key, ID: r.PathValue("id"), Title: p.Title, DueAt: p.Due,
-		Status: "open", Priority: 2, CreatedBy: p.Author, Parent: p.Parent, Comments: []api.Comment{}}
+		Status: "open", Priority: 2, CreatedBy: p.Author, Parent: p.Parent, Labels: p.Labels, Comments: []api.Comment{}}
 	if p.Repeat != nil && p.Due != nil {
 		// The hub starts the rule at the due time.
 		rule := *p.Repeat
@@ -223,6 +223,9 @@ func (h *Hub) changePersonal(w http.ResponseWriter, r *http.Request, bridge stri
 		}
 	}
 	h.changes = append(h.changes, Change{Bridge: bridge, Project: project, Item: id, PersonalChange: c})
+	if set := c.Payload.Set; c.Kind == api.KindEdit && set != nil && set.Labels != nil {
+		h.personal[h.ownTodo(bridge, project, id)].Labels = *set.Labels
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(a)
