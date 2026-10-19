@@ -150,6 +150,33 @@ type TrackerVersion struct {
 	Raise string `json:"raise,omitempty"`
 }
 
+// HarnessInfo is the agent harness a bridge runs, and the limits it
+// enforces on each run (docs/harnesses.md).
+type HarnessInfo struct {
+	Name    string `json:"name"`              // the registry key, such as "codex"
+	Title   string `json:"title,omitempty"`   // the name the app shows, such as "Codex"
+	Version string `json:"version,omitempty"` // empty when its check failed
+	// InstructionFile is the file in a repo the harness reads standing
+	// instructions from, such as AGENTS.md.
+	InstructionFile string `json:"instructionFile,omitempty"`
+	// Budget is how the spending cap is enforced: native, metered or none.
+	// With none, a run stops at the time limit only.
+	Budget    string  `json:"budget,omitempty"`
+	BudgetUSD float64 `json:"budgetUsd,omitempty"` // the cap for one run; 0 when Budget is none
+	// TimeoutSeconds is the time limit for one run.
+	TimeoutSeconds int `json:"timeoutSeconds,omitempty"`
+	// Steer is true when a note reaches a live run at once; otherwise it
+	// waits for the agent's turn to end.
+	Steer bool `json:"steer,omitempty"`
+}
+
+// Harness budget modes, as in HarnessInfo.Budget.
+const (
+	BudgetNative  = "native"
+	BudgetMetered = "metered"
+	BudgetNone    = "none"
+)
+
 // Run states. An item with no Run has never had an agent asked (idle).
 const (
 	RunWorking = "working" // the agent is running
@@ -216,6 +243,9 @@ type Bridge struct {
 	BdVersion string     `json:"bdVersion,omitempty"`
 	// Trackers are the trackers the bridge last said it runs.
 	Trackers []TrackerVersion `json:"trackers,omitempty"`
+	// Harness is the agent harness the bridge last said it runs; nil for a
+	// bridge that predates harnesses, which runs Claude Code.
+	Harness *HarnessInfo `json:"harness,omitempty"`
 }
 
 // Action kinds.
@@ -307,6 +337,8 @@ type Hello struct {
 	BdVersion string `json:"bdVersion"` // beads' version, kept for older hubs; empty when beads is not available
 	// Trackers are the trackers whose tools passed their check.
 	Trackers []TrackerVersion `json:"trackers,omitempty"`
+	// Harness is the agent harness the bridge runs for Ask agent.
+	Harness *HarnessInfo `json:"harness,omitempty"`
 }
 
 // HelloReply tells the bridge its own name.

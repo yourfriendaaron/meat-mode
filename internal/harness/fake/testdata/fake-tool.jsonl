@@ -1,0 +1,5 @@
+{"session":"fake-session-1"}
+{"tool":{"kind":"read","file":"/repo/notes.txt"}}
+{"tool":{"kind":"shell","command":"bd close task-1"}}
+{"read":1}
+{"end":{"text":"Watered the plants."}}
