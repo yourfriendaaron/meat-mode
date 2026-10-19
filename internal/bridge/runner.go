@@ -21,7 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
-	"github.com/yourfriendaaron/meat-mode/internal/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // RunsEvery is the least time between two run lists sent to the hub.
@@ -42,7 +42,7 @@ var errNoGroups = errors.New("agent runs need Linux or macOS")
 // maxDetail caps a run's detail sentence.
 const maxDetail = 300
 
-// AgentRunner runs agents on beads, one run per bead, and keeps what it knows in
+// AgentRunner runs agents on tasks, one run per task, and keeps what it knows in
 // runs.json in Dir: each bead's session id (so the next ask resumes the
 // conversation), its lifetime run count, its latest run and the process of a
 // live one. Worktrees live in Dir/worktrees and each run's raw stream in
@@ -50,7 +50,6 @@ const maxDetail = 300
 type AgentRunner struct {
 	Config AgentConfig
 	Dir    string
-	Beads  beads.Beads
 	Log    *slog.Logger
 	Now    func() time.Time
 	Grace  time.Duration // DefaultGrace when zero
@@ -127,14 +126,14 @@ func runKey(repo, bead string) string { return repo + "\x00" + bead }
 // OpenAgentRunner loads the runner's journal from dir and ends any run a previous
 // bridge left live: its process group is killed if it is still there, and
 // the run shows stopped with reason restarted.
-func OpenAgentRunner(dir string, cfg AgentConfig, bd beads.Beads, log *slog.Logger) (*AgentRunner, error) {
+func OpenAgentRunner(dir string, cfg AgentConfig, log *slog.Logger) (*AgentRunner, error) {
 	if len(cfg.Command) == 0 {
 		return nil, errors.New("no agent command is set")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	r := &AgentRunner{Config: cfg, Dir: dir, Beads: bd, Log: log}
+	r := &AgentRunner{Config: cfg, Dir: dir, Log: log}
 	if err := r.load(); err != nil {
 		return nil, err
 	}
@@ -314,12 +313,12 @@ func (r *AgentRunner) agentName(creator string) string {
 // Ask applies an ask whose note is already on the bead. On a live run the
 // note goes to the agent; otherwise a run starts, unless a guard refuses it,
 // and then the run shows stopped with that reason. An ask id seen before
-// changes nothing.
+// changes nothing. A repo whose tracker runs no agents is ignored.
 func (r *AgentRunner) Ask(req askRequest) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.init()
-	if r.gone {
+	if r.gone || agentOf(req.Repo.Tracker) == nil {
 		return
 	}
 	if req.Author != "" {
@@ -343,7 +342,7 @@ func (r *AgentRunner) Ask(req askRequest) {
 		}
 		if !lr.inboxClosed {
 			select {
-			case lr.inbox <- userLine(followUp(req.BeadID, req.Text)):
+			case lr.inbox <- userLine(agentOf(req.Repo.Tracker).FollowUp(req.BeadID, req.Text)):
 				lr.written++
 				lr.run.Queued = max(0, lr.written-lr.replayed)
 				r.notify()
@@ -445,7 +444,8 @@ func (r *AgentRunner) launch(req askRequest, rec *beadRecord, run *api.Run) (*li
 	defer errf.Close() // the child keeps its own copy
 	cmd := exec.Command(r.Config.Command[0], r.Config.args(rec.Session)...)
 	cmd.Dir = cwd
-	cmd.Env = agentEnv(os.Environ(), run.Agent)
+	ag := agentOf(req.Repo.Tracker)
+	cmd.Env = agentEnv(os.Environ(), run.Agent, ag)
 	cmd.SysProcAttr = agentProcAttr()
 	cmd.Stderr = errf
 	out, outW, err := os.Pipe()
@@ -474,7 +474,7 @@ func (r *AgentRunner) launch(req askRequest, rec *beadRecord, run *api.Run) (*li
 		key: runKey(req.Repo.Name, req.BeadID), rec: rec, run: run, repo: req.Repo, pid: cmd.Process.Pid,
 		inbox: make(chan []byte, 64), exited: make(chan struct{}), done: make(chan struct{}), log: logf,
 	}
-	lr.inbox <- userLine(agentPrompt(req.BeadID))
+	lr.inbox <- userLine(ag.Prompt(req.BeadID))
 	lr.written = 1
 	lr.timer = time.AfterFunc(r.Config.Timeout, func() { r.end(lr, api.ReasonTimeout) })
 	r.wg.Add(1)
@@ -584,7 +584,7 @@ func (r *AgentRunner) onLine(lr *liveRun, raw []byte) {
 		_ = json.Unmarshal(m.Message.Content, &content)
 		for _, c := range content {
 			if c.Type == "tool_use" {
-				if a := describeTool(c.Name, c.Input); a != lr.run.Activity {
+				if a := describeTool(c.Name, c.Input, agentOf(lr.repo.Tracker)); a != lr.run.Activity {
 					lr.run.Activity = a
 					r.notify()
 				}
@@ -713,11 +713,11 @@ func (r *AgentRunner) settle(lr *liveRun, waitErr error) {
 func (r *AgentRunner) outcome(lr *liveRun) (state, reason, detail string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	i, err := r.Beads.Show(ctx, lr.repo.Dir, lr.rec.BeadID)
+	i, err := lr.repo.Tracker.Show(ctx, lr.repo.Dir, lr.rec.BeadID)
 	if err != nil {
 		return api.RunStopped, api.ReasonNoReply, "The bridge could not read the task after the run."
 	}
-	if i.Status == "closed" {
+	if i.Status == tracker.StatusClosed {
 		return api.RunDone, "", ""
 	}
 	since := lr.run.StartedAt.Truncate(time.Second)

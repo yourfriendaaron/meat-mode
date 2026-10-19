@@ -200,8 +200,12 @@ func TestSettingsRepos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	repos, err := s.Repos()
+	if err != nil {
+		t.Fatal(err)
+	}
 	got := map[string]bool{}
-	for _, r := range s.Repos() {
+	for _, r := range repos {
 		got[r.Name] = r.Synced()
 	}
 	want := map[string]bool{"projects/garden": false, "projects/kitchen": true, "projects/shed": true}

@@ -17,10 +17,11 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
-	"github.com/yourfriendaaron/meat-mode/internal/beads"
-	"github.com/yourfriendaaron/meat-mode/internal/beads/beadstest"
-	"github.com/yourfriendaaron/meat-mode/internal/beads/fakebeads"
 	"github.com/yourfriendaaron/meat-mode/internal/bridge/fakehub"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads/beadstest"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker/fake"
 )
 
 const (
@@ -31,13 +32,14 @@ const (
 
 var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
 
-// world is one bridge test setup: a fake hub, a roots directory and a beads
-// implementation (real bd or the fake).
+// world is one bridge test setup: a fake hub, a roots directory and a
+// tracker (beads over real bd, or the fake).
 type world struct {
 	t      *testing.T
 	ctx    context.Context
 	hub    *fakehub.Hub
-	bd     beads.Beads
+	tr     tracker.Tracker
+	fake   *fake.Fake // nil with real bd
 	real   bool
 	root   string
 	state  string
@@ -53,20 +55,22 @@ func newWorld(t *testing.T, real bool) *world {
 	t.Cleanup(hub.Close)
 	w := &world{t: t, ctx: context.Background(), hub: hub, real: real, root: t.TempDir(), state: t.TempDir()}
 	if real {
-		w.bd = &beads.CLI{}
+		w.tr = &beads.CLI{}
 	} else {
-		w.bd = fakebeads.New()
+		w.fake = fake.New()
+		w.tr = w.fake.Tracker()
 	}
 	return w
 }
 
-// both runs a test against the fake beads and, when bd is installed, real bd.
+// both runs a test against the fake tracker and, when bd is installed,
+// beads over real bd.
 func both(t *testing.T, f func(t *testing.T, w *world)) {
 	t.Run("fake", func(t *testing.T) { f(t, newWorld(t, false)) })
 	t.Run("bd", func(t *testing.T) { f(t, newWorld(t, true)) })
 }
 
-// repo makes a beads repo under the root, opted in or not.
+// repo makes a repo of the world's tracker under the root, opted in or not.
 func (w *world) repo(name string, optIn bool) string {
 	w.t.Helper()
 	if w.real {
@@ -77,26 +81,21 @@ func (w *world) repo(name string, optIn bool) string {
 		return dir
 	}
 	dir := filepath.Join(w.root, name)
-	if err := os.MkdirAll(filepath.Join(dir, ".beads"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, fake.Store), 0o755); err != nil {
 		w.t.Fatal(err)
 	}
-	cfg := "# Beads configuration\n"
 	if optIn {
-		cfg += "meat-mode.sync: true\n"
-	}
-	if err := os.WriteFile(filepath.Join(dir, ".beads", "config.yaml"), []byte(cfg), 0o644); err != nil {
-		w.t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, ".beads", "metadata.json"), []byte("{}\n"), 0o644); err != nil {
-		w.t.Fatal(err)
+		if err := os.WriteFile(filepath.Join(dir, tracker.OptInFile), []byte("sync: true\n"), 0o644); err != nil {
+			w.t.Fatal(err)
+		}
 	}
 	return dir
 }
 
-// seed creates a human bead and returns its id.
+// seed creates a task for the person and returns its id.
 func (w *world) seed(dir, title string) string {
 	w.t.Helper()
-	id, err := w.bd.Create(w.ctx, dir, beads.NewIssue{Title: title, ActionID: "seed-" + title, Actor: "agent"})
+	id, err := w.tr.Create(w.ctx, dir, tracker.NewIssue{Title: title, ActionID: "seed-" + title, Actor: "agent"})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -116,7 +115,7 @@ func (w *world) start() *Bridge {
 	}
 	w.t.Cleanup(func() { j.Close() })
 	w.bridge = &Bridge{
-		Hub: &Hub{URL: w.hub.URL, Token: token}, Beads: w.bd, Journal: j,
+		Hub: &Hub{URL: w.hub.URL, Token: token}, Trackers: []tracker.Tracker{w.tr}, Journal: j,
 		Roots: []string{w.root}, Home: w.root, Version: "test", Log: quiet,
 	}
 	return w.bridge
@@ -129,13 +128,22 @@ func (w *world) tick(b *Bridge) {
 	}
 }
 
-func (w *world) show(dir, id string) beads.Issue {
+func (w *world) show(dir, id string) tracker.Issue {
 	w.t.Helper()
-	i, err := w.bd.Show(w.ctx, dir, id)
+	i, err := w.tr.Show(w.ctx, dir, id)
 	if err != nil {
 		w.t.Fatal(err)
 	}
 	return i
+}
+
+// wire is repos as the bridge reports them, with the world's tracker.
+func (w *world) wire(repos ...api.Repo) []api.Repo {
+	info := w.tr.Info()
+	for i := range repos {
+		repos[i].Tracker, repos[i].Actions = info.Title, info.Actions
+	}
+	return repos
 }
 
 func (w *world) oneOK(id string) api.ActionResult {
@@ -191,12 +199,15 @@ func TestReplaysEveryKindOnce(t *testing.T) {
 			t.Errorf("snooze: status %s defer %v", wi.Status, wi.DeferUntil)
 		}
 		fi := w.show(dir, feed)
-		if fi.Status != "closed" || fi.CloseReason == nil || *fi.CloseReason != "Dismissed" {
+		if fi.Status != "closed" || fi.CloseReason != "Dismissed" {
 			t.Errorf("feed after done, reopen, dismiss: %s %v", fi.Status, fi.CloseReason)
 		}
 		added := w.oneOK(aid("a-add")).BeadID
 		ai := w.show(dir, added)
-		if ai.Title != "Repot the fern" || ai.ActionID() != aid("a-add") || ai.DueAt == nil || !ai.DueAt.Equal(due) ||
+		if found, _ := w.tr.FindByActionID(w.ctx, dir, aid("a-add")); found != added {
+			t.Errorf("FindByActionID = %q, want %q", found, added)
+		}
+		if ai.Title != "Repot the fern" || ai.DueAt == nil || !ai.DueAt.Equal(due) ||
 			!slices.Contains(ai.Labels, "human") || ai.CreatedBy != author {
 			t.Errorf("added bead = %+v", ai)
 		}
@@ -238,7 +249,7 @@ func TestSurvivesCrashMidReplay(t *testing.T) {
 			// One action per run, so each crash happens at that action.
 			w.hub.Enqueue(us, a)
 			b := w.start()
-			b.afterBD = func(api.Action) error { return errCrash }
+			b.afterWrite = func(api.Action) error { return errCrash }
 			if err := b.Tick(w.ctx, true); !errors.Is(err, errCrash) {
 				t.Fatalf("%s: tick = %v, want the simulated crash", a.ID, err)
 			}
@@ -258,7 +269,7 @@ func TestSurvivesCrashMidReplay(t *testing.T) {
 		if wi.Status != "closed" {
 			t.Errorf("done not applied: %s", wi.Status)
 		}
-		list, err := w.bd.ListHuman(w.ctx, dir)
+		list, err := w.tr.List(w.ctx, dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -286,7 +297,7 @@ func TestResendsResultAfterLostReport(t *testing.T) {
 	b := w.start()
 	w.tick(b)
 	w.hub.Enqueue(us, action("r-note", api.KindNote, "garden", water, api.Payload{Text: "Done already"}))
-	b.afterBD = nil
+	b.afterWrite = nil
 	// Apply directly, as if the result POST then failed.
 	st := b.repos["garden"]
 	if _, err := b.apply(w.ctx, w.hub.Pending(us)[0], st.Repo); err != nil {
@@ -310,10 +321,10 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 		b := w.start()
 		w.tick(b)
 
-		want := []api.Repo{
-			{Name: "garden", OptedIn: true},
-			{Name: "kitchen", OptedIn: false},
-		}
+		want := w.wire(
+			api.Repo{Name: "garden", OptedIn: true},
+			api.Repo{Name: "kitchen", OptedIn: false},
+		)
 		if got := w.hub.Repos(us); !reflect.DeepEqual(got, want) {
 			t.Errorf("repos = %+v, want %+v", got, want)
 		}
@@ -345,7 +356,7 @@ func TestRefusesUnknownBeads(t *testing.T) {
 			chore = strings.TrimSpace(beadstest.Run(t, dir, "bd", "create", "Agent chore", "--silent"))
 		} else {
 			chore = "tst-chore"
-			w.bd.(*fakebeads.Fake).Put(dir, beads.Issue{ID: chore, Title: "Agent chore", Status: "open"})
+			w.fake.Put(dir, tracker.Issue{ID: chore, Title: "Agent chore", Status: "open"})
 		}
 		acts := []api.Action{
 			action("u-chore", api.KindDone, "garden", chore, api.Payload{}),
@@ -399,7 +410,7 @@ func TestSyncsOnlyWhenSomethingChanged(t *testing.T) {
 		t.Fatalf("puts after two quiet rounds = %d", n)
 	}
 	// An agent comments: updated_at stays, comment_count moves.
-	if err := w.bd.AddComment(w.ctx, dir, water, "agent", "Use rain water"); err != nil {
+	if err := w.tr.AddComment(w.ctx, dir, water, "agent", "Use rain water"); err != nil {
 		t.Fatal(err)
 	}
 	w.tick(b)
@@ -408,7 +419,7 @@ func TestSyncsOnlyWhenSomethingChanged(t *testing.T) {
 		t.Fatalf("after a comment: puts %d items %+v", n, items)
 	}
 	// A deleted bead drops out of the set.
-	w.bd.(*fakebeads.Fake).Put(dir, beads.Issue{ID: water, Title: "Water the plants", Status: "open"}) // no human label
+	w.fake.Put(dir, tracker.Issue{ID: water, Title: "Water the plants", Status: "open"}) // no human label
 	w.tick(b)
 	if items, _ := w.hub.Items(us, "garden"); len(items) != 0 {
 		t.Fatalf("item without the human label still sent: %+v", items)
@@ -426,7 +437,7 @@ func TestOneRepoFailingDoesNotStopOthers(t *testing.T) {
 	bad := w.repo("broken", true)
 	good := w.repo("garden", true)
 	w.seed(good, "Water the plants")
-	w.bd.(*fakebeads.Fake).FailDir[bad] = errors.New("database is locked")
+	w.fake.FailDir[bad] = errors.New("database is locked")
 	w.tick(w.start())
 	if items, _ := w.hub.Items(us, "garden"); len(items) != 1 {
 		t.Errorf("garden items = %+v", items)
@@ -448,16 +459,18 @@ func TestHubDownThenBack(t *testing.T) {
 		t.Errorf("items = %+v", items)
 	}
 	hs := w.hub.Hellos()
-	if len(hs) != 1 || hs[0].Version != "test" || hs[0].BdVersion != "1.3.1" {
+	if len(hs) != 1 || hs[0].Version != "test" || hs[0].BdVersion != "" ||
+		!reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "fake", Version: "1.0.0"}}) {
 		t.Errorf("hellos = %+v", hs)
 	}
 }
 
 func TestRefusesOldBD(t *testing.T) {
 	w := newWorld(t, false)
-	w.bd.(*fakebeads.Fake).Ver = "1.2.2"
-	err := w.start().Run(w.ctx)
-	if err == nil || !strings.Contains(err.Error(), "too old") {
+	b := w.start()
+	b.Trackers = []tracker.Tracker{&beads.CLI{Bin: fakeBD(t, "1.2.2")}}
+	err := b.Run(w.ctx)
+	if err == nil || err.Error() != "bd 1.2.2 is too old; Meat Mode needs bd 1.3.0 or newer" {
 		t.Fatalf("Run with bd 1.2.2 = %v", err)
 	}
 	if len(w.hub.Hellos()) != 0 {
@@ -541,7 +554,7 @@ func TestSameNamedReposSyncSideBySide(t *testing.T) {
 		b := w.start()
 		w.tick(b)
 
-		want := []api.Repo{{Name: "projects/garden", OptedIn: true}, {Name: "work/garden", OptedIn: true}}
+		want := w.wire(api.Repo{Name: "projects/garden", OptedIn: true}, api.Repo{Name: "work/garden", OptedIn: true})
 		if got := w.hub.Repos(us); !reflect.DeepEqual(got, want) {
 			t.Errorf("repos = %+v, want %+v", got, want)
 		}
@@ -585,7 +598,7 @@ func TestSyncSwitch(t *testing.T) {
 		if !maps.Equal(saved, map[string]bool{"projects/garden": true, "projects/kitchen": false}) {
 			t.Errorf("saved switches %v", saved)
 		}
-		want := []api.Repo{{Name: "projects/garden", OptedIn: true}, {Name: "projects/kitchen", OptedIn: false}}
+		want := w.wire(api.Repo{Name: "projects/garden", OptedIn: true}, api.Repo{Name: "projects/kitchen", OptedIn: false})
 		if got := w.hub.Repos(us); !reflect.DeepEqual(got, want) {
 			t.Errorf("repos = %+v, want %+v", got, want)
 		}
@@ -624,7 +637,7 @@ func TestSubtasks(t *testing.T) {
 			t.Fatalf("child parent = %q, want %q", got, water)
 		}
 		rs := w.hub.Results(aid("s-done"))
-		if len(rs) != 1 || rs[0].OK || rs[0].Error != beads.ErrOpenChildren.Error() {
+		if len(rs) != 1 || rs[0].OK || rs[0].Error != tracker.ErrOpenChildren.Error() {
 			t.Fatalf("done on a parent with an open child = %+v", rs)
 		}
 		items, _ := w.hub.Items(us, "garden")
@@ -641,4 +654,77 @@ func TestSubtasks(t *testing.T) {
 			t.Fatalf("child missing from hub items %+v", items)
 		}
 	})
+}
+
+// TestRefusesWhatTheTrackerCannotDo: an action whose kind the repo's
+// tracker does not list fails with "<title> cannot <kind>", as the hub
+// would refuse it, and nothing is written.
+func TestRefusesWhatTheTrackerCannotDo(t *testing.T) {
+	w := newWorld(t, false)
+	w.fake.Inf = tracker.Info{Name: "plain", Title: "Plain", Actions: []string{api.KindDone, api.KindAdd}}
+	w.tr = w.fake.Tracker()
+	dir := w.repo("garden", true)
+	water := w.seed(dir, "Water the plants")
+	b := w.start()
+	r, err := OpenAgentRunner(filepath.Join(w.state, "agents"), DefaultAgentConfig(), quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Runner = r
+	w.tick(b)
+	until := time.Date(2030, 3, 1, 9, 0, 0, 0, time.UTC)
+	refused := map[string]api.Action{
+		"Plain cannot snooze":  action("x-snooze", api.KindSnooze, "garden", water, api.Payload{Until: &until}),
+		"Plain cannot note":    action("x-note", api.KindNote, "garden", water, api.Payload{Text: "Bought soil"}),
+		"Plain cannot ask":     action("x-ask", api.KindAsk, "garden", water, api.Payload{}),
+		"Plain cannot subtask": action("x-sub", api.KindAdd, "garden", "", api.Payload{Title: "Fill the can", Parent: water}),
+	}
+	for _, a := range refused {
+		w.hub.Enqueue(us, a)
+	}
+	addAsk := action("x-add-ask", api.KindAdd, "garden", "", api.Payload{Title: "Fill the can", Ask: true})
+	w.hub.Enqueue(us, addAsk)
+	done := action("x-done", api.KindDone, "garden", water, api.Payload{})
+	w.hub.Enqueue(us, done)
+	w.tick(b)
+	refused["Plain cannot ask"+" (add)"] = addAsk
+	for msg, a := range refused {
+		msg = strings.TrimSuffix(msg, " (add)")
+		if rs := w.hub.Results(a.ID); len(rs) != 1 || rs[0].OK || rs[0].Error != msg {
+			t.Errorf("%s: results = %+v, want %q", a.Kind, rs, msg)
+		}
+	}
+	w.oneOK(done.ID)
+	if got := w.fake.Writes(); !slices.Equal(got, []string{"create " + dir + " " + water, "close " + dir + " " + water}) {
+		t.Errorf("writes = %q", got)
+	}
+}
+
+// TestSkipsAFailedTracker: a tracker whose check fails is left out of the
+// hello and finds no repos, while the others carry on. Only when every check
+// fails does the bridge refuse to start.
+func TestSkipsAFailedTracker(t *testing.T) {
+	w := newWorld(t, false)
+	w.repo("garden", true)
+	broken := fake.New()
+	broken.Inf.Name, broken.Inf.Title, broken.Inf.Rank = "broken", "Broken", 10
+	broken.CheckErr = errors.New("broken is not on PATH")
+	b := w.start()
+	b.Trackers = []tracker.Tracker{w.tr, broken.Tracker()}
+	w.tick(b)
+	hs := w.hub.Hellos()
+	if len(hs) != 1 || !reflect.DeepEqual(hs[0].Trackers, []api.TrackerVersion{{Name: "fake", Version: "1.0.0"}}) {
+		t.Errorf("hellos = %+v", hs)
+	}
+	if got := w.hub.Repos(us); len(got) != 1 || got[0].Tracker != "Fake" {
+		t.Errorf("repos = %+v", got)
+	}
+
+	w.fake.CheckErr = errors.New("fake is not on PATH")
+	b = w.start()
+	b.Trackers = []tracker.Tracker{w.tr, broken.Tracker()}
+	err := b.Run(w.ctx)
+	if err == nil || err.Error() != "no task tracker is available (fake: fake is not on PATH; broken: broken is not on PATH)" {
+		t.Fatalf("Run with every check failing = %v", err)
+	}
 }

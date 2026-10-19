@@ -19,6 +19,8 @@ Style guide for this page.
 
 Your AI agents work in [beads](https://github.com/gastownhall/beads), an issue tracker that lives in your code repos. When an agent needs you for something it cannot do itself (approve a text, sign in somewhere, make a call), it files a task labelled `human`. Meat Mode gathers those tasks from every repo and every machine into one list, next to your own to-dos. You tick them off, snooze them, say no, or reply with a note, and your answer goes back to the agent in beads. In the repos you allow, one tap also wakes an agent to work on a task, and you watch how it goes on the task itself.
 
+beads is the example on this page. Meat Mode reads [beads](docs/trackers/beads.md), [Backlog.md](docs/trackers/backlog.md) and [ticket](docs/trackers/ticket.md) repos the same way (the docs call these trackers); [docs/trackers.md](docs/trackers.md) lists what each one supports.
+
 You host it yourself. It runs as one container on any always-on machine you have, such as a home server, a NAS or a Raspberry Pi, so your list and your reminders keep working while the computer your agents run on is asleep. It stays on your private network, your tailnet or your home LAN, refuses requests from the internet, and always asks for a password.
 
 ## How it fits together

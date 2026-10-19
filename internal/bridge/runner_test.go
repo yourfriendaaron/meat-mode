@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
-	"github.com/yourfriendaaron/meat-mode/internal/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // fakeAgentBin is the fake agent command, built once per test binary.
@@ -69,7 +69,7 @@ func agentWorld(t *testing.T) (w *world, dir, id string) {
 	t.Helper()
 	w = newWorld(t, true)
 	dir = w.repo("garden", true)
-	id, err := w.bd.Create(w.ctx, dir, beads.NewIssue{Title: "Water the plants", ActionID: "seed-water", Actor: "planner"})
+	id, err := w.tr.Create(w.ctx, dir, tracker.NewIssue{Title: "Water the plants", ActionID: "seed-water", Actor: "planner"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func (w *world) agentBridge(allowed bool, opts ...func(*AgentConfig)) *Bridge {
 	for _, o := range opts {
 		o(&cfg)
 	}
-	r, err := OpenAgentRunner(filepath.Join(w.state, "agents"), cfg, w.bd, quiet)
+	r, err := OpenAgentRunner(filepath.Join(w.state, "agents"), cfg, quiet)
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func (w *world) waitGroupGone(pid int) {
 	}
 }
 
-func hasComment(i beads.Issue, author, text string) bool {
+func hasCommentBy(i tracker.Issue, author, text string) bool {
 	for _, c := range i.Comments {
 		if c.Author == author && c.Text == text {
 			return true
@@ -186,7 +186,7 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 	w.ask(b, "ask-close", id, "Please go slow and close it")
 
 	// The note is on the bead first, and the hub hears of the run at once.
-	if !hasComment(w.show(dir, id), author, "Please go slow and close it") {
+	if !hasCommentBy(w.show(dir, id), author, "Please go slow and close it") {
 		t.Errorf("the ask's note is missing: %+v", w.show(dir, id).Comments)
 	}
 	if r := w.hubRun(id); r.State != api.RunWorking || r.Count != 1 || r.Agent != "planner" || r.EndedAt != nil {
@@ -203,7 +203,7 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 	if run.State != api.RunDone || run.Activity != "Closing the bead" || run.Reason != "" {
 		t.Errorf("settled run = %+v", run)
 	}
-	if i := w.show(dir, id); i.Status != "closed" || !hasComment(i, "planner", "Done: watered.") {
+	if i := w.show(dir, id); i.Status != "closed" || !hasCommentBy(i, "planner", "Done: watered.") {
 		t.Errorf("bead after the run = %s %+v", i.Status, i.Comments)
 	}
 	w.tick(b)
@@ -283,7 +283,7 @@ func TestAgentFollowUpJoinsLiveRun(t *testing.T) {
 	if run.ID != first.ID || run.State != api.RunDone || run.Count != 1 || run.Queued != 0 {
 		t.Errorf("settled = %+v", run)
 	}
-	if !hasComment(w.show(dir, id), author, "Then close it") {
+	if !hasCommentBy(w.show(dir, id), author, "Then close it") {
 		t.Error("the follow-up note is not on the bead")
 	}
 	logf := filepath.Join(w.state, "agents", "logs", "garden", id, run.ID+".jsonl")
@@ -366,7 +366,7 @@ func TestOnlyAsksStartRuns(t *testing.T) {
 	w.tick(b)
 	w.ask(b, "ask-reply", id, "reply")
 	run := w.waitRun(b, id, settled)
-	if err := w.bd.AddComment(w.ctx, dir, id, "planner", "One more thing"); err != nil {
+	if err := w.tr.AddComment(w.ctx, dir, id, "planner", "One more thing"); err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range []api.Action{
@@ -377,7 +377,7 @@ func TestOnlyAsksStartRuns(t *testing.T) {
 		w.hub.Enqueue(us, a)
 	}
 	w.tick(b)
-	if err := w.bd.Close(w.ctx, dir, id, "Done", "planner"); err != nil {
+	if err := w.tr.Close(w.ctx, dir, id, "Done", "planner"); err != nil {
 		t.Fatal(err)
 	}
 	w.tick(b)
@@ -404,7 +404,7 @@ func TestAgentRunLimit(t *testing.T) {
 	if run.State != api.RunStopped || run.Reason != api.ReasonRunLimit || run.Count != 1 || run.EndedAt == nil {
 		t.Errorf("run = %+v", run)
 	}
-	if i := w.show(dir, id); i.Status == "closed" || !hasComment(i, author, "close") {
+	if i := w.show(dir, id); i.Status == "closed" || !hasCommentBy(i, author, "close") {
 		t.Errorf("bead = %s %+v; the note must stand and nothing run", i.Status, i.Comments)
 	}
 }
@@ -545,7 +545,7 @@ func TestAgentsSwitchPerRepo(t *testing.T) {
 	if rec.Run.State != api.RunStopped || rec.Run.Reason != api.ReasonNotAllowed || rec.Count != 0 {
 		t.Errorf("run with agents off = %+v", rec.Run)
 	}
-	if i := w.show(dir, id); i.Status == "closed" || !hasComment(i, author, "close") {
+	if i := w.show(dir, id); i.Status == "closed" || !hasCommentBy(i, author, "close") {
 		t.Errorf("bead = %s %+v", i.Status, i.Comments)
 	}
 	if _, err := os.Stat(filepath.Join(w.state, "agents", "worktrees", "garden", id)); !os.IsNotExist(err) {

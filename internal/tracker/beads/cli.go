@@ -11,18 +11,26 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
-// CLI implements Beads by running `bd -C <dir> ... --json`. Every call puts
-// its flags first, then `--`, then bead ids and text, because bd reads flags
-// anywhere on the line.
+// CLI is the beads tracker. It runs `bd -C <dir> ... --json`; every call
+// puts its flags first, then `--`, then bead ids and text, because bd reads
+// flags anywhere on the line.
 type CLI struct {
 	Bin     string        // bd executable; "bd" when empty
 	Timeout time.Duration // per call; one minute when zero
 	Now     func() time.Time
+	// Missing is set when bd was looked up on PATH and not found, so Check
+	// says so in plain words.
+	Missing bool
 }
 
-var _ Beads = (*CLI)(nil)
+var (
+	_ tracker.Tracker = (*CLI)(nil)
+	_ tracker.Agent   = (*CLI)(nil)
+)
 
 // Error is a failed bd call.
 type Error struct {
@@ -96,7 +104,7 @@ func (c *CLI) run(ctx context.Context, dir string, args ...string) ([]byte, erro
 	}
 	e := &Error{Args: args, Message: msg}
 	if strings.Contains(msg, "not found") || strings.Contains(msg, "no issues found") {
-		return nil, fmt.Errorf("%w: %w", ErrNotFound, e)
+		return nil, fmt.Errorf("%w: %w", tracker.ErrNotFound, e)
 	}
 	return nil, e
 }
@@ -164,7 +172,7 @@ func decode(out []byte, v any) error {
 	return fmt.Errorf("bd printed no JSON: %q", firstLine(string(out)))
 }
 
-// Version implements Beads.
+// Version returns the bd version, such as "1.3.1".
 func (c *CLI) Version(ctx context.Context) (string, error) {
 	out, err := c.run(ctx, "", "version", "--json")
 	if err != nil {
@@ -182,13 +190,28 @@ func (c *CLI) Version(ctx context.Context) (string, error) {
 	return v.Version, nil
 }
 
-// ListHuman implements Beads.
-func (c *CLI) ListHuman(ctx context.Context, dir string) ([]Issue, error) {
-	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--json", "-l", HumanLabel)
+// List implements tracker.Tracker: the beads labelled human.
+func (c *CLI) List(ctx context.Context, dir string) ([]tracker.Issue, error) {
+	list, err := c.listHuman(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	var all []Issue
+	out := make([]tracker.Issue, 0, len(list))
+	for _, b := range list {
+		i := b.Issue()
+		i.Comments = nil
+		out = append(out, i)
+	}
+	return out, nil
+}
+
+// listHuman returns the beads labelled human, open or recently closed.
+func (c *CLI) listHuman(ctx context.Context, dir string) ([]Bead, error) {
+	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--json", "-l", tracker.HumanLabel)
+	if err != nil {
+		return nil, err
+	}
+	var all []Bead
 	if err := decode(out, &all); err != nil {
 		return nil, err
 	}
@@ -202,38 +225,47 @@ func (c *CLI) ListHuman(ctx context.Context, dir string) ([]Issue, error) {
 	return keep, nil
 }
 
-// Show implements Beads.
-func (c *CLI) Show(ctx context.Context, dir, id string) (Issue, error) {
+// Show implements tracker.Tracker.
+func (c *CLI) Show(ctx context.Context, dir, id string) (tracker.Issue, error) {
+	b, err := c.ShowBead(ctx, dir, id)
+	if err != nil {
+		return tracker.Issue{}, err
+	}
+	return b.Issue(), nil
+}
+
+// ShowBead returns one bead with its comments, as bd prints it.
+func (c *CLI) ShowBead(ctx context.Context, dir, id string) (Bead, error) {
 	if err := CheckID(id); err != nil {
-		return Issue{}, err
+		return Bead{}, err
 	}
 	out, err := c.run(ctx, dir, "show", "--include-comments", "--json", "--", id)
 	if err != nil {
-		return Issue{}, err
+		return Bead{}, err
 	}
-	var list []Issue
+	var list []Bead
 	if err := decode(out, &list); err != nil {
-		return Issue{}, err
+		return Bead{}, err
 	}
 	if len(list) == 0 {
-		return Issue{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+		return Bead{}, fmt.Errorf("%w: %s", tracker.ErrNotFound, id)
 	}
 	return list[0], nil
 }
 
-// Close implements Beads.
+// Close implements tracker.Tracker.
 func (c *CLI) Close(ctx context.Context, dir, id, reason, actor string) error {
 	if err := CheckID(id); err != nil {
 		return err
 	}
 	_, err := c.run(ctx, dir, "close", "--reason="+reason, "--actor="+actor, "--json", "--", id)
 	if err != nil && strings.Contains(err.Error(), "open child issue") {
-		return ErrOpenChildren
+		return tracker.ErrOpenChildren
 	}
 	return err
 }
 
-// Reopen implements Beads.
+// Reopen implements tracker.Tracker.
 func (c *CLI) Reopen(ctx context.Context, dir, id, actor string) error {
 	if err := CheckID(id); err != nil {
 		return err
@@ -242,7 +274,7 @@ func (c *CLI) Reopen(ctx context.Context, dir, id, actor string) error {
 	return err
 }
 
-// Defer implements Beads.
+// Defer implements tracker.Tracker.
 func (c *CLI) Defer(ctx context.Context, dir, id string, until *time.Time, actor string) error {
 	if err := CheckID(id); err != nil {
 		return err
@@ -255,7 +287,8 @@ func (c *CLI) Defer(ctx context.Context, dir, id string, until *time.Time, actor
 	return err
 }
 
-// Dismiss implements Beads. bd prints no JSON for it.
+// Dismiss implements tracker.Tracker with bd human dismiss. bd prints no
+// JSON for it.
 func (c *CLI) Dismiss(ctx context.Context, dir, id, actor string) error {
 	if err := CheckID(id); err != nil {
 		return err
@@ -264,7 +297,7 @@ func (c *CLI) Dismiss(ctx context.Context, dir, id, actor string) error {
 	return err
 }
 
-// AddComment implements Beads.
+// AddComment implements tracker.Tracker.
 func (c *CLI) AddComment(ctx context.Context, dir, id, author, text string) error {
 	if err := CheckID(id); err != nil {
 		return err
@@ -273,11 +306,12 @@ func (c *CLI) AddComment(ctx context.Context, dir, id, author, text string) erro
 	return err
 }
 
-// Create implements Beads. Every value rides in a --flag=value argument, so
-// none can be read as a flag of its own.
-func (c *CLI) Create(ctx context.Context, dir string, in NewIssue) (string, error) {
+// Create implements tracker.Tracker: a bead labelled human, with the action
+// id in its metadata. Every value rides in a --flag=value argument, so none
+// can be read as a flag of its own.
+func (c *CLI) Create(ctx context.Context, dir string, in tracker.NewIssue) (string, error) {
 	meta, _ := json.Marshal(map[string]string{ActionMetaKey: in.ActionID})
-	args := []string{"create", "--title=" + in.Title, "-l", HumanLabel, "--metadata=" + string(meta), "--json"}
+	args := []string{"create", "--title=" + in.Title, "-l", tracker.HumanLabel, "--metadata=" + string(meta), "--json"}
 	if in.Actor != "" {
 		args = append(args, "--actor="+in.Actor)
 	}
@@ -294,7 +328,7 @@ func (c *CLI) Create(ctx context.Context, dir string, in NewIssue) (string, erro
 	if err != nil {
 		return "", err
 	}
-	var created Issue
+	var created Bead
 	if err := decode(out, &created); err != nil {
 		return "", err
 	}
@@ -304,13 +338,13 @@ func (c *CLI) Create(ctx context.Context, dir string, in NewIssue) (string, erro
 	return created.ID, nil
 }
 
-// FindByActionID implements Beads.
+// FindByActionID implements tracker.Tracker.
 func (c *CLI) FindByActionID(ctx context.Context, dir, actionID string) (string, error) {
 	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--metadata-field="+ActionMetaKey+"="+actionID, "--json")
 	if err != nil {
 		return "", err
 	}
-	var list []Issue
+	var list []Bead
 	if err := decode(out, &list); err != nil {
 		return "", err
 	}

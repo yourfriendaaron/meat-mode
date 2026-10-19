@@ -1,7 +1,6 @@
 package bridge
 
 import (
-	"bufio"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -11,23 +10,22 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
-// optInKey is the .beads/config.yaml key that opts a repo into syncing.
-const optInKey = "meat-mode.sync"
-
-// Repo is one beads database the bridge found.
+// Repo is one tracker store the bridge found.
 type Repo struct {
 	// Name is the repo's key: its path relative to the home folder, such as
 	// projects/garden.
 	Name    string
 	Dir     string
-	OptedIn bool  // the repo's config file has meat-mode.sync: true
-	Switch  *bool // the sync switch set in the app, when there is one
+	Tracker tracker.Tracker // the tracker whose store this is
+	OptedIn bool            // the repo's own files switch syncing on (Tracker.OptedIn)
+	Switch  *bool           // the sync switch set in the app, when there is one
 }
 
 // Synced reports whether the bridge sends this repo's items: as the app's
-// switch says, else as the repo's own config file says.
+// switch says, else as the repo's own files say.
 func (r Repo) Synced() bool {
 	if r.Switch != nil {
 		return *r.Switch
@@ -44,13 +42,14 @@ func syncSwitch(switches map[string]bool, name string) *bool {
 	return nil
 }
 
-// Discover walks each root for beads repos.
-// The walk skips the folders in pruneNames and pruneHomePaths, symlinks,
-// Git worktrees and anything it cannot read, and finds repos nested at any
-// depth. A .beads folder counts only when it holds a database (see
-// hasDatabase). Names are paths relative to home (see repoName); the first
-// one found wins on a clash.
-func Discover(roots []string, home string, log *slog.Logger) []Repo {
+// Discover walks each root for the stores of trackers, which are in the
+// order tracker.Sort gives. The walk skips the folders in pruneNames,
+// pruneHomePaths and each tracker's Info.Prune, symlinks, Git worktrees and
+// anything it cannot read, and finds repos nested at any depth. A folder
+// belongs to the first tracker whose Detect matches it; any other that
+// matches is skipped with a log line. Names are paths relative to home (see
+// repoName); the first one found wins on a clash.
+func Discover(roots []string, home string, trackers []tracker.Tracker, log *slog.Logger) []Repo {
 	var out []Repo
 	seen := map[string]bool{}    // names
 	seenDir := map[string]bool{} // directories, when roots overlap
@@ -62,7 +61,8 @@ func Discover(roots []string, home string, log *slog.Logger) []Repo {
 		start := time.Now()
 		dirs := 0
 		rootPath := resolvePath(root)
-		for _, dir := range scan(rootPath, homePath, &dirs, log) {
+		for _, f := range scan(rootPath, homePath, trackers, &dirs, log) {
+			dir := f.Dir
 			name := repoName(homePath, rootPath, dir)
 			switch {
 			case seenDir[dir]:
@@ -75,19 +75,19 @@ func Discover(roots []string, home string, log *slog.Logger) []Repo {
 				continue
 			}
 			seen[name], seenDir[dir] = true, true
-			out = append(out, Repo{Name: name, Dir: dir, OptedIn: OptedIn(dir)})
+			out = append(out, Repo{Name: name, Dir: dir, Tracker: f.Tracker, OptedIn: f.Tracker.OptedIn(dir)})
 		}
-		log.Debug("scanned for beads repos", "root", root, "dirs", dirs, "took", time.Since(start))
+		log.Debug("scanned for repos", "root", root, "dirs", dirs, "took", time.Since(start))
 	}
 	slices.SortFunc(out, func(a, b Repo) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
 
 // pruneNames are folders never searched, wherever they are: version control,
-// dependency trees, package caches and virtual environments.
+// dependency trees, package caches and virtual environments. Trackers add
+// their own stores through Info.Prune.
 var pruneNames = map[string]bool{
-	".git": true, ".hg": true, ".svn": true, ".jj": true,
-	".beads": true, ".worktrees": true,
+	".git": true, ".hg": true, ".svn": true, ".jj": true, ".worktrees": true,
 	"node_modules": true, ".pnpm-store": true, ".yarn": true, ".npm": true, ".bun": true, ".deno": true,
 	".cache": true, "__pycache__": true, ".venv": true, ".tox": true, ".mypy_cache": true, ".pytest_cache": true,
 	".cargo": true, ".rustup": true, ".gradle": true, ".m2": true, ".nuget": true, ".cpan": true,
@@ -126,32 +126,41 @@ var pruneHomePaths = map[string]bool{
 	"Library/Photos":              true,
 }
 
-// scan returns the directories under root that hold a beads database. It
+// found is one tracker store the walk found.
+type found struct {
+	Dir     string
+	Tracker tracker.Tracker
+}
+
+// scan returns the directories under root that hold a tracker's store. It
 // reads each directory once and counts them in *dirs.
-func scan(root, home string, dirs *int, log *slog.Logger) []string {
+func scan(root, home string, trackers []tracker.Tracker, dirs *int, log *slog.Logger) []found {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		log.Warn("cannot read root", "root", root, "err", err)
 		return nil
 	}
-	var found []string
+	prune := map[string]bool{}
+	for _, t := range trackers {
+		for _, p := range t.Info().Prune {
+			prune[p] = true
+		}
+	}
+	var out []found
 	var walk func(dir string, entries []fs.DirEntry)
 	walk = func(dir string, entries []fs.DirEntry) {
 		*dirs++
 		for _, e := range entries {
 			if e.Name() == ".git" && e.Type().IsRegular() && isWorktree(dir) {
-				return // a worktree shares its main checkout's beads
+				return // a worktree shares its main checkout's tasks
 			}
+		}
+		if t := detect(dir, entries, trackers, log); t != nil {
+			out = append(out, found{Dir: dir, Tracker: t})
 		}
 		var sub []string
 		for _, e := range entries {
-			name := e.Name()
-			switch {
-			case name == ".beads" && e.IsDir():
-				if hasDatabase(dir) {
-					found = append(found, dir)
-				}
-			case e.IsDir() && !pruneNames[name]: // symlinks are not dirs here
+			if name := e.Name(); e.IsDir() && !pruneNames[name] && !prune[name] { // symlinks are not dirs here
 				sub = append(sub, filepath.Join(dir, name))
 			}
 		}
@@ -165,7 +174,24 @@ func scan(root, home string, dirs *int, log *slog.Logger) []string {
 		}
 	}
 	walk(root, entries)
-	return found
+	return out
+}
+
+// detect returns the first of trackers whose store is in dir, logging any
+// other that also matches, or nil.
+func detect(dir string, entries []fs.DirEntry, trackers []tracker.Tracker, log *slog.Logger) tracker.Tracker {
+	var won tracker.Tracker
+	for _, t := range trackers {
+		if !t.Detect(dir, entries) {
+			continue
+		}
+		if won == nil {
+			won = t
+			continue
+		}
+		log.Info("skipping a second tracker in a repo; the first one syncs it", "dir", dir, "tracker", t.Info().Name, "syncs", won.Info().Name)
+	}
+	return won
 }
 
 // repoName is dir relative to home, or for a root outside home, relative to
@@ -203,18 +229,6 @@ func isWorktree(dir string) bool {
 	return ok && strings.Contains(filepath.ToSlash(gitdir), "/worktrees/")
 }
 
-// hasDatabase reports whether dir/.beads holds a beads database: the
-// metadata.json bd writes on init, or an older SQLite *.db file. bd's own
-// ~/.beads folder holds neither.
-func hasDatabase(dir string) bool {
-	beadsDir := filepath.Join(dir, ".beads")
-	if fi, err := os.Stat(filepath.Join(beadsDir, "metadata.json")); err == nil && fi.Mode().IsRegular() {
-		return true
-	}
-	dbs, _ := filepath.Glob(filepath.Join(beadsDir, "*.db"))
-	return len(dbs) > 0
-}
-
 func isDir(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
@@ -229,83 +243,4 @@ func resolvePath(dir string) string {
 	}
 	abs, _ := filepath.Abs(dir)
 	return abs
-}
-
-// OptedIn reports whether dir/.beads/config.yaml has the top-level line
-// `meat-mode.sync: true`.
-func OptedIn(dir string) bool {
-	f, err := os.Open(filepath.Join(dir, ".beads", "config.yaml"))
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	on := false
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		if k, v, ok := yamlLine(sc.Text()); ok && k == optInKey {
-			on = isTrue(v) // the last occurrence wins, as in YAML loaders
-		}
-	}
-	return on
-}
-
-// yamlLine splits a top-level `key: value` line, removing quotes and a
-// trailing comment.
-func yamlLine(line string) (key, val string, ok bool) {
-	if line == "" || line[0] == ' ' || line[0] == '\t' || line[0] == '#' {
-		return "", "", false
-	}
-	line = stripComment(line)
-	var rest string
-	switch line[0] {
-	case '"', '\'':
-		end := strings.IndexByte(line[1:], line[0])
-		if end < 0 {
-			return "", "", false
-		}
-		key, rest = line[1:1+end], line[2+end:]
-		rest, ok = strings.CutPrefix(strings.TrimLeft(rest, " \t"), ":")
-	default:
-		key, rest, ok = strings.Cut(line, ":")
-		key = strings.TrimSpace(key)
-	}
-	if !ok {
-		return "", "", false
-	}
-	return key, unquote(strings.TrimSpace(rest)), true
-}
-
-// stripComment drops a # comment that is outside quotes and preceded by
-// whitespace.
-func stripComment(s string) string {
-	var q byte
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case q != 0:
-			if c == q {
-				q = 0
-			}
-		case c == '"' || c == '\'':
-			q = c
-		case c == '#' && i > 0 && (s[i-1] == ' ' || s[i-1] == '\t'):
-			return strings.TrimRight(s[:i], " \t")
-		}
-	}
-	return s
-}
-
-func unquote(v string) string {
-	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
-		return v[1 : len(v)-1]
-	}
-	return v
-}
-
-func isTrue(v string) bool {
-	switch strings.ToLower(v) {
-	case "true", "yes", "on":
-		return true
-	}
-	return false
 }

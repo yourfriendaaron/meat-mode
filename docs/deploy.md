@@ -3,7 +3,7 @@
 Meat Mode has two parts:
 
 - **The hub** is a container on any always-on host (a home server, a NAS, a Raspberry Pi, a VPS). It keeps your personal to-do list, a copy of your agents' items and the log of what you tapped, and sends reminders. It never connects to your agent machine.
-- **The bridge** is the same `meat-mode` program, run as a user service on the machine where your beads repos live. It dials out to the hub, sends your agents' items up and replays your taps on them into beads with `bd`.
+- **The bridge** is the same `meat-mode` program, run as a user service on the machine where your agents' repos live. It dials out to the hub, sends your agents' items up and replays your taps on them into the repo's task tracker, such as beads with `bd`. [trackers.md](trackers.md) lists the trackers it reads.
 
 Your personal list needs only the hub. You can stop after step 2 and use it on its own, then add a bridge when you want your agents' tasks too.
 
@@ -231,7 +231,7 @@ On each other device you open the app on, a banner offers **Set up this device**
 
 The setup wizard's **Agent machines** step, or **Settings**, **Agent machines**, shows the install command for the platform you pick. By hand:
 
-The bridge needs `bd` 1.3.0 or later on that machine.
+The bridge needs the tool of each tracker your agents use on that machine, such as `bd` 1.3.0 or later for beads. Each tracker's page under [trackers/](trackers.md) says what to install. A tracker whose tool is missing is skipped, and the bridge refuses to start only when none is available. To use a tool that is not on your `PATH`, give its path in `trackerBins` in `bridge.json`, such as `{"trackerBins": {"beads": "/opt/beads/bin/bd"}}`.
 
 Install the program, either from a release binary for your platform (linux or darwin, amd64 or arm64; put it somewhere on your `PATH` such as `~/.local/bin`), or with Go:
 
@@ -248,28 +248,28 @@ go install github.com/yourfriendaaron/meat-mode/cmd/meat-mode@latest
    meat-mode bridge pair https://meat-mode.example.com mm_xxxxxxxx
    ```
 
-   Options: `--root DIR` (repeatable) to look for beads repos only in those folders instead of your whole home folder, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
+   Options: `--root DIR` (repeatable) to look for repos only in those folders instead of your whole home folder, `--allow-insecure-http` to allow plain HTTP to a hub that is not on loopback (not recommended). To keep the token out of your shell history, put `-` in its place and paste it on the next line, or leave it out and set `MEAT_MODE_BRIDGE_TOKEN`.
 
 Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/bridge.json` on Linux, `~/Library/Application Support/meat-mode/bridge.json` on macOS) and installs a user service:
 
 - **Linux**: a systemd user unit, `meat-mode-bridge.service`. Logs: `journalctl --user -u meat-mode-bridge`. To keep it running while you are logged out, enable lingering once: `loginctl enable-linger $USER`.
 - **macOS**: a launchd agent, `com.github.yourfriendaaron.meat-mode.bridge`. Logs: `~/Library/Logs/meat-mode-bridge.log`.
 
-`meat-mode bridge status` shows the config, the repos found and whether the hub answers. The app shows the machine as connected once the bridge first reports in.
+`meat-mode bridge status` shows the config, the trackers with their versions, the repos found and whether the hub answers. The app shows the machine as connected once the bridge first reports in.
 
 ## 5. Choose which repos sync
 
-The bridge looks through your home folder for beads repos, on start and every 5 minutes, at any depth. It skips dependency, cache and app-data folders, Git worktrees and symlinks, and a `.beads` folder without a database (such as bd's own `~/.beads`).
+The bridge looks through your home folder for the repos of every tracker it has, on start and every 5 minutes, at any depth. It skips dependency, cache and app-data folders, Git worktrees, symlinks and each tracker's own store, and a store a tracker does not count, such as a `.beads` folder without a database (bd's own `~/.beads`). A repo with two trackers syncs from one of them, beads first.
 
 Every repo it finds appears in the app under **Settings**, below its machine, with a switch. The setup wizard's **Choose repos** step shows the same switches. Switches start off. Turn one on and that repo's items arrive within a few seconds; turn it off and they leave the app. If the machine is off, the switch shows "Waiting for" the machine until it is back. The machine keeps your choices in its own config file, and it only accepts a switch for a repo it found itself.
 
-You can also opt a repo in from the repo itself, with this line in its `.beads/config.yaml`. A switch set in the app wins over it.
+You can also opt a repo in from the repo itself, with this line in a `.meat-mode.yaml` file at its root. A switch set in the app wins over it.
 
 ```yaml
-meat-mode.sync: true
+sync: true
 ```
 
-Only beads labelled `human` appear. Repos are told apart by their path, so `projects/garden` and `work/garden` both sync; the app shows the folder name, and the path where two names match.
+A tracker can have its own place for that line too; for beads it is `meat-mode.sync: true` in `.beads/config.yaml`. Only the tasks marked for you appear: in beads, those labelled `human`. Each tracker's page says how it marks them, and the app offers only the actions the repo's tracker supports. Repos are told apart by their path, so `projects/garden` and `work/garden` both sync; the app shows the folder name, and the path where two names match.
 
 ## Reminders
 
@@ -347,7 +347,7 @@ The fields and the HTTP calls behind these commands are in [api.md](api.md#agent
 
 ## Wake an agent on a task
 
-With agents allowed in a repo, one tap on an item asks an agent to take it on. The bridge writes your note to the bead, then starts the agent on that machine. The agent reads the bead and its notes, then does the work and closes the bead, or replies with a note, and the app tells you either way. A note you send to the agent while it works (**Send to** in the app) goes to the same run, which reads it at its next step; a plain **Save note** stays on the bead for later. One task never has two agents.
+With agents allowed in a repo whose tracker supports them (see [trackers.md](trackers.md)), one tap on an item asks an agent to take it on. The bridge writes your note to the task, then starts the agent on that machine. The agent reads the task and its notes with the tracker's own commands, then does the work and closes the task, or replies with a note, and the app tells you either way. A note you send to the agent while it works (**Send to** in the app) goes to the same run, which reads it at its next step; a plain **Save note** stays on the task for later. One task never has two agents.
 
 Only your own asks start an agent. The agent's notes and closes, and your other taps (notes, Done, Won't do), never do.
 
@@ -392,7 +392,7 @@ Environment=MEAT_MODE_AGENT_BUDGET_USD=1
 Environment=MEAT_MODE_AGENT_TIMEOUT=15m
 ```
 
-The service runs with a short `PATH`: the folders of `bd` and of the agent command, then the system folders. If the agent's work needs other tools, such as `go` or `pnpm`, add an `Environment=PATH=…` line the same way. On macOS, add the variables to the `EnvironmentVariables` of `~/Library/LaunchAgents/com.github.yourfriendaaron.meat-mode.bridge.plist` and restart it; pairing again rewrites that file.
+The service runs with a short `PATH`: the folders of the trackers' tools (such as `bd`) and of the agent command as `meat-mode bridge pair` found them, then the system folders. If the agent's work needs other tools, such as `go` or `pnpm`, add an `Environment=PATH=…` line the same way. On macOS, add the variables to the `EnvironmentVariables` of `~/Library/LaunchAgents/com.github.yourfriendaaron.meat-mode.bridge.plist` and restart it; pairing again rewrites that file.
 
 Another agent command must speak Claude Code's stream-json protocol on its standard input and output (user messages in; `system`, `assistant`, `user` and `result` lines out, with `session_id`), echo each message it reads as a `user` line with `isReplay`, and accept `--max-budget-usd <dollars>` and `--resume <session id>`, which the bridge adds.
 

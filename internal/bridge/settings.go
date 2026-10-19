@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // Settings is the bridge's effective configuration: bridge.json with every
@@ -82,14 +83,24 @@ func (s Settings) Paired() error {
 // Hub returns the client for the paired hub. Check Paired first.
 func (s Settings) Hub() *Hub { return s.env.hub(s.Config, s.Allowed) }
 
-// Repos discovers the beads repos under the roots, with the sync switches
-// set in the app applied. The walk logs nothing.
-func (s Settings) Repos() []Repo {
-	repos := Discover(s.Roots, s.env.Paths.Home, slog.New(slog.NewTextHandler(io.Discard, nil)))
+// Trackers builds every registered tracker with this machine's tool paths,
+// in the order Detect is tried.
+func (s Settings) Trackers() ([]tracker.Tracker, error) {
+	return buildTrackers(s.Config, s.env.getenv(), s.env.lookPath)
+}
+
+// Repos discovers the repos of every registered tracker under the roots,
+// with the sync switches set in the app applied. The walk logs nothing.
+func (s Settings) Repos() ([]Repo, error) {
+	ts, err := s.Trackers()
+	if err != nil {
+		return nil, err
+	}
+	repos := Discover(s.Roots, s.env.Paths.Home, ts, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for i := range repos {
 		repos[i].Switch = syncSwitch(s.Config.Sync, repos[i].Name)
 	}
-	return repos
+	return repos, nil
 }
 
 // pairedHub is the hub this machine's bridge config pairs it with.

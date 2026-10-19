@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"reflect"
 	"slices"
@@ -11,7 +10,7 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
-	"github.com/yourfriendaaron/meat-mode/internal/beads"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // Timing defaults.
@@ -31,13 +30,15 @@ const (
 // ErrNotSynced is the result for an action on a repo this bridge does not sync.
 const ErrNotSynced = "repo not synced"
 
-// Bridge syncs beads repos with the hub.
+// Bridge syncs the repos of its trackers with the hub.
 type Bridge struct {
-	Hub     *Hub
-	Beads   beads.Beads
-	Journal *Journal
-	Roots   []string
-	Home    string // repo keys are relative to it; empty in tests that need no keys
+	Hub *Hub
+	// Trackers are every tracker the bridge has, in tracker.Sort order. Only
+	// those whose check passed find repos.
+	Trackers []tracker.Tracker
+	Journal  *Journal
+	Roots    []string
+	Home     string // repo keys are relative to it; empty in tests that need no keys
 	// Switches are the app's sync switches by repo name, and SaveSwitch
 	// records one (in bridge.json). A nil SaveSwitch refuses switches.
 	Switches   map[string]bool
@@ -60,12 +61,14 @@ type Bridge struct {
 	// which the end-to-end tests use to avoid waiting 30 seconds per round.
 	Poll time.Duration
 
-	// afterBD runs after a bd write and before the journal's done record.
-	// Tests use it to simulate a crash.
-	afterBD func(api.Action) error
+	// afterWrite runs after a tracker write and before the journal's done
+	// record. Tests use it to simulate a crash.
+	afterWrite func(api.Action) error
 
-	name       string // from hello; empty until the hub greeted us
-	bdVersion  string
+	name       string            // from hello; empty until the hub greeted us
+	available  []tracker.Tracker // the trackers whose check last passed
+	versions   []api.TrackerVersion
+	checked    bool // the trackers were checked since the last hello
 	repos      map[string]*repoState
 	found      []Repo // the last scan
 	scannedAt  time.Time
@@ -124,27 +127,35 @@ func (b *Bridge) log() *slog.Logger {
 // Name is the bridge's name as the hub knows it, after the first hello.
 func (b *Bridge) Name() string { return b.name }
 
-// CheckBD reads the bd version and refuses one older than beads.MinVersion.
-func (b *Bridge) CheckBD(ctx context.Context) error {
-	v, err := b.Beads.Version(ctx)
+// CheckTrackers runs every tracker's check and keeps those that passed. It
+// fails only when none did. When the set changes, the next round rescans
+// the roots, so a tracker that came or went finds or drops its repos.
+func (b *Bridge) CheckTrackers(ctx context.Context) error {
+	checks := checkTrackers(ctx, b.Trackers)
+	ok, versions, err := passed(checks)
 	if err != nil {
-		return fmt.Errorf("cannot run bd: %w", err)
-	}
-	if err := beads.CheckVersion(v); err != nil {
 		return err
 	}
-	b.bdVersion = v
+	for _, c := range checks {
+		if c.Err != nil {
+			b.log().Warn("tracker not available; its repos are skipped", "tracker", c.Tracker.Info().Name, "err", c.Err)
+		}
+	}
+	if !slices.Equal(ok, b.available) {
+		b.scannedAt = time.Time{}
+	}
+	b.available, b.versions, b.checked = ok, versions, true
 	return nil
 }
 
-// Run checks bd, then ticks until ctx ends. Hub errors are logged and backed
+// Run checks the trackers, then ticks until ctx ends. Hub errors are logged and backed
 // off; they never stop the bridge. Between ticks it sends the run list soon
 // after a run changes. When ctx ends it ends every live agent run first.
 func (b *Bridge) Run(ctx context.Context) error {
-	if err := b.CheckBD(ctx); err != nil {
+	if err := b.CheckTrackers(ctx); err != nil {
 		return err
 	}
-	b.log().Info("bridge started", "version", b.Version, "bd", b.bdVersion, "hub", b.Hub.URL)
+	b.log().Info("bridge started", "version", b.Version, "trackers", trackerList(b.versions), "hub", b.Hub.URL)
 	defer b.stopRuns()
 	var changed <-chan struct{}
 	if b.Runner != nil {
@@ -224,19 +235,20 @@ func (b *Bridge) stopRuns() {
 // Tick runs one round: hello if needed, report repos, replay actions, then
 // sync the repos that had actions, or all of them when full is set or
 // SyncEvery has passed since the last full round. full also rescans the
-// roots, which otherwise happens every ScanEvery. It returns hub errors; bd errors are logged per repo.
+// roots, which otherwise happens every ScanEvery. It returns hub errors;
+// tracker errors are logged per repo. Each hello checks the trackers again.
 func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if b.name == "" {
-		if b.bdVersion == "" {
-			if err := b.CheckBD(ctx); err != nil {
+		if !b.checked {
+			if err := b.CheckTrackers(ctx); err != nil {
 				return err
 			}
 		}
-		r, err := b.Hub.Hello(ctx, api.Hello{Version: b.Version, BdVersion: b.bdVersion})
+		r, err := b.Hub.Hello(ctx, b.hello())
 		if err != nil {
 			return err
 		}
-		b.name = r.Bridge
+		b.name, b.checked = r.Bridge, false
 		b.log().Info("connected to hub", "bridge", b.name)
 	}
 	if err := b.hubErr(b.discover(ctx, full)); err != nil {
@@ -274,6 +286,20 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	return b.hubErr(b.Runner.Flush(ctx, b.putRuns, full))
 }
 
+// hello is the bridge's greeting: its version and its trackers'.
+func (b *Bridge) hello() api.Hello {
+	return api.Hello{Version: b.Version, BdVersion: beadsVersion(b.versions), Trackers: b.versions}
+}
+
+// trackerList is versions as one log value, such as "beads 1.3.1".
+func trackerList(versions []api.TrackerVersion) string {
+	parts := make([]string, 0, len(versions))
+	for _, v := range versions {
+		parts = append(parts, strings.TrimSpace(v.Name+" "+v.Version))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // hubErr makes the next tick say hello again after a hub failure, so the hub
 // hears the versions again after it restarts.
 func (b *Bridge) hubErr(err error) error {
@@ -304,27 +330,29 @@ func (b *Bridge) syncedNames() []string {
 }
 
 // discover rescans the roots when rescan is set or ScanEvery has passed,
-// rereads each found repo's opt-in line, and reports the repo list when it
+// rereads each found repo's opt-in, and reports the repo list when it
 // changed.
 func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 	b.reloadAgents()
 	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.scanEvery() {
-		b.found = Discover(b.Roots, b.Home, b.log())
+		b.found = Discover(b.Roots, b.Home, b.available, b.log())
 		b.scannedAt = b.now()
 	}
 	next := map[string]*repoState{}
 	wire := make([]api.Repo, 0, len(b.found))
 	for i := range b.found {
 		r := &b.found[i]
-		r.OptedIn = OptedIn(r.Dir)
+		r.OptedIn = r.Tracker.OptedIn(r.Dir)
 		r.Switch = syncSwitch(b.Switches, r.Name)
 		st := b.repos[r.Name]
-		if st == nil || st.Dir != r.Dir || st.Synced() != r.Synced() {
+		if st == nil || st.Dir != r.Dir || st.Tracker != r.Tracker || st.Synced() != r.Synced() {
 			st = &repoState{fps: map[string]string{}, items: map[string]api.Item{}}
 		}
 		st.Repo = *r
 		next[r.Name] = st
-		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced(), AgentsAllowed: b.Agents[r.Name]})
+		info := r.Tracker.Info()
+		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced(), AgentsAllowed: b.Agents[r.Name],
+			Tracker: info.Title, Actions: info.Actions})
 	}
 	b.repos = next
 	if reflect.DeepEqual(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {
@@ -351,17 +379,17 @@ func (b *Bridge) reloadAgents() {
 	b.Agents = m
 }
 
-// syncRepo lists a repo's human items and pushes the full set when any
-// fingerprint changed, on the first run, or after RefreshEvery.
+// syncRepo lists a repo's tasks for the person and pushes the full set when
+// any version changed, on the first run, or after RefreshEvery.
 func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
-	list, err := b.Beads.ListHuman(ctx, st.Dir)
+	list, err := st.Tracker.List(ctx, st.Dir)
 	if err != nil {
 		return err
 	}
 	fps := make(map[string]string, len(list))
 	var changed []string
 	for _, i := range list {
-		fp := i.Fingerprint()
+		fp := i.Version
 		fps[i.ID] = fp
 		if st.fps[i.ID] != fp {
 			changed = append(changed, i.ID)
@@ -378,8 +406,8 @@ func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
 		}
 	}
 	for _, id := range changed {
-		full, err := b.Beads.Show(ctx, st.Dir, id)
-		if errors.Is(err, beads.ErrNotFound) {
+		full, err := st.Tracker.Show(ctx, st.Dir, id)
+		if errors.Is(err, tracker.ErrNotFound) {
 			delete(fps, id) // deleted between list and show
 			delete(items, id)
 			continue
