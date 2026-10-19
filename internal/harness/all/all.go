@@ -4,6 +4,7 @@ package all
 
 import (
 	_ "github.com/yourfriendaaron/meat-mode/internal/harness/antigravity"
+	_ "github.com/yourfriendaaron/meat-mode/internal/harness/claude"
 	_ "github.com/yourfriendaaron/meat-mode/internal/harness/codex"
 	_ "github.com/yourfriendaaron/meat-mode/internal/harness/opencode"
 	_ "github.com/yourfriendaaron/meat-mode/internal/harness/pi"

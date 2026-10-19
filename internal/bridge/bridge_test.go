@@ -666,7 +666,7 @@ func TestRefusesWhatTheTrackerCannotDo(t *testing.T) {
 	dir := w.repo("garden", true)
 	water := w.seed(dir, "Water the plants")
 	b := w.start()
-	r, err := OpenAgentRunner(filepath.Join(w.state, "agents"), DefaultAgentConfig(), quiet)
+	r, err := OpenAgentRunner(filepath.Join(w.state, "agents"), DefaultAgentConfig(), claudeHarness(t), quiet)
 	if err != nil {
 		t.Fatal(err)
 	}

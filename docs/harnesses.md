@@ -58,7 +58,7 @@ Each event sets one field, except that `Session` may come with any other:
 One harness per machine, picked by `MEAT_MODE_AGENT_HARNESS`. The run limits hold for every harness: the time limit for one run, runs per task and runs at once on the machine. A run past its time limit, or a metered run past its cap, gets SIGTERM, then SIGKILL after a grace time, as a stopped run does.
 
 - **A run** is one Ask: from the first launch to the end of the agent's last turn. It keeps one run id and counts once toward runs per task.
-- **The end of a turn** with nothing left to send closes stdin, and the process exits. A process that exits without an `End` is a run that failed, with its exit status as the detail.
+- **The end of a turn** with nothing left to send closes stdin, and the process exits. A process that exits without an `End` is a stopped run with the reason `crashed` and its exit status as the detail.
 - **Notes.** With `Steer`, a note goes to stdin at once, and `Run.Queued` counts the notes not yet read. Without it, notes wait: `Run.Queued` counts them, and when the turn ends well the bridge resumes the session in a new process, in the same run, with the held notes joined into one prompt (each as the tracker's `FollowUp` gives it). The time limit still runs from the run's start. After a turn that failed, hit a limit or spent its budget, held notes stay on the task for the next ask, as they do with `Steer`.
 - **Sessions** are recorded in the bridge's `runs.json` with the harness's name. A session recorded under another harness is never resumed; the next ask starts fresh.
 

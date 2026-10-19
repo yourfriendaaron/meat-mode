@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -21,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/harness"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
@@ -48,11 +50,12 @@ const maxDetail = 300
 // live one. Worktrees live in Dir/worktrees and each run's raw stream in
 // Dir/logs.
 type AgentRunner struct {
-	Config AgentConfig
-	Dir    string
-	Log    *slog.Logger
-	Now    func() time.Time
-	Grace  time.Duration // DefaultGrace when zero
+	Config  AgentConfig
+	Harness harness.Harness // what runs the agents
+	Dir     string
+	Log     *slog.Logger
+	Now     func() time.Time
+	Grace   time.Duration // DefaultGrace when zero
 
 	mu      sync.Mutex
 	records map[string]*beadRecord // by runKey
@@ -64,14 +67,18 @@ type AgentRunner struct {
 	sentAt  time.Time                    // when the run list was last sent
 	changed chan struct{}
 	gone    bool // tests: the process "died"; nothing is written any more
-	wg      sync.WaitGroup
+	// unavailable is why the harness's last check failed; asks are refused
+	// while it is set.
+	unavailable error
+	wg          sync.WaitGroup
 }
 
 // beadRecord is what the runner keeps about one bead.
 type beadRecord struct {
 	Repo     string      `json:"repo"`
 	BeadID   string      `json:"beadId"`
-	Session  string      `json:"session,omitempty"`  // the agent's session, for --resume
+	Session  string      `json:"session,omitempty"`  // the agent's session, to resume
+	Harness  string      `json:"harness,omitempty"`  // the harness Session belongs to; "" for claude
 	Count    int         `json:"count"`              // lifetime runs; nothing resets it
 	Run      *api.Run    `json:"run,omitempty"`      // the latest run, while the bead is listed
 	Process  *procRecord `json:"process,omitempty"`  // while a run is live
@@ -85,29 +92,48 @@ type procRecord struct {
 	Start string `json:"start,omitempty"` // processStart at launch
 }
 
-// liveRun is a run whose process the runner started and has not reaped.
+// liveRun is a run the runner started and has not settled. A harness
+// without Steer can take more than one process for it: the turn that ended
+// well is resumed with the notes held meanwhile.
 type liveRun struct {
 	key  string
 	rec  *beadRecord
 	run  *api.Run // rec.Run
 	repo Repo
-	pid  int
+	ag   tracker.Agent
+	cwd  string
+	proc *agentProc // the process now running, or the last one
 
-	inbox       chan []byte // stdin lines; closed to close stdin
+	held       []string      // notes waiting for the turn to end, without Steer
+	cost       float64       // spending so far, summed for a metered harness
+	overBudget bool          // a metered run passed its cap
+	startErr   error         // why a resume could not start
+	badSession string        // the last session id refused, to warn once per value
+	ending     string        // a reason the runner ended it for: stopped, timeout, restarted, budget
+	again      *askRequest   // an ask that came while it was closing
+	settling   bool          // its last process exited and it is settling
+	done       chan struct{} // closed once the run settled
+	timer      *time.Timer
+	log        *os.File // every process's raw output
+}
+
+// agentProc is one process of a run.
+type agentProc struct {
+	pid         int
+	inbox       chan []byte // stdin writes; closed to close stdin
 	inboxClosed bool
-	written     int  // user messages sent, the prompt included
-	replayed    int  // of those, echoed back (isReplay)
-	sawReplay   bool // the command echoes messages at all
-	result      *streamLine
-	usage       string // detail when the agent hit a usage limit
-	budget      bool
-	badSession  string        // the last session id refused, to warn once per value
-	ending      string        // a reason the runner ended it for: stopped, timeout, restarted
-	again       *askRequest   // an ask that came while it was closing
+	written     int  // messages sent on stdin, the prompt included
+	read        int  // of those, taken in, as the harness says
+	sawRead     bool // the harness says what it read at all
+	end         *harness.End
+	usage       string        // detail when the agent hit a usage limit
 	exited      chan struct{} // closed when the process is reaped
-	done        chan struct{} // closed once the run settled
-	timer       *time.Timer
-	log         *os.File
+}
+
+// wentWell reports whether p's turn ended without an error, a limit or the
+// budget, so held notes may resume it.
+func (p *agentProc) wentWell() bool {
+	return p.end != nil && !p.end.Error && !p.end.Budget && p.usage == ""
 }
 
 // askRequest is one ask whose note, if any, is already on the bead.
@@ -126,14 +152,14 @@ func runKey(repo, bead string) string { return repo + "\x00" + bead }
 // OpenAgentRunner loads the runner's journal from dir and ends any run a previous
 // bridge left live: its process group is killed if it is still there, and
 // the run shows stopped with reason restarted.
-func OpenAgentRunner(dir string, cfg AgentConfig, log *slog.Logger) (*AgentRunner, error) {
-	if len(cfg.Command) == 0 {
-		return nil, errors.New("no agent command is set")
+func OpenAgentRunner(dir string, cfg AgentConfig, h harness.Harness, log *slog.Logger) (*AgentRunner, error) {
+	if h == nil {
+		return nil, errors.New("no agent harness is set")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	r := &AgentRunner{Config: cfg, Dir: dir, Log: log}
+	r := &AgentRunner{Config: cfg, Harness: h, Dir: dir, Log: log}
 	if err := r.load(); err != nil {
 		return nil, err
 	}
@@ -340,16 +366,29 @@ func (r *AgentRunner) Ask(req askRequest) {
 			r.saveOrLog()
 			return
 		}
-		if !lr.inboxClosed {
-			select {
-			case lr.inbox <- userLine(agentOf(req.Repo.Tracker).FollowUp(req.BeadID, req.Text)):
-				lr.written++
-				lr.run.Queued = max(0, lr.written-lr.replayed)
-				r.notify()
-				r.saveOrLog()
-				return
-			default:
+		text := agentOf(req.Repo.Tracker).FollowUp(req.BeadID, req.Text)
+		p := lr.proc
+		switch {
+		case lr.settling:
+		case r.Harness.Info().Steer:
+			if !p.inboxClosed {
+				select {
+				case p.inbox <- r.Harness.Note(text):
+					p.written++
+					lr.run.Queued = max(0, p.written-p.read)
+					r.notify()
+					r.saveOrLog()
+					return
+				default:
+				}
 			}
+		case p.end == nil || p.wentWell():
+			// The note waits for the turn to end, then resumes it.
+			lr.held = append(lr.held, text)
+			lr.run.Queued = len(lr.held)
+			r.notify()
+			r.saveOrLog()
+			return
 		}
 		// It is finishing: start again once it has ended.
 		lr.again = &req
@@ -370,6 +409,9 @@ func (r *AgentRunner) start(req askRequest, rec *beadRecord) {
 		r.log().Info("agent run refused", "repo", req.Repo.Name, "bead", req.BeadID, "reason", reason)
 	}
 	switch {
+	case r.unavailable != nil:
+		refuse(api.ReasonFailed, clipText(r.Harness.Info().Title+" is not available on this machine: "+r.unavailable.Error(), maxDetail))
+		return
 	case !req.Allowed:
 		refuse(api.ReasonNotAllowed, "Agents are switched off for this repo on this machine.")
 		return
@@ -401,7 +443,6 @@ func (r *AgentRunner) start(req askRequest, rec *beadRecord) {
 		return
 	}
 	r.live[lr.key] = lr
-	rec.Process = &procRecord{PID: lr.pid, Start: processStart(lr.pid)}
 	r.notify()
 	r.saveOrLog()
 	r.log().Info("agent run started", "repo", req.Repo.Name, "bead", req.BeadID, "run", run.ID, "count", run.Count)
@@ -414,7 +455,8 @@ func agents(n int) string {
 	return strconv.Itoa(n) + " agents are"
 }
 
-// launch starts the agent process in the bead's worktree. Callers hold mu.
+// launch starts the run's first process in the bead's worktree. Callers
+// hold mu.
 func (r *AgentRunner) launch(req askRequest, rec *beadRecord, run *api.Run) (*liveRun, error) {
 	if agentProcAttr() == nil {
 		return nil, errNoGroups
@@ -436,63 +478,95 @@ func (r *AgentRunner) launch(req askRequest, rec *beadRecord, run *api.Run) (*li
 	if err != nil {
 		return nil, fmt.Errorf("cannot write the run log: %w", err)
 	}
-	errf, err := os.OpenFile(filepath.Join(logDir, run.ID+".stderr"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
-	if err != nil {
+	ag := agentOf(req.Repo.Tracker)
+	lr := &liveRun{
+		key: runKey(req.Repo.Name, req.BeadID), rec: rec, run: run, repo: req.Repo, ag: ag, cwd: cwd,
+		done: make(chan struct{}), log: logf,
+	}
+	if err := r.spawn(lr, ag.Prompt(req.BeadID)); err != nil {
 		logf.Close()
-		return nil, fmt.Errorf("cannot write the run log: %w", err)
+		return nil, err
+	}
+	lr.timer = time.AfterFunc(r.Config.Timeout, func() { r.end(lr, api.ReasonTimeout) })
+	return lr, nil
+}
+
+// legacyHarness is the harness of a session recorded before runs.json named
+// one.
+const legacyHarness = "claude"
+
+// spawn starts one process of lr with prompt, resuming the bead's session
+// when the configured harness recorded it. Callers hold mu.
+func (r *AgentRunner) spawn(lr *liveRun, prompt string) error {
+	name := r.Harness.Info().Name
+	session := lr.rec.Session
+	if cmp.Or(lr.rec.Harness, legacyHarness) != name {
+		// Another harness's session means nothing to this one.
+		session = ""
+	}
+	l, err := r.Harness.Launch(harness.Spec{Dir: lr.cwd, Prompt: prompt, Session: session, BudgetUSD: r.Config.BudgetUSD})
+	if err != nil {
+		return fmt.Errorf("the agent command could not be made: %w", err)
+	}
+	if len(l.Args) == 0 {
+		return errors.New("the agent harness gave no command")
+	}
+	logDir := r.logDir(lr.repo.Name, lr.rec.BeadID)
+	errf, err := os.OpenFile(filepath.Join(logDir, lr.run.ID+".stderr"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	if err != nil {
+		return fmt.Errorf("cannot write the run log: %w", err)
 	}
 	defer errf.Close() // the child keeps its own copy
-	cmd := exec.Command(r.Config.Command[0], r.Config.args(rec.Session)...)
-	cmd.Dir = cwd
-	ag := agentOf(req.Repo.Tracker)
-	cmd.Env = agentEnv(os.Environ(), run.Agent, ag)
+	cmd := exec.Command(l.Args[0], l.Args[1:]...)
+	cmd.Dir = lr.cwd
+	cmd.Env = agentEnv(os.Environ(), lr.run.Agent, lr.ag)
 	cmd.SysProcAttr = agentProcAttr()
 	cmd.Stderr = errf
 	out, outW, err := os.Pipe()
 	if err != nil {
-		logf.Close()
-		return nil, err
+		return err
 	}
 	// The child writes straight to the pipe, so Wait never waits on a
 	// grandchild that kept stdout open.
 	cmd.Stdout = outW
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		logf.Close()
 		out.Close()
 		outW.Close()
-		return nil, err
+		return err
 	}
 	if err := cmd.Start(); err != nil {
-		logf.Close()
 		out.Close()
 		outW.Close()
-		return nil, fmt.Errorf("the agent command could not start: %w", err)
+		return fmt.Errorf("the agent command could not start: %w", err)
 	}
 	outW.Close()
-	lr := &liveRun{
-		key: runKey(req.Repo.Name, req.BeadID), rec: rec, run: run, repo: req.Repo, pid: cmd.Process.Pid,
-		inbox: make(chan []byte, 64), exited: make(chan struct{}), done: make(chan struct{}), log: logf,
+	p := &agentProc{pid: cmd.Process.Pid, inbox: make(chan []byte, 64), exited: make(chan struct{})}
+	if len(l.Stdin) > 0 {
+		p.inbox <- l.Stdin
+		p.written = 1
 	}
-	lr.inbox <- userLine(ag.Prompt(req.BeadID))
-	lr.written = 1
-	lr.timer = time.AfterFunc(r.Config.Timeout, func() { r.end(lr, api.ReasonTimeout) })
+	if !l.KeepStdin {
+		closeInbox(p)
+	}
+	lr.proc = p
+	lr.rec.Process = &procRecord{PID: p.pid, Start: processStart(p.pid)}
 	r.wg.Add(1)
-	go r.watch(lr, cmd, out, stdin)
-	return lr, nil
+	go r.watch(lr, p, cmd, out, stdin)
+	return nil
 }
 
 func (r *AgentRunner) logDir(repo, bead string) string {
 	return filepath.Join(r.Dir, "logs", filepath.FromSlash(repo), bead)
 }
 
-// watch feeds stdin, reads the stream until the process ends, and settles
-// the run.
-func (r *AgentRunner) watch(lr *liveRun, cmd *exec.Cmd, out *os.File, stdin io.WriteCloser) {
+// watch feeds stdin and reads the output until the process ends, then
+// resumes or settles the run.
+func (r *AgentRunner) watch(lr *liveRun, p *agentProc, cmd *exec.Cmd, out *os.File, stdin io.WriteCloser) {
 	defer r.wg.Done()
 	go func() {
 		var err error
-		for line := range lr.inbox {
+		for line := range p.inbox {
 			if err == nil {
 				_, err = stdin.Write(line)
 			}
@@ -502,20 +576,23 @@ func (r *AgentRunner) watch(lr *liveRun, cmd *exec.Cmd, out *os.File, stdin io.W
 	read := make(chan struct{})
 	go func() {
 		defer close(read)
+		dec := r.Harness.NewDecoder()
 		sc := bufio.NewScanner(out)
 		sc.Buffer(make([]byte, 0, 64<<10), 16<<20)
 		for sc.Scan() {
 			line := sc.Bytes()
 			_, _ = lr.log.Write(line)
 			_, _ = lr.log.Write([]byte{'\n'})
-			r.onLine(lr, line)
+			if evs := dec.Line(line); len(evs) > 0 {
+				r.onEvents(lr, p, evs)
+			}
 		}
 		_, _ = io.Copy(lr.log, out) // past a line too long to read, keep the raw rest
 	}()
 	waitErr := cmd.Wait()
-	close(lr.exited)
+	close(p.exited)
 	// Sweep up whatever it left in its group, so nothing outlives the run.
-	_ = killGroup(lr.pid)
+	_ = killGroup(p.pid)
 	select {
 	case <-read:
 	case <-time.After(5 * time.Second):
@@ -523,117 +600,121 @@ func (r *AgentRunner) watch(lr *liveRun, cmd *exec.Cmd, out *os.File, stdin io.W
 		<-read
 	}
 	out.Close()
-	lr.log.Close()
-	r.settle(lr, waitErr)
+	r.turnOver(lr, p, waitErr)
 }
 
-// streamLine is the part of a stream-json line the runner reads.
-type streamLine struct {
-	Type      string `json:"type"`
-	Subtype   string `json:"subtype"`
-	SessionID string `json:"session_id"`
-	IsReplay  bool   `json:"isReplay"`
-	Message   *struct {
-		Content json.RawMessage `json:"content"`
-	} `json:"message"`
-	RateLimit *struct {
-		Status   string `json:"status"`
-		ResetsAt int64  `json:"resetsAt"`
-	} `json:"rate_limit_info"`
-	IsError bool    `json:"is_error"`
-	Result  string  `json:"result"`
-	Cost    float64 `json:"total_cost_usd"`
-}
-
-// onLine reads one line of the agent's stream. Unknown lines are skipped.
-func (r *AgentRunner) onLine(lr *liveRun, raw []byte) {
-	var m streamLine
-	if json.Unmarshal(raw, &m) != nil {
-		return
-	}
+// turnOver follows a process's exit: with notes held and a turn that ended
+// well, the session resumes with them in a new process, in the same run;
+// otherwise the run settles.
+func (r *AgentRunner) turnOver(lr *liveRun, p *agentProc, waitErr error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if m.SessionID != "" && lr.rec.Session != m.SessionID {
-		if ValidSessionID(m.SessionID) {
-			lr.rec.Session = m.SessionID
+	if lr.ending == "" && !r.gone && len(lr.held) > 0 && p.wentWell() {
+		prompt := strings.Join(lr.held, "\n\n")
+		lr.held = nil
+		err := r.spawn(lr, prompt)
+		if err == nil {
+			lr.run.Queued = 0
+			r.notify()
 			r.saveOrLog()
-		} else if lr.badSession != m.SessionID {
-			// The id becomes the argument of --resume on the next run, so a
-			// malformed one is ignored, never stored.
-			lr.badSession = m.SessionID
-			r.log().Warn("ignoring a malformed session id from the agent; the next run starts fresh",
-				"repo", lr.repo.Name, "bead", lr.rec.BeadID, "session", m.SessionID)
-		}
-	}
-	switch m.Type {
-	case "user":
-		if m.IsReplay {
-			lr.replayed++
-			lr.sawReplay = true
-			r.setQueued(lr)
-		}
-	case "assistant":
-		if m.Message == nil {
+			r.mu.Unlock()
+			r.log().Info("agent run resumed with held notes", "repo", lr.repo.Name, "bead", lr.rec.BeadID, "run", lr.run.ID)
 			return
 		}
-		var content []struct {
-			Type  string          `json:"type"`
-			Name  string          `json:"name"`
-			Input json.RawMessage `json:"input"`
+		r.log().Warn("agent run failed to resume", "repo", lr.repo.Name, "bead", lr.rec.BeadID, "err", err)
+		lr.startErr = err
+	}
+	lr.settling = true
+	r.mu.Unlock()
+	r.settle(lr, p, waitErr)
+}
+
+// onEvents applies what one line of the agent's output says.
+func (r *AgentRunner) onEvents(lr *liveRun, p *agentProc, evs []harness.Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	info := r.Harness.Info()
+	for _, e := range evs {
+		if e.Session != "" {
+			r.setSession(lr, e.Session)
 		}
-		_ = json.Unmarshal(m.Message.Content, &content)
-		for _, c := range content {
-			if c.Type == "tool_use" {
-				if a := describeTool(c.Name, c.Input, agentOf(lr.repo.Tracker)); a != lr.run.Activity {
-					lr.run.Activity = a
-					r.notify()
-				}
+		switch {
+		case e.Tool != nil:
+			if a := describeTool(*e.Tool, lr.ag); a != lr.run.Activity {
+				lr.run.Activity = a
+				r.notify()
 			}
-		}
-	case "rate_limit_event":
-		if m.RateLimit != nil && m.RateLimit.Status != "allowed" && m.RateLimit.Status != "allowed_warning" {
-			lr.usage = usageDetail(m.RateLimit.ResetsAt)
-		}
-	case "result":
-		lr.result = &m
-		if strings.Contains(m.Subtype, "budget") {
-			lr.budget = true
-		}
-		if m.IsError && lr.usage == "" && looksLikeUsageLimit(m.Result) {
-			lr.usage = usageDetail(0)
-		}
-		if !lr.sawReplay {
-			// A command that never echoes its input cannot say what it
-			// read; a finished turn read everything sent before it.
-			lr.replayed = lr.written
-		}
-		r.setQueued(lr)
-		// The turn is over. With nothing on its way, closing stdin lets the
-		// agent exit; after an error or a limit, the run is over either way
-		// (a queued note stays on the bead for the next ask).
-		if lr.written <= lr.replayed || m.IsError || lr.usage != "" || lr.budget {
-			r.closeInbox(lr)
+		case e.Read > 0:
+			p.read += e.Read
+			p.sawRead = true
+			r.setQueued(lr, p)
+		case e.CostUSD > 0:
+			if info.Budget != harness.BudgetMetered {
+				continue
+			}
+			lr.cost += e.CostUSD
+			if lr.cost > r.Config.BudgetUSD && !lr.overBudget {
+				lr.overBudget = true
+				go r.end(lr, api.ReasonBudget)
+			}
+		case e.Limit != nil:
+			// A later limit without a reset time keeps the one already known.
+			if p.usage == "" || e.Limit.ResetsAt > 0 {
+				p.usage = usageDetail(e.Limit.ResetsAt)
+			}
+		case e.End != nil:
+			p.end = e.End
+			if !p.sawRead {
+				// A harness that never says what it read cannot; a finished
+				// turn read everything sent before it.
+				p.read = p.written
+			}
+			r.setQueued(lr, p)
+			// The turn is over. With nothing on its way, closing stdin lets the
+			// agent exit; after an error or a limit, the run is over either way
+			// (a queued note stays on the bead for the next ask).
+			if p.written <= p.read || !p.wentWell() {
+				closeInbox(p)
+			}
 		}
 	}
 }
 
-func (r *AgentRunner) setQueued(lr *liveRun) {
-	if q := max(0, lr.written-lr.replayed); q != lr.run.Queued {
+// setSession stores a session id the agent named, when it is one the bridge
+// may resume. Callers hold mu.
+func (r *AgentRunner) setSession(lr *liveRun, id string) {
+	name := r.Harness.Info().Name
+	if lr.rec.Session == id && cmp.Or(lr.rec.Harness, legacyHarness) == name {
+		return
+	}
+	if harness.ValidSession(id) {
+		lr.rec.Session, lr.rec.Harness = id, name
+		r.saveOrLog()
+	} else if lr.badSession != id {
+		// The id becomes an argument of the next run, so a malformed one
+		// is ignored, never stored.
+		lr.badSession = id
+		r.log().Warn("ignoring a malformed session id from the agent; the next run starts fresh",
+			"repo", lr.repo.Name, "bead", lr.rec.BeadID, "session", id)
+	}
+}
+
+// setQueued counts the notes a steering harness has not read. Callers hold
+// mu.
+func (r *AgentRunner) setQueued(lr *liveRun, p *agentProc) {
+	if !r.Harness.Info().Steer {
+		return
+	}
+	if q := max(0, p.written-p.read); q != lr.run.Queued {
 		lr.run.Queued = q
 		r.notify()
 	}
 }
 
-func (r *AgentRunner) closeInbox(lr *liveRun) {
-	if !lr.inboxClosed {
-		lr.inboxClosed = true
-		close(lr.inbox)
+func closeInbox(p *agentProc) {
+	if !p.inboxClosed {
+		p.inboxClosed = true
+		close(p.inbox)
 	}
-}
-
-func looksLikeUsageLimit(s string) bool {
-	s = strings.ToLower(s)
-	return strings.Contains(s, "usage limit") || strings.Contains(s, "limit reached") || strings.Contains(s, "hit your limit")
 }
 
 func usageDetail(resetsAt int64) string {
@@ -651,22 +732,24 @@ func (r *AgentRunner) end(lr *liveRun, reason string) {
 	if lr.ending == "" {
 		lr.ending = reason
 	}
-	r.closeInbox(lr)
+	p := lr.proc
+	closeInbox(p)
 	r.mu.Unlock()
-	_ = terminateGroup(lr.pid)
+	_ = terminateGroup(p.pid)
 	select {
-	case <-lr.exited:
+	case <-p.exited:
 	case <-time.After(r.grace()):
-		_ = killGroup(lr.pid)
+		_ = killGroup(p.pid)
 	}
 }
 
-// settle records how a run ended, once its process was reaped.
-func (r *AgentRunner) settle(lr *liveRun, waitErr error) {
+// settle records how a run ended, once its last process was reaped.
+func (r *AgentRunner) settle(lr *liveRun, p *agentProc, waitErr error) {
 	r.mu.Lock()
 	lr.timer.Stop()
-	ending, result, usage, budget := lr.ending, lr.result, lr.usage, lr.budget
+	ending, end, usage, startErr := lr.ending, p.end, p.usage, lr.startErr
 	r.mu.Unlock()
+	lr.log.Close()
 
 	state, reason, detail := api.RunStopped, "", ""
 	switch {
@@ -676,15 +759,19 @@ func (r *AgentRunner) settle(lr *liveRun, waitErr error) {
 		reason, detail = ending, "It ran past the time limit of "+humanDuration(r.Config.Timeout)+"."
 	case ending == api.ReasonRestarted:
 		reason, detail = ending, restartedDetail
+	case ending == api.ReasonBudget:
+		reason, detail = ending, r.budgetDetail()
+	case startErr != nil:
+		reason, detail = api.ReasonFailed, clipText(startErr.Error(), maxDetail)
 	case usage != "":
 		reason, detail = api.ReasonUsageLimit, usage
-	case budget:
-		reason, detail = api.ReasonBudget, "It spent its budget of $"+strconv.FormatFloat(r.Config.BudgetUSD, 'f', 2, 64)+" for one run."
-	case result == nil:
+	case end != nil && end.Budget:
+		reason, detail = api.ReasonBudget, r.budgetDetail()
+	case end == nil:
 		reason, detail = api.ReasonCrashed, "The agent process ended before it finished ("+exitText(waitErr)+")."
-	case result.IsError:
+	case end.Error:
 		reason, detail = api.ReasonFailed, "The agent reported an error."
-		if t := strings.TrimSpace(result.Result); t != "" {
+		if t := strings.TrimSpace(end.Text); t != "" {
 			detail = "The agent reported an error: " + clipText(t, maxDetail-30)
 		}
 	default:
@@ -694,7 +781,7 @@ func (r *AgentRunner) settle(lr *liveRun, waitErr error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.settleRun(lr.run, state, reason, detail)
-	r.closeInbox(lr)
+	closeInbox(p)
 	lr.rec.Process = nil
 	delete(r.live, lr.key)
 	r.touched[lr.repo.Name] = true
@@ -705,6 +792,25 @@ func (r *AgentRunner) settle(lr *liveRun, waitErr error) {
 	if again := lr.again; again != nil && ending == "" && !r.gone {
 		r.start(*again, lr.rec)
 	}
+}
+
+func (r *AgentRunner) budgetDetail() string {
+	return "It spent its budget of $" + strconv.FormatFloat(r.Config.BudgetUSD, 'f', 2, 64) + " for one run."
+}
+
+// CheckHarness runs the harness's check and returns it as the hello names
+// it. While the check fails, asks are refused and syncing carries on.
+func (r *AgentRunner) CheckHarness(ctx context.Context) *api.HarnessInfo {
+	v, err := r.Harness.Check(ctx)
+	r.mu.Lock()
+	r.unavailable = err
+	r.mu.Unlock()
+	if err != nil {
+		v = ""
+		r.log().Warn("the agent harness is not available, so asks will fail; see docs/harnesses.md",
+			"harness", r.Harness.Info().Name, "err", err)
+	}
+	return harnessInfo(r.Harness, r.Config, v)
 }
 
 // outcome reads the bead after a run that finished its turn: closed is

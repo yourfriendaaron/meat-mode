@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/harness"
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
@@ -237,7 +238,15 @@ func pair(ctx context.Context, args []string, env Env) error {
 		}
 	}
 	tools = append(tools, configuredBins(cfg)...)
-	hello := api.Hello{Version: env.Version, BdVersion: beadsVersion(versions), Trackers: versions}
+	h, err := s.Harness()
+	if err != nil {
+		return err
+	}
+	hi, herr := checkHarness(ctx, h, s.Agent)
+	if herr != nil {
+		fmt.Fprintf(env.Stdout, "%s is not available, so agents cannot run here yet: %v\n", h.Info().Title, herr)
+	}
+	hello := api.Hello{Version: env.Version, BdVersion: beadsVersion(versions), Trackers: versions, Harness: hi}
 	reply, err := env.hub(cfg, s.Allowed).Hello(ctx, hello)
 	if err != nil {
 		return fmt.Errorf("cannot reach the hub with that token: %w", err)
@@ -268,17 +277,17 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if err := svc.Install(exe, ServicePath(append(tools, agentPath(s))...)); err != nil {
+	if err := svc.Install(exe, ServicePath(append(tools, agentPath(s, h))...)); err != nil {
 		return err
 	}
 	fmt.Fprintf(env.Stdout, "Installed and started the user service (%s).\n", svc.File())
 	return nil
 }
 
-// agentPath is the agent command's absolute path as this shell finds it, so
-// the service finds it too; "" when it is not found.
-func agentPath(s Settings) string {
-	p, err := s.env.lookPath(s.Agent.Command[0])
+// agentPath is the harness program's absolute path as this shell finds it,
+// so the service finds it too; "" when it is not found.
+func agentPath(s Settings, h harness.Harness) string {
+	p, err := s.env.lookPath(harnessProgram(h))
 	if err != nil {
 		return ""
 	}
@@ -309,11 +318,17 @@ func New(s Settings, log *slog.Logger) (*Bridge, error) {
 		return nil, s.runErr
 	}
 	env, cfg, agents := s.env, s.Config, s.Agent
-	if _, err := env.lookPath(agents.Command[0]); err != nil {
-		// A service written before the agent was installed has a PATH
-		// without it, and every ask would end as failed with no other hint.
-		log.Warn("the agent command is not on this bridge's PATH, so asks will fail; see \"Wake an agent on a task\" in docs/deploy.md",
-			"command", agents.Command[0])
+	h, err := s.Harness()
+	if err != nil {
+		return nil, err
+	}
+	if prog := harnessProgram(h); prog != "" {
+		if _, err := env.lookPath(prog); err != nil {
+			// A service written before the agent was installed has a PATH
+			// without it, and every ask would end as failed with no other hint.
+			log.Warn("the agent command is not on this bridge's PATH, so asks will fail; see \"Wake an agent on a task\" in docs/deploy.md",
+				"harness", h.Info().Name, "command", prog)
+		}
 	}
 	j, err := OpenJournal(env.Paths.State)
 	if err != nil {
@@ -326,7 +341,7 @@ func New(s Settings, log *slog.Logger) (*Bridge, error) {
 	}
 	// The runner opens after the journal, whose lock keeps a second bridge
 	// from ending this one's runs as left behind.
-	runner, err := OpenAgentRunner(filepath.Join(env.Paths.State, "agents"), agents, log)
+	runner, err := OpenAgentRunner(filepath.Join(env.Paths.State, "agents"), agents, h, log)
 	if err != nil {
 		j.Close()
 		return nil, fmt.Errorf("open agent journal: %w", err)
@@ -406,6 +421,18 @@ func status(ctx context.Context, env Env) error {
 			fmt.Fprintf(out, "  %-24s %s\n", c.Tracker.Info().Name, orNone(c.Version))
 		}
 	}
+	var hi *api.HarnessInfo
+	if h, err := s.Harness(); err != nil {
+		fmt.Fprintf(out, "Agent:    %v\n", err)
+	} else {
+		var herr error
+		hi, herr = checkHarness(ctx, h, s.Agent)
+		if herr != nil {
+			fmt.Fprintf(out, "Agent:    %s, not available: %v\n", h.Info().Title, herr)
+		} else {
+			fmt.Fprintf(out, "Agent:    %s %s\n", h.Info().Title, hi.Version)
+		}
+	}
 	if svc, err := env.service(); err != nil {
 		fmt.Fprintf(out, "Service:  %v\n", err)
 	} else {
@@ -429,7 +456,7 @@ func status(ctx context.Context, env Env) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if r, err := s.Hub().Hello(ctx, api.Hello{Version: env.Version, BdVersion: beadsVersion(versions), Trackers: versions}); err != nil {
+	if r, err := s.Hub().Hello(ctx, api.Hello{Version: env.Version, BdVersion: beadsVersion(versions), Trackers: versions, Harness: hi}); err != nil {
 		fmt.Fprintf(out, "Hub check: unreachable: %v\n", err)
 	} else {
 		fmt.Fprintf(out, "Hub check: reachable, this bridge is %q\n", r.Bridge)
