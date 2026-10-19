@@ -2,8 +2,10 @@ import { api, newId } from "../../api.ts";
 import type { AppContext } from "../../app-context.ts";
 import { fmtDay, fmtTime } from "../../dates.ts";
 import { esc } from "../../html.ts";
-import { repoKey, repoLabel, visibleRepos } from "../../model.ts";
-import { parseQuickAdd, type QuickAdd } from "../../quickadd.ts";
+import { repoLabel } from "../../model.ts";
+import { browserZone } from "../../profile.ts";
+import { ADD_ERROR_TEXT, addAction, readQuickAdd, type QuickRead } from "../../quickadd.ts";
+import { repeatLabel } from "../../repeat.ts";
 import type { Repo } from "../../types.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
@@ -23,12 +25,8 @@ function personal(ctx: AppContext): Repo | undefined {
   return ctx.state?.repos?.find((r) => r.personal);
 }
 
-function parse(ctx: AppContext, value: string): QuickAdd {
-  const lists = visibleRepos(ctx.state?.repos ?? []).map((r) => ({
-    key: repoKey(r),
-    name: repoLabel(r),
-  }));
-  return parseQuickAdd(value, ctx.now(), lists);
+function parse(ctx: AppContext, value: string): QuickRead {
+  return readQuickAdd(value, ctx.now(), ctx.state?.repos ?? []);
 }
 
 /** "Tomorrow 18:00", "Fri, Oct 23 9:00": the day and the time the reminder will fire. */
@@ -48,7 +46,7 @@ function preview(
   ctx: AppContext,
   value: string,
 ): { backdrop: string; summary: string } {
-  const qa = parse(ctx, value);
+  const { qa, target } = parse(ctx, value);
   let backdrop = "";
   let pos = 0;
   for (const t of qa.tokens) {
@@ -63,44 +61,39 @@ function preview(
       backdrop,
       summary: `<span class="muted">Type a to-do to see how it is read.</span>`,
     };
-  const list = qa.list
-    ? ctx.state?.repos?.find((r) => repoKey(r) === qa.list)
-    : undefined;
   const chips = [
     `<span class="chip">${esc(qa.title)}</span>`,
     qa.due
       ? `<span class="chip chip-date">Due ${esc(when(qa.due, ctx.now()))}</span>`
       : `<span class="chip">No due date</span>`,
-    `<span class="chip chip-list">${esc(list ? repoLabel(list) : "Your own list")}</span>`,
   ];
+  if (qa.repeat)
+    chips.push(
+      `<span class="chip chip-repeat">${esc(repeatLabel(qa.repeat, ctx.now()))}</span>`,
+    );
+  if (qa.early)
+    chips.push('<span class="chip chip-error">Ends before it starts</span>');
+  chips.push(
+    `<span class="chip chip-list">${esc(qa.list && target ? repoLabel(target) : "Your own list")}</span>`,
+  );
   return { backdrop, summary: chips.join("") };
 }
 
 /** Adds the typed to-do to the personal list, or to the list the text names. */
 async function add(ctx: AppContext): Promise<boolean> {
   if (adding) return false;
-  const qa = parse(ctx, text);
-  if (!qa.title) {
-    error = "Type a to-do first.";
+  const res = addAction(text, ctx.now(), ctx.state?.repos ?? [], {
+    id: newId(),
+    zone: browserZone(),
+  });
+  if ("error" in res) {
+    error = ADD_ERROR_TEXT[res.error];
     return false;
   }
-  const target =
-    (qa.list
-      ? ctx.state?.repos?.find((r) => repoKey(r) === qa.list)
-      : undefined) ?? personal(ctx);
-  if (!target) {
-    error = "There is no list to add to yet.";
-    return false;
-  }
+  const { qa, target } = res;
   adding = true;
   try {
-    await api.postAction({
-      id: newId(),
-      kind: "add",
-      bridge: target.bridge,
-      repo: target.name,
-      payload: { title: qa.title, due: qa.due ? qa.due.toISOString() : null },
-    });
+    await api.postAction(res.action);
   } catch (e) {
     error = `Could not save: ${(e as Error).message}`;
     return false;

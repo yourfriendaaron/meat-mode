@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseQuickAdd, type QuickList } from "../../src/quickadd.ts";
+import { addAction, parseQuickAdd, readQuickAdd, type AddOptions, type QuickList } from "../../src/quickadd.ts";
+import type { Repo } from "../../src/types.ts";
 
 // Wednesday 14 October 2026, 10:00 local time.
 const now = new Date(2026, 9, 14, 10, 0);
@@ -365,4 +366,95 @@ test("end of the week is this Friday at 9:00 until it has passed", () => {
   assert.equal(at(16, 10), "2026-10-23 09:00"); // Friday after 9:00
   assert.equal(at(17, 10), "2026-10-23 09:00"); // Saturday
   assert.equal(at(18, 10), "2026-10-23 09:00"); // Sunday
+});
+
+// addAction: typed text as the add action to send, one path for the New task bar and the setup wizard.
+const repos: Repo[] = [
+  { bridge: "hub", name: "personal", personal: true, optedIn: true },
+  { bridge: "laptop", name: "garden", personal: false, optedIn: true, agentsAllowed: true },
+  { bridge: "laptop", name: "website", personal: false, optedIn: true },
+  { bridge: "laptop", name: "attic", personal: false, optedIn: false, agentsAllowed: true },
+];
+const opts = { id: "a1", zone: "Europe/Paris" };
+
+function added(text: string, o: Partial<AddOptions> = {}) {
+  const r = addAction(text, now, repos, { ...opts, ...o });
+  if ("error" in r) assert.fail(`${text}: ${r.error}`);
+  return r;
+}
+
+function errorOf(text: string, rs: Repo[] = repos) {
+  const r = addAction(text, now, rs, opts);
+  return "error" in r ? r.error : null;
+}
+
+test("an add goes to the personal list by default, with its due date", () => {
+  const r = added("Water the plants tomorrow 6pm");
+  assert.deepEqual(r.action, {
+    id: "a1",
+    kind: "add",
+    bridge: "hub",
+    repo: "personal",
+    payload: { title: "Water the plants", due: new Date(2026, 9, 15, 18, 0).toISOString() },
+  });
+  assert.equal(r.wakes, false);
+});
+
+test("the list the text names wins over the picked one", () => {
+  const r = added("Prune the roses #garden", { list: "laptop/website" });
+  assert.equal(r.action.bridge, "laptop");
+  assert.equal(r.action.repo, "garden");
+  assert.equal(r.action.payload.title, "Prune the roses");
+});
+
+test("the picked list is used when the text names none; a stale or hidden pick falls back to personal", () => {
+  assert.equal(added("Fix the footer", { list: "laptop/website" }).action.repo, "website");
+  assert.equal(added("Fix the footer", { list: "laptop/gone" }).action.repo, "personal");
+  assert.equal(added("Clear the attic", { list: "laptop/attic" }).action.repo, "personal");
+});
+
+test("a repeat is sent on the personal list with the zone", () => {
+  const r = added("Water the plants every sunday until nov 26");
+  assert.deepEqual(r.action.payload.repeat, { every: "week", weekdays: [0], until: "2026-11-26", timeZone: "Europe/Paris" });
+  assert.equal(r.action.payload.due, new Date(2026, 9, 18, 9, 0).toISOString());
+});
+
+test("on any other list the repeat words stay in the title, as the hub takes no repeat there", () => {
+  const r = added("Water the plants every sunday", { list: "laptop/garden" });
+  assert.equal(r.action.repo, "garden");
+  assert.equal(r.action.payload.repeat, undefined);
+  assert.equal(r.action.payload.title, "Water the plants every sunday");
+  const tagged = added("Check the logs daily #website").action;
+  assert.equal(tagged.payload.repeat, undefined);
+  assert.equal(tagged.payload.title, "Check the logs daily");
+});
+
+test("a repeat that ends before it starts, an empty title and no list make no action", () => {
+  assert.equal(errorOf("Stretch daily until today"), "early");
+  assert.equal(errorOf("  "), "empty");
+  assert.equal(errorOf("tomorrow"), "empty");
+  assert.equal(errorOf("Water the plants", []), "no-list");
+});
+
+test("the agent switch wakes an agent only where agents may work", () => {
+  const garden = added("Prune the roses #garden", { ask: true });
+  assert.equal(garden.wakes, true);
+  assert.equal(garden.action.payload.ask, true);
+  assert.equal(added("Prune the roses #garden").action.payload.ask, undefined);
+  assert.equal(added("Fix the footer #website", { ask: true }).wakes, false);
+  assert.equal(added("Water the plants", { ask: true }).action.payload.ask, undefined);
+});
+
+test("readQuickAdd gives the list the add will go to", () => {
+  assert.equal(readQuickAdd("Water the plants", now, repos).target?.name, "personal");
+  assert.equal(readQuickAdd("Water the plants", now, [], { list: "hub/personal" }).target, undefined);
+  assert.equal(readQuickAdd("Water the plants daily", now, repos, { list: "laptop/garden" }).qa.repeat, null);
+});
+
+test("with no list named or picked, an add starts on the list being viewed", () => {
+  assert.equal(added("Fix the footer", { viewing: "laptop/website" }).action.repo, "website");
+  assert.equal(added("Fix the footer", { list: "laptop/garden", viewing: "laptop/website" }).action.repo, "garden");
+  assert.equal(added("Prune the roses #garden", { viewing: "laptop/website" }).action.repo, "garden");
+  assert.equal(added("Fix the footer", { viewing: "laptop/attic" }).action.repo, "personal");
+  assert.equal(added("Fix the footer daily", { viewing: "laptop/website" }).action.payload.title, "Fix the footer daily");
 });

@@ -90,6 +90,24 @@ for (const [name, viewport] of [
       expect(hub.posted.map((a) => a.payload.title)).toEqual(["Call Sam"]);
     });
 
+    test("a repeat is read and sent on the personal list", async ({
+      page,
+      hub,
+    }) => {
+      await openWizardAt(page, hub, "first-todo");
+      await page.locator("#ft-input").fill("Water the plants every sunday");
+      await expect(page.locator("#ft-read .chip-repeat")).toBeVisible();
+      await page.getByRole("button", { name: "Add to-do" }).click();
+      await expect(page.locator(".wiz-added")).toContainText(
+        'Added "Water the plants" to personal.',
+      );
+      expect(hub.posted).toHaveLength(1);
+      expect(hub.posted[0].payload.repeat).toMatchObject({
+        every: "week",
+        weekdays: [0],
+      });
+    });
+
     test("skipping creates nothing", async ({ page, hub }) => {
       await openWizardAt(page, hub, "first-todo");
       const w = wizard(page);

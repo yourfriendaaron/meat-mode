@@ -1,9 +1,13 @@
-// Quick add parser: a title with an optional natural-language date, repeat
-// and #list. Pure: the caller passes `now` and the lists it may match.
+// Quick add: a title with an optional natural-language date, repeat and
+// #list, parsed and turned into the add action to send. Pure: the caller
+// passes `now` and the lists it may match.
 
 import * as chrono from "chrono-node/en";
 import { findRepeat, firstOccurrence, type RepeatRule } from "./repeat.ts";
 import { startOfDay, ymd } from "./dates.ts";
+import { HUB_BRIDGE, repoKey, repoLabel, visibleRepos } from "./model.ts";
+import { noAgentReason } from "./runs.ts";
+import type { NewAction, Repo } from "./types.ts";
 
 export interface QuickList {
   /** Repo key, `<bridge>/<repo>`. */
@@ -212,6 +216,87 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   const out: QuickAdd = { title, due, repeat, list, tokens };
   if (early) out.early = early;
   return out;
+}
+
+/** Whether a list takes a repeat: only the hub's personal list does, as the hub checks. */
+export function takesRepeat(r: Repo | undefined): boolean {
+  return !!r && r.bridge === HUB_BRIDGE && r.personal;
+}
+
+/** Whether an add to this list, with the agent switch at `ask`, wakes an agent. */
+export function wakesAgent(r: Repo | undefined, ask: boolean): boolean {
+  return !!r && !noAgentReason(r) && ask;
+}
+
+export interface QuickRead {
+  qa: QuickAdd;
+  /** The list the to-do goes to; undefined when there is none yet. */
+  target: Repo | undefined;
+}
+
+/** Where an add goes when the text names no list, as repo keys. */
+export interface QuickPicks {
+  /** The list picked outside the text. */
+  list?: string;
+  /** The list being viewed, used when none was picked. */
+  viewing?: string;
+}
+
+/**
+ * Typed text as it will be added. The list the text names wins, then the
+ * picked list, then the list being viewed, then the first visible list,
+ * which is the personal one; a key that is not a visible list is passed
+ * over. On a list that takes no repeat the repeat words stay in the title.
+ */
+export function readQuickAdd(text: string, now: Date, repos: Repo[], picks: QuickPicks = {}): QuickRead {
+  const visible = visibleRepos(repos);
+  const lists = visible.map((r) => ({ key: repoKey(r), name: repoLabel(r) }));
+  let qa = parseQuickAdd(text, now, lists);
+  const find = (key: string | null | undefined) => (key ? visible.find((r) => repoKey(r) === key) : undefined);
+  const target = find(qa.list) ?? find(picks.list) ?? find(picks.viewing) ?? visible[0];
+  if (qa.repeat && !takesRepeat(target)) qa = parseQuickAdd(text, now, lists, { repeat: false });
+  return { qa, target };
+}
+
+export interface AddOptions extends QuickPicks {
+  /** The new action's id. */
+  id: string;
+  /** The "an agent starts on it" switch. */
+  ask?: boolean;
+  /** The IANA zone a repeat keeps its time in. */
+  zone?: string;
+}
+
+/** Why typed text makes no add: no title, no list to add to, or a repeat that ends before it starts. */
+export type AddError = "empty" | "no-list" | "early";
+
+export const ADD_ERROR_TEXT: Record<AddError, string> = {
+  empty: "Type a to-do first.",
+  "no-list": "There is no list to add to yet.",
+  early: "The end date is before the first date.",
+};
+
+export type AddResult =
+  | { action: NewAction; qa: QuickAdd; target: Repo; wakes: boolean }
+  | { error: AddError; qa: QuickAdd };
+
+/** Typed quick add text as the add action to send, or why there is none. */
+export function addAction(text: string, now: Date, repos: Repo[], opts: AddOptions): AddResult {
+  const { qa, target } = readQuickAdd(text, now, repos, opts);
+  if (!qa.title) return { error: "empty", qa };
+  if (!target) return { error: "no-list", qa };
+  if (qa.early) return { error: "early", qa };
+  const action: NewAction = {
+    id: opts.id,
+    kind: "add",
+    bridge: target.bridge,
+    repo: target.name,
+    payload: { title: qa.title, due: qa.due ? qa.due.toISOString() : null },
+  };
+  if (qa.repeat && qa.due) action.payload.repeat = { ...qa.repeat, timeZone: opts.zone ?? "" };
+  const wakes = wakesAgent(target, opts.ask ?? false);
+  if (wakes) action.payload.ask = true;
+  return { action, qa, target, wakes };
 }
 
 /**

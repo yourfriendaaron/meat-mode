@@ -34,7 +34,7 @@ import { completedGroups, deletedGroups, isDeleted } from "./history.ts";
 import { searchGroups } from "./search.ts";
 import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "./bulk.ts";
 import { snoozeOptions, typedSnooze } from "./snooze.ts";
-import { parseQuickAdd, type QuickAdd } from "./quickadd.ts";
+import { ADD_ERROR_TEXT, addAction, readQuickAdd, wakesAgent, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
 import { leadSelect, loadLead } from "./lead.ts";
 import { browserZone } from "./profile.ts";
@@ -1848,8 +1848,7 @@ let qaAsk: boolean | null = null;
 
 /** Whether Add will also wake an agent on the new task. */
 function qaWakes(listKey: string): boolean {
-  const r = repos().find((x) => repoKey(x) === listKey);
-  return !!r && !noAgentReason(r) && (qaAsk ?? false);
+  return wakesAgent(repos().find((x) => repoKey(x) === listKey), qaAsk ?? false);
 }
 
 /**
@@ -1878,16 +1877,9 @@ function updateQaAgent(listKey: string) {
   setHTML(add, `${on ? ICON.spark : ICON.plus}Add`);
 }
 
-function quickLists() {
-  return visibleRepos(repos()).map((r) => ({ key: repoKey(r), name: repoLabel(r) }));
-}
-
-/** The list being viewed, else the personal repo (visibleRepos sorts it first), else the first list. */
-function defaultList(): string {
-  const v = visibleRepos(repos());
-  const here = S.view.startsWith("list:") ? S.view.slice("list:".length) : "";
-  if (here && v.some((r) => repoKey(r) === here)) return here;
-  return v.length ? repoKey(v[0]) : "";
+/** The list being viewed, as a repo key, so a new task starts there. */
+function viewingList(): string | undefined {
+  return S.view.startsWith("list:") ? S.view.slice("list:".length) : undefined;
 }
 
 function updateQuickAdd() {
@@ -1901,15 +1893,11 @@ function updateQuickAdd() {
   setHTML(select, opts);
   // No lists yet (no machine paired): hide the picker rather than show it blank.
   select.hidden = !opts;
-  qa = parseQuickAdd(input.value, now(), quickLists());
-  if (qa.list) select.value = qa.list;
-  else if (qaListTouched && prev) select.value = prev;
-  else select.value = defaultList();
-  // A stale pick (a list that disappeared) leaves nothing selected; fall
-  // back to the default so the picker is never blank.
-  if (select.selectedIndex < 0) select.value = defaultList();
-  // Only the personal list repeats; on an agent's list the words stay as typed.
-  if (qa.repeat && !select.value.startsWith(`${HUB_BRIDGE}/`)) qa = parseQuickAdd(input.value, now(), quickLists(), { repeat: false });
+  // The list the text names, else a pick the user made, else the list being
+  // viewed, else the personal list; a stale pick falls back the same way.
+  const read = readQuickAdd(input.value, now(), repos(), { list: qaListTouched ? prev : undefined, viewing: viewingList() });
+  qa = read.qa;
+  select.value = read.target ? repoKey(read.target) : "";
 
   updateQaAgent(select.value);
 
@@ -1938,33 +1926,21 @@ function updateQuickAdd() {
 async function submitQuickAdd() {
   const input = $<HTMLInputElement>("#qa-input");
   updateQuickAdd();
-  const title = qa.title;
-  if (!title) {
-    input.focus();
-    return;
-  }
-  const listKey = $<HTMLSelectElement>("#qa-list").value || qa.list || defaultList();
-  const slash = listKey.indexOf("/");
-  if (slash < 0) {
-    showToast("No list to add to yet.");
-    return;
-  }
-  const a: NewAction = {
+  const add = addAction(input.value, now(), repos(), {
     id: newId(),
-    kind: "add",
-    bridge: listKey.slice(0, slash),
-    repo: listKey.slice(slash + 1),
-    payload: { title, due: qa.due ? qa.due.toISOString() : null },
-  };
-  if (qa.early) {
-    showToast("The end date is before the first date.");
-    input.focus();
+    list: $<HTMLSelectElement>("#qa-list").value,
+    viewing: viewingList(),
+    ask: qaAsk ?? false,
+    zone: browserZone(),
+  });
+  if ("error" in add) {
+    if (add.error !== "empty") showToast(ADD_ERROR_TEXT[add.error]);
+    if (add.error !== "no-list") input.focus();
     return;
   }
-  if (qa.repeat && qa.due) a.payload.repeat = { ...qa.repeat, timeZone: browserZone() };
-  const wakes = qaWakes(listKey);
-  if (wakes) a.payload.ask = true;
-  if (await post(a)) {
+  const { title } = add.qa;
+  const { wakes } = add;
+  if (await post(add.action)) {
     input.value = "";
     qaListTouched = false;
     qaAsk = null;
