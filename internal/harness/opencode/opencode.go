@@ -83,6 +83,11 @@ func (o *OpenCode) Check(ctx context.Context) (string, error) {
 // because opencode takes its root from $PWD, which a bridge started from
 // another directory may carry stale. A resume is -s <id>; -c would pick the
 // newest session in any project.
+//
+// The prompt goes in on stdin, which opencode reads to the end when no
+// message is given (cli/cmd/run.ts). As an argument, a prompt starting with
+// a dash would be read as a flag, and opencode wraps any argument holding a
+// space in quotes before sending it to the model.
 func (o *OpenCode) Launch(s harness.Spec) (harness.Launch, error) {
 	args := append([]string{}, o.command...)
 	if s.Dir != "" {
@@ -91,8 +96,7 @@ func (o *OpenCode) Launch(s harness.Spec) (harness.Launch, error) {
 	if harness.ValidSession(s.Session) {
 		args = append(args, "-s", s.Session)
 	}
-	args = append(args, s.Prompt)
-	return harness.Launch{Args: args}, nil
+	return harness.Launch{Args: args, Stdin: []byte(s.Prompt)}, nil
 }
 
 // Note is never called: Info.Steer is false.
