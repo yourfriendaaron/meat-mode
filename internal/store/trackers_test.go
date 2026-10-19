@@ -173,7 +173,7 @@ func TestMigrationTenAddsTrackers(t *testing.T) {
 	must(t, err)
 	seed(t, s)
 	_, err = s.DB().Exec(`ALTER TABLE repos DROP COLUMN tracker; ALTER TABLE repos DROP COLUMN actions;
-		ALTER TABLE bridges DROP COLUMN trackers; PRAGMA user_version = 9`)
+		ALTER TABLE bridges DROP COLUMN trackers; ALTER TABLE bridges DROP COLUMN harness; PRAGMA user_version = 9`)
 	must(t, err)
 	must(t, s.Close())
 

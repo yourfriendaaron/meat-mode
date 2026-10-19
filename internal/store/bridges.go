@@ -66,7 +66,7 @@ func (s *Store) CreateBridge(name string) (string, error) {
 		return "", conflictf("a bridge named %q already exists", name)
 	default:
 		_, err = tx.Exec(`UPDATE bridges SET token_hash = ?, created_at = ?, revoked_at = NULL,
-			last_seen = NULL, version = '', bd_version = '', trackers = '' WHERE name = ?`,
+			last_seen = NULL, version = '', bd_version = '', trackers = '', harness = '' WHERE name = ?`,
 			hashToken(token), now, name)
 	}
 	if err != nil {
@@ -121,14 +121,20 @@ func (s *Store) Touch(name string) error {
 	return err
 }
 
-// Hello records the bridge's versions, its trackers and last-seen time.
+// Hello records the bridge's versions, its trackers, its harness and
+// last-seen time. A hello without a harness clears it: that bridge predates
+// harnesses and runs Claude Code.
 func (s *Store) Hello(name string, h api.Hello) error {
 	trackers, err := encodeTrackers(h.Trackers)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(`UPDATE bridges SET last_seen = ?, version = ?, bd_version = ?, trackers = ? WHERE name = ?`,
-		fmtTime(s.now()), truncRunes(h.Version, maxVersionLen), truncRunes(h.BdVersion, maxVersionLen), trackers, name)
+	harness, err := encodeHarness(h.Harness)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`UPDATE bridges SET last_seen = ?, version = ?, bd_version = ?, trackers = ?, harness = ? WHERE name = ?`,
+		fmtTime(s.now()), truncRunes(h.Version, maxVersionLen), truncRunes(h.BdVersion, maxVersionLen), trackers, harness, name)
 	if err != nil {
 		return err
 	}
@@ -138,7 +144,7 @@ func (s *Store) Hello(name string, h api.Hello) error {
 
 // Bridges lists active bridges by name, without the hub's own row.
 func (s *Store) Bridges() ([]api.Bridge, error) {
-	rows, err := s.db.Query(`SELECT name, created_at, last_seen, version, bd_version, trackers
+	rows, err := s.db.Query(`SELECT name, created_at, last_seen, version, bd_version, trackers, harness
 		FROM bridges WHERE revoked_at IS NULL AND name != ? ORDER BY name`, HubBridge)
 	if err != nil {
 		return nil, err
@@ -149,8 +155,11 @@ func (s *Store) Bridges() ([]api.Bridge, error) {
 		var b api.Bridge
 		var created string
 		var last sql.NullString
-		var trackers string
-		if err := rows.Scan(&b.Name, &created, &last, &b.Version, &b.BdVersion, &trackers); err != nil {
+		var trackers, harness string
+		if err := rows.Scan(&b.Name, &created, &last, &b.Version, &b.BdVersion, &trackers, &harness); err != nil {
+			return nil, err
+		}
+		if b.Harness, err = decodeHarness(harness); err != nil {
 			return nil, err
 		}
 		if b.Trackers, err = decodeTrackers(trackers); err != nil {

@@ -43,3 +43,22 @@ func TestTrackerOverHTTP(t *testing.T) {
 	}
 	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: aid2, Kind: api.KindDone, Key: "laptop/garden/gd-1"}, ""), http.StatusCreated)
 }
+
+// A bridge's harness reaches the app's state, and a later hello without one
+// clears it.
+func TestHarnessOverHTTP(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	pi := api.HarnessInfo{Name: "pi", Title: "Pi", Version: "1.2.0", InstructionFile: "AGENTS.md",
+		Budget: api.BudgetNone, TimeoutSeconds: 1800}
+	h.expect(h.do("POST", "/bridge/v1/hello", api.Hello{Version: "1.0.0", Harness: &pi}, h.token), http.StatusOK)
+	st := decode[api.State](t, h.do("GET", "/api/state", nil, ""))
+	if len(st.Bridges) != 1 || st.Bridges[0].Harness == nil || *st.Bridges[0].Harness != pi {
+		t.Fatalf("bridges %+v", st.Bridges)
+	}
+	h.expect(h.do("POST", "/bridge/v1/hello", api.Hello{Version: "1.0.0"}, h.token), http.StatusOK)
+	st = decode[api.State](t, h.do("GET", "/api/state", nil, ""))
+	if st.Bridges[0].Harness != nil {
+		t.Fatalf("harness after a plain hello %+v", st.Bridges[0].Harness)
+	}
+}
