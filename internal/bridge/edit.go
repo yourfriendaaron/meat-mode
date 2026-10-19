@@ -12,8 +12,8 @@ import (
 )
 
 // Edit runs `meat-mode edit`: it changes the title, description, due time,
-// repeat or priority of a to-do this machine added to the personal list or
-// a project, and prints its
+// repeat, priority or parent of a to-do this machine added to the personal
+// list or a project, and prints its
 // id. --until and --no-until apply to the --every given with them, or else
 // to the to-do's own repeat, which is sent back whole with the new end.
 func Edit(ctx context.Context, args []string, env Env) error {
@@ -27,9 +27,11 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	every, fromDone, until := repeatFlags(fs)
 	noUntil := fs.Bool("no-until", false, "let its repeat go on for good")
 	noRepeat := fs.Bool("no-repeat", false, "stop it repeating")
+	parent := fs.String("parent", "", "make it a sub-task of this to-do, one this machine added to the same list")
+	noParent := fs.Bool("no-parent", false, "make it a to-do of its own, not a sub-task")
 	author, id, project := changeFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--project NAME|.] [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode edit <id> [--project NAME|.] [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N] [--parent ID | --no-parent] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -53,8 +55,19 @@ func Edit(ctx context.Context, args []string, env Env) error {
 			set.Priority = priority
 		case "no-repeat":
 			set.ClearRepeat = *noRepeat
+		case "parent":
+			p := strings.TrimSpace(*parent)
+			set.Parent = &p
 		}
 	})
+	switch {
+	case set.Parent != nil && *noParent:
+		return errors.New("use --parent or --no-parent, not both")
+	case set.Parent != nil && *set.Parent == "":
+		return errors.New("--parent needs the id of a to-do; --no-parent makes it a to-do of its own")
+	case *noParent:
+		set.Parent = new(string)
+	}
 	if *due != "" && set.ClearDue {
 		return errors.New("use --due or --clear-due, not both")
 	}
@@ -87,9 +100,10 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	case endChanged && set.ClearDue:
 		return errors.New("--until and --no-until need a repeat; --clear-due stops it repeating")
 	}
-	if set.Title == nil && set.Description == nil && w.due == "" && !set.ClearDue && set.Priority == nil && w.repeat == nil && !set.ClearRepeat && !endChanged {
+	if set.Title == nil && set.Description == nil && w.due == "" && !set.ClearDue && set.Priority == nil && w.repeat == nil && !set.ClearRepeat && !endChanged &&
+		set.Parent == nil {
 		fs.Usage()
-		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat, --until, --no-until or --priority")
+		return errors.New("edit needs at least one of --title, --description, --due, --clear-due, --every, --no-repeat, --until, --no-until, --priority, --parent or --no-parent")
 	}
 
 	hub, err := pairedHub(env)
@@ -113,8 +127,16 @@ func Edit(ctx context.Context, args []string, env Env) error {
 		r.Start, r.Until = nil, w.until
 		set.Repeat = &r
 	}
-	return change(ctx, hub, env, list, item, api.PersonalChange{ID: *id, Kind: api.KindEdit,
-		Payload: api.Payload{Set: &set}, Author: *author})
+	c := api.PersonalChange{ID: *id, Kind: api.KindEdit, Payload: api.Payload{Set: &set}, Author: *author}
+	if set.Parent == nil || *set.Parent == "" {
+		return change(ctx, hub, env, list, item, c)
+	}
+	// The hub's not found may be for either to-do.
+	if _, err := hub.ChangePersonal(ctx, list, item, c); err != nil {
+		return notOurs(item, err, *set.Parent)
+	}
+	fmt.Fprintln(env.Stdout, item)
+	return nil
 }
 
 // Done runs `meat-mode done`: it closes a to-do this machine added.
@@ -194,12 +216,16 @@ func change(ctx context.Context, hub *Hub, env Env, list, item string, c api.Per
 	return nil
 }
 
-// notOurs explains the hub's not found for a to-do: it is not one this
-// machine added.
-func notOurs(item string, err error) error {
+// notOurs explains the hub's not found for a to-do, or for either of two:
+// it is not one this machine added to the list.
+func notOurs(item string, err error, other ...string) error {
 	var herr *HTTPError
-	if errors.As(err, &herr) && herr.Status == http.StatusNotFound {
-		return fmt.Errorf("the hub has no to-do %q that this machine added; an agent can change only the to-dos its own machine added", item)
+	if !errors.As(err, &herr) || herr.Status != http.StatusNotFound {
+		return err
 	}
-	return err
+	what := fmt.Sprintf("%q", item)
+	for _, o := range other {
+		what += fmt.Sprintf(" or %q", o)
+	}
+	return fmt.Errorf("the hub has no to-do %s that this machine added to this list; an agent can change only the to-dos its own machine added", what)
 }

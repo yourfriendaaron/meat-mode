@@ -19,7 +19,7 @@ const defaultDueHour = 9
 // Add runs `meat-mode add`: it puts a to-do on the hub's personal list, or
 // on the project --project names, with the hub URL and token of this
 // machine's bridge config, and prints its id for `meat-mode edit`, `done`
-// and `reopen`.
+// and `reopen`. --parent makes it a sub-task of a to-do this machine added.
 func Add(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -27,10 +27,11 @@ func Add(ctx context.Context, args []string, env Env) error {
 	note := fs.String("note", "", "a note, added as the first comment")
 	author := fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id := fs.String("id", "", "a UUID for this to-do; adding the same id again changes nothing")
+	parent := fs.String("parent", "", "the id of an open to-do this machine added to the same list; the new one is its sub-task")
 	every, fromDone, until := repeatFlags(fs)
 	project := projectFlag(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--project NAME|.] [--due TIME [--every RULE [--from-done] [--until DATE]]] [--note TEXT] [--author NAME] [--id UUID]`)
+		fmt.Fprintln(env.Stderr, `usage: meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME [--every RULE [--from-done] [--until DATE]]] [--note TEXT] [--author NAME] [--id UUID]`)
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -45,7 +46,10 @@ func Add(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	t := api.PersonalTodo{ID: *id, Title: title, Note: *note, Author: *author}
+	t := api.PersonalTodo{ID: *id, Title: title, Parent: strings.TrimSpace(*parent), Note: *note, Author: *author}
+	if given(fs, "parent") && t.Parent == "" {
+		return errors.New("--parent needs the id of a to-do, as `meat-mode add` printed it")
+	}
 	w, err := parseWhen(fs, *due, *every, *fromDone, *until)
 	if err != nil {
 		return err
@@ -70,6 +74,9 @@ func Add(ctx context.Context, args []string, env Env) error {
 	}
 	reply, err := hub.AddPersonal(ctx, list, t)
 	if err != nil {
+		if t.Parent != "" {
+			return notOurs(t.Parent, err)
+		}
 		return err
 	}
 	fmt.Fprintln(env.Stdout, reply.ID)
