@@ -321,6 +321,37 @@ When a run ends the hub sends one notification for it, through Web Push and ntfy
 
 The Web Push payload is `{"title", "body", "url", "tag", "channel", "actions"?}`; `channel` is `reminders`, `agents` or `test`. `actions` is a list of `{"action", "title"}` where `action` is `reply`, `open` or `retry` (`retry` on `stopped` only) on an agent push, and `done` and `snooze` on a reminder for one item, each only where the item's tracker can apply it (see Trackers); the payload then also carries `"key"`, the item key. The service worker opens `url` for `open` and a tap on the notification, `/?item=<key>&reply=1` for `reply`, for `retry` posts `{"kind": "ask", "key"}` as a new action, for `done` posts `{"kind": "done", "key"}`, and for `snooze` posts `{"kind": "snooze", "key", "payload": {"until": <one hour from now>, "previous": null}}`, the app's "In 1 hour". A reminder that gathers several missed ones has no actions. The payload stays within Web Push's size limit: with a long key or title the hub shortens the body, then the title, never the link, the key, the tag or the actions. ntfy gets the same title, body and link, with Reply and Open as view actions.
 
+### Export and restore
+
+The hub holds the only copy of the personal list, the projects, the action log and the settings kept in the app. An export takes them out as one JSON file; a restore loads that file into a fresh hub. The Go types are `api.Export` and `api.RestoreResult`.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/export` | | `200`, the export, with `Content-Disposition: attachment; filename="meat-mode-export-<YYYY-MM-DD>.json"` (the date in the hub's time zone, UTC while it has none) |
+| `POST /api/restore` | the export file as it was downloaded | `200` and `{"items", "actions", "reminders", "cancelled", "machines", "calendarFeed"}`; `409` on a hub that already has data; `400` for a file that is not an export, is from a newer hub or fails a check below. Bodies up to 64 MiB. |
+
+**What an export holds.** `{"format": "meat-mode-export", "version": 1, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
+
+- `settings` is `{"name", "timeZone", "reminderLead", "calendarFeed"}`: the first three as `GET /api/settings` shows them, except that `name` is `""` while none was chosen, and `calendarFeed` whether the calendar feed was on.
+- `items` holds every item of the lists the hub keeps, the personal list and every project, closed ones included however old: the `Item` fields as `GET /api/state` shows them, with `key`, `bridge` (`hub`), `repo` (the list), `firstSeen` and `seenAt`, and no `run`, `pending` or `error`. `owner` names the machine whose agents added the item, `""` (left out) for one added in the app.
+- `actions` is the whole action log, every machine's included, oldest first, each as `GET /api/actions` shows it.
+- `reminders` lists the reminders already sent for those items: `{"key", "kind", "at"}`, where `kind` is `due` (at the due time or a snooze end, `at` being that moment) or `early` (`at` being the due time it came before).
+- `origins` lists the items moved from a machine's personal repo: `{"machine", "beadId", "itemId"}`.
+- `machines` names the machines paired when the export was made, revoked ones left out.
+
+**What it leaves out.** No secret is exported: no machine token, password hash, login session, setup code, calendar feed address, Web Push subscription or VAPID key. Items from a machine's repos stay out too, whatever its tracker (beads, ticket, Backlog.md): each is a copy of a file on that machine, which stays its source of truth and sends it again once paired. So do the hub's copies of agent runs and its record of the run ends it pushed.
+
+**Versions.** `version` goes up by one whenever what an export holds changes in any way, an added field included, so a hub never restores a file it would read only in part. A hub restores a file of its own version and of every older one, upgrading an older file step by step to its own before loading it. It refuses a file from a newer hub with `400` and says which version the file is and which this hub reads, so the user updates the hub first. A file whose `format` is not `meat-mode-export`, or whose `version` is not a whole number from 1 up, is refused as not an export.
+
+**Restore.** Restore is offered by the hub part of the setup wizard on a hub whose setup status is `new`, after the password step:
+
+- It refuses with `409` on a hub that already has data: any item, any action, or any machine other than `hub`, revoked ones included. It never merges into or replaces data, so nothing a hub holds is lost to a restore. The settings the wizard has already set do not count as data; the export's replace them.
+- It checks the whole file before it writes anything, and loads it in one transaction, so a file that fails a check changes nothing. Each item must belong to the personal list or a valid project name (see Identity), with a valid id unique in its list, a title, a known status and the limits an edit holds to; each action needs a valid id, unique in the file; each `key` must name an item in the file; and the settings must pass `PUT /api/settings`'s checks.
+- It keeps every item's id, key, times, comments, checklist, repeat and parent; every action's id, order, status and times; and each owner, reminder and origin. An action still `pending` for a machine's repo is loaded as `cancelled`, with `error` "Not sent: the hub was restored from an export.", so a machine paired again never replays an old change; actions on the hub's own lists are already applied.
+- It does not record the setup wizard as done; the wizard goes on to its next step.
+- The answer counts what it loaded and lists what to do again: pair each machine in `machines`, turn the calendar feed on again when `calendarFeed` is true, and turn notifications on, on each device. A machine paired again under its old name gets back the items its agents added.
+
+
 ## Bridge API
 
 Every request carries `Authorization: Bearer <token>`. The token names the bridge; a bridge never names itself in a body.
