@@ -1,5 +1,5 @@
-// Quick add: a title with an optional natural-language date, repeat and
-// #list, parsed and turned into the add action to send. Pure: the caller
+// Quick add: a title with an optional natural-language date, repeat, #list
+// and @tags, parsed and turned into the add action to send. Pure: the caller
 // passes `now` and the lists it may match.
 
 import * as chrono from "chrono-node/en";
@@ -7,7 +7,8 @@ import { findRepeat, firstOccurrence, type RepeatRule } from "./repeat.ts";
 import { startOfDay, ymd } from "./dates.ts";
 import { isPersonal, repoKey, repoLabel, visibleRepos } from "./model.ts";
 import { noAgentReason } from "./runs.ts";
-import type { NewAction, Repo } from "./types.ts";
+import { cleanTags } from "./tags.ts";
+import { MAX_TAG_LEN, MAX_TAGS, type NewAction, type Repo } from "./types.ts";
 
 export interface QuickList {
   /** Repo key, `<bridge>/<repo>`. */
@@ -17,7 +18,7 @@ export interface QuickList {
 }
 
 export interface QuickToken {
-  kind: "date" | "list" | "repeat";
+  kind: "date" | "list" | "repeat" | "tag";
   start: number;
   end: number;
   text: string;
@@ -31,12 +32,16 @@ export interface QuickAdd {
   /** Set when the repeat's end date falls before its first occurrence; the rule then holds no `until`. */
   early?: true;
   list: string | null;
+  /** The @tags, as typed, in order. */
+  tags: string[];
   tokens: QuickToken[];
 }
 
 export interface QuickOptions {
   /** Whether the repeat words make a rule, which only the personal list takes. They are blanked from the date either way. Default yes. */
   repeat?: boolean;
+  /** Whether @word makes a tag, which only the personal list and projects take. Default yes. */
+  tags?: boolean;
 }
 
 /** Hour used for "tonight". */
@@ -50,6 +55,9 @@ export const MORNING_HOUR = 9;
 const PART_OF_DAY = /\b(morning|noon|midday|afternoon|evening|night|midnight)\b/i;
 const TONIGHT = /\btonight\b/i;
 const LIST_TAG = /(^|\s)#([\p{L}\p{N}_.-]+)/gu;
+/** "@word" after a space: a tag when the word starts with a letter ("@garden"), never a date ("@5pm", "@monday"). */
+const AT_WORD = /(^|\s)@([\p{L}\p{N}_.:/-]+)/gu;
+const TAG_WORD = /^\p{L}/u;
 /** The words that end a repeat ("every sunday until nov 26"), before its date. */
 const UNTIL = /\b(?:until|ending)\s+/gi;
 
@@ -145,15 +153,29 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
     tokens.push({ kind: "list", start, end: start + m[2].length + 1, text: `#${m[2]}` });
   }
 
+  // An @word is blanked for the date and repeat readers, so "@monday" and
+  // "@5pm" stay in the title. One that starts with a letter is a tag, where
+  // tags are taken.
+  const tags: string[] = [];
+  let scan = text;
+  for (const m of text.matchAll(AT_WORD)) {
+    const start = (m.index ?? 0) + m[1].length;
+    const end = start + m[2].length + 1;
+    scan = scan.slice(0, start) + " ".repeat(end - start) + scan.slice(end);
+    if (opts.tags === false || !TAG_WORD.test(m[2])) continue;
+    tags.push(m[2]);
+    tokens.push({ kind: "tag", start, end, text: `@${m[2]}` });
+  }
+
   // The repeat goes first, and its words are blanked for chrono, which would
   // read "every monday" as next Monday. With repeats off the span is still
   // found and blanked, but makes no rule and no token, so the words stay in
   // the title and give no date.
   let repeat: RepeatRule | null = null;
   let monthDay: number | undefined;
-  let dateText = text;
+  let dateText = scan;
   const takeRepeat = opts.repeat !== false;
-  const rm = findRepeat(text);
+  const rm = findRepeat(scan);
   const rmTaken = !!rm && !tokens.some((t) => rm.start < t.end && t.start < rm.end);
   if (rmTaken && rm) {
     if (takeRepeat) {
@@ -161,7 +183,7 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
       monthDay = rm.monthDay;
       tokens.push({ kind: "repeat", start: rm.start, end: rm.end, text: rm.text });
     }
-    dateText = text.slice(0, rm.start) + " ".repeat(rm.end - rm.start) + text.slice(rm.end);
+    dateText = scan.slice(0, rm.start) + " ".repeat(rm.end - rm.start) + scan.slice(rm.end);
   }
 
   // "until nov 26" after the repeat, blanked for chrono in the same way; with
@@ -169,9 +191,9 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   let until: ReturnType<typeof chrono.parse>[number] | null = null;
   if (rmTaken && rm) {
     UNTIL.lastIndex = rm.end;
-    for (let m = UNTIL.exec(text); m && !until; m = UNTIL.exec(text)) {
+    for (let m = UNTIL.exec(scan); m && !until; m = UNTIL.exec(scan)) {
       const from = m.index + m[0].length;
-      const r = dateOnly(parser.parse(text.slice(from), now, { forwardDate: true })[0], now);
+      const r = dateOnly(parser.parse(scan.slice(from), now, { forwardDate: true })[0], now);
       // Only a date that follows the word and names its day: "until 5pm" is no end.
       if (!r || r.index !== 0 || !hasDay(r)) continue;
       const end = from + r.text.length;
@@ -213,13 +235,18 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   }
   title += text.slice(pos);
   title = title.replace(/\s+/g, " ").trim();
-  const out: QuickAdd = { title, due, repeat, list, tokens };
+  const out: QuickAdd = { title, due, repeat, list, tags, tokens };
   if (early) out.early = early;
   return out;
 }
 
 /** Whether a list takes a repeat: only the hub's personal list does, as the hub checks. */
 export function takesRepeat(r: Repo | undefined): boolean {
+  return !!r && isPersonal(r);
+}
+
+/** Whether a list takes tags from the app: the personal list and projects do, a tracker's list does not. */
+export function takesTags(r: Repo | undefined): boolean {
   return !!r && isPersonal(r);
 }
 
@@ -246,7 +273,8 @@ export interface QuickPicks {
  * Typed text as it will be added. The list the text names wins, then the
  * picked list, then the list being viewed, then the first visible list,
  * which is the personal one; a key that is not a visible list is passed
- * over. On a list that takes no repeat the repeat words stay in the title.
+ * over. On a list that takes no repeat the repeat words stay in the title,
+ * and on one that takes no tags the @words do.
  */
 export function readQuickAdd(text: string, now: Date, repos: Repo[], picks: QuickPicks = {}): QuickRead {
   const visible = visibleRepos(repos);
@@ -254,7 +282,9 @@ export function readQuickAdd(text: string, now: Date, repos: Repo[], picks: Quic
   let qa = parseQuickAdd(text, now, lists);
   const find = (key: string | null | undefined) => (key ? visible.find((r) => repoKey(r) === key) : undefined);
   const target = find(qa.list) ?? find(picks.list) ?? find(picks.viewing) ?? visible[0];
-  if (qa.repeat && !takesRepeat(target)) qa = parseQuickAdd(text, now, lists, { repeat: false });
+  const repeat = !qa.repeat || takesRepeat(target);
+  const tags = !qa.tags.length || takesTags(target);
+  if (!repeat || !tags) qa = parseQuickAdd(text, now, lists, { repeat, tags });
   return { qa, target };
 }
 
@@ -267,18 +297,19 @@ export interface AddOptions extends QuickPicks {
   zone?: string;
 }
 
-/** Why typed text makes no add: no title, no list to add to, or a repeat that ends before it starts. */
-export type AddError = "empty" | "no-list" | "early";
+/** Why typed text makes no add: no title, no list to add to, a repeat that ends before it starts, or a tag the hub refuses. */
+export type AddError = "empty" | "no-list" | "early" | "tags";
 
 export const ADD_ERROR_TEXT: Record<AddError, string> = {
   empty: "Type a to-do first.",
   "no-list": "There is no list to add to yet.",
   early: "The end date is before the first date.",
+  tags: `A tag is one word of up to ${MAX_TAG_LEN} characters, and a to-do has at most ${MAX_TAGS}.`,
 };
 
 export type AddResult =
   | { action: NewAction; qa: QuickAdd; target: Repo; wakes: boolean }
-  | { error: AddError; qa: QuickAdd };
+  | { error: AddError; qa: QuickAdd; /** The hub's words for a refused tag. */ why?: string };
 
 /** Typed quick add text as the add action to send, or why there is none. */
 export function addAction(text: string, now: Date, repos: Repo[], opts: AddOptions): AddResult {
@@ -286,6 +317,8 @@ export function addAction(text: string, now: Date, repos: Repo[], opts: AddOptio
   if (!qa.title) return { error: "empty", qa };
   if (!target) return { error: "no-list", qa };
   if (qa.early) return { error: "early", qa };
+  const tags = cleanTags(qa.tags);
+  if ("error" in tags) return { error: "tags", qa, why: tags.error };
   const action: NewAction = {
     id: opts.id,
     kind: "add",
@@ -294,6 +327,7 @@ export function addAction(text: string, now: Date, repos: Repo[], opts: AddOptio
     payload: { title: qa.title, due: qa.due ? qa.due.toISOString() : null },
   };
   if (qa.repeat && qa.due) action.payload.repeat = { ...qa.repeat, timeZone: opts.zone ?? "" };
+  if (tags.tags.length) action.payload.labels = tags.tags;
   const wakes = wakesAgent(target, opts.ask ?? false);
   if (wakes) action.payload.ask = true;
   return { action, qa, target, wakes };

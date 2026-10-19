@@ -7,6 +7,7 @@ import { isOpen, isPersonal, repoKey } from "./model.ts";
 import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
 import { parseQuickAdd } from "./quickadd.ts";
 import { sameRule, type RepeatRule } from "./repeat.ts";
+import { cleanTags, sameTags, shownTags, typedTags } from "./tags.ts";
 
 export const TITLE_MAX = 1000;
 export const TEXT_MAX = 10000;
@@ -69,6 +70,8 @@ export interface EditDraft {
   remindBefore: number | null;
   /** The id of the item it is a sub-task of; "" for top-level. */
   parent: string;
+  /** The tags as typed, split at spaces and commas. */
+  tags: string;
 }
 
 export function draftOf(item: Item, timeZone = ""): EditDraft {
@@ -87,6 +90,7 @@ export function draftOf(item: Item, timeZone = ""): EditDraft {
     timeZone,
     remindBefore: item.remindBefore ?? null,
     parent: item.parent ?? "",
+    tags: shownTags(item).join(" "),
   };
 }
 
@@ -144,6 +148,8 @@ export function editError(item: Item, d: EditDraft, now: Date): string {
   if (rule && (due.kind === "clear" || (due.kind === "keep" && !due.at))) return "A repeat needs a due date. Add one, or pick Does not repeat.";
   if (rule?.until && !fromYmd(rule.until)) return "End the repeat on a real date, or pick No end date.";
   if (rule?.until && (due.kind === "set" || due.kind === "keep") && due.at && rule.until < ymd(due.at)) return "End the repeat on or after its due date.";
+  const tags = cleanTags(typedTags(d.tags));
+  if ("error" in tags) return tags.error;
   return "";
 }
 
@@ -167,6 +173,8 @@ export function diffEdit(item: Item, d: EditDraft, now: Date): Edit | null {
     else set.remindBefore = d.remindBefore;
   }
   if (d.parent !== (item.parent ?? "")) set.parent = d.parent;
+  const tags = cleanTags(typedTags(d.tags));
+  if ("tags" in tags && !sameTags(tags.tags, shownTags(item))) set.labels = tags.tags;
   return Object.keys(set).length ? set : null;
 }
 
@@ -189,6 +197,7 @@ export function applyEdit(item: Item, set: Edit): void {
     item.parent = set.parent || undefined;
     item.parentTitle = undefined;
   }
+  if (set.labels !== undefined) item.labels = set.labels.length ? [...set.labels] : undefined;
 }
 
 /** "2/5": done entries out of all, or "" for an empty checklist. */

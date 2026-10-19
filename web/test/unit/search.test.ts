@@ -113,3 +113,20 @@ test("a sub-task is found by its parent's title, from the held parent or the tit
   assert.deepEqual(titles("old", [parent, stale]), []);
   assert.deepEqual(titles("basket picnic", [parent, stale]), [["found-open", ["Pack the basket"]]]);
 });
+
+test("a tag finds its item, with or without the @; human is never searched", () => {
+  const tagged = item({ title: "Water the plants", labels: ["Garden"] });
+  const agent = item({ repo: "garden", title: "Check the tomato labels", labels: ["human", "outdoor"] });
+  const items = [tagged, agent, item({ title: "Buy milk" })];
+  assert.deepEqual(titles("garden", items), [["found-open", ["Water the plants"]]]);
+  assert.deepEqual(titles("@garden", items), [["found-open", ["Water the plants"]]]);
+  assert.deepEqual(titles("outdoor", items), [["found-open", ["Check the tomato labels"]]]);
+  assert.deepEqual(titles("human", items), []);
+});
+
+test("only narrows the items searched, as a tag filter does", () => {
+  const a = item({ title: "Tea one", labels: ["kitchen"] });
+  const b = item({ title: "Tea two" });
+  const found = searchGroups([a, b], "tea", now, (i) => !!i.labels?.includes("kitchen"));
+  assert.deepEqual(found.map((g) => g.items.map((i) => i.title)), [["Tea one"]]);
+});

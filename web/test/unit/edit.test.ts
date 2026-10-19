@@ -290,3 +290,34 @@ test("an item moves only under open top-level items of its own list, and not at 
   assert.deepEqual(moveTargets(it, [...all, other("pe-6", { parent: "pe-1", status: "closed" })]), []);
   assert.deepEqual(moveTargets(item({ key: "home/garden/ga-1", bridge: "home", repo: "garden", id: "ga-1" }), all), []);
 });
+
+test("tags: the form shows them without human and sends the whole list when it changed", () => {
+  const it = item({ labels: ["garden", "errands"] });
+  const d = draftOf(it);
+  assert.equal(d.tags, "garden errands");
+  assert.equal(diffEdit(it, d, now), null);
+  assert.deepEqual(diffEdit(it, { ...d, tags: "garden, @weekend  Garden" }, now), { labels: ["garden", "weekend"] });
+  assert.deepEqual(diffEdit(it, { ...d, tags: "  " }, now), { labels: [] });
+  assert.equal(diffEdit(item(), { ...draftOf(item()), tags: "human" }, now), null);
+});
+
+test("tags: the hub's rules refuse the form before it sends", () => {
+  const it = item();
+  assert.equal(editError(it, { ...draftOf(it), tags: "a".repeat(51) }, now), `The tag "${"a".repeat(51)}" is longer than 50 characters.`);
+  const many = Array.from({ length: 21 }, (_, i) => `t${i}`).join(" ");
+  assert.equal(editError(it, { ...draftOf(it), tags: many }, now), "An item has at most 20 tags.");
+  assert.equal(editError(it, { ...draftOf(it), tags: "ok\u0007bell" }, now), 'The tag "ok\u0007bell" has a space, comma or control character; a tag is one word.');
+});
+
+test("applyEdit sets the tags, and an empty list clears them", () => {
+  const it = item({ labels: ["garden"] });
+  applyEdit(it, { labels: ["garden", "weekend"] });
+  assert.deepEqual(it.labels, ["garden", "weekend"]);
+  applyEdit(it, { labels: [] });
+  assert.equal(it.labels, undefined);
+});
+
+test("the Undo of a tag edit sets the tags it had, from was", () => {
+  const applied = action("edit", { set: { labels: ["weekend"] }, was: { labels: [] } });
+  assert.deepEqual(undoOf(applied, "hub/personal/pe-1", "u1"), { id: "u1", kind: "edit", key: "hub/personal/pe-1", payload: { set: { labels: [] } } });
+});
