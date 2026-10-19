@@ -332,3 +332,32 @@ func TestLinkUsesTheItemsOwnKey(t *testing.T) {
 		t.Fatalf("link %q does not point at the item's own key", got)
 	}
 }
+
+func TestButtonsFollowWhatTheListAllows(t *testing.T) {
+	db, c, src, n := setup(t)
+	s := sched(t, db, c, src, n)
+	// The list's tracker cannot snooze; a failed check keeps the button.
+	s.Allows = func(_ context.Context, key, kind string) (bool, error) {
+		if key == "home/chores/ch-2" {
+			return false, errors.New("store is down")
+		}
+		return kind != notify.ActionSnooze, nil
+	}
+	other := item(tp(t0))
+	other.Key, other.ID = "home/chores/ch-2", "ch-2"
+	src.items = []api.Item{item(tp(t0)), other}
+	c.now = t0.Add(time.Minute)
+	s.Tick(context.Background())
+	if len(n.got) != 2 {
+		t.Fatalf("fired %d", len(n.got))
+	}
+	for _, m := range n.got {
+		want := 1
+		if m.Key == "home/chores/ch-2" {
+			want = 2
+		}
+		if len(m.Actions) != want || m.Actions[0].Action != notify.ActionDone {
+			t.Errorf("%s: actions %+v", m.Key, m.Actions)
+		}
+	}
+}
