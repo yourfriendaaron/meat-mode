@@ -65,6 +65,23 @@ func TestLaunch(t *testing.T) {
 	}
 }
 
+// A prompt or note that starts with "/" goes in with a leading space, so Pi
+// sends it to the model instead of running it as a skill or template.
+func TestSlashIsPlain(t *testing.T) {
+	h := &Pi{command: command}
+	l, _ := h.Launch(harness.Spec{Dir: "/repo", Prompt: "/tmp holds the seed list."})
+	lines := strings.Split(strings.TrimSuffix(string(l.Stdin), "\n"), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[1], `"message":" /tmp holds the seed list."`) {
+		t.Fatalf("prompt line = %q", lines[len(lines)-1])
+	}
+	if got := string(h.Note("/skill:water")); got != `{"message":" /skill:water","type":"steer"}`+"\n" {
+		t.Fatalf("Note = %q", got)
+	}
+	if got := plain("Water the /garden plants."); got != "Water the /garden plants." {
+		t.Fatalf("plain = %q", got)
+	}
+}
+
 // Read reports each user message Pi takes in, one at a time: the prompt, then each
 // steering note once it is delivered.
 func TestRead(t *testing.T) {
