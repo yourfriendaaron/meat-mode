@@ -26,7 +26,7 @@ agy --input-format stream-json --output-format stream-json --dangerously-skip-pe
 ## Limits
 
 - **No spending cap.** agy reports tokens, not money, and has no cap of its own. A run stops at the time limit (`MEAT_MODE_AGENT_TIMEOUT`) only, and `MEAT_MODE_AGENT_BUDGET_USD` is ignored. The app says so.
-- **A note reaches a live run.** It goes to stdin at once. agy's docs show prompts written before the previous turn ends running one after another, so a note sent mid-turn starts the next turn when the current one ends; it does not interrupt it. The docs advise waiting for a turn's `result` before writing the next prompt, and do not say more.
+- **A note reaches a live run.** It goes to stdin at once. A note sent mid-turn waits for the current turn to end, then runs as the next turn in the same process; it does not interrupt the turn. A live run on agy 1.3.6 showed this: agy echoed the note as a `user_input` step after the first turn's `result`, then answered it.
 - **Usage limit.** A `result` with a quota error (`RESOURCE_EXHAUSTED`, "Individual quota reached", "Your AI credits balance is too low") ends the run as a usage limit, with the reset time when agy gives one ("Resets in 2h39m52s").
 
 ## Things to know
@@ -36,9 +36,9 @@ agy --input-format stream-json --output-format stream-json --dangerously-skip-pe
 - A run can end without a `result` line, for example on a full disk ([#1290](https://github.com/google-antigravity/antigravity-cli/issues/1290)). The bridge counts a process that exits without a turn end as a failed run.
 - An MCP server that never starts can hold a turn until the time limit ([#1087](https://github.com/google-antigravity/antigravity-cli/issues/1087)), and on some models a used-up quota shows as a timeout, not a usage limit ([#1278](https://github.com/google-antigravity/antigravity-cli/issues/1278)).
 - Each headless start takes some seconds of its own ([#1291](https://github.com/google-antigravity/antigravity-cli/issues/1291)), and each run is saved as a conversation in agy.
-- Two problems reported against agy 1.0.x by a third-party migration guide no longer apply as far as the current docs and changelog show: print mode writing nothing to stdout when not run in a terminal (fixed across 1.0.15 to 1.1.28; hangs on some prompts are still reported in [#594](https://github.com/google-antigravity/antigravity-cli/issues/594)), and `--dangerously-skip-permissions` doing nothing in print mode (documented as working, with `init` reporting `always-proceed`). Neither has been checked in a live run.
+- Two problems reported against agy 1.0.x by a third-party migration guide no longer apply as far as the current docs and changelog show: print mode writing nothing to stdout when not run in a terminal (fixed across 1.0.15 to 1.1.28; hangs on some prompts are still reported in [#594](https://github.com/google-antigravity/antigravity-cli/issues/594)), and `--dangerously-skip-permissions` doing nothing in print mode (documented as working, with `init` reporting `always-proceed`). A live run on agy 1.3.6 printed its stream with no terminal and ran a shell command with no prompt.
 - agy documents no variable it sets in the shells it runs. Its built-in helper scripts read `ANTIGRAVITY_CONVERSATION_ID`, `ANTIGRAVITY_LS_ADDRESS`, `ANTIGRAVITY_CSRF_TOKEN`, `ANTIGRAVITY_SIDECAR_WEB_PORT` and `ANTIGRAVITY_AGENTAPI_EXE` from the environment agy gives them, so a bridge started from inside an agy session passes none of those to the runs it starts. `AGY_*` settings and `GEMINI_API_KEY` are your own and pass through.
 
 ## Version
 
-Built against agy 1.4.2's headless docs and changelog. The fixtures are written from those docs (`from source, agy 1.4.2`) and should be recorded again from a live run.
+Built against agy 1.4.2's headless docs and changelog. One fixture is a live run with a note sent mid-turn (`live, agy 1.3.6`); the others are written from those docs (`from source, agy 1.4.2`) and should be recorded again from a live run.

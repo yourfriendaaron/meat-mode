@@ -12,6 +12,11 @@ import (
 
 func TestConformance(t *testing.T) {
 	harnesstest.Run(t, Name, []harnesstest.Fixture{
+		{File: "testdata/antigravity-1.3.6-steer.jsonl", Source: "live, agy 1.3.6", Want: harnesstest.Want{
+			Session: "3f2a9c1e-5b7d-4e8a-9c0b-1d2e3f4a5b6c",
+			Tools:   []harness.Tool{{Kind: harness.ToolShell, Command: "sleep 10 && ls"}},
+			End:     harness.End{Text: "blue"},
+		}},
 		{File: "testdata/antigravity-1.4.2-tool.jsonl", Source: "from source, agy 1.4.2", Want: harnesstest.Want{
 			Session: "5f1c2b9e-3a47-4d8e-9b10-2c6f7a8d9e01",
 			Tools: []harness.Tool{
