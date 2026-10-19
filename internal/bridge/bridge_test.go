@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -313,7 +314,7 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 			{Name: "garden", OptedIn: true},
 			{Name: "kitchen", OptedIn: false},
 		}
-		if got := w.hub.Repos(us); !slices.Equal(got, want) {
+		if got := w.hub.Repos(us); !reflect.DeepEqual(got, want) {
 			t.Errorf("repos = %+v, want %+v", got, want)
 		}
 		if _, ok := w.hub.Items(us, "kitchen"); ok {
@@ -541,7 +542,7 @@ func TestSameNamedReposSyncSideBySide(t *testing.T) {
 		w.tick(b)
 
 		want := []api.Repo{{Name: "projects/garden", OptedIn: true}, {Name: "work/garden", OptedIn: true}}
-		if got := w.hub.Repos(us); !slices.Equal(got, want) {
+		if got := w.hub.Repos(us); !reflect.DeepEqual(got, want) {
 			t.Errorf("repos = %+v, want %+v", got, want)
 		}
 		if items, _ := w.hub.Items(us, "projects/garden"); len(items) != 1 || items[0].Title != "Water the plants" {
@@ -585,7 +586,7 @@ func TestSyncSwitch(t *testing.T) {
 			t.Errorf("saved switches %v", saved)
 		}
 		want := []api.Repo{{Name: "projects/garden", OptedIn: true}, {Name: "projects/kitchen", OptedIn: false}}
-		if got := w.hub.Repos(us); !slices.Equal(got, want) {
+		if got := w.hub.Repos(us); !reflect.DeepEqual(got, want) {
 			t.Errorf("repos = %+v, want %+v", got, want)
 		}
 		if items, _ := w.hub.Items(us, "projects/garden"); len(items) != 1 {
@@ -596,7 +597,7 @@ func TestSyncSwitch(t *testing.T) {
 		b = w.start()
 		b.Switches = saved
 		w.tick(b)
-		if got := w.hub.Repos(us); !slices.Equal(got, want) {
+		if got := w.hub.Repos(us); !reflect.DeepEqual(got, want) {
 			t.Errorf("repos after restart = %+v, want %+v", got, want)
 		}
 	})

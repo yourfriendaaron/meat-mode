@@ -107,6 +107,10 @@ export interface Repo {
   pending?: boolean;
   /** An agents switch the machine has not applied yet; agentsAllowed shows where it was switched to. */
   agentsPending?: boolean;
+  /** The repo's task tracker as the app names it, such as "beads" or "Backlog.md"; absent for the hub's own lists. */
+  tracker?: string;
+  /** Action kinds the tracker can apply, plus "subtask" for an add under a parent. Absent means every kind. */
+  actions?: string[];
 }
 
 /** An agent run's state (docs/api.md, Agent runs). No run on an item means no agent was ever asked. */
@@ -154,6 +158,8 @@ export interface Bridge {
   lastSeen?: string | null;
   version?: string;
   bdVersion?: string;
+  /** The trackers the machine runs, with their tools' versions. */
+  trackers?: { name: string; version?: string }[];
 }
 
 export interface Payload {

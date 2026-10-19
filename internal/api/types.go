@@ -129,6 +129,21 @@ type Repo struct {
 	// Hub-only: an agents switch the bridge has not applied yet.
 	// AgentsAllowed then shows the position it was switched to.
 	AgentsPending bool `json:"agentsPending,omitempty"`
+	// Tracker is the name the app shows for the repo's task tracker, such
+	// as "beads" or "Backlog.md"; empty for the hub's own lists and from
+	// an older bridge.
+	Tracker string `json:"tracker,omitempty"`
+	// Actions are the action kinds the tracker can apply, plus "subtask"
+	// for an add under a parent. Nil means every kind (an older bridge, or
+	// the hub's own lists); the app hides the others and the hub refuses
+	// them.
+	Actions []string `json:"actions,omitempty"`
+}
+
+// TrackerVersion is one tracker a bridge runs and its tool's version.
+type TrackerVersion struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
 }
 
 // Run states. An item with no Run has never had an agent asked (idle).
@@ -195,6 +210,8 @@ type Bridge struct {
 	LastSeen  *time.Time `json:"lastSeen,omitempty"`
 	Version   string     `json:"version,omitempty"`
 	BdVersion string     `json:"bdVersion,omitempty"`
+	// Trackers are the trackers the bridge last said it runs.
+	Trackers []TrackerVersion `json:"trackers,omitempty"`
 }
 
 // Action kinds.
@@ -283,7 +300,9 @@ type ActionResult struct {
 // Hello is the bridge's greeting.
 type Hello struct {
 	Version   string `json:"version"`
-	BdVersion string `json:"bdVersion"`
+	BdVersion string `json:"bdVersion"` // beads' version, kept for older hubs; empty when beads is not available
+	// Trackers are the trackers whose tools passed their check.
+	Trackers []TrackerVersion `json:"trackers,omitempty"`
 }
 
 // HelloReply tells the bridge its own name.

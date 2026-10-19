@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -326,7 +327,7 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced(), AgentsAllowed: b.Agents[r.Name]})
 	}
 	b.repos = next
-	if slices.Equal(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {
+	if reflect.DeepEqual(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {
 		return nil
 	}
 	if err := b.Hub.PutRepos(ctx, wire); err != nil {
