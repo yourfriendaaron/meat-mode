@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { firstRun, parseProgress, partsOf, type Progress } from "../../src/wizard/rules.ts";
 import { findStep, stepOutcome, stepsFor, registerStep } from "../../src/wizard/registry.ts";
+import { startWizard, wizardAct } from "../../src/wizard/wizard.ts";
 import type { AppContext } from "../../src/app-context.ts";
 import "../../src/wizard/steps/index.ts";
 
@@ -80,4 +81,22 @@ test("Finish lists a step as set up, skipped or not set up", () => {
   const html = findStep("finish")!.render(ctx, { mode: "first", steps: stepsFor("first", ctx), progress: p });
   assert.match(html, /Set up<\/span><span class="wiz-sum-title">Hub thing/);
   assert.match(html, /Skipped<\/span><span class="wiz-sum-title">Device thing/);
+});
+
+test("closing the run first leaves the step it is on, as Skip does", async () => {
+  const left: string[] = [];
+  registerStep({ id: "test-closer", title: "Closer", part: "device", order: 1, render: () => "", leave: () => left.push("test-closer") });
+  const closeCtx = {
+    state: null,
+    session: null,
+    setup: null,
+    view: "setup",
+    setView: () => {},
+    render: () => {},
+  } as unknown as AppContext;
+  const el = { dataset: {} } as unknown as HTMLElement;
+  startWizard("device", closeCtx);
+  await wizardAct("wizard-next", el, closeCtx); // past Welcome, onto the step above
+  await wizardAct("wizard-close", el, closeCtx);
+  assert.deepEqual(left, ["test-closer"]);
 });

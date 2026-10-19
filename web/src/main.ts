@@ -65,7 +65,7 @@ import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } 
 import { gate, loginErrorText } from "./login.ts";
 import { claimHTML, claimScreen } from "./password.ts";
 import { esc } from "./html.ts";
-import { addMachineError, agentsOnHTML, copyFrom, machineReposHTML, reauthFieldHTML } from "./agents.ts";
+import { addMachineError, agentsOnHTML, copyFrom, machineReposHTML, pairCommand, reauthFieldHTML } from "./agents.ts";
 import { agentName, agentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
 import { appPushStatus, appStateMessage, initPush, inAndroidApp, remindersOn, subscribePush, turnOnReminders } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
@@ -983,7 +983,7 @@ function renderSettings() {
           ? '<p class="muted">Notifications are blocked for this site in the browser settings.</p>'
           : '<button class="btn btn-primary" data-act="push">Turn on reminders</button>';
   const nb = S.newBridge;
-  const cmd = nb ? `meat-mode bridge pair ${location.origin} ${nb.token}` : "";
+  const cmd = nb ? pairCommand(location.origin, nb.token) : "";
   const machines = bridges.length
     ? `<ul class="machines">${bridges
         .map((b) => {
@@ -1992,7 +1992,9 @@ function closeQuickAdd() {
 // ---------- push ----------
 
 async function enablePush() {
-  S.pushStatus = await turnOnReminders();
+  // “Register this phone again”: the app already reports reminders on, so it must be told to register once more.
+  const again = inAndroidApp() && appPushStatus()?.state === "on";
+  S.pushStatus = await turnOnReminders(again);
   forgetDevices();
   render();
 }
@@ -2021,6 +2023,8 @@ async function addBridge(form: HTMLFormElement) {
     S.bridgeError = "";
     S.bridgeReauth = false;
     S.copied = false;
+    // The name is used; keep it out of the form, or a second tap would ask for the same name again.
+    input.value = "";
   } catch (e) {
     ({ error: S.bridgeError, reauth: S.bridgeReauth } = addMachineError(e, password !== undefined));
   }
@@ -2576,6 +2580,7 @@ function leaveShell() {
   S.open = null;
   S.selected = null;
   S.snoozeKeys = null;
+  S.query = "";
   S.qaOpen = false;
   S.syncOpen = false;
   S.newBridge = null;

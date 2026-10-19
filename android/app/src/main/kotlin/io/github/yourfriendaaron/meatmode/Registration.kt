@@ -106,6 +106,12 @@ object Registration {
     }
 
     fun onConfirm(context: Context, device: String, code: String) {
+        // A code that arrives after push-off belongs to no registration; taking
+        // it would show reminders on with no endpoint.
+        if (Store(context).endpoint == null) {
+            PushLog.add(context, "confirmation code with no registration: ignored")
+            return
+        }
         Secrets(context).set(Secrets.CONFIRM_CODE, code)
         Work.confirm(context, device)
     }

@@ -32,7 +32,7 @@ func TestConfigNeedsAnHTTPSPublicURL(t *testing.T) {
 }
 
 func TestConfigPushAllow(t *testing.T) {
-	c := Config{PublicURL: "https://meat-mode.example.com", PushAllow: " ntfy.example.com, Push.Example.NET. ,192.0.2.0/24,2001:db8::/32, 198.51.100.7 ,"}
+	c := Config{PublicURL: "https://meat-mode.example.com", PushAllow: " ntfy.example.com, Push.Example.NET. ,192.0.2.0/24,2001:db8::/48, 198.51.100.7 ,"}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -47,10 +47,10 @@ func TestConfigPushAllow(t *testing.T) {
 	for _, p := range cidrs {
 		got = append(got, p.String())
 	}
-	if strings.Join(got, ",") != "192.0.2.0/24,2001:db8::/32,198.51.100.7/32" {
+	if strings.Join(got, ",") != "192.0.2.0/24,2001:db8::/48,198.51.100.7/32" {
 		t.Errorf("cidrs %v", got)
 	}
-	for _, bad := range []string{"https://ntfy.example.com", "ntfy.example.com:443", "ntfy.example.com/up", "192.0.2.0/33", "not a host", "-ntfy.example.com"} {
+	for _, bad := range []string{"https://ntfy.example.com", "ntfy.example.com:443", "ntfy.example.com/up", "192.0.2.0/33", "0.0.0.0/0", "198.51.0.0/15", "2001:db8::/47", "::ffff:0.0.0.0/96", "not a host", "-ntfy.example.com"} {
 		err := Config{PublicURL: "https://meat-mode.example.com", PushAllow: "ntfy.example.com," + bad}.Validate()
 		if err == nil || !strings.Contains(err.Error(), "MEAT_MODE_PUSH_ALLOW") || !strings.Contains(err.Error(), bad) {
 			t.Errorf("%q: %v, want an error naming the entry", bad, err)

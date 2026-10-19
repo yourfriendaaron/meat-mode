@@ -117,6 +117,10 @@ func (r *Registry) writeDevice(tx *sql.Tx, d *device) error {
 }
 
 // secret returns a random 32-byte secret, base64url, and its hex SHA-256.
+// maxCode is longer than any code secret makes, so a longer one is refused
+// before it is hashed.
+const maxCode = 64
+
 func secret() (string, string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -134,8 +138,9 @@ func hashSecret(s string) string {
 // RegisterApp registers the Android app's subscription s for the session
 // sessionID ("" for a hub without a login). An endpoint that already belongs
 // to a confirmed device renews that device and reports renewed. Any other
-// becomes a new device awaiting confirmation: the hub pushes it a code at
-// once and returns its ID.
+// becomes a new device awaiting confirmation. Either way the hub pushes a
+// code at once: an app that lost its token while its endpoint lived on gets a
+// new one by confirming, and the device stays confirmed meanwhile.
 func (r *Registry) RegisterApp(ctx context.Context, sessionID string, s api.PushSubscription) (id string, renewed bool, err error) {
 	name, session, err := r.checkRegistration(sessionID, s)
 	if err != nil {
@@ -157,19 +162,18 @@ func (r *Registry) RegisterApp(ctx context.Context, sessionID string, s api.Push
 		return "", false, err
 	}
 	renewed = d != nil && d.Kind == api.DeviceApp && d.Confirmed
-	var code string
 	if !renewed {
 		if d, err = newDevice(api.DeviceApp, r.now()); err != nil {
 			return "", false, err
 		}
-		var hash string
-		if code, hash, err = secret(); err != nil {
-			return "", false, err
-		}
 		d.Confirmed = false
-		d.CodeHash = sql.NullString{String: hash, Valid: true}
-		d.CodeExpires = sql.NullInt64{Int64: r.now().Add(confirmTTL).Unix(), Valid: true}
 	}
+	code, hash, err := secret()
+	if err != nil {
+		return "", false, err
+	}
+	d.CodeHash = sql.NullString{String: hash, Valid: true}
+	d.CodeExpires = sql.NullInt64{Int64: r.now().Add(confirmTTL).Unix(), Valid: true}
 	d.Endpoint, d.P256dh, d.Auth, d.Name, d.Session = s.Endpoint, s.Keys.P256dh, s.Keys.Auth, name, session
 	if err := r.writeDevice(tx, d); err != nil {
 		return "", false, err
@@ -177,9 +181,7 @@ func (r *Registry) RegisterApp(ctx context.Context, sessionID string, s api.Push
 	if err := tx.Commit(); err != nil {
 		return "", false, err
 	}
-	if !renewed {
-		r.sendConfirmation(ctx, d, code)
-	}
+	r.sendConfirmation(ctx, d, code)
 	return d.ID, renewed, nil
 }
 
@@ -202,8 +204,12 @@ func (r *Registry) sendConfirmation(ctx context.Context, d *device, code string)
 
 // ConfirmDevice checks the code the app got in its confirmation push,
 // confirms the device and returns its device token, which is not stored and
-// cannot be shown again. A code works once, within confirmTTL.
+// cannot be shown again. A code works once, within confirmTTL. On a device
+// confirmed already, the new token replaces the old one.
 func (r *Registry) ConfirmDevice(ctx context.Context, id, code string) (string, error) {
+	if len(code) > maxCode {
+		return "", ErrBadCode
+	}
 	if err := r.prune(ctx); err != nil {
 		return "", err
 	}
@@ -212,7 +218,7 @@ func (r *Registry) ConfirmDevice(ctx context.Context, id, code string) (string, 
 		return "", err
 	}
 	defer tx.Rollback()
-	d, err := readDevice(tx, `id = ? AND kind = ? AND confirmed = 0`, id, api.DeviceApp)
+	d, err := readDevice(tx, `id = ? AND kind = ?`, id, api.DeviceApp)
 	if err != nil {
 		return "", err
 	}
@@ -242,8 +248,12 @@ func (r *Registry) DeviceByToken(ctx context.Context, token string) (id, session
 		return "", "", err
 	}
 	var session sql.NullString
-	err = r.db.QueryRowContext(ctx, `UPDATE push_subscriptions SET last_seen = ?
-		WHERE token_hash = ? AND confirmed = 1 RETURNING id, session_id`, r.now().Unix(), hashSecret(token)).Scan(&id, &session)
+	// A token call proves the app still holds its device, so it renews it as
+	// opening the app does: a phone used only from its notification buttons
+	// keeps its reminders.
+	now := r.now().Unix()
+	err = r.db.QueryRowContext(ctx, `UPDATE push_subscriptions SET last_seen = ?, renewed_at = ?
+		WHERE token_hash = ? AND confirmed = 1 RETURNING id, session_id`, now, now, hashSecret(token)).Scan(&id, &session)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", store.ErrUnauthorized
 	}

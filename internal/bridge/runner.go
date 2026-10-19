@@ -360,7 +360,7 @@ func (r *AgentRunner) Ask(req askRequest) {
 			select {
 			case lr.inbox <- userLine(followUp(req.BeadID, req.Text)):
 				lr.written++
-				lr.run.Queued = lr.written - lr.replayed
+				lr.run.Queued = max(0, lr.written-lr.replayed)
 				r.notify()
 				r.saveOrLog()
 				return

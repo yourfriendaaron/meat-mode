@@ -71,7 +71,7 @@ The app is then at `https://meat-mode.<your tailnet>.ts.net`.
 
 **`tailscale serve` on the host (fallback).** For trying it out, or a host that will never move, run `tailscale serve --bg --https=443 http://127.0.0.1:8080` instead. The app is then at `https://<host name>.<your tailnet>.ts.net`. That address belongs to the host: if you move the hub, each bridge must pair again and each device must turn reminders on again, because browsers tie push subscriptions and installed apps to the address.
 
-Then set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub. The hub refuses to start without an `https://` public address (plain `http://` is accepted for localhost only), and it answers only to `localhost`, `127.0.0.1`, the public address's name and any names in `MEAT_MODE_ALLOWED_HOSTS`.
+Then set `MEAT_MODE_PUBLIC_URL` to that address and restart the hub. The hub refuses to start without an `https://` public address (plain `http://` is accepted for localhost only), and it answers only to `localhost`, `127.0.0.1`, `[::1]`, the public address's name and any names in `MEAT_MODE_ALLOWED_HOSTS`.
 
 Certificates are recorded in public Certificate Transparency logs, so the `ts.net` name is publicly visible, though only your tailnet can reach it. Keep anything private out of the Service and host names.
 
@@ -292,7 +292,7 @@ MEAT_MODE_PUSH_ALLOW=ntfy.example.com,192.0.2.0/24
 ```
 
 - A host name admits exactly that host, whatever it resolves to; `ntfy.example.com` does not admit `push.ntfy.example.com`. Give the name only: no `https://`, port or path.
-- A CIDR, such as `192.0.2.0/24` or `2001:db8::/32`, admits any push server whose address is inside it. A bare address admits that one address.
+- A CIDR, such as `192.0.2.0/24` or `2001:db8::/48`, admits any push server whose address is inside it; an entry wider than /16 for IPv4 or /48 for IPv6 stops the hub at start. A bare address admits that one address.
 - An entry that is neither stops the hub at start with a message naming it.
 
 The push server still needs `https://`. Pushes follow no redirects and time out after 10 seconds. Settings lists each browser and phone that gets reminders and can revoke any of them.

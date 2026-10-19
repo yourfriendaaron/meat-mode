@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -29,6 +30,9 @@ type Hub struct {
 	Allowed netguard.Set
 	// Resolver looks up the hub's host name; nil is the system resolver.
 	Resolver Resolver
+
+	once sync.Once
+	http *http.Client // built on first use, so connections are reused
 }
 
 // Resolver looks up the addresses of a host name.
@@ -50,8 +54,14 @@ func (e *HTTPError) Error() string {
 }
 
 // client never follows redirects: one would carry the bearer token to
-// wherever the Location points.
+// wherever the Location points. It is built once per Hub, so the bridge's
+// polls reuse one connection.
 func (h *Hub) client() *http.Client {
+	h.once.Do(func() { h.http = h.newClient() })
+	return h.http
+}
+
+func (h *Hub) newClient() *http.Client {
 	c := &http.Client{Timeout: 30 * time.Second}
 	if h.HTTP != nil {
 		cp := *h.HTTP
@@ -62,6 +72,7 @@ func (h *Hub) client() *http.Client {
 		DialContext:           h.dial,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
 		ForceAttemptHTTP2:     true,
 	}
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }

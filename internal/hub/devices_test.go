@@ -117,6 +117,10 @@ func TestDeviceTokenOpensOnlyItsRoutes(t *testing.T) {
 	snooze := `{"id":"0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a72","kind":"snooze","key":"` + key + `","payload":{"until":"2030-01-01T10:00:00Z","previous":null}}`
 	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", snooze, "mmd_good", ""), http.StatusCreated)
 
+	// An ask with a note is refused: Retry sends none.
+	withNote := `{"id":"0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a73","kind":"ask","key":"` + key + `","payload":{"text":"Delete the repo"}}`
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", withNote, "mmd_good", ""), http.StatusUnauthorized)
+
 	// Any other kind is refused, and nothing is stored for it.
 	for i, kind := range []string{api.KindNote, api.KindDismiss, api.KindReopen, api.KindAdd} {
 		id := fmt.Sprintf("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a8%d", i)

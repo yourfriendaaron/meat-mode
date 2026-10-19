@@ -17,6 +17,8 @@ export const HELLO_WAIT_MS = 2000;
 /** How often, and for how long, the page asks `push-status` for a confirmation. */
 export const CONFIRM_POLL_MS = 1000;
 export const CONFIRM_WAIT_MS = 30_000;
+/** How long `push-on` has to answer: it waits for the user at Android's notification permission prompt and the distributor picker. */
+export const PUSH_ON_WAIT_MS = 180_000;
 
 let nextId = 0;
 const waiting = new Map<string, { ok: (v: any) => void; fail: (e: Error) => void }>();
@@ -117,7 +119,7 @@ async function turnOnInApp(force = false): Promise<string> {
   if (stop) return stop;
   if (before?.state === "on" && !force) return "Reminders are on.";
   const { publicKey } = await api.pushKey();
-  const reg = await appCall<AppPushSubscription>("push-on", { vapidKey: publicKey });
+  const reg = await appCall<AppPushSubscription>("push-on", { vapidKey: publicKey }, PUSH_ON_WAIT_MS);
   await api.pushSubscribe(reg.subscription, "app", reg.name);
   for (let waited = 0; waited <= CONFIRM_WAIT_MS; waited += CONFIRM_POLL_MS) {
     const st = await refreshAppStatus();
@@ -179,11 +181,15 @@ export async function subscribePush(renew = false): Promise<string> {
   return json.endpoint ?? "";
 }
 
-/** Asks for permission and subscribes. Resolves to the message to show. Call it from a tap. */
-export async function turnOnReminders(): Promise<string> {
+/**
+ * Asks for permission and subscribes. Resolves to the message to show. Call it
+ * from a tap. With force, the app registers again even though it already
+ * reports reminders on; a browser always subscribes again when asked.
+ */
+export async function turnOnReminders(force = false): Promise<string> {
   if (inApp) {
     try {
-      return await turnOnInApp();
+      return await turnOnInApp(force);
     } catch (e) {
       return `Could not turn on reminders: ${(e as Error).message}`;
     }

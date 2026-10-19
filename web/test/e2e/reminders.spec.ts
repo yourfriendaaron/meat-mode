@@ -107,14 +107,17 @@ test.describe("desktop", () => {
     expect(hub.pushSubscriptions).toBe(1);
   });
 
-  test("a device with no subscription is told so", async ({ page, hub }) => {
+  test("a hub that no longer knows this device's subscription gets a new one", async ({ page, hub }) => {
     await fakeBrowserPush(page, "granted");
     await openWizardAt(page, hub, "reminders", "device");
     const w = wizard(page);
     await expect(w.region).toContainText("Reminders are on for this device.");
-    hub.pushSubscriptions = 0; // the hub lost it, as after a log out
+    hub.pushSubscriptions = 0; // the hub lost it, as after revoking this browser in Settings
     await w.region.getByRole("button", { name: "Send a test reminder" }).click();
-    await expect(w.region.getByRole("status")).toContainText("no reminder subscription");
+    await expect(w.region.getByRole("status")).toContainText("A test reminder is on its way");
+    expect(hub.pushSubscriptions).toBe(1);
+    expect(hub.testedEndpoint).toBe("https://push.example.com/send/1");
+    expect(hub.reminderTests).toBe(2);
   });
 
   test("a subscription the push service dropped is renewed", async ({ page, hub }) => {

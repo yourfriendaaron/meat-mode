@@ -29,8 +29,8 @@ async function sendTest(): Promise<string> {
   try {
     // The hub sends the test to this device's own subscription only.
     let r = await call<ReminderTest>("POST", "/api/reminders/test", { endpoint: await pushEndpoint() });
-    if (r.push === "expired") {
-      // The hub dropped the stale subscription; make a new one and try once more.
+    if (r.push === "expired" || r.push === "none") {
+      // The hub dropped the stale subscription, or this device has none; make one and try once more.
       const endpoint = await subscribePush(true);
       r = await call<ReminderTest>("POST", "/api/reminders/test", { endpoint });
     }

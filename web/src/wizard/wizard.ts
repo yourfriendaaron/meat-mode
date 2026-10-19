@@ -183,8 +183,11 @@ export async function wizardAct(act: string, el: HTMLElement, ctx: AppContext): 
         break;
       case "wizard-close":
       case "wizard-later":
-        if (progress) await dismiss(ctx);
-        else {
+        if (progress) {
+          // The run ends here, so the step it is on drops what must not outlive it.
+          step?.leave?.();
+          await dismiss(ctx);
+        } else {
           setDeviceRecord("dismissed");
           offerDevice = false;
           ctx.render();

@@ -117,6 +117,16 @@ test.describe("reminders", () => {
     await axe(page);
   });
 
+  test("in the app, Register this phone again sends the app to register once more", async ({ page, hub }) => {
+    await fakeApp(page, { states: ["on"] });
+    await openSettings(page);
+    await expect(page.getByText("Reminders are on for this phone.")).toBeVisible();
+    await page.getByRole("button", { name: "Register this phone again" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Reminders are on." })).toBeVisible({ timeout: 10_000 });
+    expect(await sentTypes(page)).toContain("push-on");
+    expect(hub.pushPosts).toEqual([{ endpoint: "https://up.example.com/abc", keys: { p256dh: "BP", auth: "AU" }, kind: "app", name: "Test phone" }]);
+  });
+
   test("in the app, blocked notifications are explained and nothing is registered", async ({ page, hub }) => {
     await fakeApp(page, { states: ["blocked"] });
     await openSettings(page);

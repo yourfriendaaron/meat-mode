@@ -252,6 +252,11 @@ func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "a device token posts only ask, done and snooze")
 		return
 	}
+	if deviceOf(r) != "" && na.Kind == api.KindAsk && strings.TrimSpace(na.Payload.Text) != "" {
+		// A notification's Retry wakes the agent; words for it come from the app.
+		writeError(w, http.StatusUnauthorized, "a device token asks without a note")
+		return
+	}
 	user, err := s.userName()
 	if err != nil {
 		s.storeError(w, r, err)

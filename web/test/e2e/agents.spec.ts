@@ -148,6 +148,7 @@ test.describe("desktop", () => {
     await section.getByRole("button", { name: "Add machine" }).click();
     await expect(page.locator("#pair-cmd")).toContainText("test-token");
     await expect(section.getByLabel("Password")).toHaveCount(0);
+    await expect(section.getByLabel("Machine name")).toHaveValue("");
   });
 
   test("No skips the agent steps", async ({ page, hub }) => {

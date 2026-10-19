@@ -462,6 +462,29 @@ func TestAppConfirmation(t *testing.T) {
 		t.Fatal("renewal lost the token")
 	}
 
+	// The renewal pushed a fresh code too, so an app that lost its token
+	// while its endpoint lived on gets a new one; the old token stops.
+	pushes := a.pushes("/up1")
+	var rc struct {
+		Confirm struct{ Device, Code string }
+	}
+	if err := json.Unmarshal(s.decrypt(t, pushes[len(pushes)-1].body), &rc); err != nil || rc.Confirm.Device != id || rc.Confirm.Code == c.Confirm.Code {
+		t.Fatalf("renewal confirmation %+v, %v", rc, err)
+	}
+	if _, err := r.ConfirmDevice(ctx, id, strings.Repeat("a", maxCode+1)); !errors.Is(err, store.ErrForbidden) {
+		t.Fatalf("overlong code: %v, want forbidden", err)
+	}
+	newToken, err := r.ConfirmDevice(ctx, id, rc.Confirm.Code)
+	if err != nil || newToken == token {
+		t.Fatalf("confirm after renewal: %q, %v", newToken, err)
+	}
+	if _, _, err := r.DeviceByToken(ctx, token); !errors.Is(err, store.ErrUnauthorized) {
+		t.Fatalf("old token after a new confirmation: %v", err)
+	}
+	if got, _, _ := r.DeviceByToken(ctx, newToken); got != id {
+		t.Fatal("new token does not open the device")
+	}
+
 	// A code not used within 10 minutes is dropped with its registration.
 	late := newAppSub(t, a.endpoint("/up2"))
 	lateID, _, err := r.RegisterApp(ctx, "", late.PushSubscription)
@@ -772,6 +795,16 @@ func TestAppDevicesExpireWithoutRenewal(t *testing.T) {
 	r, _ := newTestRegistry(t)
 	a := newAppServer(t, r)
 	_, token := a.confirmed(newAppSub(t, a.endpoint("/up")), "")
+	// A device-token call renews the device, as a tap on a notification
+	// button does.
+	a.now = a.now.Add(SubscriptionTTL - time.Hour)
+	if _, _, err := r.DeviceByToken(context.Background(), token); err != nil {
+		t.Fatalf("token an hour before the end: %v", err)
+	}
+	a.now = a.now.Add(SubscriptionTTL - time.Hour)
+	if _, _, err := r.DeviceByToken(context.Background(), token); err != nil {
+		t.Fatalf("token renewed by its last call: %v", err)
+	}
 	a.now = a.now.Add(SubscriptionTTL)
 	if _, _, err := r.DeviceByToken(context.Background(), token); !errors.Is(err, store.ErrUnauthorized) {
 		t.Fatalf("token of a device not renewed for 60 days: %v", err)

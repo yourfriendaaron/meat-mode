@@ -133,7 +133,13 @@ func (c Config) PushAllowList() (hosts []string, cidrs []netip.Prefix, err error
 		case strings.Contains(e, "/"):
 			p, err := safedial.ParseAllowedPrefix(e)
 			if err != nil {
-				return nil, nil, fmt.Errorf("MEAT_MODE_PUSH_ALLOW entry %q is not a CIDR such as 192.0.2.0/24 or 2001:db8::/32", e)
+				return nil, nil, fmt.Errorf("MEAT_MODE_PUSH_ALLOW entry %q is not a CIDR such as 192.0.2.0/24 or 2001:db8::/48", e)
+			}
+			// As for MEAT_MODE_TRUSTED_NETWORKS: one entry cannot switch the
+			// endpoint rule off.
+			if p.Addr().Is4() && p.Bits() < netguard.MinBits4 || !p.Addr().Is4() && p.Bits() < netguard.MinBits6 {
+				return nil, nil, fmt.Errorf("MEAT_MODE_PUSH_ALLOW entry %q is wider than /%d for IPv4 or /%d for IPv6; name only your push server's network",
+					e, netguard.MinBits4, netguard.MinBits6)
 			}
 			cidrs = append(cidrs, p.Masked())
 		default:
