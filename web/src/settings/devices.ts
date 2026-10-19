@@ -1,18 +1,17 @@
 // The Devices section: every place reminders go, with Revoke (docs/api.md,
 // Devices).
 
-import type { AppContext } from "../app-context.ts";
-import { api } from "../api.ts";
+import { api, errorText } from "../api.ts";
 import { fmtAgo } from "../dates.ts";
 import { esc } from "../html.ts";
+import { remote } from "../remote.ts";
 import type { Device } from "../types.ts";
 import { registerSection } from "./registry.ts";
 
+/** The hub's list of devices. */
+const devices = remote(() => api.devices());
+
 const dev = {
-  /** The hub's list, or null until loaded. */
-  list: null as Device[] | null,
-  loadError: "",
-  loading: false,
   /** The device being asked about before it is revoked. */
   revoking: null as string | null,
   busy: false,
@@ -20,8 +19,7 @@ const dev = {
 
 /** Drops the loaded list so the next time Settings draws it, it is fetched again. */
 export function forgetDevices(): void {
-  dev.list = null;
-  dev.loadError = "";
+  devices.forget();
   dev.revoking = null;
 }
 
@@ -43,35 +41,23 @@ export function revokeEffect(kind: Device["kind"]): string {
     : "Reminders stop for that browser until it opens Meat Mode again with notifications allowed, when it signs up anew. To stop it for good, log it out or block its notifications. If it is this browser, that happens the next time you open the app.";
 }
 
-async function load(ctx: AppContext) {
-  if (dev.loading) return;
-  dev.loading = true;
-  try {
-    dev.list = await api.devices();
-    dev.loadError = "";
-  } catch (e) {
-    dev.loadError = (e as Error).message;
-  }
-  dev.loading = false;
-  ctx.render();
-}
-
 registerSection({
   id: "devices",
   title: "Devices",
   order: 22,
+  leave: forgetDevices,
   render(ctx) {
-    if (dev.list === null) {
-      if (dev.loadError) {
-        return `<p class="row-error">Could not load the devices: ${esc(dev.loadError)}</p><button class="btn" data-act="devices-retry">Try again</button>`;
+    const list = devices.get(ctx.render);
+    if (list === null) {
+      if (devices.error()) {
+        return `<p class="row-error">Could not load the devices: ${esc(devices.error())}</p><button class="btn" data-act="devices-retry">Try again</button>`;
       }
-      void load(ctx);
       return '<p class="muted">Loading</p>';
     }
-    if (!dev.list.length) return '<p class="muted">No device gets reminders yet. Turn them on above.</p>';
+    if (!list.length) return '<p class="muted">No device gets reminders yet. Turn them on above.</p>';
     const n = ctx.now();
     const busy = dev.busy ? " disabled" : "";
-    const rows = dev.list
+    const rows = list
       .map((d) => {
         const asking = dev.revoking === d.id;
         const actions = asking
@@ -86,8 +72,7 @@ registerSection({
   async act(act, el, ctx) {
     switch (act) {
       case "devices-retry":
-        dev.loadError = "";
-        await load(ctx);
+        await devices.reload(ctx.render);
         break;
       case "device-revoke":
         dev.revoking = el.dataset.id ?? null;
@@ -105,10 +90,10 @@ registerSection({
         try {
           await api.revokeDevice(id);
           dev.revoking = null;
-          dev.list = (dev.list ?? []).filter((d) => d.id !== id);
+          devices.set((devices.peek() ?? []).filter((d) => d.id !== id));
           ctx.toast("Revoked");
         } catch (e) {
-          ctx.toast(`Could not revoke the device: ${(e as Error).message}`);
+          ctx.toast(`Could not revoke the device: ${errorText(e)}`);
         }
         dev.busy = false;
         ctx.render();

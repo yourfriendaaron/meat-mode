@@ -2,7 +2,7 @@
 // browser that is Web Push; in the Android app it is the app's message bridge
 // (docs/api.md, Android app).
 
-import { api } from "./api.ts";
+import { api, errorText } from "./api.ts";
 import { browserName } from "./device.ts";
 import type { AppPushState, AppPushStatus, AppPushSubscription } from "./types.ts";
 
@@ -191,7 +191,7 @@ export async function turnOnReminders(force = false): Promise<string> {
     try {
       return await turnOnInApp(force);
     } catch (e) {
-      return `Could not turn on reminders: ${(e as Error).message}`;
+      return `Could not turn on reminders: ${errorText(e)}`;
     }
   }
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || typeof Notification === "undefined") {
@@ -203,6 +203,6 @@ export async function turnOnReminders(force = false): Promise<string> {
     await subscribePush();
     return "Reminders are on.";
   } catch (e) {
-    return `Could not turn on reminders: ${(e as Error).message}`;
+    return `Could not turn on reminders: ${errorText(e)}`;
   }
 }

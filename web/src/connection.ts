@@ -4,6 +4,7 @@
 import type { AppContext } from "./app-context.ts";
 import { call } from "./api.ts";
 import { esc } from "./html.ts";
+import { remote } from "./remote.ts";
 import type { SetupStatus } from "./types.ts";
 
 export interface Check {
@@ -191,17 +192,35 @@ export function evaluate(p: Probe): Check[] {
 
 // ---------- running the check ----------
 
-let result: Check[] | null = null;
-let failure = "";
-let running = false;
-let checkedAt = 0;
-/** The latest GET /api/setup/status, from a check or from Settings, and when it came. */
-let latest: SetupStatus | null = null;
-let latestAt = 0;
-let loading = false;
+/** The latest GET /api/setup/status, from a check or from Settings. */
+const hubStatus = remote(() => call<SetupStatus>("GET", "/api/setup/status"), { maxAge: 60_000 });
+
+/** One run of every check. A failed run counts as recent too, so its error stays up until the user asks again. */
+const checks = remote(
+  async () => {
+    const sent = Date.now();
+    const liveProbe = probeLive();
+    const status = await call<SetupStatus>("GET", "/api/setup/status");
+    hubStatus.set(status);
+    const received = Date.now();
+    const live = await liveProbe;
+    // The hub stamped its time somewhere in the status request, so use the middle of it.
+    const deviceMs = (sent + received) / 2;
+    return evaluate({
+      status,
+      origin: location.origin,
+      host: location.host,
+      secure: window.isSecureContext,
+      live,
+      deviceMs,
+    });
+  },
+  { maxAge: 60_000 },
+);
 
 /** Whether the last check ran and found no failure. */
 export function connectionOK(): boolean {
+  const result = checks.peek();
   return result !== null && !result.some((c) => c.state === "fail");
 }
 
@@ -244,52 +263,26 @@ function probeLive(): Promise<Probe["live"]> {
 
 /** Runs every check, drawing the app before and after. */
 export async function runChecks(ctx: AppContext): Promise<void> {
-  if (running) return;
-  running = true;
-  result = null;
-  failure = "";
+  if (checks.loading()) return;
+  checks.forget();
+  const run = checks.reload(ctx.render);
   ctx.render();
-  try {
-    const sent = Date.now();
-    const liveProbe = probeLive();
-    const status = await call<SetupStatus>("GET", "/api/setup/status");
-    latest = status;
-    latestAt = Date.now();
-    const received = Date.now();
-    const live = await liveProbe;
-    // The hub stamped its time somewhere in the status request, so use the middle of it.
-    const deviceMs = (sent + received) / 2;
-    result = evaluate({
-      status,
-      origin: location.origin,
-      host: location.host,
-      secure: window.isSecureContext,
-      live,
-      deviceMs,
-    });
-  } catch (e) {
-    failure = `Could not reach the hub: ${(e as Error).message}`;
-  } finally {
-    // A failed run counts as recent too, so the error stays up until the user asks again.
-    checkedAt = Date.now();
-    running = false;
-    ctx.render();
-  }
+  await run;
 }
 
 /** Starts a check when none has run lately; for a step that opens on one. */
 export function checkIfStale(ctx: AppContext): void {
-  if (typeof document === "undefined" || running) return;
-  if (result === null && !failure) void runChecks(ctx);
-  else if (Date.now() - checkedAt > 60_000) void runChecks(ctx);
+  if (typeof document === "undefined" || !checks.stale()) return;
+  void runChecks(ctx);
 }
 
 const STATE = { pass: "Passed", fail: "Problem", info: "Optional" } as const;
 
 /** The results, or what is going on in their place. */
 export function checksHTML(): string {
-  if (running) return '<p class="muted" role="status">Checking&hellip;</p>';
-  if (failure) return `<p class="conn-error" role="alert">${esc(failure)}</p>`;
+  if (checks.loading()) return '<p class="muted" role="status">Checking&hellip;</p>';
+  if (checks.error()) return `<p class="conn-error" role="alert">${esc(`Could not reach the hub: ${checks.error()}`)}</p>`;
+  const result = checks.peek();
   if (!result) return '<p class="muted">Not checked yet.</p>';
   return `<ul class="conn-list" aria-label="Connection checks">${result
     .map(
@@ -300,7 +293,7 @@ export function checksHTML(): string {
 }
 
 export function checkButtonHTML(): string {
-  return `<div class="btn-row"><button class="btn" data-act="connection-run"${running ? " disabled" : ""}>${result || failure ? "Check again" : "Check connection"}</button></div>`;
+  return `<div class="btn-row"><button class="btn" data-act="connection-run"${checks.loading() ? " disabled" : ""}>${checks.peek() || checks.error() ? "Check again" : "Check connection"}</button></div>`;
 }
 
 /** The click handler both the step and the Settings section use. */
@@ -315,26 +308,14 @@ export function connectionAct(act: string, ctx: AppContext): void {
  * the whole check, so the public DNS warning shows when Settings opens.
  */
 export function loadStatusIfStale(ctx: AppContext): void {
-  if (typeof document === "undefined" || loading || running) return;
-  if (latest && Date.now() - latestAt < 60_000) return;
-  loading = true;
-  call<SetupStatus>("GET", "/api/setup/status").then(
-    (s) => {
-      latest = s;
-      latestAt = Date.now();
-      loading = false;
-      ctx.render();
-    },
-    () => {
-      // The check shows the error when the user runs it.
-      latestAt = Date.now();
-      loading = false;
-    },
-  );
+  if (typeof document === "undefined" || checks.loading()) return;
+  // A failed load is not shown here: the check shows the error when the user runs it.
+  hubStatus.get(ctx.render);
 }
 
 /** The warning Settings shows while public DNS gives the hub's name a public address, or "". */
 export function publicDnsWarningHTML(): string {
+  const latest = hubStatus.peek();
   const w = latest && publicDnsWarning(latest);
   if (!w) return "";
   return `<div class="conn-warn" role="alert"><strong>The internet can find this hub</strong><p>${esc(w.detail)}</p><p class="conn-fix">${esc(w.fix)}</p></div>`;

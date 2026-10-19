@@ -1,7 +1,8 @@
 // Agents, part three: text for the agents' instruction file, saying how to
 // raise a task for the user and how to add to their personal list.
 
-import { agentMachines, copyFrom, instructionsHTML, pickMachine } from "../../agents.ts";
+import { agentMachines, instructionsHTML, pickMachine } from "../../agents.ts";
+import { copyText } from "../../clipboard.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
 /** The machine chosen when there are several. */
@@ -24,7 +25,7 @@ ${instructionsHTML(user, machines, machine, "wiz-")}`;
   },
   async act(act, el, ctx) {
     if (act !== "agents-copy") return;
-    await copyFrom(el.dataset.copy ?? "");
+    await copyText(el.dataset.copy ?? "");
     ctx.toast("Copied");
   },
   change(el, ctx) {

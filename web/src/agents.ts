@@ -3,7 +3,7 @@
 // repo, adding a machine, the commands that install and pair the bridge, and
 // the text that tells a machine's agents how to raise tasks.
 
-import { ApiError } from "./api.ts";
+import { ApiError, errorText } from "./api.ts";
 import { esc } from "./html.ts";
 import { HUB_BRIDGE, repoLabel } from "./model.ts";
 import type { Bridge, Repo } from "./types.ts";
@@ -87,18 +87,8 @@ export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync
 
 /** What the add-machine form shows after the hub refused it, and whether it now asks for the password. */
 export function addMachineError(e: unknown, sentPassword: boolean): { error: string; reauth: boolean } {
-  if (!(e instanceof ApiError)) return { error: (e as Error).message, reauth: false };
-  if (e.status === 403 && e.reauth) return { error: sentPassword ? "Wrong password." : "", reauth: true };
-  if (e.status === 429) return { error: `Too many tries. Wait ${waitText(e.retryAfter)} and try again.`, reauth: true };
-  return { error: e.message, reauth: false };
-}
-
-/** "a minute", or the seconds or minutes a Retry-After asked for. */
-export function waitText(seconds: number): string {
-  if (seconds <= 0 || seconds === 60) return "a minute";
-  if (seconds < 60) return seconds === 1 ? "1 second" : `${seconds} seconds`;
-  const m = Math.ceil(seconds / 60);
-  return m === 1 ? "a minute" : `${m} minutes`;
+  const reauth = e instanceof ApiError && ((e.status === 403 && e.reauth) || e.status === 429);
+  return { error: errorText(e, { reauth: sentPassword ? "Wrong password." : "" }), reauth };
 }
 
 /**
@@ -147,22 +137,6 @@ edit takes --title, --description, --due or --clear-due, --every (with --from-do
 
 Keep titles short and say what to do. Put the context in the description or the note.
 `;
-}
-
-/** Copies the text of the element with that id, falling back to selecting it. */
-export async function copyFrom(id: string): Promise<void> {
-  const el = document.getElementById(id);
-  if (!el) return;
-  try {
-    await navigator.clipboard.writeText(el.textContent ?? "");
-  } catch {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const sel = getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    document.execCommand("copy");
-  }
 }
 
 /**

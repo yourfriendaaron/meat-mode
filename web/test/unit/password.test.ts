@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { ApiError } from "../../src/api.ts";
 import { changeErrorText, checkPassword, claimErrorText } from "../../src/password.ts";
 import { findStep } from "../../src/wizard/registry.ts";
 import type { AppContext } from "../../src/app-context.ts";
@@ -15,12 +16,13 @@ test("a new password needs 8 characters, counted as the hub counts them, typed t
 });
 
 test("refused claims and changes say what to do in plain words", () => {
-  assert.equal(claimErrorText(403, "x"), "That setup code is wrong, expired or already used. Restart the hub for a new one.");
-  assert.equal(claimErrorText(429, "x"), "Too many wrong codes. Wait a minute and try again.");
-  assert.equal(claimErrorText(409, "this hub already has a password"), "This hub already has a password.");
-  assert.equal(changeErrorText(403, "wrong password"), "The current password is wrong.");
-  assert.equal(changeErrorText(429, "x"), "Too many tries. Wait a minute and try again.");
-  assert.equal(changeErrorText(400, "the password must be at least 8 characters"), "The password must be at least 8 characters.");
+  assert.equal(claimErrorText(new ApiError(403, "x")), "That setup code is wrong, expired or already used. Restart the hub for a new one.");
+  assert.equal(claimErrorText(new ApiError(429, "x", false, 600)), "Too many wrong codes. Wait 10 minutes and try again.");
+  assert.equal(claimErrorText(new ApiError(409, "this hub already has a password")), "This hub already has a password.");
+  assert.equal(changeErrorText(new ApiError(403, "wrong password")), "The current password is wrong.");
+  assert.equal(changeErrorText(new ApiError(429, "x")), "Too many tries. Wait a minute and try again.");
+  assert.equal(changeErrorText(new ApiError(400, "the password must be at least 8 characters")), "The password must be at least 8 characters.");
+  assert.equal(changeErrorText(new TypeError("failed to fetch")), "Failed to fetch.");
 });
 
 test("the Secure step counts as set up with any password, and with none only never", () => {

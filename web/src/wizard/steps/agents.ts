@@ -2,7 +2,8 @@
 // installing and pairing its bridge, and waiting for its first hello.
 
 import type { AppContext } from "../../app-context.ts";
-import { addMachineError, agentMachines, copyFrom, installCommand, pairCommand, PLATFORMS, reauthFieldHTML, type Platform } from "../../agents.ts";
+import { addMachineError, agentMachines, installCommand, pairCommand, PLATFORMS, reauthFieldHTML, type Platform } from "../../agents.ts";
+import { copyText } from "../../clipboard.ts";
 import { api } from "../../api.ts";
 import { esc } from "../../html.ts";
 import type { NewBridgeReply } from "../../types.ts";
@@ -132,7 +133,7 @@ registerStep({
       ctx.render();
       document.getElementById("agents-name")?.focus();
     } else if (act === "agents-copy") {
-      await copyFrom(el.dataset.copy ?? "");
+      await copyText(el.dataset.copy ?? "");
       ctx.toast("Copied");
     }
   },

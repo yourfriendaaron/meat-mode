@@ -1,4 +1,4 @@
-import { call } from "../../api.ts";
+import { call, errorText } from "../../api.ts";
 import { isIOS, pushSupport } from "../../device.ts";
 import { esc } from "../../html.ts";
 import { appPushStatus, appStateMessage, inAndroidApp, pushEndpoint, remindersOn, subscribePush, turnOnReminders } from "../../push.ts";
@@ -36,7 +36,7 @@ async function sendTest(): Promise<string> {
     }
     return testMessage(r);
   } catch (e) {
-    return `Could not send a test reminder: ${(e as Error).message}`;
+    return `Could not send a test reminder: ${errorText(e)}`;
   }
 }
 

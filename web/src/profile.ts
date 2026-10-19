@@ -2,7 +2,7 @@
 // step and the Settings section.
 
 import type { AppContext } from "./app-context.ts";
-import { call } from "./api.ts";
+import { call, errorText } from "./api.ts";
 import { esc } from "./html.ts";
 import type { SettingsUpdate } from "./types.ts";
 
@@ -101,7 +101,7 @@ export async function saveProfile(form: HTMLFormElement, ctx: AppContext): Promi
   try {
     await call("PUT", "/api/settings", change);
   } catch (e) {
-    show((e as Error).message);
+    show(errorText(e));
     return false;
   }
   await ctx.refresh();

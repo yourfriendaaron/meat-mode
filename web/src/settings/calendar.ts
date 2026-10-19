@@ -2,16 +2,17 @@
 // apps subscribe to, shown once when made.
 
 import type { AppContext } from "../app-context.ts";
-import { call } from "../api.ts";
+import { call, errorText } from "../api.ts";
+import { copyText } from "../clipboard.ts";
 import { esc } from "../html.ts";
+import { remote } from "../remote.ts";
 import type { CalendarLink, CalendarStatus } from "../types.ts";
 import { registerSection } from "./registry.ts";
 
+/** Whether the feed is on. */
+const feedOn = remote(async () => (await call<CalendarStatus>("GET", "/api/calendar")).on);
+
 const cal = {
-  /** Whether the feed is on, or null until loaded. */
-  on: null as boolean | null,
-  loadError: "",
-  loading: false,
   /** The link just made, shown until Done or leaving Settings. */
   link: "",
   copied: false,
@@ -21,23 +22,10 @@ const cal = {
 };
 
 /** Forgets the link on screen; it is shown once. */
-export function forgetCalendarLink(): void {
+function forgetCalendarLink(): void {
   cal.link = "";
   cal.copied = false;
   cal.confirmNew = false;
-}
-
-async function load(ctx: AppContext) {
-  if (cal.loading) return;
-  cal.loading = true;
-  try {
-    cal.on = (await call<CalendarStatus>("GET", "/api/calendar")).on;
-    cal.loadError = "";
-  } catch (e) {
-    cal.loadError = (e as Error).message;
-  }
-  cal.loading = false;
-  ctx.render();
 }
 
 /** Runs a change to the feed, then draws the section and puts focus on `focus`. */
@@ -47,7 +35,7 @@ async function change(ctx: AppContext, fn: () => Promise<void>, focus: string) {
   try {
     await fn();
   } catch (e) {
-    ctx.toast(`Could not change the calendar link: ${(e as Error).message}`);
+    ctx.toast(`Could not change the calendar link: ${errorText(e)}`);
   }
   cal.busy = false;
   ctx.render();
@@ -61,25 +49,15 @@ function newLink(ctx: AppContext) {
       cal.confirmNew = false;
       cal.link = (await call<CalendarLink>("POST", "/api/calendar", {})).url;
       cal.copied = false;
-      cal.on = true;
+      feedOn.set(true);
     },
     "cal-copy",
   );
 }
 
 async function copy(ctx: AppContext) {
-  const el = document.getElementById("cal-url");
-  if (!el) return;
-  try {
-    await navigator.clipboard.writeText(cal.link);
-  } catch {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const sel = getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    document.execCommand("copy");
-  }
+  if (!document.getElementById("cal-url")) return;
+  await copyText("cal-url");
   cal.copied = true;
   ctx.render();
 }
@@ -91,19 +69,20 @@ registerSection({
   id: "calendar",
   title: "Calendar",
   order: 25,
+  leave: forgetCalendarLink,
   render(ctx) {
-    if (cal.on === null) {
-      if (cal.loadError) {
-        return `<p class="row-error">Could not load the calendar link: ${esc(cal.loadError)}</p><button class="btn" data-act="calendar-retry">Try again</button>`;
+    const on = feedOn.get(ctx.render);
+    if (on === null) {
+      if (feedOn.error()) {
+        return `<p class="row-error">Could not load the calendar link: ${esc(feedOn.error())}</p><button class="btn" data-act="calendar-retry">Try again</button>`;
       }
-      void load(ctx);
       return '<p class="muted">Loading</p>';
     }
     const busy = cal.busy ? " disabled" : "";
     if (cal.link) {
       return `<div class="token-box" role="status"><p>In your calendar app, add a calendar from a link (often called Subscribe or From URL) and paste this one. It is shown only once.</p><code class="cmd" id="cal-url">${esc(cal.link)}</code><div class="btn-row"><button class="btn" id="cal-copy" data-act="calendar-copy">${cal.copied ? "Copied" : "Copy"}</button><button class="btn" data-act="calendar-done">Done</button></div><p class="muted small">Calendar apps check the link on their own schedule, from every hour to once a day.</p></div>${REACH}`;
     }
-    if (!cal.on) {
+    if (!on) {
       return `<p>Show every open to-do with a due date, from every list, in a calendar app.</p><button class="btn btn-primary" id="cal-on" data-act="calendar-on"${busy}>Get calendar link</button>${REACH}`;
     }
     const buttons = cal.confirmNew
@@ -114,8 +93,7 @@ registerSection({
   async act(act, _el, ctx) {
     switch (act) {
       case "calendar-retry":
-        cal.loadError = "";
-        await load(ctx);
+        await feedOn.reload(ctx.render);
         break;
       case "calendar-on":
       case "calendar-new-confirm":
@@ -136,7 +114,7 @@ registerSection({
           ctx,
           async () => {
             await call<void>("DELETE", "/api/calendar");
-            cal.on = false;
+            feedOn.set(false);
           },
           "cal-on",
         );

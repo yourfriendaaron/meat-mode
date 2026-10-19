@@ -1,5 +1,6 @@
 // The login screen's pure parts: whether to show it, and what a failed attempt says.
 
+import { errorText } from "./api.ts";
 import type { Session } from "./types.ts";
 
 /**
@@ -18,8 +19,6 @@ export function needsLogin(s: Session): boolean {
 }
 
 /** The message under the password field after a login the hub refused. */
-export function loginErrorText(status: number, message: string): string {
-  if (status === 401) return "Wrong password.";
-  if (status === 429) return "Too many tries. Wait a minute and try again.";
-  return `Could not log in: ${message}`;
+export function loginErrorText(e: unknown): string {
+  return errorText(e, { unauthorized: "Wrong password.", other: (m) => `Could not log in: ${m}` });
 }

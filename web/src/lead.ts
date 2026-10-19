@@ -3,8 +3,9 @@
 // form names as its default, and the choices both offer.
 
 import type { AppContext } from "./app-context.ts";
-import { call } from "./api.ts";
+import { call, errorText } from "./api.ts";
 import { esc } from "./html.ts";
+import { remote } from "./remote.ts";
 import type { Settings } from "./types.ts";
 
 /** The lead times the app offers, in minutes; 0 is none. */
@@ -31,45 +32,32 @@ export function leadOptions(current: number | null): number[] {
   return out.sort((a, b) => a - b);
 }
 
-/** The hub's reminderLead, or null until it loaded. */
-let lead: number | null = null;
-let loading: Promise<void> | null = null;
-let failed = "";
+/** The hub's reminderLead. */
+const lead = remote(async () => (await call<Settings>("GET", "/api/settings")).reminderLead ?? 0);
 
+/** The hub's reminderLead, or null until it loaded. */
 export function hubLead(): number | null {
-  return lead;
+  return lead.peek();
 }
 
 /** Why the setting could not load, or "". */
 export function leadError(): string {
-  return failed;
+  return lead.error();
 }
 
-/** Loads the hub's reminderLead once, then draws the app again. */
+/** Loads the hub's reminderLead once, or again with `again`, then draws the app again. */
 export function loadLead(ctx: Pick<AppContext, "render">, again = false): void {
-  if (loading || (lead !== null && !again)) return;
-  loading = call<Settings>("GET", "/api/settings").then(
-    (s) => {
-      lead = s.reminderLead ?? 0;
-      failed = "";
-    },
-    (e: Error) => {
-      failed = e.message;
-    },
-  );
-  void loading.finally(() => {
-    loading = null;
-    ctx.render();
-  });
+  if (again) void lead.reload(ctx.render);
+  else if (lead.peek() === null && !lead.loading()) void lead.reload(ctx.render);
 }
 
 /** Saves a new reminderLead. Resolves false, with a toast saying why, when the hub refuses it. */
 export async function saveLead(minutes: number, ctx: AppContext): Promise<boolean> {
   try {
     const s = await call<Settings>("PUT", "/api/settings", { reminderLead: minutes });
-    lead = s.reminderLead;
+    lead.set(s.reminderLead);
   } catch (e) {
-    ctx.toast(`Could not save: ${(e as Error).message}`);
+    ctx.toast(`Could not save: ${errorText(e)}`);
     ctx.render();
     return false;
   }
@@ -79,8 +67,9 @@ export async function saveLead(minutes: number, ctx: AppContext): Promise<boolea
 
 /** A <select> of lead times. `value` null picks the "Use default" choice, which shows only when `withDefault` is set. */
 export function leadSelect(id: string, value: number | null, withDefault: boolean, extra = ""): string {
+  const hub = lead.peek();
   const def = withDefault
-    ? `<option value=""${value === null ? " selected" : ""}>${esc(lead === null ? "Use default" : `Use default (${leadText(lead) ? `${leadText(lead)} before` : "none"})`)}</option>`
+    ? `<option value=""${value === null ? " selected" : ""}>${esc(hub === null ? "Use default" : `Use default (${leadText(hub) ? `${leadText(hub)} before` : "none"})`)}</option>`
     : "";
   const opts = leadOptions(value)
     .map((m) => `<option value="${m}"${m === value ? " selected" : ""}>${esc(leadLabel(m))}</option>`)

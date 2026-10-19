@@ -2,8 +2,8 @@
 // is a render function returning an HTML string, written only when it changed,
 // and one delegated handler per event type.
 
-import { ApiError, api, newId, setUnauthorizedHandler } from "./api.ts";
-import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type NewBridgeReply, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
+import { ApiError, api, errorText, newId, setUnauthorizedHandler } from "./api.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
   DISMISSED,
@@ -61,20 +61,21 @@ import {
   undoOf,
   type EditDraft,
 } from "./edit.ts";
-import { applyTheme, getTheme, setTheme, themeChoiceChanged, themeChoicesHTML } from "./theme.ts";
+import { applyTheme, getTheme, setTheme } from "./theme.ts";
 import { gate, loginErrorText } from "./login.ts";
 import { claimHTML, claimScreen } from "./password.ts";
 import { esc } from "./html.ts";
-import { addMachineError, agentsOnHTML, copyFrom, machineReposHTML, pairCommand, reauthFieldHTML } from "./agents.ts";
+import { agentsOnHTML } from "./agents.ts";
+import { copyText } from "./clipboard.ts";
+import { ICON } from "./icons.ts";
+import { remote } from "./remote.ts";
 import { agentName, agentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
-import { appPushStatus, appStateMessage, initPush, inAndroidApp, remindersOn, subscribePush, turnOnReminders } from "./push.ts";
+import { initPush, remindersOn, subscribePush } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
 import { trackKeyboard } from "./keyboard.ts";
 import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
-import { sectionsHTML } from "./settings/registry.ts";
-import { forgetCalendarLink } from "./settings/calendar.ts";
-import { forgetDevices } from "./settings/devices.ts";
+import { leaveSettings, sectionsHTML } from "./settings/registry.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
 /** Completed and Deleted show the closed items the hub keeps for 7 days. */
@@ -119,18 +120,8 @@ const S = {
   checkDrafts: new Map<string, string>(),
   snoozeKeys: null as string[] | null,
   syncOpen: false,
-  syncActions: null as Action[] | null,
-  syncError: false,
   qaOpen: false,
   toast: null as Toast | null,
-  newBridge: null as NewBridgeReply | null,
-  bridgeError: "",
-  /** The hub asked for the password again before it adds a machine. */
-  bridgeReauth: false,
-  addingBridge: false,
-  revoking: null as string | null,
-  pushStatus: "",
-  copied: false,
   auth: null as Session | null,
   loginError: "",
   loggingIn: false,
@@ -195,32 +186,6 @@ function setHTML(el: Element, html: string): boolean {
   }
   return true;
 }
-
-// ---------- icons ----------
-
-const ICON = {
-  today: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>',
-  upcoming: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
-  agents: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M2 13v2M22 13v2"/></svg>',
-  all: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
-  moon: '<svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
-  note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-  plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
-  close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
-  gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
-  sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg>',
-  check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
-  trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
-  search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
-  repeat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V10a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
-  select: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12.5l3 3 5-6"/></svg>',
-  edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
-  ban: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
-  undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
-  spark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
-  stop: '<svg class="i-fill" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
-  reply: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v2"/></svg>',
-};
 
 /** The point of light that runs round a working run's edge; CSS draws it. */
 const TRACER = '<span class="run-fx" aria-hidden="true"></span>';
@@ -353,9 +318,9 @@ function renderSync() {
   const pop = $("#syncpop");
   pop.hidden = !S.syncOpen;
   if (!S.syncOpen) return;
-  const list = S.syncActions;
+  const list = syncActions.peek();
   let body: string;
-  if (S.syncError) body = '<p class="muted">Could not load actions.</p>';
+  if (syncActions.error()) body = '<p class="muted">Could not load actions.</p>';
   else if (!list) body = '<p class="muted">Loading</p>';
   else if (!list.length) body = '<p class="muted">No actions yet.</p>';
   else
@@ -965,77 +930,12 @@ function renderTheme() {
 // ---------- render: settings ----------
 
 function renderSettings() {
-  const n = now();
-  const bridges = S.state?.bridges ?? [];
-  const perm = typeof Notification === "undefined" ? "unsupported" : Notification.permission;
-  const appPush = appPushStatus();
-  const pushHTML = inAndroidApp()
-    ? appPush?.state === "on"
-      ? '<p>Reminders are on for this phone.</p><button class="btn" data-act="push">Register this phone again</button>'
-      : appStateMessage(appPush?.state)
-        ? `<p class="muted">${esc(appStateMessage(appPush?.state))}</p><button class="btn" data-act="push">Try again</button>`
-        : '<button class="btn btn-primary" data-act="push">Turn on reminders</button>'
-    : perm === "unsupported"
-      ? '<p class="muted">This browser does not support reminders.</p>'
-      : perm === "granted"
-        ? '<p>Reminders are on for this device.</p><button class="btn" data-act="push">Send subscription again</button>'
-        : perm === "denied"
-          ? '<p class="muted">Notifications are blocked for this site in the browser settings.</p>'
-          : '<button class="btn btn-primary" data-act="push">Turn on reminders</button>';
-  const nb = S.newBridge;
-  const cmd = nb ? pairCommand(location.origin, nb.token) : "";
-  const machines = bridges.length
-    ? `<ul class="machines">${bridges
-        .map((b) => {
-          const seen = b.lastSeen ? `Last seen ${fmtAgo(new Date(b.lastSeen), n)}` : "Never seen";
-          const actions =
-            S.revoking === b.name
-              ? `<span class="confirm">Revoke ${esc(b.name)}?</span><button class="btn btn-small btn-danger" data-act="revoke-confirm" data-name="${esc(b.name)}">Revoke</button><button class="btn btn-small" data-act="revoke-cancel">Cancel</button>`
-              : `<button class="btn btn-small" data-act="revoke" data-name="${esc(b.name)}">Revoke</button>`;
-          return `<li class="machine"><div><div class="m-name">${esc(b.name)}</div><div class="muted small">${esc(seen)}${b.version ? ` · ${esc(b.version)}` : ""}</div></div><div class="m-actions">${actions}</div>${machineRepos(b.name)}</li>`;
-        })
-        .join("")}</ul>`
-    : '<p class="muted">No machines yet.</p>';
-  const machinesHTML = `<section class="set-section" aria-labelledby="s-mach"><h2 id="s-mach" tabindex="-1">Agent machines</h2>${machines}
-<form class="add-machine" data-form="bridge"><label for="bridge-name">Machine name</label><div class="pick-row"><input id="bridge-name" name="name" required pattern="[a-z0-9-]{1,32}" placeholder="laptop" autocomplete="off"><button class="btn btn-primary" type="submit"${S.addingBridge ? " disabled" : ""}>Add machine</button></div><p class="muted small">Lowercase letters, digits and dashes.</p>${
-      S.bridgeReauth ? reauthFieldHTML("bridge") : ""
-    }${S.bridgeError ? `<p class="row-error" role="alert">${esc(S.bridgeError)}</p>` : ""}</form>
-${
-  nb
-    ? `<div class="token-box" role="status"><p>Run this on <strong>${esc(nb.name)}</strong>. The token is shown only once.</p><code class="cmd" id="pair-cmd">${esc(cmd)}</code><button class="btn" data-act="copy">${S.copied ? "Copied" : "Copy"}</button><button class="btn" data-act="token-done">Done</button></div>`
-    : ""
-}</section>`;
-  const own: [number, string][] = [
-    [10, `<section class="set-section" aria-labelledby="s-look"><h2 id="s-look" tabindex="-1">Appearance</h2>${themeChoicesHTML("settings-theme")}</section>`],
-    [
-      20,
-      `<section class="set-section" aria-labelledby="s-push"><h2 id="s-push" tabindex="-1">Reminders</h2>${pushHTML}${S.pushStatus ? `<p class="muted small" role="status">${esc(S.pushStatus)}</p>` : ""}</section>`,
-    ],
-    [
-      30,
-      S.auth?.login
-        ? '<section class="set-section" aria-labelledby="s-acct"><h2 id="s-acct" tabindex="-1">Account</h2><p class="muted">Logging out ends this device\'s session and stops its reminders.</p><button class="btn" data-act="logout">Log out</button></section>'
-        : "",
-    ],
-    [40, machinesHTML],
-  ];
   // A public DNS record for the hub's name heads Settings, above every section.
   loadStatusIfStale(ctx);
   const warn = publicDnsWarningHTML();
-  if (warn) own.push([0, warn]);
-  setHTML(
-    $("#settings"),
-    [...own, ...sectionsHTML(ctx)]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, html]) => html)
-      .join("\n"),
-  );
+  const sections = sectionsHTML(ctx);
+  setHTML($("#settings"), warn ? `${warn}\n${sections}` : sections);
   renderTheme();
-}
-
-/** The repos a machine found, each with its sync switch. */
-function machineRepos(bridge: string): string {
-  return machineReposHTML(repos(), bridge);
 }
 
 async function switchSync(bridge: string, repo: string) {
@@ -1120,9 +1020,9 @@ async function refresh(): Promise<void> {
       const server = new Date(st.serverTime).getTime();
       if (!Number.isNaN(server)) S.offset = server - Date.now();
       if (S.selected && !byKey(S.selected)) S.selected = null;
-      if (S.syncOpen) void loadSyncActions();
+      if (S.syncOpen) void syncActions.reload(renderSync);
     } catch (e) {
-      S.loadError = (e as Error).message;
+      S.loadError = errorText(e);
     }
     if (!shellUp) return;
     render();
@@ -1139,16 +1039,8 @@ async function refresh(): Promise<void> {
   }
 }
 
-async function loadSyncActions() {
-  try {
-    S.syncActions = await api.actions(30);
-    S.syncError = false;
-  } catch {
-    S.syncActions = null;
-    S.syncError = true;
-  }
-  renderSync();
-}
+/** The hub's recent actions, which the sync pill's popup lists while it is open. */
+const syncActions = remote(() => api.actions(30));
 
 let es: EventSource | null = null;
 let esRetry = 0;
@@ -1760,13 +1652,7 @@ function setView(v: View) {
     $<HTMLInputElement>("#search-input").value = "";
   }
   if (isPhone()) closeDetail();
-  // The pairing token is shown once; leaving Settings ends that showing.
-  if (v !== "settings") {
-    S.newBridge = null;
-    S.bridgeReauth = false;
-    forgetCalendarLink();
-    forgetDevices();
-  }
+  if (v !== "settings") leaveSettings();
   // A new view sets the New task list afresh: the list being viewed, else the default.
   qaListTouched = false;
   render();
@@ -1991,79 +1877,9 @@ function closeQuickAdd() {
 
 // ---------- push ----------
 
-async function enablePush() {
-  // “Register this phone again”: the app already reports reminders on, so it must be told to register once more.
-  const again = inAndroidApp() && appPushStatus()?.state === "on";
-  S.pushStatus = await turnOnReminders(again);
-  forgetDevices();
-  render();
-}
-
 function resubscribeOnOpen() {
   if (!remindersOn() || !("serviceWorker" in navigator)) return;
   subscribePush().catch(() => {});
-}
-
-// ---------- settings actions ----------
-
-async function addBridge(form: HTMLFormElement) {
-  const input = form.querySelector<HTMLInputElement>("input[name=name]")!;
-  const name = input.value.trim();
-  if (!/^[a-z0-9-]{1,32}$/.test(name)) {
-    S.bridgeError = "Use 1 to 32 lowercase letters, digits or dashes.";
-    render();
-    return;
-  }
-  if (S.addingBridge) return;
-  const pw = form.querySelector<HTMLInputElement>("input[name=password]");
-  const password = S.bridgeReauth && pw ? pw.value : undefined;
-  S.addingBridge = true;
-  try {
-    S.newBridge = await api.addBridge(name, password);
-    S.bridgeError = "";
-    S.bridgeReauth = false;
-    S.copied = false;
-    // The name is used; keep it out of the form, or a second tap would ask for the same name again.
-    input.value = "";
-  } catch (e) {
-    ({ error: S.bridgeError, reauth: S.bridgeReauth } = addMachineError(e, password !== undefined));
-  }
-  S.addingBridge = false;
-  await refresh();
-  if (S.bridgeReauth) {
-    const field = document.querySelector<HTMLInputElement>("#bridge-password");
-    if (field) {
-      field.value = "";
-      field.focus();
-    }
-  }
-}
-
-async function revokeBridge(name: string) {
-  try {
-    await api.revokeBridge(name);
-    if (S.newBridge?.name === name) S.newBridge = null;
-  } catch (e) {
-    showToast(`Could not revoke: ${(e as Error).message}`);
-  }
-  S.revoking = null;
-  await refresh();
-}
-
-async function copyCommand() {
-  const text = $("#pair-cmd").textContent ?? "";
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const range = document.createRange();
-    range.selectNodeContents($("#pair-cmd"));
-    const sel = getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    document.execCommand("copy");
-  }
-  S.copied = true;
-  render();
 }
 
 // ---------- events ----------
@@ -2162,7 +1978,7 @@ function onClick(e: MouseEvent) {
       void switchAgents(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
       break;
     case "agents-on-copy":
-      void copyFrom(btn.dataset.copy ?? "").then(() => showToast("Copied"));
+      void copyText(btn.dataset.copy ?? "").then(() => showToast("Copied"));
       break;
     case "edit":
       openEdit(key);
@@ -2240,11 +2056,10 @@ function onClick(e: MouseEvent) {
       break;
     case "sync":
       S.syncOpen = !S.syncOpen;
-      S.syncActions = null;
-      S.syncError = false;
+      syncActions.forget();
       renderSync();
       if (S.syncOpen) {
-        void loadSyncActions();
+        void syncActions.reload(renderSync);
         $<HTMLElement>("#syncpop [data-act=sync-close]")?.focus();
       }
       break;
@@ -2259,30 +2074,8 @@ function onClick(e: MouseEvent) {
     case "logout":
       void logout();
       break;
-    case "push":
-      void enablePush();
-      break;
-    case "revoke":
-      S.revoking = btn.dataset.name ?? null;
-      render();
-      break;
-    case "revoke-cancel":
-      S.revoking = null;
-      render();
-      break;
-    case "revoke-confirm":
-      void revokeBridge(btn.dataset.name ?? "");
-      break;
     case "sync-switch":
       void switchSync(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
-      break;
-    case "copy":
-      void copyCommand();
-      break;
-    case "token-done":
-      S.newBridge = null;
-      S.copied = false;
-      render();
       break;
     default:
       void extAct(btn, ctx);
@@ -2404,7 +2197,6 @@ function onChange(e: Event) {
     qaListTouched = true;
     updateQaAgent((t as HTMLSelectElement).value);
   }
-  else if (themeChoiceChanged(e.target as HTMLElement, "settings-theme")) renderTheme();
   else if (shellUp) extChange(e.target as HTMLElement, ctx);
 }
 
@@ -2432,7 +2224,6 @@ function onSubmit(e: SubmitEvent) {
   else if (form.dataset.form === "pw-claim" && form.closest(".claim")) void submitClaim(form);
   else if (form.id === "qa-form") void submitQuickAdd();
   else if (form.id === "search-form") (document.activeElement as HTMLElement | null)?.blur();
-  else if (form.dataset.form === "bridge") void addBridge(form);
   else if (form.dataset.form === "edit") saveEdit();
   else if (form.dataset.form === "note-edit") saveNoteEdit();
   else if (form.dataset.form === "check-add" && S.open) addToChecklist(S.open);
@@ -2583,8 +2374,7 @@ function leaveShell() {
   S.query = "";
   S.qaOpen = false;
   S.syncOpen = false;
-  S.newBridge = null;
-  S.bridgeReauth = false;
+  leaveSettings();
   S.loggingIn = false;
   $("#app").className = "app";
 }
@@ -2674,7 +2464,7 @@ async function submitLogin(form: HTMLFormElement) {
       showClaim();
       return;
     }
-    S.loginError = e instanceof ApiError ? loginErrorText(e.status, e.message) : loginErrorText(0, (e as Error).message);
+    S.loginError = loginErrorText(e);
   }
   S.loggingIn = false;
   $("#app").innerHTML = loginHTML();
@@ -2686,7 +2476,7 @@ async function logout() {
     await api.logout();
   } catch (e) {
     if (!(e instanceof ApiError && e.status === 401)) {
-      showToast(`Could not log out: ${(e as Error).message}`);
+      showToast(`Could not log out: ${errorText(e)}`);
       return;
     }
   }

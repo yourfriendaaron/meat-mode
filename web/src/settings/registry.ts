@@ -1,7 +1,5 @@
-// Settings sections that live in their own modules. Each calls
-// registerSection; ./index.ts imports them all. main.ts draws them among its
-// own sections, which sit at order 10 (Appearance), 20 (Reminders),
-// 30 (Account) and 40 (Agent machines).
+// Settings sections, each in its own module. Each calls registerSection;
+// ./index.ts imports them all, and Settings shows them by `order`.
 
 import type { AppContext, Handlers } from "../app-context.ts";
 import { esc } from "../html.ts";
@@ -15,6 +13,8 @@ export interface SettingsSection extends Handlers {
   applies?(ctx: AppContext): boolean;
   /** The section's body under its heading, as HTML. Escape every value with esc(). */
   render(ctx: AppContext): string;
+  /** Runs when the app leaves Settings or logs out: drop what is shown only once, or only while there. */
+  leave?(): void;
 }
 
 const registered: SettingsSection[] = [];
@@ -28,12 +28,19 @@ export function findSection(id: string | undefined): SettingsSection | undefined
   return registered.find((s) => s.id === id);
 }
 
-/** The registered sections that apply, as [order, html] pairs for main.ts to merge with its own. */
-export function sectionsHTML(ctx: AppContext): [number, string][] {
+/** The sections that apply, in order, as Settings' HTML. */
+export function sectionsHTML(ctx: AppContext): string {
   return registered
     .filter((s) => s.applies?.(ctx) ?? true)
-    .map((s) => [
-      s.order,
-      `<section class="set-section" data-section="${esc(s.id)}" aria-labelledby="s-${esc(s.id)}"><h2 id="s-${esc(s.id)}" tabindex="-1">${esc(s.title)}</h2>${s.render(ctx)}</section>`,
-    ]);
+    .sort((a, b) => a.order - b.order)
+    .map(
+      (s) =>
+        `<section class="set-section" data-section="${esc(s.id)}" aria-labelledby="s-${esc(s.id)}"><h2 id="s-${esc(s.id)}" tabindex="-1">${esc(s.title)}</h2>${s.render(ctx)}</section>`,
+    )
+    .join("\n");
+}
+
+/** Tells every section the app has left Settings. */
+export function leaveSettings(): void {
+  for (const s of registered) s.leave?.();
 }
