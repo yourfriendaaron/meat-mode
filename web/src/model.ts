@@ -39,6 +39,8 @@ export interface Group {
   id: GroupId | ExtraGroupId;
   label: string;
   items: Item[];
+  /** Keys of the items shown as sub-tasks under the item before them. */
+  nested?: Set<string>;
 }
 
 /** Hour from which a task counts as "this evening". */
@@ -162,17 +164,116 @@ function compare(now: Date) {
     sortKey(a, now) - sortKey(b, now) || a.priority - b.priority || a.title.localeCompare(b.title);
 }
 
+// ---------- sub-tasks ----------
+
+function itemKeyOf(i: Item, id: string): string {
+  return `${repoKey(i)}/${id}`;
+}
+
+/** The item's sub-tasks among `items`: the items in its list that name it as their parent. */
+export function subtasksOf(item: Item, items: Item[]): Item[] {
+  return items.filter((i) => i.parent === item.id && repoKey(i) === repoKey(item) && !isDeleted(i));
+}
+
+/** The item's open sub-tasks, which keep it from closing. */
+export function openSubtasks(item: Item, items: Item[]): Item[] {
+  return subtasksOf(item, items).filter(isOpen);
+}
+
+/** The item's parent among `items`, when the app holds it. */
+export function parentOf(item: Item, items: Item[]): Item | undefined {
+  if (!item.parent) return undefined;
+  const key = itemKeyOf(item, item.parent);
+  return items.find((i) => i.key === key);
+}
+
+/** The parent's title: from the parent the app holds, else as the list's tracker gave it. */
+export function parentTitle(item: Item, items: Item[]): string {
+  return parentOf(item, items)?.title ?? item.parentTitle ?? "";
+}
+
+/** "1/3": done sub-tasks of all, or "" with none. */
+export function subtaskChip(item: Item, items: Item[]): string {
+  const subs = subtasksOf(item, items);
+  if (!subs.length) return "";
+  return `${subs.filter((i) => !isOpen(i)).length}/${subs.length}`;
+}
+
+/**
+ * The parent a sub-task shows under: open, top-level and not deleted, with
+ * the sub-task open too. Anything else shows on its own row.
+ */
+function nestsUnder(item: Item, byKey: Map<string, Item>): Item | undefined {
+  if (!item.parent || !isOpen(item)) return undefined;
+  const p = byKey.get(itemKeyOf(item, item.parent));
+  return p && isOpen(p) && !p.parent ? p : undefined;
+}
+
+/**
+ * Closes in an order the hub takes: every item's sub-tasks before it. With
+ * `cascade`, each item's open sub-tasks not in `picked` join it, as Delete
+ * and Won't do take a parent's sub-tasks with it.
+ */
+export function subtasksFirst(picked: Item[], items: Item[], cascade: boolean): Item[] {
+  const out: Item[] = [];
+  const seen = new Set<string>();
+  const push = (i: Item) => {
+    if (!seen.has(i.key)) {
+      seen.add(i.key);
+      out.push(i);
+    }
+  };
+  const pickedKeys = new Set(picked.map((i) => i.key));
+  for (const i of picked) {
+    for (const s of openSubtasks(i, items)) if (cascade || pickedKeys.has(s.key)) push(s);
+    push(i);
+  }
+  return out;
+}
+
+/**
+ * The item a parent is placed by: its own future snooze wins, else the
+ * earliest moment among it and its open sub-tasks, so a dated sub-task
+ * brings its parent onto the agenda.
+ */
+function placedBy(item: Item, subs: Item[], now: Date): Item {
+  const own = whenOf(item, now);
+  if (own.kind === "snoozed" || !subs.length) return item;
+  let earliest: Date | null = null;
+  for (const s of subs) {
+    const w = whenOf(s, now);
+    if (w.at && (!earliest || w.at < earliest)) earliest = w.at;
+  }
+  if (!earliest || (own.at && own.at <= earliest)) return item;
+  return { ...item, dueAt: earliest.toISOString(), deferUntil: null };
+}
+
 /**
  * Groups for a view, in display order, empty groups dropped. Today is today's
  * agenda from every list, then the rest of the personal list. A deleted
- * personal item shows nowhere.
+ * personal item shows nowhere. A sub-task shows under its open parent, which
+ * takes it along wherever the parent is placed; a snooze on the parent snoozes
+ * the lot.
  */
 export function buildView(view: ViewId, items: Item[], now: Date): Group[] {
-  let pool = items.filter((i) => !isDeleted(i));
+  const live = items.filter((i) => !isDeleted(i));
+  const byKey = new Map(live.map((i) => [i.key, i]));
+  const subs = new Map<string, Item[]>();
+  for (const i of live) {
+    const p = nestsUnder(i, byKey);
+    if (!p) continue;
+    const list = subs.get(p.key) ?? [];
+    list.push(i);
+    subs.set(p.key, list);
+  }
+  const placed = new Map<string, Item>();
+  const place = (i: Item) => placed.get(i.key) ?? i;
+  for (const i of live) if (subs.has(i.key)) placed.set(i.key, placedBy(i, subs.get(i.key)!, now));
+  let pool = live.filter((i) => !nestsUnder(i, byKey));
   let order: GroupId[];
   if (view === "today") {
     order = VIEW_GROUPS.today;
-    pool = pool.filter((i) => isPersonal(i) || AGENDA.includes(groupOf(i, now) ?? "nodate"));
+    pool = pool.filter((i) => isPersonal(i) || AGENDA.includes(groupOf(place(i), now) ?? "nodate"));
   } else if (view === "upcoming" || view === "all") {
     order = VIEW_GROUPS[view];
   } else if (view === "agents") {
@@ -185,7 +286,7 @@ export function buildView(view: ViewId, items: Item[], now: Date): Group[] {
   }
   const buckets = new Map<GroupId, Item[]>();
   for (const item of pool) {
-    const g = groupOf(item, now);
+    const g = groupOf(place(item), now);
     if (!g || !order.includes(g)) continue;
     const list = buckets.get(g) ?? [];
     list.push(item);
@@ -195,8 +296,18 @@ export function buildView(view: ViewId, items: Item[], now: Date): Group[] {
   for (const id of order) {
     const list = buckets.get(id);
     if (!list?.length) continue;
-    list.sort(id === "done" ? (a, b) => (date(b.closedAt)?.getTime() ?? 0) - (date(a.closedAt)?.getTime() ?? 0) : compare(now));
-    groups.push({ id, label: GROUP_LABELS[id], items: list });
+    const byPlace = compare(now);
+    list.sort(id === "done" ? (a, b) => (date(b.closedAt)?.getTime() ?? 0) - (date(a.closedAt)?.getTime() ?? 0) : (a, b) => byPlace(place(a), place(b)));
+    const nested = new Set<string>();
+    const rows: Item[] = [];
+    for (const item of list) {
+      rows.push(item);
+      for (const s of (subs.get(item.key) ?? []).sort(byPlace)) {
+        rows.push(s);
+        nested.add(s.key);
+      }
+    }
+    groups.push({ id, label: GROUP_LABELS[id], items: rows, ...(nested.size ? { nested } : {}) });
   }
   return groups;
 }

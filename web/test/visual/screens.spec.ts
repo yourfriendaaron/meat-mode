@@ -219,6 +219,27 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await shot(page, "personal-detail");
         });
 
+        test("sub-tasks in the list and the detail", async ({ page, hub }) => {
+          const parent = hub.find("hub/personal/pe-3")!;
+          const sub = (id: string, title: string, over: Partial<typeof parent> = {}) => ({
+            ...structuredClone(parent),
+            key: `hub/personal/${id}`,
+            id,
+            title,
+            parent: "pe-3",
+            dueAt: null,
+            ...over,
+          });
+          hub.items.push(
+            sub("pe-31", "Book the train", { dueAt: "2026-10-14T11:00:00Z" }),
+            sub("pe-32", "Pack a bag"),
+            sub("pe-33", "Check the timetable", { status: "closed", closedAt: "2026-10-14T08:00:00Z", closeReason: "Done in Meat Mode" }),
+          );
+          await openApp(page, "/?item=" + encodeURIComponent("hub/personal/pe-3"));
+          await expect(page.locator("#detail h2#d-title")).toHaveText(parent.title);
+          await shot(page, "subtasks");
+        });
+
         test("edit a personal task", async ({ page, hub }) => {
           const it = hub.find("hub/personal/pe-1")!;
           it.repeat = { every: "week", weekdays: [1, 4], timeZone: "UTC", start: it.dueAt! };

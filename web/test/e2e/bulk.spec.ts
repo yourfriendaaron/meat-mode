@@ -39,7 +39,7 @@ test("Done on two picked items, one repeating, and one Undo brings both back", a
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => hub.find("hub/personal/pe-3")!.status).toBe("open");
   await expect.poll(() => hub.find("hub/personal/pe-1")!.dueAt).toBe("2026-10-14T09:25:00.000Z");
-  expect(hub.posted.map((a) => a.kind)).toEqual(["done", "done", "edit", "reopen"]);
+  expect(hub.posted.map((a) => a.kind)).toEqual(["done", "done", "reopen", "edit"]);
   await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
   await expect(page.locator(".group-today")).toContainText("Call Sam about the weekend");
 });

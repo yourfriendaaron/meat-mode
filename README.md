@@ -80,6 +80,8 @@ Quick add reads dates, times and repeats as you type and shows you what it under
 
 ![Quick add on a desktop with "Water the plants every sunday at 8pm until nov 29" typed in. The words "every sunday", "at 8pm" and "until nov 29" are highlighted, and chips below read "Due Sun, Oct 18 20:00" and "Every week on Sun until Nov 29".](docs/images/quick-add-repeat.png)
 
+Break a bigger task into sub-tasks from its details, on your own to-dos and on an agent's tasks alike. "Plan the party" shows "Send invitations" and "Book a cake" under it in the list, and a dated sub-task brings its parent onto Today. The parent cannot be marked done until every sub-task is done or deleted, and **Delete** or **Won't do** on the parent takes its open sub-tasks with it. On an agent's task, a sub-task is a child issue in beads, so the agent sees it too.
+
 ### Get reminded on every device
 
 A reminder comes at the due time and when a snooze ends, as a notification on each phone and computer you turned them on for, and through [ntfy](https://ntfy.sh) if you use it. You can ask for an early reminder too, up to a week ahead. A reminder for one to-do has **Done** and **Snooze 1 hour** buttons that act without opening the app. If the hub was off when something came due, it catches up when it is back. **Settings**, **Devices** lists every browser and phone that gets reminders, and you can revoke any of them.

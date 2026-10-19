@@ -144,14 +144,15 @@ export function createActions(deps: ActionsDeps) {
   }
 
   /**
-   * Undoes what perform posted, in order. An action whose reply says how to
+   * Undoes what perform posted, last first, so a parent reopens before the
+   * sub-tasks that closed ahead of it. An action whose reply says how to
    * undo it (an edit, a note change, a done that moved a repeating item on)
    * gets that edit, applied locally before `onPatched`. Any other is
    * cancelled while still unapplied; once applied (409) it gets its inverse.
    * A failed cancel stops the Undo there.
    */
   async function undo(h: Handle, opts: { onPatched?: () => void } = {}): Promise<void> {
-    const plan = h.posted.map((p) => ({ ...p, u: undoOf(p.applied, p.sent.key ?? "", deps.newId()) }));
+    const plan = h.posted.map((p) => ({ ...p, u: undoOf(p.applied, p.sent.key ?? "", deps.newId()) })).reverse();
     for (const { u } of plan) if (u) patch(u);
     opts.onPatched?.();
     for (const { sent, u } of plan) {

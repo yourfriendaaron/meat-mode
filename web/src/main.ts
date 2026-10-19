@@ -17,12 +17,18 @@ import {
   isPersonal,
   isUnreadComment,
   isWontDo,
+  openSubtasks,
   openToday,
+  parentOf,
+  parentTitle,
   pastDue,
   repoColours,
   repoDetail,
   repoKey,
   repoLabel,
+  subtaskChip,
+  subtasksFirst,
+  subtasksOf,
   syncStatus,
   tomorrowMorning,
   visibleRepos,
@@ -116,6 +122,8 @@ const S = {
   noteEdit: null as { key: string; commentId: string; text: string } | null,
   /** Unsent text of each personal item's add-to-checklist field. */
   checkDrafts: new Map<string, string>(),
+  /** Unsent text of each item's add-a-sub-task field. */
+  subDrafts: new Map<string, string>(),
   snoozeKeys: null as string[] | null,
   syncOpen: false,
   qaOpen: false,
@@ -375,7 +383,7 @@ function actionLabel(a: Action): string {
 
 // ---------- render: list ----------
 
-function chipsFor(item: Item, opts: { list: boolean }): string {
+function chipsFor(item: Item, opts: { list: boolean; nested?: boolean }): string {
   const n = now();
   const agent = isAgentItem(item);
   const out: string[] = [];
@@ -402,6 +410,14 @@ function chipsFor(item: Item, opts: { list: boolean }): string {
     const [done, all] = ck.split("/");
     out.push(`<span class="chip chip-checklist" aria-label="Checklist: ${done} of ${all} done">${ICON.check}${ck}</span>`);
   }
+  const sc = subtaskChip(item, items());
+  if (sc) {
+    const [done, all] = sc.split("/");
+    out.push(`<span class="chip chip-subtasks" aria-label="Sub-tasks: ${done} of ${all} done">${ICON.subtask}${sc}</span>`);
+  }
+  // A sub-task on its own row names its parent; under the parent it needs not.
+  const pt = item.parent && !opts.nested ? parentTitle(item, items()) : "";
+  if (pt) out.push(`<span class="chip chip-parent">${ICON.subtask}${esc(`Part of ${pt}`)}</span>`);
   return out.join("");
 }
 
@@ -460,14 +476,14 @@ function noteRunEnds(next: Item[]) {
   for (const it of next) lastRun.set(it.key, it.run?.state);
 }
 
-function rowHTML(item: Item, showList: boolean): string {
+function rowHTML(item: Item, showList: boolean, nested = false): string {
   const agent = isAgentItem(item);
   const done = !isOpen(item);
   const picked = !done && S.selecting && S.picked.has(item.key);
   const run = agent && item.run ? item.run : null;
-  return `<li class="row${done ? " is-done" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}${run ? " has-run" : ""}"${run ? runAttrs(item) : ""} data-key="${esc(item.key)}">
+  return `<li class="row${nested ? " row-sub" : ""}${done ? " is-done" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}${run ? " has-run" : ""}"${run ? runAttrs(item) : ""} data-key="${esc(item.key)}">
 <div class="under" aria-hidden="true"><span class="u-done">Done</span><span class="u-snooze">Snooze</span></div>
-<div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
+<div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList && !nested, nested })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
     done
       ? isDeleted(item)
         ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
@@ -573,7 +589,7 @@ function renderMain() {
             ? `<button class="btn btn-small btn-ghost" data-act="snooze-all">${ICON.moon}Snooze all to tomorrow</button>`
             : "";
         return `<section class="group group-${g.id}" aria-labelledby="g-${g.id}"><div class="group-head"><h2 id="g-${g.id}">${esc(g.label)} <span class="group-count">${g.items.length}</span></h2>${extra}</div><ul class="rows">${g.items
-          .map((i) => rowHTML(i, showList))
+          .map((i) => rowHTML(i, showList, g.nested?.has(i.key)))
           .join("")}</ul></section>`;
       })
       .join("") + (S.view === "deleted" && !searching() ? '<p class="history-note">Deleted items are removed 7 days after you delete them.</p>' : ""),
@@ -754,6 +770,36 @@ function checklistHTML(item: Item): string {
 }
 
 /**
+ * The sheet's sub-tasks: a sub-task names its parent, and a top-level item
+ * lists its sub-tasks with a field to add one. Sub-tasks go one level deep.
+ */
+function subtasksHTML(item: Item): string {
+  if (item.parent) {
+    const p = parentOf(item, items());
+    const title = parentTitle(item, items());
+    if (!title) return "";
+    const name = p ? `<button class="link-btn" data-act="open" data-key="${esc(p.key)}">${esc(title)}</button>` : esc(title);
+    return `<p class="d-parent">${ICON.subtask}Part of ${name}</p>`;
+  }
+  const subs = subtasksOf(item, items());
+  const canAdd = isOpen(item) && !item.id.startsWith("pending-");
+  if (!subs.length && !canAdd) return "";
+  const rows = subs
+    .map((c) => {
+      const agent = isAgentItem(c);
+      return `<li class="sub${isOpen(c) ? "" : " sub-done"}">${checkButton(c, agent)}<button class="sub-title" data-act="open" data-key="${esc(c.key)}">${esc(c.title)}</button></li>`;
+    })
+    .join("");
+  const count = subtaskChip(item, items());
+  const add = canAdd
+    ? `<form class="pick-row" data-form="sub-add"><label class="sr" for="sub-input">Add a sub-task</label><input id="sub-input" type="text" maxlength="${TITLE_MAX}" autocomplete="off" enterkeyhint="done" placeholder="Add a sub-task"><button type="submit" class="btn">${ICON.plus}Add</button></form>`
+    : "";
+  return `<section class="d-section" aria-labelledby="d-subs"><h3 id="d-subs">Sub-tasks${count ? ` <span class="group-count">${count}</span>` : ""}</h3>${
+    rows ? `<ul class="subtasks">${rows}</ul>` : ""
+  }${add}</section>`;
+}
+
+/**
  * An agent item's card in the sheet: why the agent asks, the run's line in
  * its state's colour, and the one button that fits the state. Ask agent and
  * Retry wake the agent; Stop ends a live run. Where agents are off for the
@@ -851,6 +897,7 @@ function renderDetail() {
 ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
 ${editing ? editFormHTML(item) : why + actions}
 ${editable ? checklistHTML(item) : ""}
+${subtasksHTML(item)}
 ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
 <label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea>${composeHTML(item, allowed)}</section>
@@ -860,6 +907,8 @@ ${open ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snoo
     ta.value = S.drafts.get(item.key) ?? "";
     const ck = el.querySelector<HTMLInputElement>("#check-input");
     if (ck) ck.value = S.checkDrafts.get(item.key) ?? "";
+    const sub = el.querySelector<HTMLInputElement>("#sub-input");
+    if (sub) sub.value = S.subDrafts.get(item.key) ?? "";
     if (editing) {
       const d = S.edit!.draft;
       setValue("#edit-title", d.title);
@@ -1116,6 +1165,12 @@ function moveSelectionOff(keys: string[]) {
 async function doDone(key: string) {
   const it = byKey(key);
   if (!it || !isOpen(it)) return;
+  const blocked = blockedBySubtasks(it);
+  if (blocked) {
+    showToast(blocked);
+    render();
+    return;
+  }
   moveSelectionOff([key]);
   const h = await actions.perform([{ id: newId(), kind: "done", key, payload: {} }], { onPatched: render });
   const p = h.posted[0];
@@ -1129,13 +1184,19 @@ async function doDone(key: string) {
   await refresh();
 }
 
-/** Won't do on an agent item; Delete on a personal one, which then shows nowhere. */
+/**
+ * Won't do on an agent item; Delete on a personal one, which then shows
+ * nowhere. Its open sub-tasks go with it, closed first, under one Undo.
+ */
 function doDismiss(key: string) {
   const it = byKey(key);
   if (!it || !isOpen(it)) return;
   const agent = isAgentItem(it);
-  moveSelectionOff([key]);
-  void closing([{ id: newId(), kind: "dismiss", key, payload: {} }], `${agent ? "Won't do" : "Deleted"}: ${it.title}`, {
+  const all = subtasksFirst([it], items(), true);
+  const subs = all.length - 1;
+  moveSelectionOff(all.map((i) => i.key));
+  const text = `${agent ? "Won't do" : "Deleted"}: ${it.title}${subs ? ` and ${subs === 1 ? "its sub-task" : `${subs} sub-tasks`}` : ""}`;
+  void closing(all.map((i) => ({ id: newId(), kind: "dismiss", key: i.key, payload: {} })), text, {
     tell: offersTell(it, repos()) ? key : undefined,
     draw: () => (!agent && S.open === key ? closeDetail() : render()),
   });
@@ -1241,7 +1302,15 @@ function pickedItems(): Item[] {
  * items go back to the date they moved on from.
  */
 async function bulkDone() {
-  const its = pickedItems();
+  const picked = pickedItems();
+  if (!picked.length) return;
+  // Picked sub-tasks close before their parents; a parent with a sub-task
+  // left open stays.
+  const ordered = subtasksFirst(picked, items(), false);
+  const closes = new Set(ordered.map((i) => i.key));
+  const its = ordered.filter((i) => openSubtasks(i, items()).every((s) => closes.has(s.key)));
+  const kept = picked.length - its.length;
+  if (kept) showToast(kept === 1 ? "One task has open sub-tasks and stays open." : `${kept} tasks have open sub-tasks and stay open.`);
   if (!its.length) return;
   const keys = its.map((i) => i.key);
   moveSelectionOff(keys);
@@ -1257,15 +1326,16 @@ async function bulkDone() {
 
 /** Delete or Won't do on every pick, with one Undo. */
 function bulkDismiss() {
-  const its = pickedItems();
-  if (!its.length) return;
+  const picked = pickedItems();
+  if (!picked.length) return;
+  const its = subtasksFirst(picked, items(), true);
   const keys = its.map((i) => i.key);
-  const verb = bulkDismissDone(its);
+  const verb = bulkDismissDone(picked);
   moveSelectionOff(keys);
   const openGone = S.open && keys.includes(S.open) && isPersonal(byKey(S.open)!);
   void closing(
     keys.map((key) => ({ id: newId(), kind: "dismiss", key, payload: {} })),
-    bulkToast(verb, its.map((i) => i.title)),
+    bulkToast(verb, picked.map((i) => i.title)),
     {
       draw: () => {
         endSelect();
@@ -1480,6 +1550,26 @@ function removeFromChecklist(key: string, index: number) {
   setChecklist(key, removeCheck(it.checklist, index), `Removed: ${entry.text}`);
   // The button is gone; keep focus in the checklist.
   $<HTMLElement>("#check-input").focus({ preventScroll: true });
+}
+
+/** Adds a sub-task to an item, in the item's own list. */
+async function addSubtask(key: string) {
+  const it = byKey(key);
+  const input = document.querySelector<HTMLInputElement>("#sub-input");
+  if (!it || !input) return;
+  const title = input.value.trim();
+  if (!title) return;
+  input.value = "";
+  S.subDrafts.delete(key);
+  if (await post({ id: newId(), kind: "add", bridge: it.bridge, repo: it.repo, payload: { title, due: null, parent: it.id } })) await refresh();
+  document.querySelector<HTMLElement>("#sub-input")?.focus({ preventScroll: true });
+}
+
+/** What a close of `it` waits for while sub-tasks are open, or "" when it can close. */
+function blockedBySubtasks(it: Item): string {
+  const n = openSubtasks(it, items()).length;
+  if (!n) return "";
+  return n === 1 ? "Finish or remove its open sub-task first." : `Finish or remove its ${n} open sub-tasks first.`;
 }
 
 // ---------- toast ----------
@@ -2005,6 +2095,7 @@ function onInput(e: Event) {
   else if (t.dataset.typeTime !== undefined) updateSnoozeType(t as HTMLInputElement);
   else if (t.id === "note-input" && S.open) S.drafts.set(S.open, (t as HTMLTextAreaElement).value);
   else if (t.id === "check-input" && S.open) S.checkDrafts.set(S.open, (t as HTMLInputElement).value);
+  else if (t.id === "sub-input" && S.open) S.subDrafts.set(S.open, (t as HTMLInputElement).value);
   else if (t.id === "note-edit-input" && S.noteEdit) S.noteEdit.text = (t as HTMLTextAreaElement).value;
   else if (S.edit && t.closest(".edit-form")) {
     const d = S.edit.draft;
@@ -2063,6 +2154,7 @@ function onSubmit(e: SubmitEvent) {
   else if (form.dataset.form === "edit") saveEdit();
   else if (form.dataset.form === "note-edit") saveNoteEdit();
   else if (form.dataset.form === "check-add" && S.open) addToChecklist(S.open);
+  else if (form.dataset.form === "sub-add" && S.open) void addSubtask(S.open);
   else if (form.dataset.form === "snooze-type") submitSnoozeType(form);
   else if (shellUp) void extSubmit(form, ctx);
 }

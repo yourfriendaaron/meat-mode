@@ -129,3 +129,27 @@ func TestBridgeSubtasks(t *testing.T) {
 		t.Fatalf("parent with a slash: %v", err)
 	}
 }
+
+// TestAddedSubtaskCountsUntilSynced: between the bridge creating a sub-task
+// and sending it, the hub holds no item for it, and a tracker may close the
+// parent regardless. The applied add keeps the parent from closing until
+// the repo's next set.
+func TestAddedSubtaskCountsUntilSynced(t *testing.T) {
+	s, c := open(t)
+	seed(t, s)
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+		Payload: api.Payload{Title: "Fill the can", Parent: "gd-1"}}, "alex-app")
+	must(t, err)
+	c.tick()
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true, BeadID: "gd-1.1"}))
+	c.tick()
+	if _, _, err := s.AppendAction(api.NewAction{ID: id2, Kind: api.KindDismiss, Key: "laptop/garden/gd-1"}, "alex-app"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("dismiss before the sub-task synced: %v", err)
+	}
+	must(t, s.ReplaceItems("laptop", "garden", []api.Item{
+		{ID: "gd-1", Title: "Water the plants", Status: "open", Priority: 2},
+		{ID: "gd-1.1", Title: "Fill the can", Status: "closed", Priority: 2, Parent: "gd-1"},
+	}))
+	_, _, err = s.AppendAction(api.NewAction{ID: id3, Kind: api.KindDismiss, Key: "laptop/garden/gd-1"}, "alex-app")
+	must(t, err)
+}

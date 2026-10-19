@@ -658,6 +658,10 @@ select.qa-pill {
 .row.swiping .row-fg {
   transition: none;
 }
+/* A sub-task sits under its parent, indented past the parent's check. */
+.row-sub .row-fg {
+  padding-left: 50px;
+}
 .row:hover .row-fg {
   background: var(--role-hover);
 }
@@ -812,8 +816,17 @@ select.qa-pill {
 .chip-list,
 .chip-agent,
 .chip-notes,
-.chip-checklist {
+.chip-checklist,
+.chip-subtasks,
+.chip-parent {
   border-color: var(--role-line);
+}
+.chip-parent {
+  color: var(--role-soft);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chip-high {
   color: var(--role-priority);
@@ -1209,6 +1222,51 @@ select.qa-pill {
 .ck-done label {
   color: var(--role-soft);
   text-decoration: line-through;
+}
+.subtasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+.sub .check {
+  margin-top: 0;
+}
+.sub-title {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.sub-done .sub-title {
+  color: var(--role-soft);
+  text-decoration: line-through;
+}
+.d-parent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: var(--role-soft);
+  font-size: 13px;
+}
+.d-parent svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 .note-tools {
   display: flex;
@@ -2070,6 +2128,9 @@ select.qa-pill {
   }
   .row-fg {
     padding: 10px 24px;
+  }
+  .row-sub .row-fg {
+    padding-left: 58px;
   }
 
   .detail {

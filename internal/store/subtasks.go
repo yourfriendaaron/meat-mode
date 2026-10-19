@@ -45,7 +45,7 @@ func checkParent(tx *sql.Tx, bridge, repo, parent string) error {
 // openSubtasks counts the open sub-tasks of an item: stored ones, folded
 // with their pending done, dismiss and reopen actions (the latest wins),
 // and ones still being created.
-func openSubtasks(tx *sql.Tx, bridge, repo, id string) (int, error) {
+func (s *Store) openSubtasks(tx *sql.Tx, bridge, repo, id string) (int, error) {
 	rows, err := tx.Query(`SELECT id, json_extract(data, '$.status') FROM items
 		WHERE bridge = ? AND repo = ? AND json_extract(data, '$.parent') = ?`, bridge, repo, id)
 	if err != nil {
@@ -87,17 +87,24 @@ func openSubtasks(tx *sql.Tx, bridge, repo, id string) (int, error) {
 			n++
 		}
 	}
+	// Still being created: a pending add, or an applied one whose bead the
+	// bridge has not sent yet, by the rule State shows provisional items by.
+	// A bridge closes a parent without looking at children it has not seen.
 	var adding int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM actions WHERE bridge = ? AND repo = ? AND kind = ? AND status = ?
-		AND json_extract(payload, '$.parent') = ?`, bridge, repo, api.KindAdd, api.StatusPending, id).Scan(&adding); err != nil {
+	since := fmtTime(s.now().Add(-provisionalTTL))
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM actions a WHERE a.bridge = ? AND a.repo = ? AND a.kind = ?
+		AND json_extract(a.payload, '$.parent') = ? AND (a.status = ? OR (a.status = ? AND a.applied_at >= ?
+			AND NOT EXISTS (SELECT 1 FROM items i WHERE i.bridge = a.bridge AND i.repo = a.repo AND i.id = a.bead_id)
+			AND NOT EXISTS (SELECT 1 FROM repos r WHERE r.bridge = a.bridge AND r.name = a.repo AND r.synced_at >= a.applied_at)))`,
+		bridge, repo, api.KindAdd, id, api.StatusPending, api.StatusApplied, since).Scan(&adding); err != nil {
 		return 0, err
 	}
 	return n + adding, nil
 }
 
 // checkCloses refuses done or dismiss on an item with open sub-tasks.
-func checkCloses(tx *sql.Tx, bridge, repo, id string) error {
-	n, err := openSubtasks(tx, bridge, repo, id)
+func (s *Store) checkCloses(tx *sql.Tx, bridge, repo, id string) error {
+	n, err := s.openSubtasks(tx, bridge, repo, id)
 	if err != nil || n == 0 {
 		return err
 	}

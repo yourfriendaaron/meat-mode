@@ -729,6 +729,12 @@ export class FakeHub {
         const why = this.askRefusal(bridge, repo);
         if (why) return this.json(route, 400, { error: why });
       }
+      if (a.payload.parent) {
+        // A sub-task's parent is open, top-level and in the same list (docs/api.md, Sub-tasks).
+        const p = this.find(`${bridge}/${repo}/${a.payload.parent}`);
+        if (!p) return this.json(route, 404, { error: "no such parent" });
+        if (p.status === "closed" || p.parent) return this.json(route, 400, { error: "not a parent" });
+      }
       const r = a.payload.repeat;
       if (r) {
         if (!onHub) return this.json(route, 400, { error: "repeat is for the personal list only" });
@@ -747,6 +753,7 @@ export class FakeHub {
         status: "open",
         priority: 2,
         dueAt: a.payload.due ?? null,
+        ...(a.payload.parent ? { parent: a.payload.parent } : {}),
         ...(r ? { repeat: keptRepeat(r, a.payload.due!) } : {}),
         createdAt: this.now(),
         updatedAt: this.now(),
@@ -763,6 +770,9 @@ export class FakeHub {
       if (a.kind === "ask") {
         const why = this.askRefusal(it.bridge, it.repo);
         if (why) return this.json(route, 400, { error: why });
+      }
+      if ((a.kind === "done" || a.kind === "dismiss") && this.items.some((i) => i.parent === it.id && i.repo === it.repo && i.bridge === it.bridge && i.status !== "closed")) {
+        return this.json(route, 409, { error: "finish or remove its open sub-tasks first" });
       }
       before = structuredClone(it);
       bridge = it.bridge;

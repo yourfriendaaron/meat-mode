@@ -25,6 +25,10 @@ export interface Item {
   updatedAt: string;
   closedAt?: string | null;
   comments: Comment[] | null;
+  /** The id of the item this one is a sub-task of, in the same list. */
+  parent?: string;
+  /** The parent's title as the list's tracker last gave it, for a parent the app does not hold. */
+  parentTitle?: string;
   /** Personal items only. */
   checklist?: Check[] | null;
   /** Personal items only. */
@@ -164,6 +168,8 @@ export interface Payload {
   on?: boolean;
   /** add: an agent starts on the new item. */
   ask?: boolean;
+  /** add: the id of the item the new one is a sub-task of. */
+  parent?: string;
   /** edit */
   set?: Edit;
   /**

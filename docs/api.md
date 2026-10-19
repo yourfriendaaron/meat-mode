@@ -195,7 +195,7 @@ The last four change personal items only. The hub refuses them on an agent's ite
 An item's `parent` is the id of the item it is a sub-task of, in the same list; a top-level item has none. `parentTitle` is the parent's title as the list's tracker last gave it, so a sub-task whose parent is not in the set (on beads, a parent not labelled `human`) can still name it. The rules are the same on the personal list and on a tracker's list:
 
 - An `add` with `parent` needs that item open, in the same list, and top-level: sub-tasks go one level deep. A tracker item that is deeper is shown as it comes.
-- `done` and `dismiss` on an item answer `409` while any of its sub-tasks is open. A sub-task with a pending `done` or `dismiss` counts as closed and one with a pending `reopen` as open, so the app may send the sub-tasks' closes and then the parent's together; the bridge applies them in that order. A sub-task still being added counts as open.
+- `done` and `dismiss` on an item answer `409` while any of its sub-tasks is open. A sub-task with a pending `done` or `dismiss` counts as closed and one with a pending `reopen` as open, so the app may send the sub-tasks' closes and then the parent's together; the bridge applies them in that order. A sub-task still being added counts as open, until the bridge has sent it.
 - A snooze changes only the item it names. The app shows sub-tasks under their parent, so they move with it.
 
 `Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?}`. A field left out stays as it is.

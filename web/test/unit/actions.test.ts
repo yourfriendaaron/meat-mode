@@ -143,11 +143,12 @@ test("a mixed batch undoes each item its own way, in one call", async () => {
   assert.deepEqual([plain.status, rep.status, agent.status], ["closed", "open", "closed"]);
   assert.equal(h.posted.length, 3);
 
+  // Last first, so a parent reopens before the sub-tasks closed ahead of it.
   await hub.actions.undo(h);
   assert.deepEqual(hub.cancelled, ["d3"]);
   assert.deepEqual(hub.posted.slice(3).map((a) => [a.kind, a.key]), [
-    ["reopen", plain.key],
     ["edit", rep.key],
+    ["reopen", plain.key],
   ]);
 });
 
@@ -185,8 +186,8 @@ test("snooze undoes back to the time it had, and dismiss and reopen undo each ot
   assert.deepEqual(
     hub.posted.slice(2).map((a) => [a.kind, a.payload]),
     [
-      ["snooze", { until: null, previous: later }],
       ["dismiss", {}],
+      ["snooze", { until: null, previous: later }],
     ],
   );
 });

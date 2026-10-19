@@ -15,6 +15,8 @@ import {
   openToday,
   repoDetail,
   repoLabel,
+  subtaskChip,
+  subtasksFirst,
   syncStatus,
   visibleRepos,
 } from "../../src/model.ts";
@@ -247,4 +249,44 @@ test("a typed snooze time reads like quick add and refuses the past", () => {
     assert.equal(fmt(r.until), until, text);
     assert.equal(r.line, line, text);
   }
+});
+
+test("a sub-task shows under its open parent, and on its own row otherwise", () => {
+  const parent = item({ id: "p", title: "Plan the party", dueAt: t(14, 11) });
+  const later = item({ id: "s1", title: "Book a cake", parent: "p", dueAt: t(20, 9) });
+  const undated = item({ id: "s2", title: "Send invitations", parent: "p" });
+  const doneSub = item({ id: "s3", title: "Pick a date", parent: "p", status: "closed", closedAt: t(14, 9) });
+  const orphan = item({ id: "s4", title: "Pick a fence", parent: "gone", parentTitle: "Garden plan", dueAt: t(14, 12) });
+  const groups = buildView("all", [parent, later, undated, doneSub, orphan], now);
+  const today = groups.find((g) => g.id === "today")!;
+  assert.deepEqual(
+    today.items.map((i) => i.id),
+    ["p", "s1", "s2", "s4"],
+  );
+  assert.deepEqual([...(today.nested ?? [])].sort(), [later.key, undated.key].sort());
+  // A closed sub-task is a done item of its own.
+  assert.deepEqual(groups.find((g) => g.id === "done")!.items.map((i) => i.id), ["s3"]);
+  assert.equal(subtaskChip(parent, [parent, later, undated, doneSub]), "1/3");
+});
+
+test("a snoozed parent takes its sub-tasks along, and a dated sub-task brings its parent forward", () => {
+  const snoozed = item({ id: "p1", deferUntil: t(20, 9) });
+  const due = item({ id: "s1", parent: "p1", dueAt: t(14, 11) });
+  let groups = buildView("all", [snoozed, due], now);
+  assert.deepEqual(groups.map((g) => [g.id, g.items.map((i) => i.id)]), [["later", ["p1", "s1"]]]);
+
+  const undated = item({ id: "p2", repo: "garden" });
+  const soon = item({ id: "s2", repo: "garden", parent: "p2", dueAt: t(14, 11) });
+  groups = buildView("today", [undated, soon], now);
+  assert.deepEqual(groups.map((g) => [g.id, g.items.map((i) => i.id)]), [["today", ["p2", "s2"]]]);
+});
+
+test("closes go sub-tasks first, and a delete takes the open sub-tasks along", () => {
+  const parent = item({ id: "p" });
+  const a = item({ id: "a", parent: "p" });
+  const b = item({ id: "b", parent: "p" });
+  const done = item({ id: "c", parent: "p", status: "closed" });
+  const all = [parent, a, b, done];
+  assert.deepEqual(subtasksFirst([parent, a], all, false).map((i) => i.id), ["a", "p"]);
+  assert.deepEqual(subtasksFirst([parent], all, true).map((i) => i.id), ["a", "b", "p"]);
 });

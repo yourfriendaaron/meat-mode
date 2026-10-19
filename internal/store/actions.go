@@ -266,7 +266,7 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 			}
 		}
 		if na.Kind == api.KindDone || na.Kind == api.KindDismiss {
-			if err := checkCloses(tx, b, r, id); err != nil {
+			if err := s.checkCloses(tx, b, r, id); err != nil {
 				return a, false, err
 			}
 		}

@@ -193,6 +193,7 @@ export interface Issue {
   comment_count?: number;
   metadata?: Record<string, unknown>;
   comments?: { author: string; text: string }[];
+  parent?: string;
 }
 
 export interface BeadEvent {

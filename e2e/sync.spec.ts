@@ -225,6 +225,27 @@ test("done, snooze, note and won't do reach bd", async ({ page, w }) => {
   await expect(page.locator(".sidebar .sync-pill")).toHaveText("Synced");
 });
 
+test("a sub-task added in the app is a child bead, and Won't do on the parent closes both", async ({ page, w }) => {
+  const garden = dir(w, "laptop", "garden");
+  const parent = await w.create(garden, "Plan the herb bed", "-l", "human");
+  await open(page, w);
+  await row(page, "Plan the herb bed").locator(".row-body").click();
+  const detail = page.locator("#detail");
+  await detail.getByLabel("Add a sub-task").fill("Pick a supplier");
+  await detail.getByLabel("Add a sub-task").press("Enter");
+  await expect
+    .poll(async () => (await w.list(garden)).find((i) => i.title === "Pick a supplier")?.parent)
+    .toBe(parent);
+  // Once synced, the child shows under its parent.
+  await expect(row(page, "Pick a supplier")).toHaveClass(/row-sub/);
+  await expect(row(page, "Pick a supplier")).not.toContainText("Waiting for sync");
+
+  await detail.getByRole("button", { name: "Won't do" }).click();
+  const statuses = async () => (await w.list(garden)).filter((i) => i.id === parent || i.parent === parent).map((i) => i.status);
+  await expect.poll(statuses).toEqual(["closed", "closed"]);
+  await expect.poll(async () => (await w.api<{ unapplied: number }>("/api/state")).unapplied).toBe(0);
+});
+
 test("laptop's actions never reach desk; desk's own actions do", async ({ page, w }) => {
   const laptopActions = (await actions(w)).filter((a) => a.bridge === "laptop");
   expect(laptopActions.length).toBeGreaterThanOrEqual(5);
