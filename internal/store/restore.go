@@ -74,6 +74,9 @@ var zipMagic = []byte("PK\x03\x04")
 // the setup wizard is not recorded as done. An error reading r is returned
 // wrapped, so the caller can tell a body cut short or too large.
 func (s *Store) Restore(r io.Reader) (api.RestoreResult, error) {
+	// A second restore waits, then finds the hub in use.
+	s.restoring.Lock()
+	defer s.restoring.Unlock()
 	if err := s.checkUnused(s.db); err != nil {
 		return api.RestoreResult{}, err
 	}
@@ -259,19 +262,38 @@ func (s *Store) restoreFile(zf *zip.File, key string, a *api.Attachment, written
 		return invalidf("%s (attachment %s) on item %s could not be read from the export: %v", a.Name, a.ID, key, err)
 	}
 	defer rc.Close()
-	size, sum, typ, err := s.writeAttachmentFile(a.ID, rc, a.Size)
+	in := &readErr{r: rc}
+	size, sum, typ, err := s.writeAttachmentFile(a.ID, in, a.Size)
 	if errors.Is(err, errOverLimit) || (err == nil && (size != a.Size || sum != a.SHA256)) {
 		if err == nil {
 			*written = append(*written, a.ID)
 		}
 		return invalidf("%s (attachment %s) on item %s does not match the size and SHA-256 its item lists.", a.Name, a.ID, key)
 	}
+	if in.err != nil {
+		return invalidf("%s (attachment %s) on item %s could not be read from the export: %v", a.Name, a.ID, key, in.err)
+	}
 	if err != nil {
-		return invalidf("%s (attachment %s) on item %s could not be read from the export: %v", a.Name, a.ID, key, err)
+		return fmt.Errorf("write %s (attachment %s) on item %s: %w", a.Name, a.ID, key, err)
 	}
 	*written = append(*written, a.ID)
 	a.Type = typ
 	return nil
+}
+
+// readErr remembers the first error reading r, so a broken entry in the
+// zip can be told from a failure to write its file.
+type readErr struct {
+	r   io.Reader
+	err error
+}
+
+func (e *readErr) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if err != nil && err != io.EOF && e.err == nil {
+		e.err = err
+	}
+	return n, err
 }
 
 // load writes a checked export in one transaction.

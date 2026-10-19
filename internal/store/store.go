@@ -74,6 +74,8 @@ type Store struct {
 	offline   map[string]bool            // runs the last State showed offline; see joinRuns
 	applying  map[string]map[string]bool // per bridge, the actions its last run list holds as applied; see ReplaceRuns
 	inflight  map[string]bool            // attachment files being written; the sweep leaves them alone
+
+	restoring sync.Mutex // one restore at a time, so two never write the same files
 }
 
 // Open checks dataDir is writable, opens (or creates) the database in it,

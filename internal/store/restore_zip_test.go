@@ -317,3 +317,29 @@ func TestRestoreZipRefusesAHubWithData(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// Two restores of one zip at once: one loads it, the other finds the hub
+// in use, and every file the first wrote stays.
+func TestRestoresRunOneAtATime(t *testing.T) {
+	src, files := hubWithFiles(t)
+	_, file := exportZip(t, src)
+	s, _ := open(t)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := s.Restore(bytes.NewReader(file))
+			errs <- err
+		}()
+	}
+	a, b := <-errs, <-errs
+	if (a == nil) == (b == nil) || !errors.Is(errors.Join(a, b), ErrHubInUse) {
+		t.Fatalf("restores answered %v and %v", a, b)
+	}
+	for id, data := range files {
+		got, err := os.ReadFile(s.attachmentPath(id))
+		must(t, err)
+		if !bytes.Equal(got, data) {
+			t.Errorf("file %s differs", id)
+		}
+	}
+}
