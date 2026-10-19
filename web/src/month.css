@@ -1,0 +1,322 @@
+/* The month view: the List / Month switch at the top of Upcoming, the grid of
+   day buttons, the selected day's list, and the Move dialog's form. A day
+   cell lists titles on desktop and a count on a phone. */
+
+/* ---------- List / Month switch ---------- */
+
+.viewswitch {
+  display: flex;
+  padding: 0 16px 8px;
+}
+.viewswitch[hidden] {
+  display: none;
+}
+.vswitch {
+  display: inline-flex;
+  border: 1px solid var(--role-line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.vswitch-btn {
+  min-height: 30px;
+  padding: 4px 14px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  color: var(--role-soft);
+}
+.vswitch-btn + .vswitch-btn {
+  border-left: 1px solid var(--role-line);
+}
+.vswitch-btn:hover {
+  background: var(--role-hover);
+  color: var(--role-fg);
+}
+.vswitch-btn[aria-pressed="true"] {
+  background: var(--role-action);
+  color: var(--role-on-accent);
+}
+
+/* ---------- header ---------- */
+
+.month {
+  padding: 0 16px 16px;
+}
+.month-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+.month-head h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.month-note {
+  margin: 0 0 8px;
+}
+
+/* ---------- grid ---------- */
+
+.mgrid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.mgrid th {
+  padding: 4px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--role-soft);
+  text-align: left;
+}
+.mcell {
+  position: relative;
+  height: 92px;
+  padding: 0;
+  vertical-align: top;
+  border: 1px solid var(--role-line);
+}
+/* The day button fills the cell, so a tap anywhere in it selects the day. */
+.mday {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.mday:hover {
+  background: var(--role-hover);
+}
+.mday-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+/* The count sits under the date on a phone; the button's name says it, so it stays out of the button's text. */
+.mcount {
+  display: none;
+  position: absolute;
+  top: 28px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--role-soft);
+}
+.mcell.is-past .mday-n,
+.mcell.is-out .mday-n {
+  color: var(--role-soft);
+  font-weight: 400;
+}
+.mcell.is-out {
+  background: var(--role-sunk);
+}
+.mcell.is-today .mday-n {
+  background: var(--role-action);
+  color: var(--role-on-accent);
+}
+.mcell.is-sel {
+  box-shadow: inset 0 0 0 2px var(--role-action);
+}
+.mcell.is-drop {
+  background: color-mix(in srgb, var(--role-action) 18%, transparent);
+}
+
+/* Titles sit over the day button; only the titles themselves take the pointer. */
+.ments {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 28px 4px 4px;
+  pointer-events: none;
+}
+.ment,
+.ment-more {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ment {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--role-raise);
+  font-size: 12px;
+  line-height: 16px;
+}
+.ment[draggable="true"] {
+  cursor: grab;
+}
+.ment-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ment svg {
+  flex: none;
+  width: 11px;
+  height: 11px;
+}
+.ment-snooze svg {
+  color: var(--role-due);
+}
+/* A repeat date is quieter than a real entry. */
+.ment-repeat {
+  background: transparent;
+  border: 1px dashed var(--role-line);
+  color: var(--role-soft);
+}
+.ment-more {
+  padding: 0 5px;
+  font-size: 11px;
+  color: var(--role-soft);
+}
+.mcell.is-past .ment {
+  opacity: 0.7;
+}
+
+/* ---------- the selected day's list ---------- */
+
+.mlist {
+  margin-top: 16px;
+}
+.mlist h2 {
+  padding: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--role-soft);
+}
+.mrows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--role-line);
+}
+.mrow-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.mrow-body:hover .mrow-title {
+  text-decoration: underline;
+}
+.mrow-time {
+  flex: none;
+  min-width: 40px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--role-soft);
+}
+.mrow-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mrow-kind {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--role-soft);
+}
+.mrow-kind svg {
+  width: 12px;
+  height: 12px;
+}
+.mrow-snooze .mrow-kind {
+  color: var(--role-due);
+}
+.mrow-repeat .mrow-title {
+  color: var(--role-soft);
+}
+/* A long press opens the Move dialog, not the browser's menu or a text selection. */
+[data-movable] {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.mlist-none {
+  padding: 8px 0;
+}
+
+/* ---------- Move dialog ---------- */
+
+.move-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.move-form input {
+  font-size: 16px;
+  padding: 7px 12px;
+  border: 1px solid var(--role-line);
+  border-radius: var(--radius);
+  background: var(--role-raise);
+}
+.move-form input[aria-invalid="true"] {
+  border-color: var(--role-error);
+}
+
+/* ---------- phone: a count instead of titles ---------- */
+
+@container app (max-width: 879.98px) {
+  .mcell {
+    height: 52px;
+  }
+  .mday {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 4px 2px;
+  }
+  .ments {
+    display: none;
+  }
+  .mcount {
+    display: block;
+  }
+  .mgrid th {
+    text-align: center;
+  }
+}

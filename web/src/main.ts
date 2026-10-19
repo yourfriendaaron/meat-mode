@@ -4,7 +4,7 @@
 
 import { ApiError, api, errorText, newId, setUnauthorizedHandler } from "./api.ts";
 import { createActions, inverse, movedOn, type Handle } from "./actions.ts";
-import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type Occurrence, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
   type Capability,
@@ -39,7 +39,9 @@ import {
   type Group,
   type ViewId,
 } from "./model.ts";
-import { fmtAgo, fmtWhen, fmtWhenAt, toLocalInput, ymd } from "./dates.ts";
+import { fmtAgo, fmtWhen, fmtWhenAt, fromYmd, startOfDay, toLocalInput, ymd } from "./dates.ts";
+import { addMonths, monthEntries, monthHTML, monthOf, monthSpan, viewSwitchHTML, type MonthEntry } from "./month.ts";
+import { canMove, decideMove, type EntryKind, type MoveEntry } from "./move.ts";
 import { completedGroups, deletedGroups } from "./history.ts";
 import { searchGroups } from "./search.ts";
 import { hasTag, shownTags } from "./tags.ts";
@@ -89,8 +91,8 @@ import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
 import { leaveSettings, sectionsHTML } from "./settings/registry.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
-/** Completed and Deleted show the closed items the hub keeps for 7 days. */
-type View = ViewId | "completed" | "deleted" | "settings" | "setup";
+/** Completed and Deleted show the closed items the hub keeps for 7 days. Month shows Upcoming as a calendar. */
+type View = ViewId | "month" | "completed" | "deleted" | "settings" | "setup";
 
 /** Views that show a page in place of the task list. */
 function isPage(v: View): v is "settings" | "setup" {
@@ -107,6 +109,9 @@ interface Toast {
 
 const UNDO_MS = 6000;
 const SWIPE_THRESHOLD = 88;
+/** How long a touch holds a month entry before its Move dialog opens, and how far it may wander meanwhile. */
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 10;
 const PHONE_MAX = 880;
 
 const S = {
@@ -137,6 +142,10 @@ const S = {
   /** Unsent text of each item's add-a-sub-task field. */
   subDrafts: new Map<string, string>(),
   snoozeKeys: null as string[] | null,
+  /** The month on screen and its selected day, both local midnights; set when the month first shows. */
+  month: null as { month: Date; selected: Date } | null,
+  /** The open Move dialog: the month entry it moves, and why the day picked was refused. */
+  move: null as { key: string; kind: EntryKind; at: string; error: string } | null,
   syncOpen: false,
   qaOpen: false,
   toast: null as Toast | null,
@@ -219,6 +228,7 @@ function viewTitle(v: View): string {
     case "today":
       return "Today";
     case "upcoming":
+    case "month":
       return "Upcoming";
     case "agents":
       return "From agents";
@@ -268,6 +278,8 @@ function currentGroups(): Group[] {
   if (tag !== null) return buildView("all", items().filter((i) => hasTag(i, tag)), now());
   if (S.view === "completed") return completedGroups(items(), now());
   if (S.view === "deleted") return deletedGroups(items());
+  // The month draws its own grid.
+  if (S.view === "month") return [];
   return buildView(S.view, items(), now());
 }
 
@@ -293,8 +305,10 @@ function renderNav() {
   const agentsWorking = working ? `<span class="sr">, ${working === 1 ? "an agent is" : `${working} agents are`} working</span>` : "";
   const upcoming = buildView("upcoming", all, n).reduce((s, g) => s + g.items.length, 0);
   const everything = all.filter(isOpen).length;
+  // The month is Upcoming drawn as a calendar, so Upcoming stays current.
+  const current = S.view === "month" ? "upcoming" : S.view;
   const entry = (v: View, label: string, icon: string, count: string) =>
-    `<button class="nav-item" data-act="view" data-view="${esc(v)}"${S.view === v ? ' aria-current="page"' : ""}>${icon}<span class="nav-label">${label}</span>${count}</button>`;
+    `<button class="nav-item" data-act="view" data-view="${esc(v)}"${current === v ? ' aria-current="page"' : ""}>${icon}<span class="nav-label">${label}</span>${count}</button>`;
   const plain = (c: number) => (c ? `<span class="count">${c}</span>` : "");
   setHTML(
     $("#nav"),
@@ -327,7 +341,7 @@ function renderNav() {
       ["all", "Browse", ICON.all, ""],
     ]
       .map(([v, label, icon, badge]) => {
-        const active = v === "all" ? browsing(S.view) : S.view === v;
+        const active = v === "all" ? browsing(S.view) : current === v;
         return `<button class="tab" data-act="view" data-view="${v}"${active ? ' aria-current="page"' : ""}>${icon}<span>${label}</span>${badge}</button>`;
       })
       .join(""),
@@ -574,6 +588,12 @@ function renderMain() {
     dl.hidden = true;
   }
 
+  // The List / Month switch heads Upcoming, unless a search or a tag shows in its place.
+  const vs = $("#viewswitch");
+  const upcoming = (S.view === "upcoming" || S.view === "month") && !searching() && !filtering();
+  vs.hidden = !upcoming;
+  setHTML(vs, upcoming ? viewSwitchHTML(S.view === "month") : "");
+
   const list = $("#list");
   const settings = $("#settings");
   const wizard = $("#wizard");
@@ -601,6 +621,10 @@ function renderMain() {
 
   if (!S.state) {
     setHTML(list, `<p class="empty">${S.loadError ? `Could not reach the hub: ${esc(S.loadError)}` : "Loading"}</p>`);
+    return;
+  }
+  if (showingMonth()) {
+    setHTML(list, monthViewHTML());
     return;
   }
   const groups = currentGroups();
@@ -633,6 +657,246 @@ function renderMain() {
           .join("")}</ul></section>`;
       })
       .join("") + (S.view === "deleted" && !searching() ? '<p class="history-note">Deleted items are removed 7 days after you delete them.</p>' : ""),
+  );
+}
+
+// ---------- render: month ----------
+
+/** Whether the month's grid is on screen: the month view, with no search or tag in its place. */
+function showingMonth(): boolean {
+  return S.view === "month" && S.month !== null && !searching() && !filtering();
+}
+
+/** The repeat dates the hub gave for the span `span` ("from/to"), and whether the last load failed. */
+const occ = { span: "", list: [] as Occurrence[], failed: false, seq: 0 };
+
+function spanKey(month: Date): string {
+  const { from, to } = monthSpan(month);
+  return `${from.toISOString()}/${to.toISOString()}`;
+}
+
+/** Loads the repeat dates for the grid on screen, then draws it again. A later load wins over an earlier one. */
+function loadOccurrences() {
+  if (!S.month || S.view !== "month") return;
+  const { from, to } = monthSpan(S.month.month);
+  const span = spanKey(S.month.month);
+  const seq = ++occ.seq;
+  if (occ.span !== span) {
+    occ.span = span;
+    occ.list = [];
+    occ.failed = false;
+  }
+  api.occurrences(from, to).then(
+    (r) => {
+      if (seq !== occ.seq) return;
+      occ.list = r.occurrences ?? [];
+      occ.failed = false;
+      render();
+    },
+    () => {
+      if (seq !== occ.seq) return;
+      occ.list = [];
+      occ.failed = true;
+      render();
+    },
+  );
+}
+
+/** Whether a month entry can move: see canMove in move.ts. */
+function movable(e: MonthEntry): boolean {
+  return canMove(e.item, e.kind, allows(e.item, "snooze"));
+}
+
+function monthViewHTML(): string {
+  const m = S.month!;
+  const current = occ.span === spanKey(m.month);
+  return monthHTML({
+    month: m.month,
+    selected: m.selected,
+    now: now(),
+    entries: monthEntries(items(), current ? occ.list : [], now()),
+    occurrencesFailed: current && occ.failed,
+    movable,
+  });
+}
+
+/** Shows `month`, selecting today when it is in it, else its 1st. */
+function showMonth(month: Date) {
+  const today = startOfDay(now());
+  const sameMonth = monthOf(today).getTime() === month.getTime();
+  S.month = { month, selected: sameMonth ? today : month };
+  render();
+  loadOccurrences();
+}
+
+function selectDay(day: string) {
+  const d = fromYmd(day);
+  if (!S.month || !d) return;
+  S.month.selected = d;
+  render();
+  $<HTMLElement>(`#list .mday[data-day="${CSS.escape(day)}"]`)?.focus({ preventScroll: true });
+}
+
+/** The month entry an element names with its data-key, data-kind and data-at, with its item. */
+function entryOf(el: HTMLElement): { item: Item; entry: MoveEntry } | null {
+  const item = byKey(el.dataset.key ?? null);
+  const at = new Date(el.dataset.at ?? "");
+  const kind = el.dataset.kind as EntryKind | undefined;
+  if (!item || !kind || Number.isNaN(at.getTime())) return null;
+  return { item, entry: { kind, at } };
+}
+
+/**
+ * Moves a month entry to `day`, through the action pipeline with an Undo.
+ * Returns why the move was refused, or "".
+ */
+function moveEntry(item: Item, entry: MoveEntry, day: Date): string {
+  const d = decideMove(item, entry, day, now(), allows(item, "snooze"), newId());
+  if (d.kind === "refuse") return d.text;
+  if (d.kind === "move") void closing([d.action], d.toast);
+  return "";
+}
+
+/** The entry being dragged on desktop. */
+let dragged: { item: Item; entry: MoveEntry } | null = null;
+
+// Native drag and drop, which fires for a mouse only: an entry in the grid drops on a day cell.
+function setupMonthDrag(list: HTMLElement) {
+  const cellOf = (e: DragEvent) => (dragged ? (e.target as HTMLElement).closest<HTMLElement>(".mgrid td[data-day]") : null);
+  const unmark = () => {
+    for (const td of list.querySelectorAll(".mgrid .is-drop")) td.classList.remove("is-drop");
+  };
+  list.addEventListener("dragstart", (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>(".ment[draggable]");
+    dragged = el ? entryOf(el) : null;
+    if (!dragged || !e.dataTransfer) return;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", dragged.item.title);
+  });
+  list.addEventListener("dragover", (e) => {
+    const td = cellOf(e);
+    if (!td) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    if (!td.classList.contains("is-drop")) {
+      unmark();
+      td.classList.add("is-drop");
+    }
+  });
+  list.addEventListener("drop", (e) => {
+    const td = cellOf(e);
+    const was = dragged;
+    dragged = null;
+    unmark();
+    if (!td || !was) return;
+    e.preventDefault();
+    const day = fromYmd(td.dataset.day ?? "");
+    if (!day) return;
+    const why = moveEntry(was.item, was.entry, day);
+    if (why) showToast(why);
+  });
+  list.addEventListener("dragend", () => {
+    dragged = null;
+    unmark();
+  });
+}
+
+/** When the touch that opened the Move dialog by a long press lifted: the click its release fires is not a tap. */
+let longPressEnded = 0;
+
+// Touch has no native drag: holding a movable entry still opens its Move dialog.
+function setupLongPress(list: HTMLElement) {
+  let press: { id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  /** The pointer whose long press opened the dialog, until it lifts. */
+  let held: number | null = null;
+  const cancel = () => {
+    if (press) clearTimeout(press.timer);
+    press = null;
+  };
+  list.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-movable]");
+    cancel();
+    if (!el) return;
+    press = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      timer: setTimeout(() => {
+        held = press?.id ?? null;
+        press = null;
+        openMove(el);
+      }, LONG_PRESS_MS),
+    };
+  });
+  list.addEventListener("pointermove", (e) => {
+    if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > LONG_PRESS_SLOP) cancel();
+  });
+  // The release may reach the dialog or its scrim, so it is watched on the window.
+  window.addEventListener("pointerup", (e) => {
+    if (held !== null && e.pointerId === held) longPressEnded = Date.now();
+    held = null;
+    cancel();
+  });
+  list.addEventListener("pointercancel", cancel);
+  // The browser's own long-press menu would cover the dialog.
+  list.addEventListener("contextmenu", (e) => {
+    if ((e.target as HTMLElement).closest("[data-movable]")) e.preventDefault();
+  });
+}
+
+let moveReturn: { key: string; kind: string } | null = null;
+
+/** Opens the Move dialog for the entry `el` names, with its day filled in. */
+function openMove(el: HTMLElement) {
+  const found = entryOf(el);
+  if (!found || !canMove(found.item, found.entry.kind, allows(found.item, "snooze"))) return;
+  S.move = { key: found.item.key, kind: found.entry.kind, at: found.entry.at.toISOString(), error: "" };
+  moveReturn = { key: found.item.key, kind: found.entry.kind };
+  render();
+  setValue("#move-date", ymd(found.entry.at));
+  $<HTMLInputElement>("#move-date").focus();
+}
+
+/** Closes the Move dialog, putting focus back on the entry's Move button when it is still there. */
+function closeMove() {
+  S.move = null;
+  render();
+  const r = moveReturn;
+  moveReturn = null;
+  if (r) document.querySelector<HTMLElement>(`#list [data-act=month-move][data-key="${CSS.escape(r.key)}"][data-kind="${r.kind}"]`)?.focus({ preventScroll: true });
+}
+
+function submitMove() {
+  const m = S.move;
+  const item = byKey(m?.key ?? null);
+  if (!m || !item) return closeMove();
+  const day = fromYmd($<HTMLInputElement>("#move-date").value);
+  const d = day ? decideMove(item, { kind: m.kind, at: new Date(m.at) }, day, now(), allows(item, "snooze"), newId()) : null;
+  if (!d || d.kind === "refuse") {
+    m.error = d?.kind === "refuse" ? d.text : "Pick a day.";
+    render();
+    $<HTMLInputElement>("#move-date").focus();
+    return;
+  }
+  closeMove();
+  if (d.kind === "move") void closing([d.action], d.toast);
+}
+
+function renderMoveDialog() {
+  const dlg = $("#move");
+  const m = S.move;
+  dlg.hidden = !m;
+  if (!m) {
+    setHTML(dlg, "");
+    return;
+  }
+  const err = m.error ? ' aria-invalid="true" aria-describedby="move-error"' : "";
+  setHTML(
+    dlg,
+    `<div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="move-h"><div class="pop-head"><h2 id="move-h">Move to another day</h2><button class="icon-btn" data-act="move-close" aria-label="Close">${ICON.close}</button></div><p class="muted small dialog-sub">${esc(byKey(m.key)?.title ?? "")}</p><form class="move-form" data-form="move" novalidate><label for="move-date">Day</label><input id="move-date" type="date" min="${ymd(now())}" required${err}>${
+      m.error ? `<p id="move-error" class="row-error" role="alert">${esc(m.error)}</p>` : ""
+    }<div class="btn-row"><button type="submit" class="btn btn-primary">Move</button><button type="button" class="btn" data-act="move-close">Cancel</button></div></form></div>`,
   );
 }
 
@@ -1137,11 +1401,12 @@ function render() {
   renderMain();
   renderDetail();
   renderSnoozeDialog();
+  renderMoveDialog();
   renderToast();
   renderTheme();
   applySelection();
   renderBulk();
-  $("#scrim").hidden = !(S.snoozeKeys || (isPhone() && (S.open || S.qaOpen)));
+  $("#scrim").hidden = !(S.snoozeKeys || S.move || (isPhone() && (S.open || S.qaOpen)));
   $("#app").classList.toggle("qa-open", S.qaOpen);
 }
 
@@ -1172,6 +1437,8 @@ async function refresh(): Promise<void> {
     if (!shellUp) return;
     render();
     updateQuickAdd();
+    // A change to the state may change the repeat dates.
+    loadOccurrences();
   })();
   try {
     await refreshing;
@@ -1721,8 +1988,10 @@ function setView(v: View) {
   if (v !== "settings") leaveSettings();
   // A new view sets the New task list afresh: the list being viewed, else the default.
   qaListTouched = false;
+  if (v === "month" && !S.month) S.month = { month: monthOf(now()), selected: startOfDay(now()) };
   render();
   updateQuickAdd();
+  loadOccurrences();
   $("#list").scrollTop = 0;
   $("#wizard").scrollTop = 0;
 }
@@ -1941,6 +2210,13 @@ let swipeEnded = 0;
 
 function onClick(e: MouseEvent) {
   if (!shellUp) return;
+  // The click a long press's release may fire lands on the Move dialog's scrim or the list: it is not a tap.
+  if (Date.now() - longPressEnded < 300) {
+    longPressEnded = 0;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
   if (Date.now() - swipeEnded < 400 && (e.target as HTMLElement).closest("#list")) {
     swipeEnded = 0;
     e.preventDefault();
@@ -1950,6 +2226,7 @@ function onClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.id === "scrim") {
     if (S.snoozeKeys) closeSnooze();
+    else if (S.move) closeMove();
     else if (S.qaOpen) closeQuickAdd();
     else closeDetail();
     return;
@@ -2097,6 +2374,22 @@ function onClick(e: MouseEvent) {
     case "snooze-close":
       closeSnooze();
       break;
+    case "month-day":
+      selectDay(btn.dataset.day ?? "");
+      break;
+    case "month-prev":
+    case "month-next":
+      if (S.month) showMonth(addMonths(S.month.month, btn.dataset.act === "month-prev" ? -1 : 1));
+      break;
+    case "month-today":
+      showMonth(monthOf(now()));
+      break;
+    case "month-move":
+      openMove(btn);
+      break;
+    case "move-close":
+      closeMove();
+      break;
     case "undo": {
       const t = S.toast;
       if (t?.undo) {
@@ -2152,9 +2445,10 @@ function isTyping(el: Element | null): boolean {
 
 function onKey(e: KeyboardEvent) {
   if (!shellUp) return;
-  if (e.key === "Tab" && S.snoozeKeys) {
-    // Keep focus inside the modal snooze dialog.
-    const f = [...document.querySelectorAll<HTMLElement>("#snooze button, #snooze input")];
+  if (e.key === "Tab" && (S.snoozeKeys || S.move)) {
+    // Keep focus inside the modal dialog.
+    const box = S.snoozeKeys ? "#snooze" : "#move";
+    const f = [...document.querySelectorAll<HTMLElement>(`${box} button, ${box} input`)];
     if (!f.length) return;
     const i = f.indexOf(document.activeElement as HTMLElement);
     const next = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : i < 0 || i === f.length - 1 ? 0 : i + 1;
@@ -2164,6 +2458,7 @@ function onKey(e: KeyboardEvent) {
   }
   if (e.key === "Escape") {
     if (S.snoozeKeys) closeSnooze();
+    else if (S.move) closeMove();
     else if (S.syncOpen) {
       S.syncOpen = false;
       renderSync();
@@ -2185,7 +2480,7 @@ function onKey(e: KeyboardEvent) {
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey || isTyping(document.activeElement)) return;
-  if (S.snoozeKeys) return;
+  if (S.snoozeKeys || S.move) return;
   const active = document.activeElement as HTMLElement | null;
   switch (e.key) {
     case "j":
@@ -2295,6 +2590,7 @@ function onSubmit(e: SubmitEvent) {
   else if (form.dataset.form === "check-add" && S.open) addToChecklist(S.open);
   else if (form.dataset.form === "sub-add" && S.open) void addSubtask(S.open);
   else if (form.dataset.form === "snooze-type") submitSnoozeType(form);
+  else if (form.dataset.form === "move") submitMove();
   else if (shellUp) void extSubmit(form, ctx);
 }
 
@@ -2399,6 +2695,7 @@ function shell(): string {
   <div id="dayload" class="dayload" hidden></div>
   <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>
   <div id="tagbar" class="tagbar" role="status" hidden></div>
+  <div id="viewswitch" class="viewswitch" hidden></div>
   <div id="list" class="list"></div>
   <div id="bulkbar" class="bulkbar" role="toolbar" aria-label="Selected tasks" hidden></div>
   <div id="settings" class="settings" hidden></div>
@@ -2411,6 +2708,7 @@ function shell(): string {
 <nav id="tabs" class="tabbar" aria-label="Views"></nav>
 <div id="syncpop" class="popover" role="dialog" aria-labelledby="syncpop-h" hidden></div>
 <div id="snooze" class="dialog-wrap" hidden></div>
+<div id="move" class="dialog-wrap" hidden></div>
 <div id="toast" class="toast-region" aria-live="polite" aria-atomic="true"></div>`;
 }
 
@@ -2442,6 +2740,7 @@ function leaveShell() {
   S.open = null;
   S.selected = null;
   S.snoozeKeys = null;
+  S.move = null;
   S.query = "";
   S.qaOpen = false;
   S.syncOpen = false;
@@ -2566,6 +2865,8 @@ function startApp() {
   esRetry = 0;
   $("#qa-input").addEventListener("scroll", () => ($("#qa-backdrop").scrollLeft = $<HTMLInputElement>("#qa-input").scrollLeft));
   setupSwipe($("#list"));
+  setupMonthDrag($("#list"));
+  setupLongPress($("#list"));
 
   const params = new URL(location.href).searchParams;
   const want = params.get("item");
