@@ -56,13 +56,7 @@ func upgradeExportV1(raw json.RawMessage) (json.RawMessage, error) {
 		if json.Unmarshal(it["labels"], &labels) != nil {
 			continue
 		}
-		kept := []string{}
-		for _, l := range labels {
-			if clean, err := cleanLabels(append(kept, l)); err == nil {
-				kept = clean
-			}
-		}
-		b, err := json.Marshal(kept)
+		b, err := json.Marshal(keptLabels(labels))
 		if err != nil {
 			return nil, err
 		}

@@ -89,6 +89,9 @@ func exportItems(tx *sql.Tx) ([]api.ExportItem, error) {
 			return nil, err
 		}
 		it.Run, it.Pending, it.Error = nil, false, ""
+		if it.Labels != nil {
+			it.Labels = keptLabels(it.Labels)
+		}
 		items = append(items, it)
 		owners = append(owners, owner)
 	}

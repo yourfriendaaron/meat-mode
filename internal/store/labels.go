@@ -40,3 +40,17 @@ func cleanLabels(in []string) ([]string, error) {
 	}
 	return out, nil
 }
+
+// keptLabels returns the labels that pass the tag rules, dropping each one
+// that does not. Items moved off a machine's personal repo carry the bead's
+// labels as they were; an export holds only what a restore takes, so a
+// hub's own export always restores.
+func keptLabels(labels []string) []string {
+	kept := []string{}
+	for _, l := range labels {
+		if clean, err := cleanLabels(append(kept, l)); err == nil {
+			kept = clean
+		}
+	}
+	return kept
+}

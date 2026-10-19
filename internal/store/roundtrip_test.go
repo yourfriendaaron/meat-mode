@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -72,5 +73,27 @@ func TestExportRestoresIntoAFreshHub(t *testing.T) {
 	must(t, err)
 	if string(gotJSON) != string(wantJSON) {
 		t.Errorf("export after restore\n got %s\nwant %s", gotJSON, wantJSON)
+	}
+}
+
+// Items moved off a machine's personal repo keep the bead's labels as they
+// were, which the tag rules may refuse. The hub's own export must still
+// restore.
+func TestExportOfMovedLabelsRestores(t *testing.T) {
+	s, c := open(t)
+	legacySeed(t, s, "laptop", api.Item{ID: "lp-1", Title: "Water the plants", Status: "open", Priority: 2,
+		CreatedAt: c.t, UpdatedAt: c.t, Labels: []string{"human", "two words", "garden"}})
+	must(t, s.TransferPersonal())
+	ex, err := s.Export()
+	must(t, err)
+	file, err := json.Marshal(ex)
+	must(t, err)
+	fresh, _ := open(t)
+	_, err = fresh.Restore(bytes.NewReader(file))
+	must(t, err)
+	for _, it := range mustState(t, fresh).Items {
+		if it.Title == "Water the plants" && !slices.Equal(it.Labels, []string{"garden"}) {
+			t.Fatalf("labels %q, want [garden]", it.Labels)
+		}
 	}
 }
