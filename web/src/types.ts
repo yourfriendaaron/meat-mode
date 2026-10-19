@@ -159,7 +159,17 @@ export interface Bridge {
   version?: string;
   bdVersion?: string;
   /** The trackers the machine runs, with their tools' versions. */
-  trackers?: { name: string; version?: string }[];
+  trackers?: TrackerVersion[];
+}
+
+/** One tracker a machine runs (docs/trackers.md, On the wire). */
+export interface TrackerVersion {
+  name: string;
+  /** The name the app shows, such as "Backlog.md". */
+  title?: string;
+  version?: string;
+  /** The command an agent runs to raise a task for the person. */
+  raise?: string;
 }
 
 export interface Payload {

@@ -85,12 +85,13 @@ const AGENDA: GroupId[] = ["pastdue", "today", "evening", "done"];
 /** The bridge name under which the hub keeps the personal list itself. */
 export const HUB_BRIDGE = "hub";
 
-/** Personal: on the list the hub keeps itself. Agent: from a repo on an agent machine. */
+/** Personal: on a list the hub keeps itself, the personal list or a project. Agent: from a repo on an agent machine. */
 export type Kind = "personal" | "agent";
 
 /**
  * The one rule for what an item, repo or action belongs to: the personal list
- * is the hub's own bridge, everything else came from an agent machine.
+ * and the projects are the hub's own bridge, everything else came from an
+ * agent machine.
  */
 export function kindOf(x: { bridge: string }): Kind {
   return x.bridge === HUB_BRIDGE ? "personal" : "agent";
@@ -426,13 +427,21 @@ export function syncStatus(state: Pick<State, "unapplied" | "bridges">, now: Dat
   return { tone: "synced", text: "Synced" };
 }
 
-/** Repos shown as lists: personal and opted-in ones, personal first, then by name. */
+/** Whether a repo is the personal list itself, rather than a project the hub keeps or a machine's repo. */
+export function isPersonalList(r: Pick<Repo, "bridge" | "personal">): boolean {
+  return isPersonal(r) && r.personal;
+}
+
+/**
+ * Repos shown as lists: the hub's own (the personal list and the projects)
+ * and opted-in ones, the personal list first, then by name.
+ */
 export function visibleRepos(repos: Repo[]): Repo[] {
   return repos
     .filter((r) => isPersonal(r) || r.optedIn)
     .sort(
       (a, b) =>
-        Number(isPersonal(b)) - Number(isPersonal(a)) ||
+        Number(isPersonalList(b)) - Number(isPersonalList(a)) ||
         repoLabel(a).localeCompare(repoLabel(b)) ||
         a.name.localeCompare(b.name) ||
         a.bridge.localeCompare(b.bridge),

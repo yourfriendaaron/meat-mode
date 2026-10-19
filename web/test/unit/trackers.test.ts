@@ -49,6 +49,7 @@ test("a machine's repos name their tracker, and one without agents has no agents
 
 test("a machine's trackers show with their versions, and an older machine's bd version", () => {
   assert.equal(trackersText({ name: "desk", createdAt: "", trackers: [{ name: "beads", version: "0.40.0" }, { name: "ticket" }] }), "beads 0.40.0 · ticket");
+  assert.equal(trackersText({ name: "desk", createdAt: "", trackers: [{ name: "backlog", title: "Backlog.md", version: "1.20.0" }] }), "Backlog.md 1.20.0");
   assert.equal(trackersText({ name: "desk", createdAt: "", bdVersion: "0.39.1" }), "bd 0.39.1");
   assert.equal(trackersText({ name: "desk", createdAt: "" }), "");
 });

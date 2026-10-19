@@ -306,6 +306,14 @@ export class FakeHub {
     return this.items.find((i) => i.key === key);
   }
 
+  /** A project the hub keeps, as an agent's first add makes it, with to-dos in it. */
+  addProject(name: string, titles: string[]): void {
+    this.repos.push({ bridge: HUB, name, personal: false, optedIn: true });
+    titles.forEach((title, i) =>
+      this.items.push({ ...item("personal", `mm-${90 + i}`, title, { createdBy: "planner" }), key: `${HUB}/${name}/mm-${90 + i}`, repo: name }),
+    );
+  }
+
   /** Switches agents on for a repo, as if the bridge had applied the switch. */
   allowAgents(repo: string, on = true): void {
     const r = this.repos.find((x) => x.name === repo && !x.personal);
@@ -363,7 +371,7 @@ export class FakeHub {
   }
 
   private askRefusal(bridge: string, repo: string): string {
-    if (bridge === HUB) return "the personal list has no agents";
+    if (bridge === HUB) return "the personal list and projects have no agents";
     const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
     if (!r?.agentsAllowed) return `agents are not allowed in repo "${repo}"; switch them on at its machine: meat-mode bridge agents on ${repo}`;
     return "";
@@ -716,7 +724,7 @@ export class FakeHub {
     let beadId = "";
     let before: Item | null = null;
     let payload: Payload = a.payload;
-    // The hub applies an action on its own personal list at once.
+    // The hub applies an action on its own lists at once.
     const onHub = (a.bridge ?? a.key?.split("/")[0]) === HUB;
     if (EDIT_KINDS.includes(a.kind)) {
       const it = a.key ? this.find(a.key) : undefined;
@@ -730,12 +738,12 @@ export class FakeHub {
       beadId = it.id;
     } else if (a.kind === "sync") {
       const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
-      if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
+      if (!r || r.bridge === HUB) return this.json(route, 400, { error: "no such repo" });
       r.optedIn = Boolean(a.payload.on);
       r.pending = true;
     } else if (a.kind === "agents") {
       const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
-      if (!r || r.personal) return this.json(route, 400, { error: "no such repo" });
+      if (!r || r.bridge === HUB) return this.json(route, 400, { error: "no such repo" });
       // Agents switch on only at the agent machine (docs/api.md, Agents).
       if (a.payload.on) return this.json(route, 400, { error: `switch agents on at this machine: meat-mode bridge agents on ${repo}` });
       r.agentsAllowed = false;
@@ -753,7 +761,7 @@ export class FakeHub {
       }
       const r = a.payload.repeat;
       if (r) {
-        if (!onHub) return this.json(route, 400, { error: "repeat is for the personal list only" });
+        if (!onHub) return this.json(route, 400, { error: "only the personal list and projects take a repeat" });
         if (!a.payload.due) return this.json(route, 400, { error: "a repeat needs a due date" });
         const why = repeatError(r);
         if (why) return this.json(route, 400, { error: why });
