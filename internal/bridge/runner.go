@@ -58,10 +58,11 @@ type AgentRunner struct {
 	mu      sync.Mutex
 	records map[string]*beadRecord // by runKey
 	live    map[string]*liveRun
-	sets    map[string]map[string]bool // repo -> bead ids in its last pushed set
-	authors map[string]bool            // who the app writes as; see appAuthor
-	touched map[string]bool            // repos whose beads a run end changed
-	dirty   bool
+	sets    map[string]map[string]string // repo -> the bridge's fingerprints of its last pushed set
+	authors map[string]bool              // who the app writes as; see appAuthor
+	touched map[string]bool              // repos whose beads a run end changed
+	dirty   bool                         // the run list changed since the last send
+	sentAt  time.Time                    // when the run list was last sent
 	changed chan struct{}
 	gone    bool // tests: the process "died"; nothing is written any more
 	wg      sync.WaitGroup
@@ -147,7 +148,7 @@ func (r *AgentRunner) init() {
 	}
 	if r.live == nil {
 		r.live = map[string]*liveRun{}
-		r.sets = map[string]map[string]bool{}
+		r.sets = map[string]map[string]string{}
 		r.authors = map[string]bool{}
 		r.touched = map[string]bool{}
 		r.changed = make(chan struct{}, 1)
@@ -325,6 +326,9 @@ func (r *AgentRunner) Ask(req askRequest) {
 		r.authors[req.Author] = true
 	}
 	rec := r.record(req.Repo.Name, req.BeadID)
+	// A second ledger beside the replay journal: replay hands an ask to the
+	// runner even when the journal returns a cached result (the hub never
+	// heard it), so this is what keeps that ask from starting a second run.
 	if slices.Contains(rec.Asks, req.ActionID) {
 		return
 	}
@@ -815,16 +819,18 @@ func (r *AgentRunner) Shutdown() {
 	}
 }
 
-// Listed tells the runner the bead ids of a repo's set as last sent to the
-// hub. A settled run on a bead that left the set is dropped, and its
-// worktree removed when Git calls it clean (see removeWorktree).
-func (r *AgentRunner) Listed(repo string, ids map[string]bool) {
+// Listed tells the runner a repo's set as last sent to the hub: the bridge's
+// fingerprints by bead id. The runner keeps set and only reads it, so the
+// caller must replace it, never change it. A settled run on a bead that left
+// the set is dropped, and its worktree removed when Git calls it clean (see
+// removeWorktree).
+func (r *AgentRunner) Listed(repo string, set map[string]string) {
 	r.mu.Lock()
 	r.init()
-	r.sets[repo] = ids
+	r.sets[repo] = set
 	var gone []*beadRecord
 	for k, rec := range r.records {
-		if rec.Repo != repo || ids[rec.BeadID] || r.live[k] != nil {
+		if _, in := set[rec.BeadID]; rec.Repo != repo || in || r.live[k] != nil {
 			continue
 		}
 		if rec.Run != nil {
@@ -854,27 +860,74 @@ func (r *AgentRunner) Listed(repo string, ids map[string]bool) {
 	r.mu.Unlock()
 }
 
-// Dirty reports whether the run list changed since the last Reports.
-func (r *AgentRunner) Dirty() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.dirty
-}
+// putRuns sends a run list to the hub.
+type putRuns func(context.Context, []api.RunReport) error
 
-// MarkDirty asks for the run list to be sent again, after a failed send.
-func (r *AgentRunner) MarkDirty() {
+// Flush sends the run list through put when it changed and RunsEvery has
+// passed since the last send, or always when force is set. After a failed
+// send the list counts as changed, so the next Flush sends it again.
+func (r *AgentRunner) Flush(ctx context.Context, put putRuns, force bool) error {
 	r.mu.Lock()
-	r.dirty = true
-	r.mu.Unlock()
-}
-
-// Reports returns the run list for the hub: every live run, and the latest
-// settled run of each bead still in its repo's set (or of a repo not yet
-// listed since the bridge started).
-func (r *AgentRunner) Reports() []api.RunReport {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.init()
+	if !force && (!r.dirty || r.now().Sub(r.sentAt) < RunsEvery) {
+		r.mu.Unlock()
+		return nil
+	}
+	list := r.reports()
+	r.mu.Unlock()
+	return r.send(ctx, put, list)
+}
+
+// ReportApplying sends the run list through put now, naming actionID on the
+// run of bead in repo, so the hub holds the run as the action left it before
+// the action's result arrives and never counts the action twice.
+func (r *AgentRunner) ReportApplying(ctx context.Context, put putRuns, actionID, repo, bead string) error {
+	r.mu.Lock()
+	r.init()
+	list := r.reports()
+	r.mu.Unlock()
+	for i := range list {
+		if list[i].Repo == repo && list[i].BeadID == bead {
+			list[i].Applying = actionID
+		}
+	}
+	return r.send(ctx, put, list)
+}
+
+// WaitTurn returns once RunsEvery has passed since the last send, or when ctx
+// ends.
+func (r *AgentRunner) WaitTurn(ctx context.Context) {
+	r.mu.Lock()
+	wait := RunsEvery - r.now().Sub(r.sentAt)
+	r.mu.Unlock()
+	if wait <= 0 {
+		return
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(wait):
+	}
+}
+
+// send puts list and records the outcome. The bridge sends from one
+// goroutine, so sends never overlap; the lock is not held during put so a
+// slow hub never holds up the runs.
+func (r *AgentRunner) send(ctx context.Context, put putRuns, list []api.RunReport) error {
+	err := put(ctx, list)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err != nil {
+		r.dirty = true
+		return err
+	}
+	r.sentAt = r.now()
+	return nil
+}
+
+// reports returns the run list for the hub and marks it sent: every live
+// run, and the latest settled run of each bead still in its repo's set (or
+// of a repo not yet listed since the bridge started). Callers hold mu.
+func (r *AgentRunner) reports() []api.RunReport {
 	r.dirty = false
 	out := []api.RunReport{}
 	for k, rec := range r.records {
@@ -882,7 +935,7 @@ func (r *AgentRunner) Reports() []api.RunReport {
 			continue
 		}
 		set, known := r.sets[rec.Repo]
-		if r.live[k] == nil && known && !set[rec.BeadID] {
+		if _, in := set[rec.BeadID]; r.live[k] == nil && known && !in {
 			continue
 		}
 		out = append(out, api.RunReport{Repo: rec.Repo, BeadID: rec.BeadID, Run: *rec.Run})

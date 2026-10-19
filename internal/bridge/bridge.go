@@ -71,7 +71,6 @@ type Bridge struct {
 	reposSent  []api.Repo
 	reposAt    time.Time
 	lastFullAt time.Time
-	runsAt     time.Time // when the run list was last sent
 }
 
 type repoState struct {
@@ -181,15 +180,9 @@ func (b *Bridge) Run(ctx context.Context) error {
 // flushRuns syncs the repos a run end changed and sends the run list, at
 // most once per RunsEvery. Errors wait for the next tick.
 func (b *Bridge) flushRuns(ctx context.Context) {
-	if wait := RunsEvery - b.now().Sub(b.runsAt); wait > 0 {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(wait):
-		}
-	}
-	if b.name == "" {
-		return // not connected; the next tick sends everything
+	b.Runner.WaitTurn(ctx)
+	if ctx.Err() != nil || b.name == "" {
+		return // stopping, or not connected; the next tick sends everything
 	}
 	for _, name := range b.Runner.TakeTouched() {
 		if st := b.repos[name]; st != nil && st.Synced() {
@@ -198,44 +191,16 @@ func (b *Bridge) flushRuns(ctx context.Context) {
 			}
 		}
 	}
-	if err := b.pushRuns(ctx, false); err != nil {
+	if err := b.Runner.Flush(ctx, b.putRuns, false); err != nil {
 		b.log().Warn("cannot send the run list; retrying with the next round", "err", err)
 	}
 }
 
-// pushRuns sends the run list when it changed and RunsEvery has passed, or
-// always when force is set.
-func (b *Bridge) pushRuns(ctx context.Context, force bool) error {
-	if b.Runner == nil {
-		return nil
-	}
-	if !force && (!b.Runner.Dirty() || b.now().Sub(b.runsAt) < RunsEvery) {
-		return nil
-	}
-	return b.putRuns(ctx, b.Runner.Reports())
-}
-
-// pushApplied sends the run list before a's result, naming a on the run of
-// beadID, so the hub does not count a both in that run and as pending.
-func (b *Bridge) pushApplied(ctx context.Context, a api.Action, beadID string) error {
-	if b.Runner == nil {
-		return nil
-	}
-	reports := b.Runner.Reports()
-	for i := range reports {
-		if reports[i].Repo == a.Repo && reports[i].BeadID == beadID {
-			reports[i].Applying = a.ID
-		}
-	}
-	return b.putRuns(ctx, reports)
-}
-
+// putRuns is the runner's way to the hub.
 func (b *Bridge) putRuns(ctx context.Context, reports []api.RunReport) error {
 	if err := b.Hub.PutRuns(ctx, reports); err != nil {
-		b.Runner.MarkDirty()
 		return hubError{err}
 	}
-	b.runsAt = b.now()
 	return nil
 }
 
@@ -250,7 +215,7 @@ func (b *Bridge) stopRuns() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := b.pushRuns(ctx, true); err != nil {
+	if err := b.Runner.Flush(ctx, b.putRuns, true); err != nil {
 		b.log().Warn("cannot report the runs ended by the stop", "err", err)
 	}
 }
@@ -302,7 +267,10 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if full {
 		b.lastFullAt = b.now()
 	}
-	return b.hubErr(b.pushRuns(ctx, full))
+	if b.Runner == nil {
+		return nil
+	}
+	return b.hubErr(b.Runner.Flush(ctx, b.putRuns, full))
 }
 
 // hubErr makes the next tick say hello again after a hub failure, so the hub
@@ -430,11 +398,7 @@ func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
 	}
 	st.fps, st.items, st.pushed, st.primed = fps, items, b.now(), true
 	if b.Runner != nil {
-		ids := make(map[string]bool, len(fps))
-		for id := range fps {
-			ids[id] = true
-		}
-		b.Runner.Listed(st.Name, ids)
+		b.Runner.Listed(st.Name, fps) // fps is never changed from here on
 	}
 	return nil
 }
