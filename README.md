@@ -53,7 +53,7 @@ Each task from an agent shows why the agent needs you, which project it came fro
 
 <p>
   <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme, grouped into Past due, Today, This evening, Tomorrow and This week. &quot;Call Sam about the weekend&quot; carries a weekend tag, the agent's task &quot;Order compost for the beds&quot; has a New badge, and a tab bar with Today, Upcoming, Agents and Browse sits at the bottom.">
-  <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day and carries a garden tag, has a checklist with one of two entries ticked, and offers Done, Edit and Delete, a sub-task box, Files with Attach a file and Take a photo, and snooze choices.">
+  <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day and carries a garden tag, and offers Done, Edit and Delete. Under Sub-tasks, one of two is ticked, each with a remove button, above a box to add another; Files offers Attach a file, Take a photo and Choose a photo, then come the snooze choices.">
 </p>
 
 ### Hand a task to an agent
