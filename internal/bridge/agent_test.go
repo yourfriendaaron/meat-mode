@@ -19,7 +19,7 @@ func TestAgentConfigFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Harness != "claude" || c.Command != nil || c.Name != "agent" || c.Timeout != 30*time.Minute || c.BudgetUSD != 2 ||
+	if c.Harness != "claude" || c.Command != nil || c.Name != "" || c.Timeout != 30*time.Minute || c.BudgetUSD != 2 ||
 		c.RunsPerTask != 10 || c.Concurrent != 2 {
 		t.Errorf("defaults = %+v", c)
 	}

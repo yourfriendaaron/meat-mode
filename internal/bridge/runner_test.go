@@ -221,7 +221,7 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 	if !hasCommentBy(w.show(dir, id), author, "Please go slow and close it") {
 		t.Errorf("the ask's note is missing: %+v", w.show(dir, id).Comments)
 	}
-	if r := w.hubRun(id); r.State != api.RunWorking || r.Count != 1 || r.Agent != "planner" || r.EndedAt != nil {
+	if r := w.hubRun(id); r.State != api.RunWorking || r.Count != 1 || r.Agent != "helper" || r.EndedAt != nil {
 		t.Errorf("hub run at start = %+v", r)
 	}
 	// The run list reached the hub before the ask's result, so the app never
@@ -235,7 +235,7 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 	if run.State != api.RunDone || run.Activity != "Closing the bead" || run.Reason != "" {
 		t.Errorf("settled run = %+v", run)
 	}
-	if i := w.show(dir, id); i.Status != "closed" || !hasCommentBy(i, "planner", "Done: watered.") {
+	if i := w.show(dir, id); i.Status != "closed" || !hasCommentBy(i, "helper", "Done: watered.") {
 		t.Errorf("bead after the run = %s %+v", i.Status, i.Comments)
 	}
 	w.tick(b)
@@ -534,6 +534,23 @@ func TestAgentShutdownEndsRuns(t *testing.T) {
 	w.waitGroupGone(pid)
 	if r := w.hubRun(id); r.State != api.RunStopped || r.Reason != api.ReasonRestarted {
 		t.Errorf("hub run = %+v", r)
+	}
+}
+
+// A run is named for the harness that runs it, never the bead's creator:
+// a bead a person raised under their own name still runs as the agent.
+func TestRunNamedForHarness(t *testing.T) {
+	t.Parallel()
+	w, dir, id := agentWorld(t)
+	b := w.agentBridge(true, func(c *AgentConfig) { c.Name = "" })
+	w.tick(b)
+	w.ask(b, "ask-name", id, "Please close it")
+	run := w.waitRun(b, id, settled)
+	if run.Agent != "Claude Code" {
+		t.Errorf("run agent = %q, want the harness's title", run.Agent)
+	}
+	if i := w.show(dir, id); !hasCommentBy(i, "Claude Code", "Done: watered.") {
+		t.Errorf("the agent's note is not by the harness: %+v", i.Comments)
 	}
 }
 

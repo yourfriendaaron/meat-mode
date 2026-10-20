@@ -263,8 +263,8 @@ const (
 type Run struct {
 	ID    string `json:"id"`    // the bridge's id for this run; a new ask that starts a run gets a new one
 	State string `json:"state"` // RunWorking, RunWaiting, RunDone or RunStopped
-	// Agent is the name the app shows for the agent ("planner"): the bead's
-	// creator, else the bridge's configured agent name.
+	// Agent is the name the app shows for the agent ("Claude Code"): the
+	// bridge's configured agent name, else its harness's title.
 	Agent string `json:"agent"`
 	// Activity is one line in plain words of what the agent is doing now,
 	// such as "Editing notes.txt"; while settled, the last thing it did.

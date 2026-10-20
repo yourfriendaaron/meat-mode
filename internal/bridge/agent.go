@@ -27,7 +27,8 @@ type AgentConfig struct {
 	// split on whitespace with no shell. The harness still adds what each
 	// run needs.
 	Command []string
-	// Name is shown for the agent when the task's creator is not one.
+	// Name is shown for the agent, and its notes carry it; the harness's
+	// title when unset.
 	Name        string
 	Timeout     time.Duration // wall clock for one run
 	BudgetUSD   float64       // spending cap for one run
@@ -39,7 +40,6 @@ type AgentConfig struct {
 func DefaultAgentConfig() AgentConfig {
 	return AgentConfig{
 		Harness:     harness.Default,
-		Name:        "agent",
 		Timeout:     30 * time.Minute,
 		BudgetUSD:   2,
 		RunsPerTask: 10,

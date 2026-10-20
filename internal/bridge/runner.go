@@ -143,8 +143,7 @@ type askRequest struct {
 	BeadID   string
 	Text     string // the note; "" for none
 	Author   string
-	Allowed  bool   // the repo's agents switch is on
-	Creator  string // the bead's created_by
+	Allowed  bool // the repo's agents switch is on
 }
 
 func runKey(repo, bead string) string { return repo + "\x00" + bead }
@@ -327,13 +326,11 @@ func (r *AgentRunner) appAuthor(name string) bool {
 	return r.authors[name] || name == defaultActor || strings.HasSuffix(name, "-app")
 }
 
-// agentName is the name shown for a bead's agent: its creator, unless the app
-// created it, else the configured name. Callers hold mu.
-func (r *AgentRunner) agentName(creator string) string {
-	if creator == "" || r.appAuthor(creator) {
-		return r.Config.Name
-	}
-	return creator
+// agentName is the name shown for the agent that runs: the configured name,
+// else the harness's title. The bead's creator is not it: a bead a person or
+// another agent raised still runs in this machine's harness.
+func (r *AgentRunner) agentName() string {
+	return cmp.Or(strings.TrimSpace(r.Config.Name), r.Harness.Info().Title, "agent")
 }
 
 // Ask applies an ask whose note is already on the bead. On a live run the
@@ -400,7 +397,7 @@ func (r *AgentRunner) Ask(req askRequest) {
 
 // start starts a run on rec, or records why it cannot. Callers hold mu.
 func (r *AgentRunner) start(req askRequest, rec *beadRecord) {
-	run := &api.Run{ID: newRunID(), Agent: r.agentName(req.Creator), StartedAt: r.now().UTC(), Count: rec.Count}
+	run := &api.Run{ID: newRunID(), Agent: r.agentName(), StartedAt: r.now().UTC(), Count: rec.Count}
 	rec.Run = run
 	refuse := func(reason, detail string) {
 		r.settleRun(run, api.RunStopped, reason, detail)

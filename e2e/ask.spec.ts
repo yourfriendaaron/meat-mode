@@ -41,16 +41,17 @@ const test = base.extend<{ w: World }>({
 base.beforeAll(async () => {
   if (process.env.E2E_REQUIRE_BD && !hasBd()) throw new Error(BD_MISSING);
   const w = (world = await World.create());
-  // The agent's beads are planner's, so the app names the agent planner.
+  // Alex raised the beads, but the bridge's agent is called planner, and the
+  // app names the agent that runs, never the bead's creator.
   const m = await w.addMachine("laptop", [{ name: "chores", prefix: "ch", optedIn: false, human: [], commit: true }]);
-  for (const t of [PLANTS, METER]) await w.create(m.repos.chores, t, "-l", "human", "--actor", AGENT);
+  for (const t of [PLANTS, METER]) await w.create(m.repos.chores, t, "-l", "human", "--actor", "alex");
   const { token } = await w.api<{ token: string }>("/api/bridges", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name: "laptop" }),
   });
   await w.pair("laptop", w.hubURL, token);
-  w.startBridge("laptop", await w.fakeAgentEnv("2s"));
+  w.startBridge("laptop", { ...(await w.fakeAgentEnv("2s")), MEAT_MODE_AGENT_NAME: AGENT });
 });
 
 base.afterEach(async ({}, info) => {

@@ -381,13 +381,8 @@ func (b *Bridge) ask(ctx context.Context, a api.Action, st *repoState, res api.A
 		if strings.TrimSpace(a.Payload.Text) != "" {
 			req.Text = a.Payload.Text
 		}
-		if it, ok := st.items[a.BeadID]; ok {
-			req.Creator = it.CreatedBy
-		} else if i, err := st.Tracker.Show(ctx, st.Dir, a.BeadID); err == nil {
-			req.Creator = i.CreatedBy
-		}
 	case a.Kind == api.KindAdd && a.Payload.Ask && res.BeadID != "":
-		req.BeadID, req.Creator = res.BeadID, actor
+		req.BeadID = res.BeadID
 	default:
 		return
 	}

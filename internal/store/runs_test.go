@@ -137,8 +137,8 @@ func TestAskFoldsNoteAndProvisionalRun(t *testing.T) {
 		t.Fatalf("run %+v", r)
 	}
 
-	// Without text there is no note. The agent is the bead's creator, and a
-	// settled run's count goes on.
+	// Without text there is no note. The agent is not the bead's creator, and
+	// a settled run's count goes on.
 	must(t, s.ReplaceItems("laptop", "garden", []api.Item{
 		{ID: "gd-1", Title: "Water the plants", Status: "closed", CreatedBy: "planner"},
 	}))
@@ -146,7 +146,7 @@ func TestAskFoldsNoteAndProvisionalRun(t *testing.T) {
 	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindAsk, Key: k1, Payload: api.Payload{Text: "  "}}, "alex-app")
 	must(t, err)
 	it = item(t, mustState(t, s), k1)
-	if len(it.Comments) != 0 || it.Run == nil || it.Run.Agent != "planner" || it.Run.Count != 1 {
+	if len(it.Comments) != 0 || it.Run == nil || it.Run.Agent != "agent" || it.Run.Count != 1 {
 		t.Fatalf("ask on a closed item: %+v run %+v", it, it.Run)
 	}
 	settled := run("gd-1", "r1", api.RunWaiting, c.t.Add(-time.Hour))

@@ -398,7 +398,7 @@ The bridge reads these variables (see `.env.example`):
 |---|---|---|
 | `MEAT_MODE_AGENT_HARNESS` | `claude` | The harness that runs agents: `claude` for Claude Code, or another name from [docs/harnesses.md](harnesses.md). The bridge refuses to start with a name it does not know. |
 | `MEAT_MODE_AGENT_COMMAND` | the harness's own | The harness's program and fixed flags, split on spaces, with no shell. The harness still adds the prompt, the session and the cap. For Claude Code the default is `claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages --permission-mode auto --permission-prompts none`. |
-| `MEAT_MODE_AGENT_NAME` | `agent` | The name shown for the agent. A task an agent created shows its creator's name instead. |
+| `MEAT_MODE_AGENT_NAME` | the harness's name | The name shown for the agent, as in "Claude Code replied", and the author of its notes. |
 | `MEAT_MODE_AGENT_TIMEOUT` | `30m` | The longest one run may take. |
 | `MEAT_MODE_AGENT_BUDGET_USD` | `2` | The most one run may spend. A harness that caps its own spending gets it (Claude Code as `--max-budget-usd`); for one that reports its cost the bridge stops the run past it; a harness that reports no cost has the time limit only, and the app says so. |
 | `MEAT_MODE_AGENT_RUNS_PER_TASK` | `10` | How many runs one task may have, ever. Nothing resets the count. |

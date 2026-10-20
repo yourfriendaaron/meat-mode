@@ -196,11 +196,8 @@ func foldRun(it *api.Item, a api.Action) {
 			StartedAt: a.CreatedAt,
 			Count:     1,
 		}
-		switch {
-		case old != nil && old.Agent != "":
+		if old != nil && old.Agent != "" {
 			r.Agent = old.Agent
-		case it.CreatedBy != "":
-			r.Agent = it.CreatedBy
 		}
 		if old != nil {
 			r.Count = old.Count + 1
