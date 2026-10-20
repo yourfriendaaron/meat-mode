@@ -186,3 +186,82 @@ test("Done on a repeating parent reopens its done sub-tasks, and Undo closes the
   await expect(row(page, "Water the plants").locator(".chip-subtasks")).toHaveText("1/1");
   await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
 });
+
+test("a personal item's sub-tasks tick, and the remove button deletes one with Undo", async ({ page, hub }) => {
+  const base = hub.find("hub/personal/pe-1")!;
+  hub.items.push(
+    { ...structuredClone(base), key: "hub/personal/pe-11", id: "pe-11", title: "Fill the watering can", parent: "pe-1", dueAt: null, comments: [] },
+    {
+      ...structuredClone(base),
+      key: "hub/personal/pe-12",
+      id: "pe-12",
+      title: "Move the fern out of the sun",
+      parent: "pe-1",
+      dueAt: null,
+      comments: [],
+      status: "closed",
+      closeReason: "Done in Meat Mode",
+      closedAt: "2026-10-14T08:00:00Z",
+    },
+  );
+  await openApp(page);
+  await row(page, "Water the plants").locator(".row-body").click();
+  const subs = page.locator("#detail .subtasks");
+  await expect(subs.locator(".sub-title")).toHaveText(["Fill the watering can", "Move the fern out of the sun"]);
+
+  // Tick and Undo.
+  await subs.getByRole("button", { name: "Mark done: Fill the watering can" }).click();
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "hub/personal/pe-11" });
+  await expect(page.locator("#toast")).toContainText("Done: Fill the watering can");
+  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => hub.find("hub/personal/pe-11")?.status).toBe("open");
+
+  // Remove an open one: it is deleted, and Undo brings it back open.
+  await subs.getByRole("button", { name: "Remove: Fill the watering can" }).click();
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "dismiss", key: "hub/personal/pe-11" });
+  await expect(page.locator("#toast")).toContainText("Deleted: Fill the watering can");
+  await expect(subs.locator(".sub-title")).toHaveText(["Move the fern out of the sun"]);
+  await expect(page.getByLabel("Add a sub-task")).toBeFocused();
+  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+  await expect(subs.locator(".sub-title")).toHaveText(["Fill the watering can", "Move the fern out of the sun"]);
+  expect(hub.find("hub/personal/pe-11")?.status).toBe("open");
+
+  // Remove a done one: Undo brings it back done.
+  await subs.getByRole("button", { name: "Remove: Move the fern out of the sun" }).click();
+  await expect(page.locator("#toast")).toContainText("Deleted: Move the fern out of the sun");
+  await expect(subs.locator(".sub-title")).toHaveText(["Fill the watering can"]);
+  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => hub.find("hub/personal/pe-12")?.status).toBe("closed");
+  expect(hub.find("hub/personal/pe-12")?.closeReason).toBe("Done in Meat Mode");
+  await expect(subs.locator(".sub-done .sub-title")).toHaveText(["Move the fern out of the sun"]);
+  await axe(page);
+});
+
+test("a tracker item's sub-task is removed as Won't do with Undo, and not where the tracker cannot dismiss", async ({ page, hub }) => {
+  const base = hub.find("home/garden/ga-1")!;
+  hub.items.push({ ...structuredClone(base), key: "home/garden/ga-11", id: "ga-11", title: "Measure the beds", parent: "ga-1", dueAt: null, comments: [] });
+  await openApp(page);
+  await row(page, "Order compost for the beds").locator(".row-body").click();
+  const subs = page.locator("#detail .subtasks");
+  await expect(subs.locator(".sub-title")).toHaveText(["Measure the beds"]);
+
+  await subs.getByRole("button", { name: "Mark done: Measure the beds" }).click();
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "home/garden/ga-11" });
+  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+  await expect(subs.getByRole("button", { name: "Mark done: Measure the beds" })).toBeVisible();
+
+  const remove = subs.getByRole("button", { name: "Remove: Measure the beds" });
+  await expect(remove).toHaveAttribute("title", "Won't do");
+  await remove.click();
+  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "dismiss", key: "home/garden/ga-11" });
+  await expect(page.locator("#toast")).toContainText("Won't do: Measure the beds");
+  await expect(subs).toHaveCount(0);
+  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
+  await expect(subs.locator(".sub-title")).toHaveText(["Measure the beds"]);
+
+  // A tracker that cannot dismiss offers no remove button.
+  hub.repos.find((r) => r.bridge === "home" && r.name === "garden")!.actions = ["done", "reopen", "add", "subtask"];
+  await page.reload();
+  await expect(page.locator("#detail .subtasks .sub-title")).toHaveText(["Measure the beds"]);
+  await expect(page.locator("#detail .sub-remove")).toHaveCount(0);
+});

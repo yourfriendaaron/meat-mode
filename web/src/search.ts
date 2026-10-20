@@ -11,7 +11,7 @@ function fold(s: string): string {
 
 /**
  * Everything about an item a search looks in, folded: title, description,
- * note texts, checklist texts, tags and, for a sub-task, its parent's title.
+ * note texts, tags and, for a sub-task, its parent's title.
  * A tag goes in as "@tag", so "garden" and "@garden" both find it.
  */
 function haystack(item: Item, items: Item[]): string {
@@ -21,7 +21,6 @@ function haystack(item: Item, items: Item[]): string {
       parentTitle(item, items),
       item.description ?? "",
       ...(item.comments ?? []).map((c) => c.text),
-      ...(item.checklist ?? []).map((c) => c.text),
       ...shownTags(item).map((t) => `@${t}`),
     ].join("\n"),
   );
@@ -33,7 +32,7 @@ function closedAt(item: Item): number {
 }
 
 /**
- * Items whose title, parent's title, description, notes, checklist or tags
+ * Items whose title, parent's title, description, notes or tags
  * hold every word of `query`, grouped Open, Done, Deleted. `only` narrows the
  * items searched, as a tag filter does.
  */

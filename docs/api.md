@@ -244,15 +244,16 @@ An item's `parent` is the id of the item it is a sub-task of, in the same list; 
 - `done` and `dismiss` on an item answer `409` while any of its sub-tasks is open. A sub-task with a pending `done` or `dismiss` counts as closed and one with a pending `reopen` as open, so the app may send the sub-tasks' closes and then the parent's together; the bridge applies them in that order. A sub-task still being added counts as open, until the bridge has sent it.
 - A snooze changes only the item it names. The app shows sub-tasks under their parent, so they move with it.
 - On the personal list and projects, an `edit` with `parent` moves an item: under another item by the `add` rules, or to the top level with `""`. An item with sub-tasks of its own, open or closed, cannot become a sub-task, and an item cannot be its own parent. An agent's item is moved in its tracker (on beads, `bd update --parent`), and the bridge sends the new `parent`.
-- `done` on a repeating parent reopens the sub-tasks it closed with `done` when the parent moves on to its next date, as it unchecks the checklist. Dismissed sub-tasks stay closed.
+- `done` on a repeating parent reopens the sub-tasks it closed with `done` when the parent moves on to its next date. Dismissed sub-tasks stay closed.
+- In the app, each sub-task row under its parent has a remove button: Delete (a `dismiss`) on the personal list and projects, open or done, and Won't do (a `dismiss`) on an open sub-task of a tracker that can dismiss. Its Undo is a `reopen`, followed by a `done` for a sub-task that was done.
+- Items have no checklist: an entry to tick is a sub-task. An `add` or `edit` that sends `checklist`, at the top of the body, in `payload` or in `payload.set`, from the app or an agent, is refused with `400` and "Checklists are now sub-tasks: add each entry as a sub-task instead (docs/api.md, Sub-tasks)." A hub at schema 14 converted the checklists it held: each entry of an open top-level item became one sub-task of it, in order, with id `<parent>.<n>` (zero-padded to one width; a taken id gets `-2`, `-3`…), done entries closed as done. An item that is itself a sub-task, or is closed, got the entries appended to its description as a Markdown list instead, done ones as `~~text~~`.
 
-`Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "checklist"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?, "parent"?, "subtasksDone"?, "labels"?}`. A field left out stays as it is.
+`Edit` is `{"title"?, "description"?, "due"?, "clearDue"?, "priority"?, "repeat"?, "clearRepeat"?, "remindBefore"?, "clearRemindBefore"?, "parent"?, "subtasksDone"?, "labels"?}`. A field left out stays as it is.
 
 - `title` follows the `add` rules: trimmed, not empty, up to 1000 characters.
 - `description` is up to 10000 characters; `""` clears it.
 - `due` is a time; `"clearDue": true` removes the due date instead. Sending both is refused. Clearing the due date of a repeating item also ends its repeat.
 - `priority` is 0 (highest) to 4, as in bd. A new personal item has 2. The app shows 0 and 1 as high priority on every item.
-- `checklist` replaces the whole list of `{"id", "text", "done"}`. The hub gives an entry with no `id` a new one and refuses a repeated `id`. `text` is trimmed, not empty, up to 1000 characters; the list holds at most 100 entries. `[]` clears it.
 - `repeat` sets the item's `Repeat` (see Repeating to-dos); `"clearRepeat": true` ends it. Sending both is refused, and so is a `repeat` on an item that has no due date and gets none in the same edit.
 - `remindBefore` is the item's own lead time in minutes, `0` to `10080`, where `0` means no early reminder; `"clearRemindBefore": true` goes back to the hub's `reminderLead`. Sending both is refused.
 - `parent` moves the item (see Sub-tasks); `""` makes it top-level.
@@ -337,9 +338,9 @@ A personal item can repeat: "Water the plants every day at 8:30pm". `Repeat` is 
 
 - The due time becomes the next occurrence after both the current due time and now, so occurrences missed while it sat overdue are skipped, never stacked. With `fromDone`, it is the done day plus `interval` units, at the rule's time of day.
 - When that next date falls after `until`, the series is over: `done` closes the item like any other, with no `was`, so its Undo is a `reopen`. The item keeps its `repeat`, so a `reopen` brings the series back at its last due time.
-- Its snooze is cleared and every checklist entry is unchecked.
+- Its snooze is cleared.
 - Its sub-tasks closed with `done` are reopened (see Sub-tasks).
-- The applied `done` carries `was`: `{"due", "checklist"}` as they were, and `subtasksDone` with the sub-tasks it reopened. Its Undo is an `edit` with `set` = `was`, not a `reopen`; the app tells the two apart by `was`.
+- The applied `done` carries `was`: `{"due"}` as it was, and `subtasksDone` with the sub-tasks it reopened. Its Undo is an `edit` with `set` = `was`, not a `reopen`; the app tells the two apart by `was`.
 - `dismiss` closes it and ends the series. `reopen` on a closed repeating item opens it at its last due time.
 
 ### Reminders
@@ -434,7 +435,7 @@ The hub holds the only copy of the personal list, the projects, their attachment
 
 Files are not put in the JSON as base64: that grows them by a third, makes the hub hold the whole file in memory to write and read it, and would need the restore cap raised by the same third. Every app of this kind that restores its own attachments (Memos, Vikunja, Joplin, Trilium) exports a zip or tar of metadata plus raw files ([research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)).
 
-**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 2, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
+**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 3, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
 
 - `settings` is `{"name", "timeZone", "reminderLead", "calendarFeed"}`: the first three as `GET /api/settings` shows them, except that `name` is `""` while none was chosen, and `calendarFeed` whether the calendar feed was on.
 - `items` holds every item of the lists the hub keeps, the personal list and every project, closed ones included however old: the `Item` fields as `GET /api/state` shows them, with `key`, `bridge` (`hub`), `repo` (the list), `firstSeen`, `seenAt`, `labels` (those that pass the rules in Tags: an item moved off a machine's personal repo may hold bead labels that do not, and they are left out so the export always restores) and `attachments` (those not removed, each with `size` and `sha256`), and no `run`, `pending` or `error`. `owner` names the machine whose agents added the item, `""` (left out) for one added in the app.
@@ -448,13 +449,14 @@ Files are not put in the JSON as base64: that grows them by a third, makes the h
 **Versions.** `version` goes up by one whenever what an export holds changes in any way, an added field included, so a hub never restores a file it would read only in part. A hub restores a file of its own version and of every older one, upgrading an older file step by step to its own before loading it. It refuses a file from a newer hub with `400` and says which version the file is and which this hub reads, so the user updates the hub first. A file whose `format` is not `meat-mode-export`, or whose `version` is not a whole number from 1 up, is refused as not an export.
 
 - Version 1 was a bare JSON file with no attachments and no tags on hub list items. Version 2 made the export a zip and added `labels` and `attachments` to its items. Its upgrade step sets `version` and drops any label of a version 1 item that breaks the rules in Tags: such labels came from beads moved off a machine's personal repo, version 1 never showed them, and a file that restored before must still restore.
+- Version 3 dropped checklists. Its upgrade step turns each item's `checklist` into sub-tasks by the schema 14 rule in Sub-tasks, made at the file's `exportedAt`, and drops `checklist` from the `set` and `was` of the edits in `actions`.
 - A restore reads a zip by its first bytes (`PK\x03\x04`) and anything else as bare JSON. A bare JSON of version 2 or later restores only when it lists no attachment; one that lists any is refused, naming how many files it lists, so the user restores the zip it came in.
 
 **Restore.** Restore is offered by the hub part of the setup wizard on a hub whose setup status is `new`, after the password step:
 
 - It refuses with `409` on a hub that already has data: any item, any action, or any machine other than `hub`, revoked ones included. It never merges into or replaces data, so nothing a hub holds is lost to a restore. The settings the wizard has already set do not count as data; the export's replace them.
 - It checks the whole file before it writes anything, and loads it in one transaction, so a file that fails a check changes nothing. It saves an uploaded zip to a temporary file in the data directory, since a zip is read from its end, and deletes that file when done. Attachment files are written before the transaction commits and deleted again if it does not. Each item must belong to the personal list or a valid project name (see Identity), with a valid id unique in its list, a title, a known status and the limits an edit holds to; each action needs a valid id, unique in the file; each `key` must name an item in the file; and the settings must pass `PUT /api/settings`'s checks. Tags must pass the rules in Tags. Each attachment must be on an item of the file, with an id unique in the file, a clean name, and a size within the caps in Attachments; its entry must be in the zip, with that size and SHA-256. A missing entry, a size or hash that does not match, an entry the JSON does not list, or any entry name other than `export.json` and `attachments/<id>` refuses the file, naming the attachment and its item. No file is ever skipped. Entry names are never used as paths: the hub writes each file under the id the JSON gives.
-- It keeps every item's id, key, times, comments, checklist, repeat, parent, tags and attachments; every action's id, order, status and times; and each owner, reminder and origin. An action still `pending` is loaded as `cancelled`, with `error` "Not sent: the hub was restored from an export.", so a machine paired again never replays an old change and nothing waits for a hub that will never apply it.
+- It keeps every item's id, key, times, comments, repeat, parent, tags and attachments; every action's id, order, status and times; and each owner, reminder and origin. An action still `pending` is loaded as `cancelled`, with `error` "Not sent: the hub was restored from an export.", so a machine paired again never replays an old change and nothing waits for a hub that will never apply it.
 - It does not record the setup wizard as done; the wizard goes on to its next step.
 - The answer counts what it loaded, `attachments` included, and lists what to do again: pair each machine in `machines`, turn the calendar feed on again when `calendarFeed` is true, and turn notifications on, on each device. A machine paired again under its old name gets back the items its agents added.
 

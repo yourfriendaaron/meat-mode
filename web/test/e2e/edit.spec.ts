@@ -158,60 +158,6 @@ test("edits a note, deletes one and Undo restores it, and the add-note draft sur
   await expect(detail.getByLabel("Add a note")).toHaveValue("Half a can is enough.");
 });
 
-test("checklist: add with Enter, tick, remove and Undo", async ({ page, hub }) => {
-  hub.find(KEY)!.checklist = [{ id: "k1", text: "Fill the watering can", done: false }];
-  await openApp(page);
-  await expect(row(page, "Water the plants").locator(".chip-checklist")).toHaveText("0/1");
-  const detail = await openDetail(page, "Water the plants");
-  const section = detail.locator("section", { has: page.getByRole("heading", { name: /Checklist/ }) });
-  await expect(section.locator(".ck label")).toHaveText(["Fill the watering can"]);
-
-  const input = section.getByLabel("Add to the checklist");
-  await input.fill("Water the ferns");
-  await input.press("Enter");
-  await expect.poll(() => hub.posted.at(-1)).toEqual({
-    id: expect.any(String),
-    kind: "edit",
-    key: KEY,
-    payload: {
-      set: {
-        checklist: [
-          { id: "k1", text: "Fill the watering can", done: false },
-          { text: "Water the ferns", done: false },
-        ],
-      },
-    },
-  });
-  await expect(input).toHaveValue("");
-  await expect(input).toBeFocused();
-  await expect(section.locator(".ck label")).toHaveText(["Fill the watering can", "Water the ferns"]);
-  // Typing in the field does not reach the list shortcuts.
-  const before = hub.posted.length;
-  await input.press("x");
-  await input.fill("");
-  expect(hub.posted.length).toBe(before);
-
-  await section.getByLabel("Fill the watering can", { exact: true }).check();
-  await expect.poll(() => hub.posted.at(-1)?.payload.set?.checklist).toEqual([
-    { id: "k1", text: "Fill the watering can", done: true },
-    { id: "k-1", text: "Water the ferns", done: false },
-  ]);
-  await expect(page.locator("#toast")).not.toContainText("Removed");
-  await expect(row(page, "Water the plants").locator(".chip-checklist")).toHaveText("1/2");
-
-  await section.getByRole("button", { name: "Remove: Water the ferns" }).click();
-  await expect.poll(() => hub.posted.at(-1)?.payload.set?.checklist).toEqual([{ id: "k1", text: "Fill the watering can", done: true }]);
-  await expect(section.locator(".ck")).toHaveCount(1);
-  await expect(page.locator("#toast")).toContainText("Removed: Water the ferns");
-  await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
-  await expect.poll(() => hub.posted.at(-1)?.payload.set?.checklist).toEqual([
-    { id: "k1", text: "Fill the watering can", done: true },
-    { id: "k-1", text: "Water the ferns", done: false },
-  ]);
-  await expect(section.locator(".ck label")).toHaveText(["Fill the watering can", "Water the ferns"]);
-  await expect(row(page, "Water the plants").locator(".chip-checklist")).toHaveText("1/2");
-});
-
 test("an agent item shows none of the edit controls", async ({ page, hub }) => {
   void hub;
   await openApp(page);
@@ -219,14 +165,18 @@ test("an agent item shows none of the edit controls", async ({ page, hub }) => {
   const detail = await openDetail(page, "Approve the new footer text");
   await expect(detail.locator(".note")).toHaveCount(3);
   await expect(detail.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
-  await expect(detail.getByRole("heading", { name: /Checklist/ })).toHaveCount(0);
   await expect(detail.locator(".note-tools")).toHaveCount(0);
   await expect(detail.getByRole("button", { name: "Won't do" })).toBeVisible();
 });
 
-test("the edit form, notes and checklist pass axe", async ({ page, hub }) => {
+/** A done sub-task under the personal item. */
+function seedSubtask(hub: FakeHub, title: string) {
+  hub.items.push({ ...structuredClone(hub.find(KEY)!), key: `${KEY}1`, id: "pe-11", title, parent: "pe-1", dueAt: null, comments: [], status: "closed", closeReason: "Done in Meat Mode", closedAt: "2026-10-14T08:00:00Z" });
+}
+
+test("the edit form, notes and sub-tasks pass axe", async ({ page, hub }) => {
   seedNotes(hub);
-  hub.find(KEY)!.checklist = [{ id: "k1", text: "Fill the watering can", done: true }];
+  seedSubtask(hub, "Fill the watering can");
   hub.find(KEY)!.priority = 1;
   await openApp(page);
   const detail = await openDetail(page, "Water the plants");
@@ -240,7 +190,7 @@ test.describe("phone", () => {
 
   test("the forms fit the detail sheet", async ({ page, hub }) => {
     seedNotes(hub);
-    hub.find(KEY)!.checklist = [{ id: "k1", text: "Fill the watering can with the long spout from the shed", done: false }];
+    seedSubtask(hub, "Fill the watering can with the long spout from the shed");
     await openApp(page);
     const detail = await openDetail(page, "Water the plants");
     await detail.getByRole("button", { name: "Edit", exact: true }).click();
@@ -253,7 +203,7 @@ test.describe("phone", () => {
     });
     expect(fit.page).toBeLessThanOrEqual(fit.inner);
     expect(fit.sheet).toBeLessThanOrEqual(fit.sheetBox);
-    for (const sel of ["#edit-title", "#edit-due", "#edit-desc", "#edit-prio", "#check-input"]) {
+    for (const sel of ["#edit-title", "#edit-due", "#edit-desc", "#edit-prio", "#sub-input", ".sub-remove"]) {
       const box = (await detail.locator(sel).boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(375);

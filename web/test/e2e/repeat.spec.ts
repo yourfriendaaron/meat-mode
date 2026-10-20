@@ -82,13 +82,12 @@ test("quick add leaves repeat words alone on an agent's list", async ({ page, hu
 test("Done moves a repeating item to its next date, and Undo moves it back", async ({ page, hub }) => {
   const it = hub.find(KEY)!;
   it.repeat = { every: "day", timeZone: "UTC", start: it.dueAt! };
-  it.checklist = [{ id: "k1", text: "Fill the can", done: true }];
   await openApp(page);
   await expect(row(page, "Water the plants").locator(".chip-repeat")).toHaveText("Every day");
 
   await row(page, "Water the plants").getByRole("button", { name: "Mark done: Water the plants" }).click();
   await expect(page.locator("#toast")).toContainText("Done. Next: Tomorrow 9:25");
-  expect(hub.find(KEY)).toMatchObject({ status: "open", dueAt: "2026-10-15T09:25:00.000Z", checklist: [{ id: "k1", done: false }] });
+  expect(hub.find(KEY)).toMatchObject({ status: "open", dueAt: "2026-10-15T09:25:00.000Z" });
   await expect(page.locator(".group-tomorrow")).toContainText("Water the plants");
   await expect(page.locator(".group-done")).not.toContainText("Water the plants");
 
@@ -96,11 +95,10 @@ test("Done moves a repeating item to its next date, and Undo moves it back", asy
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "edit",
     key: KEY,
-    payload: { set: { due: "2026-10-14T09:25:00.000Z", checklist: [{ id: "k1", text: "Fill the can", done: true }] } },
+    payload: { set: { due: "2026-10-14T09:25:00.000Z" } },
   });
   expect(hub.posted.map((a) => a.kind)).toEqual(["done", "edit"]);
   await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
-  expect(hub.find(KEY)!.checklist![0].done).toBe(true);
 });
 
 test("the edit form sets, changes and ends a repeat", async ({ page, hub }) => {

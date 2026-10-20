@@ -4,7 +4,7 @@
 
 import { ApiError, api, errorText, newId, setUnauthorizedHandler } from "./api.ts";
 import { createActions, inverse, movedOn, type Handle } from "./actions.ts";
-import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Item, type NewAction, type Occurrence, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Comment, type Item, type NewAction, type Occurrence, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
   type Capability,
@@ -52,14 +52,9 @@ import { repeatLabel } from "./repeat.ts";
 import { leadSelect, loadLead } from "./lead.ts";
 import { browserZone } from "./profile.ts";
 import {
-  CHECKLIST_MAX,
-  CHECK_MAX,
   TEXT_MAX,
   TITLE_MAX,
-  addCheck,
   canEdit,
-  checkText,
-  checklistChip,
   diffEdit,
   draftOf,
   dueLabel,
@@ -68,8 +63,6 @@ import {
   moveTargets,
   priorityChip,
   priorityOptions,
-  removeCheck,
-  toggleCheck,
   type EditDraft,
 } from "./edit.ts";
 import { applyTheme, getTheme, setTheme } from "./theme.ts";
@@ -137,8 +130,6 @@ const S = {
   edit: null as { key: string; draft: EditDraft; error: string } | null,
   /** The note being edited, on a personal item. */
   noteEdit: null as { key: string; commentId: string; text: string } | null,
-  /** Unsent text of each personal item's add-to-checklist field. */
-  checkDrafts: new Map<string, string>(),
   /** Unsent text of each item's add-a-sub-task field. */
   subDrafts: new Map<string, string>(),
   snoozeKeys: null as string[] | null,
@@ -449,11 +440,6 @@ function chipsFor(item: Item, opts: { list: boolean; nested?: boolean; detail?: 
   if (agent && item.createdBy) out.push(`<span class="chip chip-agent">${esc(item.createdBy)}</span>`);
   const notes = item.comments?.length ?? 0;
   if (notes) out.push(`<span class="chip chip-notes" aria-label="${notes} ${notes === 1 ? "note" : "notes"}">${ICON.note}${notes}</span>`);
-  const ck = checklistChip(item.checklist);
-  if (ck) {
-    const [done, all] = ck.split("/");
-    out.push(`<span class="chip chip-checklist" aria-label="Checklist: ${done} of ${all} done">${ICON.check}${ck}</span>`);
-  }
   const sc = subtaskChip(item, items());
   if (sc) {
     const [done, all] = sc.split("/");
@@ -1108,20 +1094,6 @@ function dueText(item: Item, d: EditDraft): string {
   }
 }
 
-function checklistHTML(item: Item): string {
-  const list = item.checklist ?? [];
-  const rows = list
-    .map(
-      (c, i) =>
-        `<li class="ck${c.done ? " ck-done" : ""}"><input type="checkbox" id="ck-${i}" data-check="${i}"${c.done ? " checked" : ""}><label for="ck-${i}">${esc(c.text)}</label><button class="link-btn ck-remove" data-act="check-remove" data-idx="${i}" aria-label="Remove: ${esc(c.text)}" title="Remove">${ICON.close}</button></li>`,
-    )
-    .join("");
-  const count = checklistChip(list);
-  return `<section class="d-section" aria-labelledby="d-check"><h3 id="d-check">Checklist${count ? ` <span class="group-count">${count}</span>` : ""}</h3>${
-    rows ? `<ul class="checklist">${rows}</ul>` : ""
-  }<form class="pick-row" data-form="check-add"><label class="sr" for="check-input">Add to the checklist</label><input id="check-input" type="text" maxlength="${CHECK_MAX}" autocomplete="off" enterkeyhint="done" placeholder="Add an entry"><button type="submit" class="btn">${ICON.plus}Add</button></form></section>`;
-}
-
 /**
  * The sheet's sub-tasks: a sub-task names its parent, and a top-level item
  * lists its sub-tasks with a field to add one. Sub-tasks go one level deep.
@@ -1140,7 +1112,10 @@ function subtasksHTML(item: Item): string {
   const rows = subs
     .map((c) => {
       const agent = isAgentItem(c);
-      return `<li class="sub${isOpen(c) ? "" : " sub-done"}">${checkButton(c, agent)}<button class="sub-title" data-act="open" data-key="${esc(c.key)}">${esc(c.title)}</button></li>`;
+      const remove = canRemoveSubtask(c)
+        ? `<button class="link-btn sub-remove" data-act="sub-remove" data-key="${esc(c.key)}" aria-label="${esc(`Remove: ${c.title}`)}" title="${agent ? "Won't do" : "Delete"}">${ICON.close}</button>`
+        : "";
+      return `<li class="sub${isOpen(c) ? "" : " sub-done"}">${checkButton(c, agent)}<button class="sub-title" data-act="open" data-key="${esc(c.key)}">${esc(c.title)}</button>${remove}</li>`;
     })
     .join("");
   const count = subtaskChip(item, items());
@@ -1260,7 +1235,6 @@ function renderDetail() {
 <div class="chips d-chips">${chipsFor(item, { list: true, detail: true })}<code class="bead-id">${esc(item.id)}</code></div>
 ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
 ${editing ? editFormHTML(item) : why + actions}
-${editable ? checklistHTML(item) : ""}
 ${subtasksHTML(item)}
 ${attachmentsHTML(item, editable)}
 ${open && allows(item, "snooze") ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
@@ -1270,8 +1244,6 @@ ${noteBoxHTML(item, allowed)}</section>
   if (setHTML(el, html)) {
     const ta = el.querySelector<HTMLTextAreaElement>("#note-input");
     if (ta) ta.value = S.drafts.get(item.key) ?? "";
-    const ck = el.querySelector<HTMLInputElement>("#check-input");
-    if (ck) ck.value = S.checkDrafts.get(item.key) ?? "";
     const sub = el.querySelector<HTMLInputElement>("#sub-input");
     if (sub) sub.value = S.subDrafts.get(item.key) ?? "";
     if (editing) {
@@ -1905,34 +1877,44 @@ function deleteNote(key: string, commentId: string) {
   $<HTMLElement>("#note-input").focus({ preventScroll: true });
 }
 
-/** Posts the whole new checklist; a toast with Undo only when `toast` is given. */
-function setChecklist(key: string, next: Check[], toast?: string) {
-  const a: NewAction = { id: newId(), kind: "edit", key, payload: { set: { checklist: next } } };
-  void postEdit(a, toast);
+/**
+ * Whether a sub-task row offers its remove button: Delete on the hub's own
+ * lists, open or done, and Won't do on an open one of a tracker that can
+ * dismiss. One still being created has none.
+ */
+function canRemoveSubtask(c: Item): boolean {
+  if (c.id.startsWith("pending-") || !allows(c, "dismiss")) return false;
+  return isOpen(c) || !isAgentItem(c);
 }
 
-function addToChecklist(key: string) {
+/**
+ * The remove button on a sub-task row: the same dismiss as Delete or Won't
+ * do, with Undo. A done sub-task of the hub's lists comes back done.
+ */
+async function removeSubtask(key: string) {
   const it = byKey(key);
-  const input = document.querySelector<HTMLInputElement>("#check-input");
-  if (!it || !input) return;
-  const text = checkText(input.value);
-  if (!text) return;
-  if ((it.checklist?.length ?? 0) >= CHECKLIST_MAX) {
-    showToast(`A checklist holds up to ${CHECKLIST_MAX} entries.`);
-    return;
+  if (!it || !canRemoveSubtask(it)) return;
+  const agent = isAgentItem(it);
+  const wasDone = !isOpen(it);
+  const h = await actions.perform([{ id: newId(), kind: "dismiss", key, payload: {} }], {
+    onPatched: () => {
+      render();
+      // The row is gone; keep focus in the sub-tasks.
+      document.querySelector<HTMLElement>("#sub-input")?.focus({ preventScroll: true });
+    },
+  });
+  if (h.posted.length) {
+    const undo = undoing(h);
+    const back =
+      undo && wasDone
+        ? async () => {
+            await undo();
+            if (await post({ id: newId(), kind: "done", key, payload: {} })) await refresh();
+          }
+        : undo;
+    showToast(`${agent ? "Won't do" : "Deleted"}: ${it.title}`, back);
   }
-  input.value = "";
-  S.checkDrafts.delete(key);
-  setChecklist(key, addCheck(it.checklist, text));
-}
-
-function removeFromChecklist(key: string, index: number) {
-  const it = byKey(key);
-  const entry = it?.checklist?.[index];
-  if (!it || !entry) return;
-  setChecklist(key, removeCheck(it.checklist, index), `Removed: ${entry.text}`);
-  // The button is gone; keep focus in the checklist.
-  $<HTMLElement>("#check-input").focus({ preventScroll: true });
+  await refresh();
 }
 
 /** Adds a sub-task to an item, in the item's own list. */
@@ -2346,8 +2328,8 @@ function onClick(e: MouseEvent) {
     case "note-delete":
       if (S.open) deleteNote(S.open, btn.dataset.id ?? "");
       break;
-    case "check-remove":
-      if (S.open) removeFromChecklist(S.open, Number(btn.dataset.idx));
+    case "sub-remove":
+      void removeSubtask(key);
       break;
     case "snooze-all":
       doSnooze(
@@ -2528,7 +2510,6 @@ function onInput(e: Event) {
   } else if (t.id === "qa-input") updateQuickAdd();
   else if (t.dataset.typeTime !== undefined) updateSnoozeType(t as HTMLInputElement);
   else if (t.id === "note-input" && S.open) S.drafts.set(S.open, (t as HTMLTextAreaElement).value);
-  else if (t.id === "check-input" && S.open) S.checkDrafts.set(S.open, (t as HTMLInputElement).value);
   else if (t.id === "sub-input" && S.open) S.subDrafts.set(S.open, (t as HTMLInputElement).value);
   else if (t.id === "note-edit-input" && S.noteEdit) S.noteEdit.text = (t as HTMLTextAreaElement).value;
   else if (S.edit && t.closest(".edit-form")) {
@@ -2552,10 +2533,7 @@ function onInput(e: Event) {
 function onChange(e: Event) {
   const t = e.target as HTMLElement;
   if (S.edit && t.closest(".edit-form")) editChanged(S.edit.draft, t as HTMLInputElement);
-  else if (t.dataset.check !== undefined && S.open) {
-    const it = byKey(S.open);
-    if (it) setChecklist(it.key, toggleCheck(it.checklist, Number(t.dataset.check)));
-  } else if (t.id === "qa-list") {
+  else if (t.id === "qa-list") {
     qaListTouched = true;
     updateQaAgent((t as HTMLSelectElement).value);
   }
@@ -2589,7 +2567,6 @@ function onSubmit(e: SubmitEvent) {
   else if (form.id === "search-form") (document.activeElement as HTMLElement | null)?.blur();
   else if (form.dataset.form === "edit") saveEdit();
   else if (form.dataset.form === "note-edit") saveNoteEdit();
-  else if (form.dataset.form === "check-add" && S.open) addToChecklist(S.open);
   else if (form.dataset.form === "sub-add" && S.open) void addSubtask(S.open);
   else if (form.dataset.form === "snooze-type") submitSnoozeType(form);
   else if (form.dataset.form === "move") submitMove();

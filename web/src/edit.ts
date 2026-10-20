@@ -1,8 +1,8 @@
-// Editing personal items: the edit form's diff, checklist and priority helpers,
+// Editing personal items: the edit form's diff and priority helpers,
 // and the Undo of the edit actions (docs/api.md, Edit rules). Pure: callers
 // pass `now`.
 
-import { MAX_REPEAT_INTERVAL, type Action, type Check, type Comment, type Edit, type Item, type NewAction, type RepeatUnit } from "./types.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Comment, type Edit, type Item, type NewAction, type RepeatUnit } from "./types.ts";
 import { isOpen, isPersonal, repoKey } from "./model.ts";
 import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
 import { parseQuickAdd } from "./quickadd.ts";
@@ -11,8 +11,6 @@ import { cleanTags, sameTags, shownTags, typedTags } from "./tags.ts";
 
 export const TITLE_MAX = 1000;
 export const TEXT_MAX = 10000;
-export const CHECK_MAX = 1000;
-export const CHECKLIST_MAX = 100;
 
 /** Whether the hub takes edit actions on this item: the personal list it keeps itself. */
 export function canEdit(item: Pick<Item, "bridge">): boolean {
@@ -188,7 +186,6 @@ export function applyEdit(item: Item, set: Edit): void {
     item.repeat = null;
   }
   if (set.priority !== undefined) item.priority = set.priority;
-  if (set.checklist !== undefined) item.checklist = set.checklist.map((c) => ({ ...c }));
   if (set.repeat !== undefined) item.repeat = { ...set.repeat };
   if (set.clearRepeat) item.repeat = null;
   if (set.remindBefore !== undefined) item.remindBefore = set.remindBefore;
@@ -198,35 +195,6 @@ export function applyEdit(item: Item, set: Edit): void {
     item.parentTitle = undefined;
   }
   if (set.labels !== undefined) item.labels = set.labels.length ? [...set.labels] : undefined;
-}
-
-/** "2/5": done entries out of all, or "" for an empty checklist. */
-export function checklistChip(list: Check[] | null | undefined): string {
-  if (!list?.length) return "";
-  return `${list.filter((c) => c.done).length}/${list.length}`;
-}
-
-/** A checklist entry's text ready to send, or "" when it cannot be added. */
-export function checkText(text: string): string {
-  const t = text.trim();
-  return t.length > CHECK_MAX ? "" : t;
-}
-
-/** The checklist with one more entry, which the hub gives an id. */
-export function addCheck(list: Check[] | null | undefined, text: string): Check[] {
-  return [...copy(list), { text, done: false }];
-}
-
-export function toggleCheck(list: Check[] | null | undefined, index: number): Check[] {
-  return copy(list).map((c, i) => (i === index ? { ...c, done: !c.done } : c));
-}
-
-export function removeCheck(list: Check[] | null | undefined, index: number): Check[] {
-  return copy(list).filter((_, i) => i !== index);
-}
-
-function copy(list: Check[] | null | undefined): Check[] {
-  return (list ?? []).map((c) => ({ ...c }));
 }
 
 /** Puts a removed comment back in its place by `createdAt`. */
