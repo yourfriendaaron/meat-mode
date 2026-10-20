@@ -36,6 +36,7 @@ const CancelledByRestore = "Not sent: the hub was restored from an export."
 // version before; TestExportUpgradesReachTheCurrentVersion holds the count.
 var exportUpgrades = []func(json.RawMessage) (json.RawMessage, error){
 	upgradeExportV1,
+	upgradeExportV2,
 }
 
 // upgradeExportV1 turns version 1 into version 2, which added attachments
@@ -651,22 +652,6 @@ func checkExportItem(it *api.ExportItem) error {
 		}
 		if _, err := checkRepeat(*it.Repeat); err != nil {
 			return fail("%v", err)
-		}
-	}
-	if len(it.Checklist) > MaxChecklist {
-		return fail("a checklist holds at most %d entries", MaxChecklist)
-	}
-	checks := map[string]bool{}
-	for _, c := range it.Checklist {
-		if strings.TrimSpace(c.ID) == "" || checks[c.ID] {
-			return fail("checklist entry %q has no id of its own", c.Text)
-		}
-		checks[c.ID] = true
-		if strings.TrimSpace(c.Text) == "" {
-			return fail("a checklist entry cannot be empty")
-		}
-		if utf8.RuneCountInString(c.Text) > MaxTitleLen {
-			return fail("a checklist entry is longer than %d characters", MaxTitleLen)
 		}
 	}
 	if overTruncated(it.ParentTitle, maxTitleLen) {

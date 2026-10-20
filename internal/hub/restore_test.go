@@ -34,7 +34,7 @@ func TestRestoreRoute(t *testing.T) {
 	w := h.do("POST", "/api/restore", restoreFile(t), "")
 	h.expect(w, http.StatusOK)
 	got := decode[api.RestoreResult](t, w)
-	if got.Items != 4 || got.Actions != 6 || got.Reminders != 2 || got.Cancelled != 2 ||
+	if got.Items != 6 || got.Actions != 6 || got.Reminders != 2 || got.Cancelled != 2 ||
 		len(got.Machines) != 1 || got.Machines[0] != "laptop" || !got.CalendarFeed {
 		t.Fatalf("result %+v", got)
 	}
@@ -43,7 +43,8 @@ func TestRestoreRoute(t *testing.T) {
 	for _, it := range st.Items {
 		titles[it.Title] = true
 	}
-	if !titles["Water the plants"] || !titles["Order compost for the beds"] || st.User != "Alex" {
+	// The file's checklist came back as sub-tasks.
+	if !titles["Water the plants"] || !titles["Order compost for the beds"] || !titles["Tomatoes"] || st.User != "Alex" {
 		t.Fatalf("state after the restore: user %q, items %v", st.User, titles)
 	}
 	if s := decode[api.Setup](t, h.do("GET", "/api/setup", nil, "")); s.Status != "in-use" || s.TimeZone != "Europe/Lisbon" {
@@ -69,9 +70,9 @@ func TestRestoreRouteRefusesAHubWithAMachine(t *testing.T) {
 
 func TestRestoreRouteRefusesBadFiles(t *testing.T) {
 	h := newHarness(t, nil, false)
-	newer := strings.Replace(restoreFile(t), `"version": 1,`, `"version": 3,`, 1)
+	newer := strings.Replace(restoreFile(t), `"version": 1,`, `"version": 4,`, 1)
 	for name, c := range map[string]struct{ body, says string }{
-		"newer":      {newer, "the file is version 3, and this hub reads version 2"},
+		"newer":      {newer, "the file is version 4, and this hub reads version 3"},
 		"not export": {`{"items": []}`, "not a Meat Mode export"},
 		"not JSON":   {"Water the plants", "not a Meat Mode export"},
 		"bad item":   {strings.Replace(restoreFile(t), `"title": "Buy seeds"`, `"title": ""`, 1), "title cannot be empty"},

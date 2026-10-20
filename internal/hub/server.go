@@ -212,6 +212,39 @@ func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
 	return true
 }
 
+// ChecklistRemoved is the refusal of an add or edit that sends a checklist.
+const ChecklistRemoved = "Checklists are now sub-tasks: add each entry as a sub-task instead (docs/api.md, Sub-tasks)."
+
+// readChange reads an action, an agent's add or an agent's change as
+// readJSON does, and refuses with 400 one that still sends a checklist,
+// at the top level, in its payload or in its payload's set.
+func readChange(w http.ResponseWriter, r *http.Request, v any) bool {
+	var raw json.RawMessage
+	if !readJSON(w, r, maxBody, &raw) {
+		return false
+	}
+	type set struct {
+		Checklist json.RawMessage `json:"checklist"`
+	}
+	var probe struct {
+		Checklist json.RawMessage `json:"checklist"`
+		Payload   struct {
+			Checklist json.RawMessage `json:"checklist"`
+			Set       *set            `json:"set"`
+		} `json:"payload"`
+	}
+	if json.Unmarshal(raw, &probe) == nil &&
+		(probe.Checklist != nil || probe.Payload.Checklist != nil || (probe.Payload.Set != nil && probe.Payload.Set.Checklist != nil)) {
+		writeError(w, http.StatusBadRequest, ChecklistRemoved)
+		return false
+	}
+	if err := json.Unmarshal(raw, v); err != nil {
+		writeError(w, http.StatusBadRequest, "request body is not valid JSON: "+err.Error())
+		return false
+	}
+	return true
+}
+
 // storeError writes the HTTP response for an error from the store.
 func (s *Server) storeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
@@ -249,7 +282,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 	var na api.NewAction
-	if !readJSON(w, r, maxBody, &na) {
+	if !readChange(w, r, &na) {
 		return
 	}
 	if deviceOf(r) != "" && !deviceKinds[na.Kind] {
@@ -544,7 +577,7 @@ func (s *Server) handlePutRuns(w http.ResponseWriter, r *http.Request, bridge st
 // bridge running.
 func (s *Server) handleAddPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
 	var t api.PersonalTodo
-	if !readJSON(w, r, maxBody, &t) {
+	if !readChange(w, r, &t) {
 		return
 	}
 	key, created, err := s.store.AddPersonal(t, bridge, r.URL.Query().Get("project"))
@@ -575,7 +608,7 @@ func (s *Server) handleGetPersonal(w http.ResponseWriter, r *http.Request, bridg
 // the personal list or a project.
 func (s *Server) handleChangePersonal(w http.ResponseWriter, r *http.Request, bridge string) {
 	var c api.PersonalChange
-	if !readJSON(w, r, maxBody, &c) {
+	if !readChange(w, r, &c) {
 		return
 	}
 	a, created, err := s.store.ChangePersonal(bridge, r.URL.Query().Get("project"), r.PathValue("id"), c)

@@ -85,7 +85,7 @@ func TestRestoreLoadsAnExport(t *testing.T) {
 		a["bridge"], a["repo"], a["beadId"] = HubBridge, PersonalRepo, "mm-1"
 	})))
 	must(t, err)
-	want := api.RestoreResult{Items: 4, Actions: 6, Reminders: 2, Cancelled: 2, Machines: []string{"laptop"}, CalendarFeed: true}
+	want := api.RestoreResult{Items: 6, Actions: 6, Reminders: 2, Cancelled: 2, Machines: []string{"laptop"}, CalendarFeed: true}
 	if fmt.Sprint(res) != fmt.Sprint(want) {
 		t.Fatalf("result %+v, want %+v", res, want)
 	}
@@ -120,8 +120,22 @@ func TestRestoreLoadsAnExport(t *testing.T) {
 	if len(water.Comments) != 1 || water.Comments[0].Text != "The ferns need less water." || water.Comments[0].Author != "planner" {
 		t.Fatalf("comments %+v", water.Comments)
 	}
-	if len(water.Checklist) != 2 || water.Checklist[0] != (api.Check{ID: "ch-1", Text: "Ferns", Done: true}) {
-		t.Fatalf("checklist %+v", water.Checklist)
+	// Its checklist came back as sub-tasks, in order, made at the export's time.
+	exported := time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)
+	for i, want := range []struct {
+		id, title, status string
+	}{{"mm-1.1", "Ferns", "closed"}, {"mm-1.2", "Tomatoes", "open"}} {
+		tx, err := s.db.Begin()
+		must(t, err)
+		sub, err := hubItem(tx, PersonalRepo, want.id)
+		tx.Rollback()
+		must(t, err)
+		if sub.Title != want.title || sub.Status != want.status || sub.Parent != "mm-1" || !sub.CreatedAt.Equal(exported) {
+			t.Fatalf("sub-task %d %+v", i, sub)
+		}
+		if want.status == "closed" && (sub.CloseReason != ReasonDone || !sub.ClosedAt.Equal(exported)) {
+			t.Fatalf("done entry %+v", sub)
+		}
 	}
 	if r := water.Repeat; r == nil || r.Every != api.EveryWeek || r.TimeZone != "Europe/Lisbon" || r.Start == nil ||
 		!r.Start.Equal(time.Date(2026, 10, 7, 18, 0, 0, 0, time.UTC)) {
@@ -312,8 +326,7 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 		"own parent":         {item(1, "parent", "mm-2"), "parent"},
 		"remind before":      {item(0, "remindBefore", -1), "remindBefore"},
 		"bad owner":          {item(3, "owner", "hub"), "owner"},
-		"checklist no id":    {item(0, "checklist", []any{map[string]any{"text": "Ferns"}}), "checklist"},
-		"too many checks":    {item(0, "checklist", manyChecks(MaxChecklist+1)), "at most"},
+		"checklist not list": {item(0, "checklist", "Ferns"), "could not be upgraded"},
 		"unknown field":      {item(3, "colour", "green"), "unknown field"},
 		"item listed twice": {func(ex map[string]any) {
 			ex["items"] = append(ex["items"].([]any), exportList(ex, "items", 3))
@@ -349,14 +362,6 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 			}
 		})
 	}
-}
-
-func manyChecks(n int) []any {
-	out := make([]any, n)
-	for i := range out {
-		out[i] = map[string]any{"id": fmt.Sprintf("ch-%d", i), "text": "Ferns"}
-	}
-	return out
 }
 
 // Text the hub truncated, from a bridge or an agent, is its limit and an

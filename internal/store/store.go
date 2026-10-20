@@ -160,7 +160,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 13
+const schemaVersion = 14
 
 var migrations = []string{
 	// 1: initial schema.
@@ -348,6 +348,16 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id);
 `,
+	// 14: checklists become sub-tasks, by goMigrations.
+	``,
+}
+
+// goMigrations are the schema steps written in Go, run in the same
+// transaction after the step's SQL, keyed by the version they reach. Each
+// must leave data it already converted as it is, since the tests of older
+// migrations run them again.
+var goMigrations = map[int]func(*Store, *sql.Tx) error{
+	14: (*Store).migrateChecklists,
 }
 
 func (s *Store) migrate() error {
@@ -372,9 +382,17 @@ func (s *Store) migrate() error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(migrations[v]); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("migrate schema to version %d: %w", v+1, err)
+		if migrations[v] != "" {
+			if _, err := tx.Exec(migrations[v]); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migrate schema to version %d: %w", v+1, err)
+			}
+		}
+		if step := goMigrations[v+1]; step != nil {
+			if err := step(s, tx); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migrate schema to version %d: %w", v+1, err)
+			}
 		}
 		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", v+1)); err != nil {
 			tx.Rollback()
