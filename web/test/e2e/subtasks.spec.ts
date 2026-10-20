@@ -231,8 +231,9 @@ test("a personal item's sub-tasks tick, and the remove button deletes one with U
   await expect(page.locator("#toast")).toContainText("Deleted: Move the fern out of the sun");
   await expect(subs.locator(".sub-title")).toHaveText(["Fill the watering can"]);
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
-  await expect.poll(() => hub.find("hub/personal/pe-12")?.status).toBe("closed");
-  expect(hub.find("hub/personal/pe-12")?.closeReason).toBe("Done in Meat Mode");
+  // Removed, it is already closed as dismissed, so wait for the reason Undo restores.
+  await expect.poll(() => hub.find("hub/personal/pe-12")?.closeReason).toBe("Done in Meat Mode");
+  expect(hub.find("hub/personal/pe-12")?.status).toBe("closed");
   await expect(subs.locator(".sub-done .sub-title")).toHaveText(["Move the fern out of the sun"]);
   await axe(page);
 });

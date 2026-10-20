@@ -336,6 +336,9 @@ test("snooze to a typed time", async ({ page, hub }) => {
   await expect(snooze).toBeDisabled();
   await typed.press("Enter");
   await expect(typed).toHaveAttribute("aria-invalid", "true");
+  await typed.fill("yesterday");
+  await expect(line).toHaveText("Pick a time in the future.");
+  await expect(snooze).toBeDisabled();
   await typed.fill("today 8am");
   await expect(line).toHaveText("Pick a time in the future.");
   await expect(snooze).toBeDisabled();

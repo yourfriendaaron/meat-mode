@@ -4,7 +4,7 @@
 
 import * as chrono from "chrono-node/en";
 import { findRepeat, firstOccurrence, type RepeatRule } from "./repeat.ts";
-import { startOfDay, ymd } from "./dates.ts";
+import { addDays, sameDay, startOfDay, ymd } from "./dates.ts";
 import { isPersonal, repoKey, repoLabel, visibleRepos } from "./model.ts";
 import { noAgentReason } from "./runs.ts";
 import { cleanTags } from "./tags.ts";
@@ -54,6 +54,9 @@ export const MORNING_HOUR = 9;
 
 const PART_OF_DAY = /\b(morning|noon|midday|afternoon|evening|night|midnight)\b/i;
 const TONIGHT = /\btonight\b/i;
+const LAST_NIGHT = /\blast night\b/i;
+/** "last friday", "past monday": a weekday said as gone by. */
+const PAST_WEEKDAY = /^(?:last|past)\s/i;
 const LIST_TAG = /(^|\s)#([\p{L}\p{N}_.-]+)/gu;
 /** "@word" after a space: a tag when the word starts with a letter ("@garden"), never a date ("@5pm", "@monday"). */
 const AT_WORD = /(^|\s)@([\p{L}\p{N}_.:/-]+)/gu;
@@ -133,9 +136,27 @@ const morningAtNine: chrono.Refiner = {
   },
 };
 
+/**
+ * "last friday" stays the Friday gone by. Chrono reads it so, then its
+ * forward-date step, which looks ahead for a bare weekday, moves it to next
+ * Friday; naming the day first keeps it where it is.
+ */
+const pastWeekday: chrono.Refiner = {
+  refine(_ctx, results) {
+    for (const r of results) {
+      if (!r.start.isOnlyWeekdayComponent() || !PAST_WEEKDAY.test(r.text)) continue;
+      const d = r.start.date();
+      r.start.assign("year", d.getFullYear());
+      r.start.assign("month", d.getMonth() + 1);
+      r.start.assign("day", d.getDate());
+    }
+    return results;
+  },
+};
+
 const parser = chrono.casual.clone();
 parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek);
-parser.refiners.unshift(morningAtNine);
+parser.refiners.unshift(morningAtNine, pastWeekday);
 
 export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts: QuickOptions = {}): QuickAdd {
   const tokens: QuickToken[] = [];
@@ -423,11 +444,17 @@ function resolve(r: ReturnType<typeof chrono.parse>[number], now: Date): Date {
   if (TONIGHT.test(r.text) && !r.start.isCertain("hour")) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), TONIGHT_HOUR, 0);
   }
+  // Chrono reads "last night" as midnight; it is yesterday at tonight's hour.
+  if (LAST_NIGHT.test(r.text) && !r.start.isCertain("hour")) {
+    const y = addDays(now, -1);
+    return new Date(y.getFullYear(), y.getMonth(), y.getDate(), TONIGHT_HOUR, 0);
+  }
   if (r.start.isCertain("hour") || PART_OF_DAY.test(r.text)) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes());
   }
   const morning = new Date(d.getFullYear(), d.getMonth(), d.getDate(), DEFAULT_HOUR, 0);
-  if (morning > now) return morning;
+  // A day already past ("yesterday", "2 days ago") stays that day, overdue.
+  if (morning > now || !sameDay(d, now)) return morning;
   // "today" after 9:00: the next full hour, so the task does not start out overdue.
   const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0);
   return next;

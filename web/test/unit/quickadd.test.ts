@@ -37,6 +37,29 @@ test("today with no time after 9:00 is the next full hour", () => {
   assert.equal(local(r.due), "2026-10-14 11:00");
 });
 
+test("a past day with no time is that day at 9:00, so the to-do starts out overdue", () => {
+  const cases: [string, string][] = [
+    ["yesterday", "2026-10-13 09:00"],
+    ["2 days ago", "2026-10-12 09:00"],
+    ["a day ago", "2026-10-13 09:00"],
+    ["last week", "2026-10-07 09:00"],
+    ["last month", "2026-09-14 09:00"],
+    ["2026-10-10", "2026-10-10 09:00"],
+    ["last friday", "2026-10-09 09:00"],
+    ["past monday", "2026-10-12 09:00"],
+    ["last wednesday", "2026-10-07 09:00"],
+    ["last night", "2026-10-13 20:00"],
+  ];
+  for (const [when, due] of cases) {
+    const r = parseQuickAdd(`Water the plants ${when}`, now, lists);
+    assert.equal(r.title, "Water the plants", when);
+    assert.equal(local(r.due), due, when);
+  }
+  // A past day with a time keeps it.
+  assert.equal(local(parseQuickAdd("Water the plants yesterday 3pm", now, lists).due), "2026-10-13 15:00");
+  assert.equal(local(parseQuickAdd("Water the plants last friday at 3pm", now, lists).due), "2026-10-09 15:00");
+});
+
 test("tonight is 20:00 today", () => {
   const r = parseQuickAdd("Water the plants tonight", now, lists);
   assert.equal(r.title, "Water the plants");
