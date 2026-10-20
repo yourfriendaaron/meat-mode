@@ -157,15 +157,54 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   // "@5pm" stay in the title. One that starts with a letter is a tag, where
   // tags are taken.
   const tags: string[] = [];
-  let scan = text;
+  const blank: [number, number][] = [];
   for (const m of text.matchAll(AT_WORD)) {
     const start = (m.index ?? 0) + m[1].length;
     const end = start + m[2].length + 1;
-    scan = scan.slice(0, start) + " ".repeat(end - start) + scan.slice(end);
-    if (opts.tags === false || !TAG_WORD.test(m[2])) continue;
+    if (opts.tags === false || !TAG_WORD.test(m[2])) {
+      blank.push([start, end]);
+      continue;
+    }
     tags.push(m[2]);
     tokens.push({ kind: "tag", start, end, text: `@${m[2]}` });
   }
+
+  // The list and the tags are cut out of the text the date and repeat readers
+  // see, so the words either side of one read as if it were not there:
+  // "every sunday @weekend at 8pm" as "every sunday at 8pm". `at` maps each
+  // character of `scan` back to the text, and `own` says which of them are the
+  // text's own, not a blanked @word's.
+  let scan = "";
+  const at: number[] = [];
+  const own: boolean[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (tokens.some((t) => t.start <= i && i < t.end)) continue;
+    const blanked = blank.some(([s, e]) => s <= i && i < e);
+    scan += blanked ? " " : text[i];
+    at.push(i);
+    own.push(!blanked);
+  }
+  // A span of `scan` as tokens of the text: one for each run of the text's own
+  // characters, without the spaces at its edges.
+  const take = (kind: QuickToken["kind"], from: number, to: number) => {
+    for (let i = from; i < to; ) {
+      if (!own[i]) {
+        i++;
+        continue;
+      }
+      let j = i + 1;
+      while (j < to && own[j] && at[j] === at[j - 1] + 1) j++;
+      let start = at[i];
+      let end = at[j - 1] + 1;
+      while (start < end && /\s/.test(text[start])) start++;
+      while (end > start && /\s/.test(text[end - 1])) end--;
+      if (start < end) tokens.push({ kind, start, end, text: text.slice(start, end) });
+      i = j;
+    }
+  };
+  /** Spans of `scan` the repeat and its end have taken. */
+  const taken: [number, number][] = [];
+  const free = (from: number, to: number) => !taken.some(([s, e]) => from < e && s < to);
 
   // The repeat goes first, and its words are blanked for chrono, which would
   // read "every monday" as next Monday. With repeats off the span is still
@@ -176,30 +215,31 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   let dateText = scan;
   const takeRepeat = opts.repeat !== false;
   const rm = findRepeat(scan);
-  const rmTaken = !!rm && !tokens.some((t) => rm.start < t.end && t.start < rm.end);
-  if (rmTaken && rm) {
+  if (rm) {
     if (takeRepeat) {
       repeat = rm.rule;
       monthDay = rm.monthDay;
-      tokens.push({ kind: "repeat", start: rm.start, end: rm.end, text: rm.text });
+      take("repeat", rm.start, rm.end);
     }
+    taken.push([rm.start, rm.end]);
     dateText = scan.slice(0, rm.start) + " ".repeat(rm.end - rm.start) + scan.slice(rm.end);
   }
 
   // "until nov 26" after the repeat, blanked for chrono in the same way; with
   // no repeat rule it makes no until either.
   let until: ReturnType<typeof chrono.parse>[number] | null = null;
-  if (rmTaken && rm) {
+  if (rm) {
     UNTIL.lastIndex = rm.end;
     for (let m = UNTIL.exec(scan); m && !until; m = UNTIL.exec(scan)) {
       const from = m.index + m[0].length;
       const r = dateOnly(parser.parse(scan.slice(from), now, { forwardDate: true })[0], now);
       // Only a date that follows the word and names its day: "until 5pm" is no end.
       if (!r || r.index !== 0 || !hasDay(r)) continue;
-      const end = from + r.text.length;
-      if (tokens.some((t) => m.index < t.end && t.start < end)) continue;
+      // Chrono can take in spaces after a match, such as a cut tag's.
+      const end = from + r.text.trimEnd().length;
       until = r;
-      if (takeRepeat) tokens.push({ kind: "repeat", start: m.index, end, text: text.slice(m.index, end) });
+      if (takeRepeat) take("repeat", m.index, end);
+      taken.push([m.index, end]);
       dateText = dateText.slice(0, m.index) + " ".repeat(end - m.index) + dateText.slice(end);
     }
   }
@@ -207,15 +247,15 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
   let due: Date | null = null;
   const results = parser.parse(dateText, now, { forwardDate: true });
   for (const r of results) {
-    // Chrono can take in spaces before a match, such as a blanked repeat's.
-    const at = r.index + r.text.length - r.text.trimStart().length;
+    // Chrono can take in spaces around a match, such as a blanked repeat's.
+    const from = r.index + r.text.length - r.text.trimStart().length;
     // "in the morning", "at noon", "from friday": chrono leaves out the words that lead in.
-    const lead = /\b(?:in the|at|on|from|starting(?: on| from)?)\s+$/i.exec(dateText.slice(0, at));
-    const start = lead ? lead.index : at;
-    const end = r.index + r.text.length;
-    if (tokens.some((t) => start < t.end && t.start < end)) continue;
+    const lead = /\b(?:in the|at|on|from|starting(?: on| from)?)\s+$/i.exec(dateText.slice(0, from));
+    const start = lead ? lead.index : from;
+    const end = r.index + r.text.trimEnd().length;
+    if (!free(start, end)) continue;
     due = repeat && !hasDay(r) ? firstOccurrence(repeat, now, ...timeOf(r), monthDay) : resolve(r, now);
-    tokens.push({ kind: "date", start, end, text: text.slice(start, end) });
+    take("date", start, end);
     break;
   }
   if (repeat && !due) due = firstOccurrence(repeat, now, DEFAULT_HOUR, 0, monthDay);
