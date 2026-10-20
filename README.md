@@ -98,7 +98,7 @@ On your own to-dos and projects you can attach files: a photo of the broken part
 
 Switch **Upcoming** from **List** to **Month** to see each day's dated items, with repeating to-dos on every later date of their series. To move something to another day, drag it on a desktop, or pick the day in **Move**, which a long press opens on a touch screen. Your own to-do keeps its time of day on its new date. An agent's task moves by a snooze, where its tracker can snooze.
 
-![The Upcoming view as a month on a desktop, October 2026. Today, the 14th, is circled; the 15th is selected and lists the agent's task "Approve the new footer text", "Buy seeds" snoozed until then, and "Put the bins out" at 19:00. The bins come back every week, shown as dashed entries with a repeat icon on the 22nd and 29th, and other to-dos sit on their days through the month.](docs/images/month-view.png)
+![The Upcoming view as a month on a desktop, October 2026. Today, the 14th, is circled; the 15th is selected and lists the agent's task "Approve the new footer text", "Buy seeds" whose snooze ends then, and "Put the bins out" at 19:00. The bins come back every week, shown as dashed entries with a repeat icon on the 22nd and 29th, and other to-dos sit on their days through the month.](docs/images/month-view.png)
 
 ### Take your data with you
 

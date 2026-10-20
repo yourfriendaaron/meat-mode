@@ -81,7 +81,7 @@ test("a tapped day lists its entries by time, and an entry opens its item", asyn
   await expect(day(page, "Thursday 15 October")).toHaveAttribute("aria-pressed", "true");
   await expect(dayList(page).locator("h2")).toHaveText("Thursday 15 October");
   await expect(dayList(page).locator(".mrow-title")).toHaveText(["Approve the new footer text", "Buy seeds"]);
-  await expect(dayList(page).locator(".mrow-kind")).toHaveText(["Due", "Snoozed until"]);
+  await expect(dayList(page).locator(".mrow-kind")).toHaveText(["Due", "Snooze ends"]);
   // A title in the grid selects its day too.
   await cell(page, "2026-10-23").locator(".ment").click();
   await expect(dayList(page).locator("h2")).toHaveText("Friday 23 October");
