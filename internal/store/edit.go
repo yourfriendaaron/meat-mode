@@ -14,9 +14,6 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// MaxChecklist is how many entries a personal item's checklist holds.
-const MaxChecklist = 100
-
 // personalOnly reports whether an action kind changes personal items only.
 func personalOnly(kind string) bool {
 	switch kind {
@@ -27,11 +24,11 @@ func personalOnly(kind string) bool {
 }
 
 // checkEdit validates an edit's fields and returns them cleaned up: the
-// title trimmed, checklist texts trimmed and every entry given an id, a
+// title trimmed, a
 // repeat rule without the start the hub sets, the parent and sub-task ids
 // trimmed, the tags cleaned by cleanLabels. The rules that need the list are checkEditList's.
 func checkEdit(e api.Edit) (api.Edit, error) {
-	if e.Title == nil && e.Description == nil && e.Due == nil && !e.ClearDue && e.Priority == nil && e.Checklist == nil &&
+	if e.Title == nil && e.Description == nil && e.Due == nil && !e.ClearDue && e.Priority == nil &&
 		e.Repeat == nil && !e.ClearRepeat && e.RemindBefore == nil && !e.ClearRemindBefore &&
 		e.Parent == nil && len(e.SubtasksDone) == 0 && e.Labels == nil {
 		return e, invalidf("edit needs at least one field in payload.set")
@@ -60,33 +57,6 @@ func checkEdit(e api.Edit) (api.Edit, error) {
 		if err := api.CheckPriority(*e.Priority); err != nil {
 			return e, err
 		}
-	}
-	if e.Checklist != nil {
-		in := *e.Checklist
-		if len(in) > MaxChecklist {
-			return e, invalidf("a checklist holds at most %d entries", MaxChecklist)
-		}
-		out := make([]api.Check, 0, len(in))
-		ids := map[string]bool{}
-		for _, c := range in {
-			c.ID = strings.TrimSpace(c.ID)
-			c.Text = strings.TrimSpace(c.Text)
-			if c.Text == "" {
-				return e, invalidf("a checklist entry cannot be empty")
-			}
-			if utf8.RuneCountInString(c.Text) > MaxTitleLen {
-				return e, invalidf("a checklist entry is longer than %d characters", MaxTitleLen)
-			}
-			if c.ID == "" {
-				c.ID = uuid.NewString()
-			}
-			if ids[c.ID] {
-				return e, invalidf("checklist entry id %q is listed twice", c.ID)
-			}
-			ids[c.ID] = true
-			out = append(out, c)
-		}
-		e.Checklist = &out
 	}
 	if e.Repeat != nil && e.ClearRepeat {
 		return e, invalidf("send either repeat or clearRepeat, not both")
@@ -162,8 +132,7 @@ func checkRestore(c *api.Comment, now time.Time) (api.Comment, error) {
 
 // applyPersonal applies the kinds that change personal items only, and
 // done on a repeating item, and records in a's payload what they replaced:
-// an edit's old values and a repeating done's due time and checklist as
-// Was, a note-edit's or note-delete's comment as it was. The sub-tasks they
+// an edit's old values and a repeating done's due time as Was, a note-edit's or note-delete's comment as it was. The sub-tasks they
 // change are applyHubSubtasks'.
 func applyPersonal(it *api.Item, a *api.Action) error {
 	p := &a.Payload
@@ -180,16 +149,9 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 		}
 		// It stays open and moves on to its next date; apply sees Was and
 		// leaves it open.
-		p.Was = &api.Edit{Due: ptr(*it.DueAt), Checklist: ptr(cloneChecklist(it.Checklist))}
+		p.Was = &api.Edit{Due: ptr(*it.DueAt)}
 		it.DueAt = ptr(next)
 		it.DeferUntil = nil
-		if len(it.Checklist) > 0 {
-			cs := slices.Clone(it.Checklist)
-			for i := range cs {
-				cs[i].Done = false
-			}
-			it.Checklist = cs
-		}
 	case api.KindEdit:
 		set, was := p.Set, &api.Edit{}
 		if set.Title != nil {
@@ -250,13 +212,6 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 			was.Priority = ptr(it.Priority)
 			it.Priority = *set.Priority
 		}
-		if set.Checklist != nil {
-			was.Checklist = ptr(cloneChecklist(it.Checklist))
-			it.Checklist = nil
-			if len(*set.Checklist) > 0 {
-				it.Checklist = slices.Clone(*set.Checklist)
-			}
-		}
 		if set.Parent != nil {
 			// checkEditList has checked the move against the list.
 			was.Parent = ptr(it.Parent)
@@ -311,14 +266,6 @@ func applyPersonal(it *api.Item, a *api.Action) error {
 }
 
 func ptr[T any](v T) *T { return &v }
-
-// cloneChecklist copies a checklist for Was, where none is an empty list.
-func cloneChecklist(cs []api.Check) []api.Check {
-	if cs == nil {
-		return []api.Check{}
-	}
-	return slices.Clone(cs)
-}
 
 // agentAuthor is the author an agent's post carries: its own name, or
 // fallback (the machine's) when it gives none.

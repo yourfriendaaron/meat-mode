@@ -85,11 +85,11 @@ test.describe("restore step", () => {
   });
 
   test("shows why a file was refused", async ({ page, hub }) => {
-    await answerRestore(page, 400, { error: "This export is from a newer hub: the file is version 3, and this hub reads version 2 and older. Update the hub, then restore again." });
+    await answerRestore(page, 400, { error: "This export is from a newer hub: the file is version 4, and this hub reads version 3 and older. Update the hub, then restore again." });
     await openWizardAt(page, hub, "restore");
     await choose(page);
     await expect(wizard(page).region.getByRole("alert")).toHaveText(
-      "Not restored. This export is from a newer hub: the file is version 3, and this hub reads version 2 and older. Update the hub, then restore again.",
+      "Not restored. This export is from a newer hub: the file is version 4, and this hub reads version 3 and older. Update the hub, then restore again.",
     );
   });
 

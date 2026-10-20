@@ -62,13 +62,13 @@ test("a fresh hub is restored from an older hub's JSON export in the setup wizar
     page.getByLabel("Export file").setInputFiles({ name, mimeType: "application/json", buffer: Buffer.from(text) });
 
   await test.step("a file from a newer hub is refused", async () => {
-    await choose("newer.json", file.replace('"version": 1,', '"version": 3,'));
-    await expect(wiz.getByRole("alert")).toContainText("the file is version 3, and this hub reads version 2 and older");
+    await choose("newer.json", file.replace('"version": 1,', '"version": 4,'));
+    await expect(wiz.getByRole("alert")).toContainText("the file is version 4, and this hub reads version 3 and older");
   });
 
   await test.step("the export loads and the step lists what to do again", async () => {
     await choose("meat-mode-export-2026-10-14.json", file);
-    await expect(wiz.getByRole("status")).toHaveText("Restored 4 to-dos, 6 changes in the history and 2 reminders already sent.");
+    await expect(wiz.getByRole("status")).toHaveText("Restored 6 to-dos, 6 changes in the history and 2 reminders already sent.");
     await expect(wiz).toContainText("2 changes were still waiting for a machine and will not be sent.");
     await expect(wiz.locator(".restore-todo code")).toHaveText(["laptop"]);
     await expect(wiz.locator(".restore-todo")).toContainText("Turn the calendar feed on again");
@@ -85,7 +85,11 @@ test("a fresh hub is restored from an older hub's JSON export in the setup wizar
 
   await test.step("the restored to-dos are there, and a second restore is refused", async () => {
     const state = await w.api<{ items: { key: string; title: string; parent?: string }[] }>("/api/state");
-    expect(state.items.map((i) => i.key).sort()).toEqual(["hub/personal/mm-1", "hub/personal/mm-2", "hub/projects/garden/mm-3"]);
+    // The file's checklist comes back as sub-tasks of mm-1; the done one,
+    // closed at the file's time, shows only while that is under 7 days ago.
+    const keys = state.items.map((i) => i.key).filter((k) => k !== "hub/personal/mm-1.1").sort();
+    expect(keys).toEqual(["hub/personal/mm-1", "hub/personal/mm-1.2", "hub/personal/mm-2", "hub/projects/garden/mm-3"]);
+    expect(state.items.find((i) => i.key === "hub/personal/mm-1.2")?.parent).toBe("mm-1");
     expect(state.items.find((i) => i.key === "hub/personal/mm-2")?.parent).toBe("mm-1");
     await expect(
       w.api("/api/restore", { method: "POST", headers: { "content-type": "application/octet-stream" }, body: file }),

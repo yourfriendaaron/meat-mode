@@ -828,7 +828,6 @@ select.qa-pill {
 .chip-list,
 .chip-agent,
 .chip-notes,
-.chip-checklist,
 .chip-subtasks,
 .chip-parent {
   border-color: var(--role-line);
@@ -1300,36 +1299,6 @@ select.qa-pill {
 .edit-form .btn-row {
   margin-top: 6px;
 }
-.checklist {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-.ck {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 36px;
-}
-.ck input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  flex: none;
-  accent-color: var(--role-action);
-}
-.ck label {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.ck-done label {
-  color: var(--role-soft);
-  text-decoration: line-through;
-}
 .subtasks {
   list-style: none;
   margin: 0;
@@ -1341,7 +1310,7 @@ select.qa-pill {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 36px;
 }
 .sub .check {
   margin-top: 0;
@@ -1349,7 +1318,7 @@ select.qa-pill {
 .sub-title {
   flex: 1;
   min-width: 0;
-  padding: 6px 0;
+  padding: 4px 0;
   border: 0;
   background: none;
   color: inherit;
@@ -1386,11 +1355,11 @@ select.qa-pill {
   font-size: 12px;
 }
 .note-tools svg,
-.ck-remove svg {
+.sub-remove svg {
   width: 16px;
   height: 16px;
 }
-.ck-remove {
+.sub-remove {
   justify-content: center;
   min-width: 36px;
   min-height: 36px;

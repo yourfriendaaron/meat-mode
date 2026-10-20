@@ -59,7 +59,7 @@ func TestEditChangesOnlyTheGivenFields(t *testing.T) {
 	due := time.Date(2026, 3, 2, 14, 0, 0, 0, time.UTC)
 	if c.Item != "mm-1" || c.Bridge != us || c.Kind != api.KindEdit || c.ID != changeID || c.Author != "planner" || set == nil ||
 		*set.Title != "Renew the card" || set.Description == nil || *set.Description != "" ||
-		set.Due == nil || !set.Due.Equal(due) || set.ClearDue || *set.Priority != 0 || set.Checklist != nil {
+		set.Due == nil || !set.Due.Equal(due) || set.ClearDue || *set.Priority != 0 {
 		t.Fatalf("change %+v, set %+v", c, set)
 	}
 	set = cs[1].Payload.Set

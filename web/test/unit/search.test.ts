@@ -51,11 +51,11 @@ test("every word must match, and may match in different fields", () => {
   assert.deepEqual(titles("plants zebra", [a, b, c]), []);
 });
 
-test("looks in the description, notes and checklist", () => {
+test("looks in the description and notes", () => {
   const items = [
     item({ title: "One", description: "bring a ladder" }),
     item({ title: "Two", comments: [{ id: "c1", author: "sam", text: "the ladder is borrowed", createdAt: t(13, 9) }] }),
-    item({ title: "Three", checklist: [{ id: "k1", text: "Fetch ladder", done: false }] }),
+    item({ title: "Three", description: "the ladder is in the shed" }),
     item({ title: "Four", comments: null }),
   ];
   assert.deepEqual(titles("ladder", items), [["found-open", ["One", "Three", "Two"]]]);

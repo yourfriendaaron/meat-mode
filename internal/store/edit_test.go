@@ -34,40 +34,35 @@ func TestEditPersonalItem(t *testing.T) {
 		Description: ptr("The ones on the porch."),
 		Due:         &newDue,
 		Priority:    ptr(0),
-		Checklist:   &[]api.Check{{Text: " Fill the can "}, {ID: "c2", Text: "Check the soil", Done: true}},
 	})
 	it := item(t, mustState(t, s), key)
 	if it.Title != "Water the ferns" || it.Description != "The ones on the porch." || it.DueAt == nil || !it.DueAt.Equal(newDue) ||
-		it.Priority != 0 || len(it.Checklist) != 2 || it.Checklist[0].Text != "Fill the can" || it.Checklist[0].ID == "" ||
-		it.Checklist[1] != (api.Check{ID: "c2", Text: "Check the soil", Done: true}) || !it.UpdatedAt.Equal(c.t) {
+		it.Priority != 0 || !it.UpdatedAt.Equal(c.t) {
 		t.Fatalf("edited item %+v", it)
 	}
 	// The returned action and the stored one carry the old values of exactly
-	// the fields set named, and the ids the hub gave.
+	// the fields set named.
 	w := a.Payload.Was
 	if w == nil || *w.Title != "Water the plants" || *w.Description != "" || w.Due == nil || !w.Due.Equal(due) || w.ClearDue ||
-		*w.Priority != 2 || w.Checklist == nil || len(*w.Checklist) != 0 {
+		*w.Priority != 2 {
 		t.Fatalf("was = %+v", w)
-	}
-	if got := (*a.Payload.Set.Checklist)[0].ID; got != it.Checklist[0].ID {
-		t.Errorf("set's checklist id %q, item's %q", got, it.Checklist[0].ID)
 	}
 	stored, err := s.Action(a.ID)
 	must(t, err)
 	if b1, b2 := mustJSON(t, stored.Payload), mustJSON(t, a.Payload); b1 != b2 {
 		t.Errorf("stored payload %s, returned %s", b1, b2)
 	}
-	if raw := mustJSON(t, a.Payload.Was); !strings.Contains(raw, `"checklist":[]`) || !strings.Contains(raw, `"description":""`) {
+	if raw := mustJSON(t, a.Payload.Was); !strings.Contains(raw, `"description":""`) {
 		t.Errorf("was on the wire %s", raw)
 	}
 
 	// Undo is an edit with set = was, and it records the edit's values.
 	undo := edit(t, s, key, *a.Payload.Was)
 	it = item(t, mustState(t, s), key)
-	if it.Title != "Water the plants" || it.Description != "" || !it.DueAt.Equal(due) || it.Priority != 2 || it.Checklist != nil {
+	if it.Title != "Water the plants" || it.Description != "" || !it.DueAt.Equal(due) || it.Priority != 2 {
 		t.Fatalf("after undo %+v", it)
 	}
-	if w := undo.Payload.Was; *w.Title != "Water the ferns" || !w.Due.Equal(newDue) || len(*w.Checklist) != 2 {
+	if w := undo.Payload.Was; *w.Title != "Water the ferns" || !w.Due.Equal(newDue) {
 		t.Fatalf("undo's was %+v", w)
 	}
 
@@ -91,10 +86,6 @@ func TestEditRefuses(t *testing.T) {
 	key := hubKey(addPersonal(t, s, id1, "Water the plants", nil).BeadID)
 	now := time.Now()
 	long := strings.Repeat("a", MaxTitleLen+1)
-	many := make([]api.Check, MaxChecklist+1)
-	for i := range many {
-		many[i] = api.Check{Text: "Step"}
-	}
 	for name, set := range map[string]*api.Edit{
 		"no set":            nil,
 		"nothing set":       {},
@@ -104,10 +95,6 @@ func TestEditRefuses(t *testing.T) {
 		"due and clearDue":  {Due: &now, ClearDue: true},
 		"priority too low":  {Priority: ptr(-1)},
 		"priority too high": {Priority: ptr(5)},
-		"too many entries":  {Checklist: &many},
-		"empty entry":       {Checklist: &[]api.Check{{Text: " "}}},
-		"long entry":        {Checklist: &[]api.Check{{Text: long}}},
-		"repeated entry id": {Checklist: &[]api.Check{{ID: "c1", Text: "One"}, {ID: "c1", Text: "Two"}}},
 	} {
 		_, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindEdit, Key: key,
 			Payload: api.Payload{Set: set}}, "alex-app")
@@ -116,11 +103,7 @@ func TestEditRefuses(t *testing.T) {
 		}
 	}
 	// A limit is fine.
-	full := make([]api.Check, MaxChecklist)
-	for i := range full {
-		full[i] = api.Check{Text: "Step"}
-	}
-	edit(t, s, key, api.Edit{Checklist: &full, Priority: ptr(4), Description: ptr(strings.Repeat("a", MaxNoteLen))})
+	edit(t, s, key, api.Edit{Priority: ptr(4), Description: ptr(strings.Repeat("a", MaxNoteLen))})
 
 	// None of the personal-only kinds touches an agent's item, and none
 	// reaches the bridge.
@@ -346,7 +329,6 @@ func TestDoneMovesARepeatingItemOn(t *testing.T) {
 	}
 	until := c.t.Add(time.Hour)
 	act(t, s, api.KindSnooze, key, api.Payload{Until: &until})
-	edit(t, s, key, api.Edit{Checklist: &[]api.Check{{ID: "c1", Text: "Transfer", Done: true}, {ID: "c2", Text: "File the receipt"}}})
 
 	// Done a month late: February's date is skipped, not stacked.
 	c.tick()
@@ -354,11 +336,11 @@ func TestDoneMovesARepeatingItemOn(t *testing.T) {
 	it = item(t, mustState(t, s), key)
 	march := time.Date(2026, 3, 31, 7, 0, 0, 0, time.UTC) // 9:00 in Paris, summer time
 	if it.Status != "open" || it.ClosedAt != nil || it.CloseReason != "" || !it.DueAt.Equal(march) || it.DeferUntil != nil ||
-		it.Checklist[0].Done || it.Checklist[1].Done || !it.UpdatedAt.Equal(c.t) || !it.Repeat.Start.Equal(due) {
+		!it.UpdatedAt.Equal(c.t) || !it.Repeat.Start.Equal(due) {
 		t.Fatalf("after done %+v", it)
 	}
 	w := a.Payload.Was
-	if a.Status != api.StatusApplied || w == nil || !w.Due.Equal(due) || w.Checklist == nil || !(*w.Checklist)[0].Done ||
+	if a.Status != api.StatusApplied || w == nil || !w.Due.Equal(due) ||
 		w.Title != nil || w.Repeat != nil {
 		t.Fatalf("done = %+v, was %+v", a, w)
 	}

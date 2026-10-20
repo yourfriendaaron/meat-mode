@@ -2,19 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Action, Item } from "../../src/types.ts";
 import {
-  addCheck,
   applyEdit,
   canEdit,
-  checklistChip,
   diffEdit,
   draftOf,
   editError,
   moveTargets,
   priorityChip,
   priorityOptions,
-  removeCheck,
   restoreComment,
-  toggleCheck,
   undoOf,
 } from "../../src/edit.ts";
 
@@ -97,35 +93,12 @@ test("priority: 0 and 1 show a chip, and the picker keeps 0 and 4", () => {
   assert.deepEqual(priorityOptions(4).map((o) => o.label), ["High", "Normal", "Low", "Someday"]);
 });
 
-test("checklist chip counts done entries", () => {
-  assert.equal(checklistChip(undefined), "");
-  assert.equal(checklistChip([]), "");
-  assert.equal(
-    checklistChip([
-      { id: "k1", text: "Soil", done: true },
-      { id: "k2", text: "Pots", done: false },
-      { id: "k3", text: "Seeds", done: true },
-    ]),
-    "2/3",
-  );
-});
-
-test("checklist changes return a new list and leave the old one alone", () => {
-  const list = [{ id: "k1", text: "Soil", done: false }];
-  const added = addCheck(list, "Pots");
-  assert.deepEqual(added, [{ id: "k1", text: "Soil", done: false }, { text: "Pots", done: false }]);
-  assert.deepEqual(toggleCheck(added, 0)[0], { id: "k1", text: "Soil", done: true });
-  assert.deepEqual(removeCheck(added, 0), [{ text: "Pots", done: false }]);
-  assert.deepEqual(list, [{ id: "k1", text: "Soil", done: false }]);
-});
-
 test("applyEdit follows the set, clearDue included", () => {
   const it = item();
-  applyEdit(it, { title: "Water the ferns", clearDue: true, priority: 1, checklist: [{ text: "Pots", done: false }] });
+  applyEdit(it, { title: "Water the ferns", clearDue: true, priority: 1 });
   assert.equal(it.title, "Water the ferns");
   assert.equal(it.dueAt, null);
   assert.equal(it.priority, 1);
-  assert.deepEqual(it.checklist, [{ text: "Pots", done: false }]);
 });
 
 test("restoreComment puts a comment back by time", () => {
@@ -164,7 +137,7 @@ test("undo of each edit kind comes from what the hub filled in", () => {
 
 test("undo of a done that moved a repeating item on is an edit back", () => {
   const key = "hub/personal/pe-1";
-  const was = { due: due, checklist: [{ id: "k1", text: "Soil", done: true }] };
+  const was = { due: due, subtasksDone: ["pe-1.1"] };
   assert.deepEqual(undoOf(action("done", { was }), key, "u6"), { id: "u6", kind: "edit", key, payload: { set: was } });
 });
 
