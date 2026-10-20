@@ -294,13 +294,24 @@ test("snooze to a picked time; failed actions show their error", async ({ page, 
   await expect(row(page, "Fix the gate latch").locator(".row-error")).toHaveText("bd: issue is locked");
   await row(page, "Fix the gate latch").locator(".row-body").click();
   const detail = page.locator("#detail");
-  // A time in the past is refused, marked invalid, and posts nothing.
-  await detail.getByLabel("Pick a time").fill("2026-10-13T08:30");
-  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
-  await expect(detail.getByLabel("Pick a time")).toHaveAttribute("aria-invalid", "true");
+  const typed = detail.getByRole("textbox", { name: "Or type a time" });
+  const snooze = detail.getByRole("button", { name: "Snooze", exact: true });
+  await expect(snooze).toBeDisabled();
+  // The calendar button opens the browser's picker; a time picked there fills the field.
+  await detail.getByRole("button", { name: "Choose a date and time" }).click();
+  const pick = detail.locator("input[data-pick]");
+  // A time in the past is refused with a reason and cannot be snoozed to.
+  await pick.fill("2026-10-13T08:30");
+  await expect(typed).toHaveValue("Tue, Oct 13, 2026, 8:30");
+  await expect(detail.locator(".snooze-type-now")).toHaveText("Pick a time in the future.");
+  await expect(typed).toHaveAttribute("aria-invalid", "true");
+  await expect(snooze).toBeDisabled();
   expect(hub.posted).toHaveLength(0);
-  await detail.getByLabel("Pick a time").fill("2026-10-20T08:30");
-  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
+  await pick.fill("2026-10-20T08:30");
+  await expect(typed).toHaveValue("Tue, Oct 20, 8:30");
+  await expect(detail.locator(".snooze-type-now")).toHaveText("Tue, Oct 20, 8:30");
+  await expect(snooze).toBeEnabled();
+  await snooze.click();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "snooze",
     key: "hub/personal/pe-7",
@@ -314,23 +325,28 @@ test("snooze to a typed time", async ({ page, hub }) => {
   await page.keyboard.press("j");
   await page.keyboard.press("s");
   const dialog = page.getByRole("dialog", { name: "Snooze" });
-  const typed = dialog.getByRole("textbox", { name: "Type a time" });
+  const typed = dialog.getByRole("textbox", { name: "Or type a time" });
+  const snooze = dialog.getByRole("button", { name: "Snooze", exact: true });
   const line = dialog.locator(".snooze-type-now");
   await typed.focus();
   // What it cannot read, and a time already past, are refused with a reason and post nothing.
+  await expect(snooze).toBeDisabled();
   await typed.fill("whenever");
   await expect(line).toHaveText("Could not read that time. Try something like tomorrow 9am.");
+  await expect(snooze).toBeDisabled();
   await typed.press("Enter");
   await expect(typed).toHaveAttribute("aria-invalid", "true");
   await typed.fill("today 8am");
-  await expect(line).toHaveText("That time has passed. Pick a later one.");
+  await expect(line).toHaveText("Pick a time in the future.");
+  await expect(snooze).toBeDisabled();
   await typed.press("Enter");
   expect(hub.posted).toHaveLength(0);
   await expect(dialog).toBeVisible();
   // The time it reads shows as it is typed, and Enter snoozes to it.
   await typed.fill("8p");
-  await expect(line).toHaveText("Until 20:00");
+  await expect(line).toHaveText("Today, 20:00");
   await expect(typed).not.toHaveAttribute("aria-invalid");
+  await expect(snooze).toBeEnabled();
   await typed.press("Enter");
   await expect(dialog).toBeHidden();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "snooze", payload: { until: "2026-10-14T20:00:00.000Z" } });
@@ -344,9 +360,9 @@ test("snooze to a typed time", async ({ page, hub }) => {
   await page.getByRole("button", { name: /Everything/ }).click();
   await row(page, "Fix the gate latch").locator(".row-body").click();
   const detail = page.locator("#detail");
-  await detail.getByRole("textbox", { name: "Type a time" }).fill("tomorrow morning");
-  await expect(detail.locator(".snooze-type-now")).toHaveText("Until Tomorrow 9:00");
-  await detail.getByRole("button", { name: "Snooze to the typed time" }).click();
+  await detail.getByRole("textbox", { name: "Or type a time" }).fill("tomorrow morning");
+  await expect(detail.locator(".snooze-type-now")).toHaveText("Tomorrow, 9:00");
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({
     kind: "snooze",
     key: "hub/personal/pe-7",

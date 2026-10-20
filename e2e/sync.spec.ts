@@ -201,7 +201,8 @@ test("done, snooze, note and won't do reach bd", async ({ page, w }) => {
   const detail = page.locator("#detail");
   const until = new Date(Date.now() + 3 * 24 * 3600 * 1000);
   until.setUTCHours(8, 30, 0, 0);
-  await detail.getByLabel("Pick a time").fill(until.toISOString().slice(0, 16));
+  await detail.getByRole("button", { name: "Choose a date and time" }).click();
+  await detail.locator("input[data-pick]").fill(until.toISOString().slice(0, 16));
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await expect
     .poll(async () => {
@@ -407,7 +408,8 @@ test("the personal list works with every bridge stopped and survives a hub resta
   await detail.getByRole("button", { name: "Save note" }).click();
   const until = new Date(Date.now() + 2 * 24 * 3600 * 1000);
   until.setUTCHours(8, 30, 0, 0);
-  await detail.getByLabel("Pick a time").fill(until.toISOString().slice(0, 16));
+  await detail.getByRole("button", { name: "Choose a date and time" }).click();
+  await detail.locator("input[data-pick]").fill(until.toISOString().slice(0, 16));
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();
 
   type Item = { key: string; bridge: string; title: string; status: string; pending?: boolean; deferUntil?: string; comments: { author: string; text: string }[] };
