@@ -20,7 +20,7 @@ import {
   syncStatus,
   visibleRepos,
 } from "../../src/model.ts";
-import { snoozeOptions, typedSnooze } from "../../src/snooze.ts";
+import { fmtSnoozeTime, snoozeOptions, typedSnooze } from "../../src/snooze.ts";
 
 // Wednesday 14 October 2026, 10:00 local time.
 const now = new Date(2026, 9, 14, 10, 0);
@@ -237,11 +237,11 @@ test("repo labels are folder names, with the path where they repeat", () => {
 test("a typed snooze time reads like quick add and refuses the past", () => {
   const cases: [string, string | null, string][] = [
     ["", null, ""],
-    ["8p", "14 20:00", "Until 20:00"],
-    ["in 2 hours", "14 12:00", "Until 12:00"],
-    ["tomorrow morning", "15 9:00", "Until Tomorrow 9:00"],
-    ["friday 3pm", "16 15:00", "Until Fri, Oct 16 15:00"],
-    ["today 8am", null, "That time has passed. Pick a later one."],
+    ["8p", "14 20:00", "Today, 20:00"],
+    ["in 2 hours", "14 12:00", "Today, 12:00"],
+    ["tomorrow morning", "15 9:00", "Tomorrow, 9:00"],
+    ["friday 3pm", "16 15:00", "Fri, Oct 16, 15:00"],
+    ["today 8am", null, "Pick a time in the future."],
     ["whenever", null, "Could not read that time. Try something like tomorrow 9am."],
   ];
   const fmt = (d: Date | null) => (d ? `${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}` : null);
@@ -250,6 +250,28 @@ test("a typed snooze time reads like quick add and refuses the past", () => {
     assert.equal(fmt(r.until), until, text);
     assert.equal(r.line, line, text);
   }
+});
+
+test("a time picked from the calendar reads back to the same minute", () => {
+  const picks = [
+    new Date(2026, 9, 14, 20, 0),
+    new Date(2026, 9, 15, 9, 0),
+    new Date(2026, 9, 22, 20, 5),
+    new Date(2026, 11, 31, 23, 59),
+    new Date(2027, 0, 3, 9, 5),
+    new Date(2027, 9, 22, 7, 30),
+  ];
+  assert.equal(fmtSnoozeTime(picks[2], now), "Thu, Oct 22, 20:05");
+  assert.equal(fmtSnoozeTime(picks[4], now), "Sun, Jan 3, 2027, 9:05");
+  for (const d of picks) {
+    const text = fmtSnoozeTime(d, now);
+    assert.equal(typedSnooze(text, now).until?.getTime(), d.getTime(), text);
+    assert.equal(typedSnooze(text, now).line, text);
+  }
+  // A picked day already past keeps its year, so it reads as past, not as next year.
+  const past = new Date(2026, 9, 13, 8, 30);
+  assert.equal(fmtSnoozeTime(past, now), "Tue, Oct 13, 2026, 8:30");
+  assert.deepEqual(typedSnooze(fmtSnoozeTime(past, now), now), { until: null, line: "Pick a time in the future." });
 });
 
 test("a sub-task shows under its open parent, and on its own row otherwise", () => {

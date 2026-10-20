@@ -16,7 +16,7 @@ Style guide for this page.
 
 **One to-do list for the things only you can do: your own to-dos and the tasks your AI agents hand you, on your phone and your desktop.**
 
-![The Today list on a desktop: personal to-dos such as "Water the plants", with a garden tag, and "Call Sam about the weekend" sit beside a task from an agent, "Order compost for the beds". The agent's task "Approve the new footer text" is open on the right with the agent's reason, the command that lets agents work in that repo, Done and Won't do buttons, a sub-task box and snooze choices.](docs/images/desktop-today-detail.png)
+![The Today list on a desktop: personal to-dos such as "Water the plants", with a garden tag, and "Call Sam about the weekend" sit beside a task from an agent, "Order compost for the beds". The agent's task "Approve the new footer text" is open on the right with the agent's reason, the command that lets agents work in that repo, Done and Won't do buttons, a sub-task box, and a Snooze list with one row per choice, such as "In 1 hour 11:00" and "Tomorrow 9:00".](docs/images/desktop-today-detail.png)
 
 Your AI agents keep their work in an issue tracker that lives in your code repos, such as [beads](https://github.com/gastownhall/beads). When an agent needs you for something it cannot do itself (approve a text, sign in somewhere, make a call), it files a task labelled `human`. Meat Mode gathers those tasks from every repo and every machine into one list, next to your own to-dos. You tick them off, snooze them, say no, or reply with a note, and your answer goes back to the agent in its tracker. In the repos you allow, one tap also wakes an agent to work on a task, and you watch how it goes on the task itself.
 
@@ -53,7 +53,7 @@ Each task from an agent shows why the agent needs you, which project it came fro
 
 <p>
   <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme, grouped into Past due, Today, This evening, Tomorrow and This week. &quot;Call Sam about the weekend&quot; carries a weekend tag, the agent's task &quot;Order compost for the beds&quot; has a New badge, and a tab bar with Today, Upcoming, Agents and Browse sits at the bottom.">
-  <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day and carries a garden tag, and offers Done, Edit and Delete. Under Sub-tasks, one of two is ticked, each with a remove button, above a box to add another; Files offers Attach a file, Take a photo and Choose a photo, then come the snooze choices.">
+  <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day and carries a garden tag, and offers Done, Edit and Delete. Under Sub-tasks, one of two is ticked, each with a remove button, above a box to add another; Files offers Attach a file, Take a photo and Choose a photo, then the start of the Snooze list: In 1 hour at 11:00, This evening at 18:00, Tomorrow at 9:00 and This weekend on Saturday at 10:00.">
 </p>
 
 ### Hand a task to an agent
