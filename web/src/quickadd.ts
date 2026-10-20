@@ -126,6 +126,17 @@ const endOfWeek: chrono.Parser = {
   },
 };
 
+/** "day before yesterday", "day after tomorrow": chrono reads them only after "the". */
+const DAY_BESIDE = new RegExp(`${B}(?:the\\s+)?day\\s+(before\\s+yesterday|after\\s+tomorrow)${E}`, "iu");
+const dayBeside: chrono.Parser = {
+  pattern: () => DAY_BESIDE,
+  extract(ctx, m) {
+    const now = ctx.reference.instant;
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (/^before/i.test(m[1]) ? -2 : 2));
+    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  },
+};
+
 /** "morning" at 9:00 rather than chrono's 6:00, before chrono moves a time already past to tomorrow. */
 const morningAtNine: chrono.Refiner = {
   refine(_ctx, results) {
@@ -155,7 +166,7 @@ const pastWeekday: chrono.Refiner = {
 };
 
 const parser = chrono.casual.clone();
-parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek);
+parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek, dayBeside);
 parser.refiners.unshift(morningAtNine, pastWeekday);
 
 export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts: QuickOptions = {}): QuickAdd {
