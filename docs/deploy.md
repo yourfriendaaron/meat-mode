@@ -223,6 +223,7 @@ Open the app at its address. A hub with no password shows only the setup code fo
 |---|---|
 | Connection check | Checks the address, public DNS for the hub's name, the secure connection, live updates, the clocks and the reminder keys, and says what to fix. It also notes whether the request came through Tailscale Serve (also **Settings**, **Connection**). |
 | Secure the hub | Says where the password comes from: the one you set with the setup code before the app opened, or a hash in the environment. |
+| Restore from an export | Only on a fresh hub. Loads a file from **Download your data**, its files included; see [Back up](#back-up). |
 | Name and time zone | Your name and time zone, kept on the hub (also **Settings**, **Name and time zone**). The name starts as `MEAT_MODE_USER` and the time zone as this device's. Agents' dates are read in this zone; see [Let agents add to your personal list](#let-agents-add-to-your-personal-list). |
 | Install the app | Puts Meat Mode on the home screen or dock: an **Install** button when a Chromium browser offers it, and the steps for Safari on an iPhone, iPad or Mac. On an iPhone or iPad, reminders work only in the Home Screen app, so install it there first. |
 | Reminders | Asks this device for permission to notify, then sends a test reminder to this device, and to ntfy when `MEAT_MODE_NTFY_URL` is set. If you block it, the step says how to allow it again. |
@@ -455,7 +456,7 @@ From then on your personal list lives on the hub. The bridge no longer treats th
 
 ## Back up
 
-The hub holds the only copy of your personal list, your projects, the history of changes and the settings you chose in the app. To back them up, open Settings, Your data, and choose Download your data. You get one JSON file, named for the day in the hub's time zone; keep it somewhere other than the hub's host.
+The hub holds the only copy of your personal list, your projects and their files, the history of changes and the settings you chose in the app. To back them up, open Settings, Your data, and choose Download your data. You get one zip file, named for the day in the hub's time zone; keep it somewhere other than the hub's host.
 
 The file leaves out:
 
