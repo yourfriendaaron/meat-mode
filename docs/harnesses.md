@@ -66,7 +66,7 @@ One harness per machine, picked by `MEAT_MODE_AGENT_HARNESS`. The run limits hol
 
 - `MEAT_MODE_AGENT_HARNESS`: the harness's `Name`; `claude` when unset. An unknown name stops the bridge at start with the list of names.
 - `MEAT_MODE_AGENT_COMMAND`: the program and its fixed flags, split on spaces with no shell, replacing the harness's own. The harness still adds what each run needs (the prompt, the session, the cap). An existing setting written for Claude Code keeps working unchanged.
-- `MEAT_MODE_AGENT_BUDGET_USD`, `_TIMEOUT`, `_RUNS_PER_TASK`, `_CONCURRENT` and `_NAME` apply to every harness; the budget is ignored by a harness whose `Budget` is `none`.
+- `MEAT_MODE_AGENT_BUDGET_USD`, `_TIMEOUT`, `_RUNS_PER_TASK`, `_CONCURRENT` and `_NAME` apply to every harness; the budget is ignored by a harness whose `Budget` is `none`. The first four are the machine's defaults, which the app can change up to the `MEAT_MODE_AGENT_MAX_*` ceilings ([deploy.md](deploy.md#settings)); where a harness page names `MEAT_MODE_AGENT_BUDGET_USD` or `MEAT_MODE_AGENT_TIMEOUT`, read it as the limit in effect.
 
 ## Conformance
 
@@ -76,4 +76,4 @@ One harness per machine, picked by `MEAT_MODE_AGENT_HARNESS`. The run limits hol
 
 ## On the wire
 
-`api.Hello.harness` is `{name, title, version, instructionFile, budget, budgetUsd, timeoutSeconds, steer}` for the machine's harness (`docs/api.md`, Bridge API). The hub keeps it with the bridge and the app shows it in Settings and the Agents tab: which harness the machine runs, its time limit, its spending cap or that it has none, and whether notes wait for the turn. The instruction text for agents names its `instructionFile`. A bridge that sends no `harness` predates harnesses and runs Claude Code.
+`api.Hello.harness` is `{name, title, version, instructionFile, budget, budgetUsd, timeoutSeconds, steer, limits}` for the machine's harness (`docs/api.md`, Bridge API). The hub keeps it with the bridge and the app shows it in Settings and the Agents tab: which harness the machine runs, its time limit, its spending cap or that it has none, its runs per task and at once, and whether notes wait for the turn. `limits` holds the four limits with the machine's defaults and ceilings, which Settings changes within (`docs/api.md`, Harness: limits); with budget `none` the app offers no spending cap to set. The instruction text for agents names its `instructionFile`. A bridge that sends no `harness` predates harnesses and runs Claude Code.

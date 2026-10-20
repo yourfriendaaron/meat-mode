@@ -205,6 +205,35 @@ export interface Bridge {
   trackers?: TrackerVersion[];
   /** The agent harness the machine runs; absent for an older bridge, which runs Claude Code. */
   harness?: HarnessInfo;
+  /** A limits change for this machine waits for its bridge; `harness.limits` shows where it was set to. */
+  limitsPending?: boolean;
+}
+
+/** The four limits on agent runs on one machine (docs/api.md, Harness). */
+export interface AgentLimits {
+  /** The spending cap for one run, in US dollars. */
+  budgetUsd: number;
+  /** The time limit for one run. */
+  timeoutSeconds: number;
+  /** Runs one task may have in its lifetime. */
+  runsPerTask: number;
+  /** Runs live at once on the machine. */
+  concurrent: number;
+}
+
+export type LimitName = keyof AgentLimits;
+
+/** A machine's limits in effect for a run that starts now, its own defaults, and the ceilings the app can set them up to. */
+export interface RunLimits extends AgentLimits {
+  defaults: AgentLimits;
+  max: AgentLimits;
+  /** The limits the app has set; the others are the defaults. */
+  set?: LimitName[];
+}
+
+/** The payload of a limits action: each field set changes that limit, and `reset` puts limits back to the machine's default. */
+export interface LimitsChange extends Partial<AgentLimits> {
+  reset?: LimitName[];
 }
 
 /** The agent harness a machine runs and its limits on each run (docs/harnesses.md, On the wire). */
@@ -224,6 +253,8 @@ export interface HarnessInfo {
   timeoutSeconds?: number;
   /** True when a note reaches a live run at once; otherwise it waits for the agent's turn to end. */
   steer?: boolean;
+  /** The machine's limits with their defaults and ceilings; absent from a bridge too old for the app to set them. */
+  limits?: RunLimits;
 }
 
 /** One tracker a machine runs (docs/trackers.md, On the wire). */
@@ -254,6 +285,8 @@ export interface Payload {
   labels?: string[];
   /** edit */
   set?: Edit;
+  /** limits */
+  limits?: LimitsChange;
   /**
    * Filled in by the hub. edit: the values the fields in `set` held before.
    * done on a repeating item: the due time and checklist before it moved on.
@@ -276,6 +309,7 @@ export type ActionKind =
   | "ask"
   | "stop"
   | "agents"
+  | "limits"
   // Personal list only.
   | "edit"
   | "note-edit"

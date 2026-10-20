@@ -63,7 +63,7 @@ The guard only refuses. A forged header can make a request look more public, nev
 | `POST /api/devices/{id}/confirm` | `{"code": "…"}` | `200` with `{"token": "…"}`, the device token, shown once. Needs no session: the code is the credential. `403` for a wrong, used or expired code. |
 | `PUT /api/devices/self` | `PushSubscription` (`endpoint` and `keys` only) | `204`; replaces the calling device's endpoint and keys and renews it. Device token only. `400` as for `app` registration. |
 | `DELETE /api/devices/self` | | `204`; the calling device revokes itself. Device token only. |
-| `GET /api/bridges` | | `[]Bridge`: `{"name", "createdAt", "lastSeen", "version", "bdVersion", "trackers"?, "harness"?}`, with `trackers` the `{"name", "version"?}` list and `harness` the harness its last hello sent (see Harness) |
+| `GET /api/bridges` | | `[]Bridge`: `{"name", "createdAt", "lastSeen", "version", "bdVersion", "trackers"?, "harness"?}`, with `trackers` the `{"name", "version"?}` list and `harness` the harness its last hello sent (see Harness). In `State`, a bridge also carries `limitsPending: true` while a `limits` action for it waits (see Harness: limits) |
 | `POST /api/bridges` | `{"name": "…", "password"?: "…"}` | `201` with `{"name", "token"}`; the token is shown once. `403` with `"reauth": true` unless the password was entered within the last 10 minutes or `password` is right (see Login) |
 | `DELETE /api/bridges/{name}` | | `204`; revokes the token |
 
@@ -182,6 +182,7 @@ Releases: one signed universal APK per tag `vX.Y.Z`, named `meat-mode-android-vX
 | `ask` | `key` | `{"text"?: "…"}` | wakes an agent on the item (see Agent runs). With `text`, appends it as a note first, as `note` does, in the same action. The item's `run` shows `working` at once; on a live run it counts the note in `queued` instead. |
 | `stop` | `key` | `{}` | ends the item's live run; `run` shows `stopped` with reason `stopped` at once |
 | `agents` | `bridge` + `repo` | `{"on": false}` | the repo shows `agentsAllowed: false` with `agentsPending: true` until the bridge reports its repo list again. `{"on": true}` answers `400` naming the command that switches agents on at the agent machine (see below). Not allowed on the personal list or a project. |
+| `limits` | `bridge` | `{"limits": LimitsChange}` | the bridge's `harness.limits` shows the change with `limitsPending: true` until the bridge reports its harness again. Answers `400` for a value above the machine's ceiling or below its floor, and for a machine whose bridge reported no `limits` (see Harness: limits). Not allowed on the hub or with a `repo`. |
 | `edit` | `key` | `{"set": Edit}` | sets each field `set` names; the hub records the old values as `was` |
 | `note-edit` | `key` | `{"commentId": "…", "text": "…"}` | replaces that comment's text, up to 10000 characters; the hub records the comment as it was in `comment` |
 | `note-delete` | `key` | `{"commentId": "…"}` | removes that comment; the hub records it as `comment` |
@@ -209,8 +210,31 @@ Each bridge in `State` and `GET /api/bridges` carries `harness`, the agent harne
 - `budgetUsd`: the cap for one run, in US dollars; absent with `none`.
 - `timeoutSeconds`: the time limit for one run.
 - `steer`: `true` when a note reaches a live run at once; otherwise it waits until the agent finishes its turn.
+- `limits`: the machine's four limits on agent runs (see Harness: limits); absent from a bridge too old for the app to set them, which the app then shows read-only with a line saying to update it.
 
 A bridge without `harness` predates harnesses and runs Claude Code; the app shows it as Claude Code without limits. The hub trims and bounds each field as it does a tracker's, and keeps no harness without a `name`. The harness is picked on the agent machine; the app only shows it.
+
+#### Harness: limits
+
+The app sets each machine's four limits on agent runs, up to a ceiling the machine sets, so a hub that is taken over cannot widen what agents may do beyond what the machine allows. `harness.limits` is `RunLimits`:
+
+```json
+{"budgetUsd": 5, "timeoutSeconds": 1800, "runsPerTask": 10, "concurrent": 2,
+ "defaults": {"budgetUsd": 2, "timeoutSeconds": 1800, "runsPerTask": 10, "concurrent": 2},
+ "max": {"budgetUsd": 20, "timeoutSeconds": 14400, "runsPerTask": 50, "concurrent": 5},
+ "set": ["budgetUsd"]}
+```
+
+- The top-level four are the limits a run that starts now keeps: `budgetUsd` (the spending cap for one run, in US dollars), `timeoutSeconds` (the time limit for one run), `runsPerTask` (runs one item may have in its lifetime) and `concurrent` (runs live at once on the machine). `harness.budgetUsd` and `harness.timeoutSeconds` carry the same values as before, `budgetUsd` absent with budget `none`.
+- `defaults` are the machine's own limits, from `MEAT_MODE_AGENT_BUDGET_USD`, `_TIMEOUT`, `_RUNS_PER_TASK` and `_CONCURRENT`, used while the app has set nothing.
+- `max` are the ceilings, from `MEAT_MODE_AGENT_MAX_BUDGET_USD`, `_MAX_TIMEOUT`, `_MAX_RUNS_PER_TASK` and `_MAX_CONCURRENT` (see [deploy.md](deploy.md#settings)). A ceiling of `0` lets the app set nothing for that limit.
+- `set` names the limits the app has set; the others are the defaults.
+
+`LimitsChange`, the payload of a `limits` action, is `{"budgetUsd"?, "timeoutSeconds"?, "runsPerTask"?, "concurrent"?, "reset"?}`: each field present sets that limit, and `reset` lists limit names that go back to the machine's default. A limit named in neither stays as it is. A change needs at least one of them, and names each limit once.
+
+The floors are: `budgetUsd` above 0, `timeoutSeconds` at least 60, `runsPerTask` and `concurrent` at least 1, each a whole number but the budget. The hub refuses a value below its floor or above the ceiling in the bridge's last `limits` with `400`, such as `the spending cap can be at most $20 a run on laptop. To allow more, set MEAT_MODE_AGENT_MAX_BUDGET_USD on laptop and restart its bridge`.
+
+The bridge enforces them. It checks each value against its own ceilings again, whatever the hub sent, and fails the action with the same message. It saves an accepted change in the `limits` object of its `bridge.json`, atomically and under the same lock as the `agents` map, then sends a hello with its new `harness.limits` before it reports the result. A value saved above a ceiling, by a hand edit or because the ceiling was lowered since, is cut to the ceiling; one below its floor reads as unset. A change applies to runs that start after it: a live run keeps the time limit and budget it started with.
 
 ### Sub-tasks
 
@@ -353,6 +377,8 @@ Agents are switched on at the agent machine only, so a hub that is taken over ca
 
 The app's `agents` action can only switch off. The bridge accepts it only for a repo it found, saves it in the same map and reports it as the repo's `agentsAllowed: false`. A bridge refuses an `agents` action with `on: true`, such as one queued by an older hub, with the error `switch agents on at this machine: meat-mode bridge agents on <repo>`.
 
+The limits on agent runs follow the same rule: the app sets each one only up to the ceiling the machine sets in its own environment, and the bridge refuses anything above it (see Harness: limits).
+
 A `sync` switch is applied by the bridge, not by bd. The bridge accepts it only for a repo it found itself, looked up by name, so the app cannot make it read anywhere else; any other name fails with `unknown repo`. It saves the choice in the `sync` map of its own `bridge.json`, where it overrides the repo's `meat-mode.sync` line, and sends its new repo list before reporting the result. A repo with no switch syncs when its `.beads/config.yaml` has the top-level line `meat-mode.sync: true`.
 
 ### Month view
@@ -439,7 +465,7 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 
 | Method and path | Body | Response |
 |---|---|---|
-| `POST /bridge/v1/hello` | `{"version", "bdVersion", "trackers"?, "harness"?}`: `trackers` lists `{"name", "version"?}` for each tracker whose check passed; `bdVersion` is beads' version, empty without beads; `harness` is the agent harness the bridge runs for Ask agent (see Harness) | `{"bridge": "<name>", "serverTime"}`; updates last-seen and the bridge's `trackers` and `harness`. A hello without `harness` clears it |
+| `POST /bridge/v1/hello` | `{"version", "bdVersion", "trackers"?, "harness"?}`: `trackers` lists `{"name", "version"?}` for each tracker whose check passed; `bdVersion` is beads' version, empty without beads; `harness` is the agent harness the bridge runs for Ask agent, with its `limits` (see Harness) | `{"bridge": "<name>", "serverTime"}`; updates last-seen and the bridge's `trackers` and `harness`. A hello without `harness` clears it. The bridge also sends one after it applies a `limits` action |
 | `GET /bridge/v1/settings` | | `{"name", "timeZone", "reminderLead"}`, as `GET /api/settings`. Unlike hello it does not update last-seen, so `meat-mode add` can read the zone without showing the machine as connected |
 | `PUT /bridge/v1/repos` | `[]Repo` (without `bridge`, `pending` and `agentsPending`): every repo the bridge found, `optedIn` true for those it syncs, `agentsAllowed` true for those whose agents switch is on, `tracker` and `actions` as its tracker declares them (see Trackers) | `204`; replaces this bridge's repo list |
 | `PUT /bridge/v1/items?repo=<repo>` | `[]Item` (without `key`, `bridge`, `repo`, `pending`) | `204`; the complete set of human items for that repo. Items missing from the set are dropped from the hub. The repo is a query parameter because it holds `/`. An item's `parent` must be a valid id other than its own. |

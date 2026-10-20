@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 )
 
@@ -40,6 +41,9 @@ type Config struct {
 	// Agents holds the agents switches set in the app, by repo name. Agents
 	// run only in a repo switched on here; no repo file can do it.
 	Agents map[string]bool `json:"agents,omitempty"`
+	// Limits holds the limits on agent runs set in the app. The bridge
+	// takes none above its ceilings (MEAT_MODE_AGENT_MAX_*).
+	Limits SavedLimits `json:"limits,omitzero"`
 	// TrustedNetworks is MEAT_MODE_TRUSTED_NETWORKS as `bridge pair` saw it:
 	// networks outside the private set that the hub may be in. The
 	// environment, when set, wins at run time.
@@ -163,6 +167,76 @@ func saveSwitch(path string, field func(*Config) *map[string]bool, repo string, 
 		(*m)[repo] = on
 		return c.Save(path)
 	})
+}
+
+// SavedLimits are the limits on agent runs the app set, as bridge.json
+// keeps them; nil is the machine's default.
+type SavedLimits struct {
+	BudgetUSD      *float64 `json:"budgetUsd,omitempty"`
+	TimeoutSeconds *int     `json:"timeoutSeconds,omitempty"`
+	RunsPerTask    *int     `json:"runsPerTask,omitempty"`
+	Concurrent     *int     `json:"concurrent,omitempty"`
+}
+
+// has reports whether the named limit is set.
+func (s SavedLimits) has(name string) bool {
+	switch name {
+	case api.LimitBudget:
+		return s.BudgetUSD != nil
+	case api.LimitTimeout:
+		return s.TimeoutSeconds != nil
+	case api.LimitRunsPerTask:
+		return s.RunsPerTask != nil
+	case api.LimitConcurrent:
+		return s.Concurrent != nil
+	}
+	return false
+}
+
+// apply returns s with c's values set and its resets cleared.
+func (s SavedLimits) apply(c api.LimitsChange) SavedLimits {
+	for _, n := range c.Reset {
+		switch n {
+		case api.LimitBudget:
+			s.BudgetUSD = nil
+		case api.LimitTimeout:
+			s.TimeoutSeconds = nil
+		case api.LimitRunsPerTask:
+			s.RunsPerTask = nil
+		case api.LimitConcurrent:
+			s.Concurrent = nil
+		}
+	}
+	if c.BudgetUSD != nil {
+		v := *c.BudgetUSD
+		s.BudgetUSD = &v
+	}
+	for _, f := range []struct{ from, to **int }{
+		{&c.TimeoutSeconds, &s.TimeoutSeconds}, {&c.RunsPerTask, &s.RunsPerTask}, {&c.Concurrent, &s.Concurrent},
+	} {
+		if *f.from != nil {
+			v := **f.from
+			*f.to = &v
+		}
+	}
+	return s
+}
+
+// SaveLimits applies a limits change from the app to the config file at
+// path, under the config lock, and returns the limits now saved. The caller
+// has checked c against the ceilings.
+func SaveLimits(path string, c api.LimitsChange) (SavedLimits, error) {
+	var out SavedLimits
+	err := WithConfigLock(path, func() error {
+		cfg, err := readConfigFile(path)
+		if err != nil {
+			return err
+		}
+		cfg.Limits = cfg.Limits.apply(c)
+		out = cfg.Limits
+		return cfg.Save(path)
+	})
+	return out, err
 }
 
 // LoadAgents reads the agents map as saved in the config file at path. The

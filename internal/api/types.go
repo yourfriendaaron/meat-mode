@@ -226,6 +226,9 @@ type HarnessInfo struct {
 	// Steer is true when a note reaches a live run at once; otherwise it
 	// waits for the agent's turn to end.
 	Steer bool `json:"steer,omitempty"`
+	// Limits are the machine's four limits with their defaults and
+	// ceilings; nil from a bridge too old for the app to set them.
+	Limits *RunLimits `json:"limits,omitempty"`
 }
 
 // Harness budget modes, as in HarnessInfo.Budget.
@@ -304,6 +307,9 @@ type Bridge struct {
 	// Harness is the agent harness the bridge last said it runs; nil for a
 	// bridge that predates harnesses, which runs Claude Code.
 	Harness *HarnessInfo `json:"harness,omitempty"`
+	// LimitsPending is true while a limits action for this machine waits
+	// for its bridge; Harness.Limits then shows where it was set to.
+	LimitsPending bool `json:"limitsPending,omitempty"`
 }
 
 // Action kinds.
@@ -318,6 +324,7 @@ const (
 	KindAsk     = "ask"    // wake an agent on an item, with an optional note
 	KindStop    = "stop"   // end an item's live run
 	KindAgents  = "agents" // switch whether agents may work in a repo
+	KindLimits  = "limits" // change a machine's limits on agent runs
 	// Personal list only.
 	KindEdit        = "edit"
 	KindNoteEdit    = "note-edit"
@@ -335,17 +342,18 @@ const (
 
 // Payload carries the fields an action kind needs; unused fields stay empty.
 type Payload struct {
-	Until    *time.Time `json:"until,omitempty"`    // snooze
-	Previous *time.Time `json:"previous,omitempty"` // snooze: value to restore on undo
-	Text     string     `json:"text,omitempty"`     // note
-	Title    string     `json:"title,omitempty"`    // add
-	Due      *time.Time `json:"due,omitempty"`      // add
-	Repeat   *Repeat    `json:"repeat,omitempty"`   // add, personal list only; needs Due
-	On       *bool      `json:"on,omitempty"`       // sync and agents
-	Ask      bool       `json:"ask,omitempty"`      // add: an agent starts on the new item
-	Parent   string     `json:"parent,omitempty"`   // add: the id of the item the new one is a sub-task of
-	Labels   []string   `json:"labels,omitempty"`   // add: tags, on the hub's own lists only
-	Set      *Edit      `json:"set,omitempty"`      // edit
+	Until    *time.Time    `json:"until,omitempty"`    // snooze
+	Previous *time.Time    `json:"previous,omitempty"` // snooze: value to restore on undo
+	Text     string        `json:"text,omitempty"`     // note
+	Title    string        `json:"title,omitempty"`    // add
+	Due      *time.Time    `json:"due,omitempty"`      // add
+	Repeat   *Repeat       `json:"repeat,omitempty"`   // add, personal list only; needs Due
+	On       *bool         `json:"on,omitempty"`       // sync and agents
+	Ask      bool          `json:"ask,omitempty"`      // add: an agent starts on the new item
+	Parent   string        `json:"parent,omitempty"`   // add: the id of the item the new one is a sub-task of
+	Labels   []string      `json:"labels,omitempty"`   // add: tags, on the hub's own lists only
+	Set      *Edit         `json:"set,omitempty"`      // edit
+	Limits   *LimitsChange `json:"limits,omitempty"`   // limits
 	// Was is filled in by the hub. On edit it holds the fields Set changed,
 	// as they were; on done of a repeating item, the due time and checklist
 	// before it moved on, and the sub-tasks it reopened as SubtasksDone.
@@ -362,7 +370,7 @@ type NewAction struct {
 	ID      string  `json:"id"`
 	Kind    string  `json:"kind"`
 	Key     string  `json:"key,omitempty"`
-	Bridge  string  `json:"bridge,omitempty"` // add, sync and agents only
+	Bridge  string  `json:"bridge,omitempty"` // add, sync, agents and limits only
 	Repo    string  `json:"repo,omitempty"`   // add, sync and agents only
 	Payload Payload `json:"payload"`
 }

@@ -29,12 +29,31 @@ type AgentConfig struct {
 	Command []string
 	// Name is shown for the agent, and its notes carry it; the harness's
 	// title when unset.
-	Name        string
+	Name string
+	// Timeout, BudgetUSD, RunsPerTask and Concurrent are the machine's
+	// defaults for the four limits, used while the app has set none.
 	Timeout     time.Duration // wall clock for one run
 	BudgetUSD   float64       // spending cap for one run
 	RunsPerTask int           // lifetime runs per task
 	Concurrent  int           // runs live at once on this machine
+	// Max holds the ceilings the app can set each limit up to, from
+	// MEAT_MODE_AGENT_MAX_*. A zero ceiling lets the app set nothing.
+	Max Limits
+	// Saved are the limits the app set, as bridge.json keeps them.
+	Saved SavedLimits
 }
+
+// Limits are the four limits on agent runs.
+type Limits struct {
+	BudgetUSD   float64
+	Timeout     time.Duration
+	RunsPerTask int
+	Concurrent  int
+}
+
+// The ceilings when MEAT_MODE_AGENT_MAX_* is unset. A default limit above
+// its ceiling raises the ceiling to it.
+var defaultMax = Limits{BudgetUSD: 20, Timeout: 4 * time.Hour, RunsPerTask: 50, Concurrent: 5}
 
 // DefaultAgentConfig returns the defaults every variable falls back to.
 func DefaultAgentConfig() AgentConfig {
@@ -44,11 +63,56 @@ func DefaultAgentConfig() AgentConfig {
 		BudgetUSD:   2,
 		RunsPerTask: 10,
 		Concurrent:  2,
+		Max:         defaultMax,
 	}
 }
 
+// Defaults are the machine's own limits, from MEAT_MODE_AGENT_*.
+func (c AgentConfig) Defaults() Limits {
+	return Limits{BudgetUSD: c.BudgetUSD, Timeout: c.Timeout, RunsPerTask: c.RunsPerTask, Concurrent: c.Concurrent}
+}
+
+// Limits are the limits a run that starts now keeps: each one the app set,
+// cut to its ceiling, else the machine's default. A saved value below its
+// floor, which only a hand edit of bridge.json makes, reads as unset.
+func (c AgentConfig) Limits() Limits {
+	l := c.Defaults()
+	s := c.Saved
+	if v := s.BudgetUSD; v != nil && *v > 0 && c.Max.BudgetUSD > 0 {
+		l.BudgetUSD = min(*v, c.Max.BudgetUSD)
+	}
+	if v := s.TimeoutSeconds; v != nil && *v >= api.MinTimeoutSeconds && c.Max.Timeout > 0 {
+		l.Timeout = min(time.Duration(*v)*time.Second, c.Max.Timeout)
+	}
+	if v := s.RunsPerTask; v != nil && *v >= api.MinCount && c.Max.RunsPerTask > 0 {
+		l.RunsPerTask = min(*v, c.Max.RunsPerTask)
+	}
+	if v := s.Concurrent; v != nil && *v >= api.MinCount && c.Max.Concurrent > 0 {
+		l.Concurrent = min(*v, c.Max.Concurrent)
+	}
+	return l
+}
+
+// wire is l as the hub sees it, the time limit in whole seconds.
+func (l Limits) wire() api.AgentLimits {
+	return api.AgentLimits{BudgetUSD: l.BudgetUSD, TimeoutSeconds: int(l.Timeout / time.Second), RunsPerTask: l.RunsPerTask, Concurrent: l.Concurrent}
+}
+
+// RunLimits are the limits as the hello reports them.
+func (c AgentConfig) RunLimits() *api.RunLimits {
+	out := &api.RunLimits{AgentLimits: c.Limits().wire(), Defaults: c.Defaults().wire(), Max: c.Max.wire()}
+	for _, n := range api.LimitNames {
+		if c.Saved.has(n) {
+			out.Set = append(out.Set, n)
+		}
+	}
+	return out
+}
+
 // AgentConfigFromEnv reads MEAT_MODE_AGENT_HARNESS, _COMMAND, _NAME,
-// _TIMEOUT, _BUDGET_USD, _RUNS_PER_TASK and _CONCURRENT over the defaults.
+// _TIMEOUT, _BUDGET_USD, _RUNS_PER_TASK and _CONCURRENT over the defaults,
+// and the ceilings _MAX_BUDGET_USD, _MAX_TIMEOUT, _MAX_RUNS_PER_TASK and
+// _MAX_CONCURRENT.
 func AgentConfigFromEnv(getenv func(string) string) (AgentConfig, error) {
 	c := DefaultAgentConfig()
 	if v := strings.TrimSpace(getenv("MEAT_MODE_AGENT_HARNESS")); v != "" {
@@ -89,7 +153,64 @@ func AgentConfigFromEnv(getenv func(string) string) (AgentConfig, error) {
 			*n.to = i
 		}
 	}
+	if err := c.readMax(getenv); err != nil {
+		return c, err
+	}
 	return c, nil
+}
+
+// readMax sets the ceilings from MEAT_MODE_AGENT_MAX_*. An unset ceiling is
+// its default, or the machine's default limit when that is higher, so no
+// setup is tighter for having no ceiling set. A ceiling set below the
+// default limit is refused.
+func (c *AgentConfig) readMax(getenv func(string) string) error {
+	d := c.Defaults()
+	c.Max = Limits{
+		BudgetUSD:   max(defaultMax.BudgetUSD, d.BudgetUSD),
+		Timeout:     max(defaultMax.Timeout, d.Timeout),
+		RunsPerTask: max(defaultMax.RunsPerTask, d.RunsPerTask),
+		Concurrent:  max(defaultMax.Concurrent, d.Concurrent),
+	}
+	if v := getenv(api.EnvMaxTimeout); v != "" {
+		t, err := time.ParseDuration(v)
+		if err != nil || t <= 0 {
+			return fmt.Errorf("%s must be a positive duration such as 4h, not %q", api.EnvMaxTimeout, v)
+		}
+		if t < d.Timeout {
+			return fmt.Errorf("%s is %s, below MEAT_MODE_AGENT_TIMEOUT of %s; raise it or lower the time limit", api.EnvMaxTimeout, v, d.Timeout)
+		}
+		c.Max.Timeout = t
+	}
+	if v := getenv(api.EnvMaxBudget); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil || !(f > 0) || f > api.MaxLimitBudgetUSD {
+			return fmt.Errorf("%s must be a positive amount in US dollars such as 20, not %q", api.EnvMaxBudget, v)
+		}
+		if f < d.BudgetUSD {
+			return fmt.Errorf("%s is %s, below MEAT_MODE_AGENT_BUDGET_USD of %s; raise it or lower the budget", api.EnvMaxBudget, v, strconv.FormatFloat(d.BudgetUSD, 'f', -1, 64))
+		}
+		c.Max.BudgetUSD = f
+	}
+	for _, n := range []struct {
+		name, limit string
+		def         int
+		to          *int
+	}{
+		{api.EnvMaxRunsPerTask, "MEAT_MODE_AGENT_RUNS_PER_TASK", d.RunsPerTask, &c.Max.RunsPerTask},
+		{api.EnvMaxConcurrent, "MEAT_MODE_AGENT_CONCURRENT", d.Concurrent, &c.Max.Concurrent},
+	} {
+		if v := getenv(n.name); v != "" {
+			i, err := strconv.Atoi(v)
+			if err != nil || i < 1 {
+				return fmt.Errorf("%s must be a whole number of 1 or more, not %q", n.name, v)
+			}
+			if i < n.def {
+				return fmt.Errorf("%s is %d, below %s of %d; raise it or lower the limit", n.name, i, n.limit, n.def)
+			}
+			*n.to = i
+		}
+	}
+	return nil
 }
 
 // NewHarness builds the configured harness and checks what it declares.
@@ -119,17 +240,27 @@ func harnessProgram(h harness.Harness) string {
 }
 
 // harnessInfo is h as the hello names it: version is its check's, "" when
-// that failed. The budget is 0 for a harness that enforces none.
+// that failed. The limits are those a run that starts now keeps; the budget
+// is 0 for a harness that enforces none.
 func harnessInfo(h harness.Harness, c AgentConfig, version string) *api.HarnessInfo {
 	info := h.Info()
 	out := &api.HarnessInfo{
 		Name: info.Name, Title: info.Title, Version: version, InstructionFile: info.InstructionFile,
-		Budget: info.Budget, TimeoutSeconds: int(c.Timeout / time.Second), Steer: info.Steer,
+		Budget: info.Budget, Steer: info.Steer,
 	}
-	if info.Budget != harness.BudgetNone {
-		out.BudgetUSD = c.BudgetUSD
-	}
+	setLimits(out, c)
 	return out
+}
+
+// setLimits writes c's limits into a hello's harness.
+func setLimits(out *api.HarnessInfo, c AgentConfig) {
+	l := c.Limits()
+	out.TimeoutSeconds = int(l.Timeout / time.Second)
+	out.BudgetUSD = 0
+	if out.Budget != harness.BudgetNone {
+		out.BudgetUSD = l.BudgetUSD
+	}
+	out.Limits = c.RunLimits()
 }
 
 // checkHarness runs h's check for a hello outside the running bridge.

@@ -261,6 +261,50 @@ test("the end date is part of the repeat's token", () => {
   ]);
 });
 
+// A tag or list anywhere in the text leaves the date, time, repeat and end as
+// they read without it, and every span still matches the text it covers.
+const plain = "Water the plants every sunday at 8pm until nov 29";
+const words = plain.split(" ");
+for (const mark of ["@weekend", "#garden"]) {
+  for (let at = 0; at <= words.length; at++) {
+    const text = [...words.slice(0, at), mark, ...words.slice(at)].join(" ");
+    test(`a repeat reads the same with ${mark} in it: ${text}`, () => {
+      const r = parseQuickAdd(text, now, lists);
+      assert.equal(r.title, "Water the plants");
+      assert.equal(local(r.due), "2026-10-18 20:00");
+      assert.deepEqual(r.repeat, { every: "week", weekdays: [0], until: "2026-11-29" });
+      assert.deepEqual(r.tags, mark === "@weekend" ? ["weekend"] : []);
+      assert.equal(r.list, mark === "#garden" ? "home/garden" : null);
+      for (const t of r.tokens) {
+        assert.equal(text.slice(t.start, t.end), t.text);
+        assert.equal(t.text, t.text.trim());
+      }
+      assert.ok(r.tokens.some((t) => t.text === mark));
+    });
+  }
+}
+
+test("the parts of a repeat around a tag are highlighted apart from it", () => {
+  const r = parseQuickAdd("Water the plants every sunday @weekend at 8pm until #garden nov 29", now, lists);
+  assert.deepEqual(r.tokens.map((t) => [t.kind, t.text]), [
+    ["repeat", "every sunday"],
+    ["tag", "@weekend"],
+    ["date", "at 8pm"],
+    ["repeat", "until"],
+    ["list", "#garden"],
+    ["repeat", "nov 29"],
+  ]);
+});
+
+test("a date reads the same with a tag or list between its day and time", () => {
+  for (const text of ["Call Sam tomorrow @phone at 8pm", "Call Sam tomorrow #garden at 8pm", "Call Sam @phone tomorrow #garden at 8pm"]) {
+    const r = parseQuickAdd(text, now, lists);
+    assert.equal(r.title, "Call Sam", text);
+    assert.equal(local(r.due), "2026-10-15 20:00", text);
+    for (const t of r.tokens) assert.equal(text.slice(t.start, t.end), t.text, text);
+  }
+});
+
 test("an end date before the first occurrence is not sent", () => {
   for (const text of ["Stretch daily until today", "Water the plants every day until 2026-10-01", "Pay rent every month on the 1st until oct 20 2026"]) {
     const r = parseQuickAdd(text, now, lists);
