@@ -2,6 +2,7 @@ package io.github.yourfriendaaron.meatmode
 
 import android.Manifest
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,11 +11,13 @@ import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -24,6 +27,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
@@ -246,7 +250,41 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        web.setDownloadListener { url, _, _, _, _ -> openOutside(url.toUri()) }
+        web.setDownloadListener { url, userAgent, disposition, mimeType, _ ->
+            if (Hub.isSameOrigin(url, origin)) download(url, userAgent, disposition, mimeType) else openOutside(url.toUri())
+        }
+    }
+
+    /**
+     * Saves a hub file, such as the export or an attachment, to Downloads.
+     * The hub's files need the session cookie, which only the WebView holds,
+     * so the download carries it; the default browser would get "log in
+     * first". Before Android 10 saving to Downloads needs a storage
+     * permission the app does not ask for, so there the browser gets the link.
+     */
+    private fun download(url: String, userAgent: String, disposition: String?, mimeType: String?) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            openOutside(url.toUri())
+            return
+        }
+        val name = URLUtil.guessFileName(url, disposition, mimeType)
+        val request = DownloadManager.Request(url.toUri())
+            .setTitle(name)
+            .setMimeType(mimeType)
+            .addRequestHeader("User-Agent", userAgent)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+        CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
+        try {
+            getSystemService(DownloadManager::class.java).enqueue(request)
+            Toast.makeText(this, getString(R.string.download_started, name), Toast.LENGTH_SHORT).show()
+        } catch (e: IllegalArgumentException) {
+            PushLog.add(this, "download refused: ${e.message}")
+            openOutside(url.toUri())
+        } catch (e: IllegalStateException) {
+            PushLog.add(this, "download refused: ${e.message}")
+            openOutside(url.toUri())
+        }
     }
 
     /**

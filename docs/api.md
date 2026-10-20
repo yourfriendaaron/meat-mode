@@ -158,6 +158,8 @@ The Android app shows the hub's own pages in a WebView and handles push natively
 | `push-on` | `{"vapidKey": "…"}`, from `GET /api/push/key` | Asks for notification permission, picks a distributor (a dialog when several are installed) and registers with UnifiedPush. Answers `{"subscription": {"endpoint", "keys": {"p256dh", "auth"}}, "name": "<phone model>"}`. The page posts that to `POST /api/push/subscriptions` with `"kind": "app"`, then asks `push-status` every second until `on`, for up to 30 seconds. |
 | `push-off` | | Unregisters from the distributor, calls `DELETE /api/devices/self` and forgets the device token. Answers `{"state": "off"}`. |
 
+A download from the hub, such as the export or an attachment, goes to Android's download manager with the WebView's session cookie and lands in Downloads; before Android 10, and for any other origin, the link opens in the default browser.
+
 In the app the page asks the app instead of `PushManager` whether reminders are on, to turn them on, and for the endpoint the test reminder names. The service worker still runs and still handles a browser's pushes.
 
 The app builds each notification from the push payload (see Agent push). A tap, and the `open` and `reply` buttons, open the WebView at the URL, same-origin only, as the service worker does. `retry`, `done` and `snooze` post the action with the device token in the background; when the hub refuses, the app opens the item instead. `channel` picks the Android notification channel: `reminders` (with `test`) or `agents`.

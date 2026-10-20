@@ -10,6 +10,7 @@
 
     <string name="offline_title">Can\'t reach the hub</string>
     <string name="offline_unreachable">Check that this phone is online and on the hub\'s network, then try again.</string>
+    <string name="download_started">Downloading %1$s</string>
     <string name="offline_certificate">The hub\'s certificate is not trusted on this phone, so the app did not open it.</string>
     <string name="offline_retry">Retry</string>
 
