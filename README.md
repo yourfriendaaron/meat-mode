@@ -8,7 +8,7 @@ Style guide for this page.
 - Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec (not committed) at deviceScaleFactor 2, phone 390x844 and desktop 1280 wide, with element shots of the new task bar (#qa-form) and the detail pane (#detail), and reduced to 8-bit PNGs; they are not the visual test baselines. The agent images set runs with the fake hub's allowAgents and setRun. Retake them when the screens they show change, and give each alt text that says what it shows.
 - Private network only: the hub is reached over Tailscale (Serve or a Tailscale Service) or a LAN reverse proxy, never the internet, and always has a password; the hub refuses internet requests and the bridge refuses a public hub. Login, session limits and password-again rules follow docs/api.md "Login". Never suggest Funnel, Cloudflare Tunnel, port forwards or a public calendar feed; detail lives in docs/deploy.md, "Private network only".
 - Agent runs: keep the "This is not a sandbox" caution in "Hand a task to an agent" whenever that section exists. Limits and defaults quoted there follow the table in docs/deploy.md, "Wake an agent on a task".
-- Android app: the install section names the Obtainium badge link, APK filter and package ID. The badge link is an apps.obtainium.imranr.dev redirect carrying an obtainium://app/ config (double URL-encoded) with the APK filter and the certificate SHA-256; rebuild it when either changes. The badge image is Obtainium's assets/graphics/badge_obtainium.png, trimmed; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate row holds the release key's SHA-256 and changes only with the key.
+- Android app: the install section is short: the badge first, one paragraph, then a collapsed details block for adding it by hand and checking it. It names the Obtainium badge link, APK filter and package ID. The badge link is an apps.obtainium.imranr.dev redirect carrying an obtainium://app/ config (double URL-encoded) with the APK filter and the certificate SHA-256; rebuild it when either changes. The badge image is Obtainium's assets/graphics/badge_obtainium.png, trimmed; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate line holds the release key's SHA-256 and changes only with the key.
 - "What it works with" follows the tables in docs/trackers.md and docs/harnesses.md and each tracker's `Actions` and each harness's `Info()` in the code; update it when a tracker or harness is added or changes what it supports.
 - Nothing else in the repo depends on this page's headings. The Start here links depend on docs/deploy.md's headings.
 -->
@@ -121,26 +121,22 @@ Turn on the calendar feed and subscribe to it in Apple Calendar, Thunderbird or 
 
 ### Use it as an Android app
 
-Meat Mode has an Android app. It opens your hub inside the app and delivers reminders and agent notifications the way a native app does, with **Done** and **Snooze** buttons on the notification. It adds nothing else: the screens are the ones from your browser.
-
-Install it with [Obtainium](https://obtainium.imranr.dev), which installs the signed APK from each GitHub release and keeps it up to date. Install Obtainium on the phone, then tap this badge there and confirm:
-
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%2522io.github.yourfriendaaron.meatmode%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fgithub.com%252Fyourfriendaaron%252Fmeat-mode%2522%252C%2522author%2522%253A%2522yourfriendaaron%2522%252C%2522name%2522%253A%2522Meat%2520Mode%2522%252C%2522additionalSettings%2522%253A%2522%257B%255C%2522apkFilterRegEx%255C%2522%253A%255C%2522meat-mode-android-.*%255C%255C%255C%255C.apk%255C%2522%252C%255C%2522allowedSigningCertHashes%255C%2522%253A%255C%2522D9%253A96%253ACE%253A79%253AAB%253A03%253ABC%253A39%253A67%253A5C%253A6F%253A69%253A09%253AED%253A88%253A87%253A7F%253A2C%253ACA%253A12%253AB5%253A79%253A36%253A09%253A28%253A75%253AD0%253A68%253AFF%253A65%253A39%253A90%255C%2522%257D%2522%257D"><img src="docs/images/get-it-on-obtainium.png" alt="Get it on Obtainium" height="54"></a>
 
-The badge sets Meat Mode up in Obtainium for you. It picks the app file from each release, and Obtainium refuses any APK not signed with the certificate below. Without Obtainium on the phone, the badge's page offers to get it first.
+With [Obtainium](https://obtainium.imranr.dev) on your phone, tap the badge there to install the app and keep it updated. It shows the same screens as your browser and delivers reminders with **Done** and **Snooze** buttons. Reminders need Google Play Services or a [UnifiedPush](https://unifiedpush.org) app such as [ntfy](https://ntfy.sh).
 
-To add it by hand instead, paste `https://github.com/yourfriendaaron/meat-mode` into Obtainium's **Add App** and set **Filter APKs by regular expression** to `meat-mode-android-.*\.apk`.
+<details>
+<summary>Install by hand, or check the app</summary>
 
-To install by hand, download `meat-mode-android-vX.Y.Z.apk` from the [releases page](https://github.com/yourfriendaaron/meat-mode/releases).
+- In Obtainium, **Add App** `https://github.com/yourfriendaaron/meat-mode` with the APK filter `meat-mode-android-.*\.apk`.
+- Or download `meat-mode-android-vX.Y.Z.apk` from the [releases page](https://github.com/yourfriendaaron/meat-mode/releases).
+- Check it with [AppVerifier](https://github.com/soupslurpr/AppVerifier): package `io.github.yourfriendaaron.meatmode`, certificate SHA-256:
 
-Check what you installed with [AppVerifier](https://github.com/soupslurpr/AppVerifier) before you trust it. It compares the app against these two values:
+  ```
+  D9:96:CE:79:AB:03:BC:39:67:5C:6F:69:09:ED:88:87:7F:2C:CA:12:B5:79:36:09:28:75:D0:68:FF:65:39:90
+  ```
 
-| | |
-|---|---|
-| Package ID | `io.github.yourfriendaaron.meatmode` |
-| Certificate SHA-256 | `D9:96:CE:79:AB:03:BC:39:67:5C:6F:69:09:ED:88:87:7F:2C:CA:12:B5:79:36:09:28:75:D0:68:FF:65:39:90` |
-
-Reminders on Android need one of two things: Google Play Services on the phone, or a [UnifiedPush](https://unifiedpush.org) distributor app such as [ntfy](https://ntfy.sh) or Sunup. The app asks you to pick one when you turn reminders on. Maintainers set up the signing key with [docs/android-release.md](docs/android-release.md).
+</details>
 
 ## What it works with
 
@@ -218,7 +214,7 @@ Each device logs in with your password. A login lasts until it goes unused for 1
 
 Run `scripts/setup.sh` after cloning. This repo is public; read `AGENTS.md` before committing anything.
 
-Toolchain versions are pinned in `mise.toml` (Go, Node, pnpm). The web app picks every colour by what it means; see [docs/design-tokens.md](docs/design-tokens.md).
+Toolchain versions are pinned in `mise.toml` (Go, Node, pnpm). Maintainers set up the Android signing key with [docs/android-release.md](docs/android-release.md). The web app picks every colour by what it means; see [docs/design-tokens.md](docs/design-tokens.md).
 
 ```sh
 pnpm --dir web install && pnpm --dir web build   # frontend into web/static
