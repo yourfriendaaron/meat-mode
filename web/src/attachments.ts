@@ -19,6 +19,8 @@ const CLIP =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg>';
 const CAMERA =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2.5l1.5-2h6l1.5 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+const PHOTO =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M21 16l-5-5-9 9"/></svg>';
 const FILE =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
 
@@ -57,7 +59,7 @@ function totalBytes(items: Item[]): number {
   return n;
 }
 
-/** A phone or tablet, which gets a camera button besides the file picker. */
+/** A phone or tablet, which gets camera and photo buttons besides the file picker. */
 function coarse(): boolean {
   return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 }
@@ -86,7 +88,8 @@ export function attachmentsHTML(item: Item, editable: boolean): string {
   const add = canAdd
     ? `<div class="files-add"><label class="btn file-pick">${CLIP}Attach a file<input type="file" class="sr" id="file-pick" multiple data-file-pick${off}></label>${
         coarse()
-          ? `<label class="btn file-pick">${CAMERA}Take a photo<input type="file" class="sr" id="file-camera" accept="image/*" capture="environment" data-file-pick${off}></label>`
+          ? `<label class="btn file-pick">${CAMERA}Take a photo<input type="file" class="sr" id="file-camera" accept="image/*" capture="environment" data-file-pick${off}></label>` +
+            `<label class="btn file-pick">${PHOTO}Choose a photo<input type="file" class="sr" id="file-photo" accept="image/*" multiple data-file-pick${off}></label>`
           : ""
       }</div>`
     : "";

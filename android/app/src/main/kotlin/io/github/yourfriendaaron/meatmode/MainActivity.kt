@@ -30,18 +30,22 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
+import java.io.File
+import java.io.IOException
 import org.unifiedpush.android.connector.UnifiedPush
 import org.unifiedpush.android.connector.UnifiedPush.VapidNotValidException
 import org.unifiedpush.android.connector.data.ResolvedDistributor
 
 /**
  * The hub's own pages in a WebView. Native code covers only what a page in a
- * WebView cannot do: push, notifications and their buttons (docs/api.md,
+ * WebView cannot do: push, notifications and their buttons, and the camera
+ * for Take a photo (docs/api.md,
  * Android app).
  */
 class MainActivity : ComponentActivity() {
@@ -55,6 +59,20 @@ class MainActivity : ComponentActivity() {
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data))
+        fileCallback = null
+    }
+
+    // Take a photo: the camera app saves into photoFile, and the page gets its
+    // URI. The result intent may be empty, so the file itself is the answer.
+    private var photoFile: File? = null
+    private var photoUri: Uri? = null
+    private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val file = photoFile
+        val uri = photoUri
+        photoFile = null
+        photoUri = null
+        val taken = saved && uri != null && file != null && file.length() > 0
+        fileCallback?.onReceiveValue(if (taken) arrayOf(uri!!) else null)
         fileCallback = null
     }
 
@@ -214,6 +232,10 @@ class MainActivity : ComponentActivity() {
                 // Each callback must be answered, a cancelled pick included.
                 fileCallback?.onReceiveValue(null)
                 fileCallback = callback
+                // capture opens the camera; with no camera app it falls back to the picker.
+                if (params.isCaptureEnabled && Capture.acceptsImages(params.acceptTypes) && launchCamera()) {
+                    return true
+                }
                 try {
                     pickFiles.launch(params.createIntent())
                 } catch (_: ActivityNotFoundException) {
@@ -225,6 +247,35 @@ class MainActivity : ComponentActivity() {
         }
 
         web.setDownloadListener { url, _, _, _, _ -> openOutside(url.toUri()) }
+    }
+
+    /**
+     * Starts the camera app on a new file in cacheDir/photos, after deleting
+     * the earlier captures there. False when no camera app answers or the
+     * file cannot be made, so the caller falls back to the picker.
+     */
+    private fun launchCamera(): Boolean {
+        val dir = File(cacheDir, "photos")
+        val file = File(dir, "photo-${System.currentTimeMillis()}.jpg")
+        val uri = try {
+            dir.listFiles()?.forEach { it.delete() }
+            if (!dir.isDirectory && !dir.mkdirs()) return false
+            FileProvider.getUriForFile(this, "$packageName.photos", file)
+        } catch (_: IOException) {
+            return false
+        } catch (_: IllegalArgumentException) {
+            return false
+        }
+        photoFile = file
+        photoUri = uri
+        return try {
+            takePhoto.launch(uri)
+            true
+        } catch (_: ActivityNotFoundException) {
+            photoFile = null
+            photoUri = null
+            false
+        }
     }
 
     /** Links off the hub open in the default browser, or the app that handles them. */
