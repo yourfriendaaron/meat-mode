@@ -60,5 +60,18 @@
         <receiver
             android:name=".ActionReceiver"
             android:exported="false" />
+
+        <!-- Take a photo: the camera app writes into cacheDir/photos through
+             this provider. No CAMERA permission: declaring it would make
+             ACTION_IMAGE_CAPTURE need it too. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

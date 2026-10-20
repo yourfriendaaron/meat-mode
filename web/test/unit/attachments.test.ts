@@ -41,6 +41,25 @@ test("only an item of the hub's own lists has a Files section", () => {
   assert.equal(attachmentsHTML(item("hub", { id: "pending-1" }), true), "");
 });
 
+test("a touch screen adds Take a photo and Choose a photo beside the file picker", () => {
+  const html = (coarse: boolean): string => {
+    const saved = globalThis.matchMedia;
+    globalThis.matchMedia = ((q: string) => ({ matches: coarse && q === "(pointer: coarse)" })) as typeof matchMedia;
+    try {
+      return attachmentsHTML(item("hub"), true);
+    } finally {
+      globalThis.matchMedia = saved;
+    }
+  };
+  const desktop = html(false);
+  assert.match(desktop, /Attach a file<input type="file" class="sr" id="file-pick" multiple data-file-pick>/);
+  assert.doesNotMatch(desktop, /Take a photo|Choose a photo/);
+  const phone = html(true);
+  assert.match(phone, /Take a photo<input type="file" class="sr" id="file-camera" accept="image\/\*" capture="environment" data-file-pick>/);
+  // Choose a photo has no capture, so it opens the gallery, not the camera.
+  assert.match(phone, /Choose a photo<input type="file" class="sr" id="file-photo" accept="image\/\*" multiple data-file-pick>/);
+});
+
 test("a file's name is escaped and only images get a thumbnail", () => {
   const html = attachmentsHTML(
     item("hub", {
