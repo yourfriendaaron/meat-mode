@@ -163,7 +163,7 @@ function dayListHTML(m: MonthModel): string {
   const list = m.entries.get(ymd(m.selected)) ?? [];
   const rows = list
     .map((e) => {
-      const what = e.kind === "snooze" ? "Snoozed until" : e.kind === "repeat" ? "Repeats" : "Due";
+      const what = e.kind === "snooze" ? "Snooze ends" : e.kind === "repeat" ? "Repeats" : "Due";
       const move = m.movable(e)
         ? `<button type="button" class="btn btn-small" data-act="month-move" ${entryAttrs(e)} aria-label="${esc(`Move: ${e.item.title}`)}">Move</button>`
         : "";
