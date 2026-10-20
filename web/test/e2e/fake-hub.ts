@@ -204,8 +204,6 @@ export class FakeHub {
   bridges: Bridge[];
   log: Stored[] = [];
   seq = 0;
-  /** Last checklist id the hub gave out. */
-  checkSeq = 0;
   /** Last run id the fake bridge gave out. */
   runSeq = 0;
   /** Every request the page made, as "METHOD /path". */
@@ -867,21 +865,6 @@ export class FakeHub {
         was.priority = it.priority;
         it.priority = set.priority;
       }
-      if (set.checklist !== undefined) {
-        const ids = new Set<string>();
-        const next = [];
-        for (const c of set.checklist) {
-          const text = c.text.trim();
-          if (!text || text.length > 1000) return bad("checklist text must be 1 to 1000 characters");
-          const id = c.id || `k-${++this.checkSeq}`;
-          if (ids.has(id)) return bad("repeated checklist id");
-          ids.add(id);
-          next.push({ id, text, done: c.done });
-        }
-        if (next.length > 100) return bad("a checklist holds at most 100 entries");
-        was.checklist = structuredClone(it.checklist ?? []);
-        it.checklist = next;
-      }
       if (set.labels !== undefined) {
         const clean = cleanLabels(set.labels);
         if (typeof clean === "string") return bad(clean);
@@ -926,6 +909,10 @@ export class FakeHub {
     this.posted.push(a);
     const dup = this.log.find((s) => s.action.id === a.id);
     if (dup) return this.json(route, 200, dup.action);
+    const sent = a.payload as { checklist?: unknown; set?: { checklist?: unknown } };
+    if (sent.checklist !== undefined || sent.set?.checklist !== undefined) {
+      return this.json(route, 400, { error: "Checklists are now sub-tasks: add each entry as a sub-task instead (docs/api.md, Sub-tasks)." });
+    }
     const cannot = this.trackerRefusal(a);
     if (cannot) return this.json(route, 400, { error: cannot });
     let bridge = a.bridge ?? "";
@@ -1053,7 +1040,7 @@ export class FakeHub {
           // A repeating item moves on and stays open (docs/api.md, Repeating to-dos),
           // until its next date falls after the rule's end.
           if (it.repeat && it.dueAt && onHub && !endsBefore(it.repeat, nextDue(it.repeat, it.dueAt, NOW))) {
-            const was: Edit = { due: it.dueAt, checklist: structuredClone(it.checklist ?? []) };
+            const was: Edit = { due: it.dueAt };
             // Its sub-tasks closed as done open again; dismissed ones stay closed.
             const reopened = this.items.filter((i) => i.parent === it.id && i.bridge === it.bridge && i.repo === it.repo && i.status === "closed" && i.closeReason === "Done in Meat Mode");
             for (const s of reopened) {
@@ -1065,7 +1052,6 @@ export class FakeHub {
             payload = { ...a.payload, was };
             it.dueAt = nextDue(it.repeat, it.dueAt, NOW);
             it.deferUntil = null;
-            it.checklist = (it.checklist ?? []).map((c) => ({ ...c, done: false }));
             break;
           }
           it.status = "closed";

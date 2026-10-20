@@ -32,8 +32,7 @@ type Item struct {
 	// synced (a tracker item not meant for the user) can still name it.
 	Parent      string  `json:"parent,omitempty"`
 	ParentTitle string  `json:"parentTitle,omitempty"`
-	Checklist   []Check `json:"checklist,omitempty"` // personal items only
-	Repeat      *Repeat `json:"repeat,omitempty"`    // personal items only
+	Repeat      *Repeat `json:"repeat,omitempty"` // personal items only
 	// RemindBefore is how many minutes before the due time an early
 	// reminder comes; nil uses the hub's ReminderLead. Personal items only.
 	RemindBefore *int `json:"remindBefore,omitempty"`
@@ -87,23 +86,14 @@ type Comment struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// Check is one entry of a personal item's checklist.
-type Check struct {
-	ID   string `json:"id"` // given by the hub when an edit leaves it empty
-	Text string `json:"text"`
-	Done bool   `json:"done"`
-}
-
 // Edit is the change an edit action makes to a personal item. A nil field
-// stays as it is. Checklist replaces the whole list; an empty list clears
-// it.
+// stays as it is.
 type Edit struct {
 	Title       *string    `json:"title,omitempty"`
 	Description *string    `json:"description,omitempty"`
 	Due         *time.Time `json:"due,omitempty"`
 	ClearDue    bool       `json:"clearDue,omitempty"`
 	Priority    *int       `json:"priority,omitempty"` // 0 (highest) to 4, as bd
-	Checklist   *[]Check   `json:"checklist,omitempty"`
 	Repeat      *Repeat    `json:"repeat,omitempty"`
 	ClearRepeat bool       `json:"clearRepeat,omitempty"`
 	// RemindBefore is minutes, 0 to MaxLeadMinutes; ClearRemindBefore goes
@@ -355,7 +345,7 @@ type Payload struct {
 	Set      *Edit         `json:"set,omitempty"`      // edit
 	Limits   *LimitsChange `json:"limits,omitempty"`   // limits
 	// Was is filled in by the hub. On edit it holds the fields Set changed,
-	// as they were; on done of a repeating item, the due time and checklist
+	// as they were; on done of a repeating item, the due time
 	// before it moved on, and the sub-tasks it reopened as SubtasksDone.
 	Was *Edit `json:"was,omitempty"`
 	// note-edit, note-delete and note-restore. note-edit takes Text. The

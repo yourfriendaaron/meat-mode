@@ -54,8 +54,6 @@ export interface Item {
   /** The parent's title as the list's tracker last gave it, for a parent the app does not hold. */
   parentTitle?: string;
   /** Personal items only. */
-  checklist?: Check[] | null;
-  /** Personal items only. */
   repeat?: Repeat | null;
   /** Minutes before the due time an early reminder comes; unset uses the hub's reminderLead. Personal items only. */
   remindBefore?: number | null;
@@ -69,14 +67,6 @@ export interface Item {
   error?: string;
 }
 
-/** One entry of a personal item's checklist. */
-export interface Check {
-  /** Given by the hub when an edit leaves it empty. */
-  id?: string;
-  text: string;
-  done: boolean;
-}
-
 /** What an edit action changes on a personal item. A field left out stays as it is. */
 export interface Edit {
   title?: string;
@@ -87,8 +77,6 @@ export interface Edit {
   clearDue?: boolean;
   /** 0 (highest) to 4, as bd. */
   priority?: number;
-  /** Replaces the whole list; [] clears it. */
-  checklist?: Check[];
   repeat?: Repeat;
   /** Ends the repeat; never sent with `repeat`. */
   clearRepeat?: boolean;
@@ -289,7 +277,7 @@ export interface Payload {
   limits?: LimitsChange;
   /**
    * Filled in by the hub. edit: the values the fields in `set` held before.
-   * done on a repeating item: the due time and checklist before it moved on.
+   * done on a repeating item: the due time before it moved on.
    */
   was?: Edit;
   /** note-edit and note-delete. */

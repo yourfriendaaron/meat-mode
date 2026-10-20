@@ -196,7 +196,7 @@ function itemKeyOf(i: Item, id: string): string {
 
 /** The item's sub-tasks among `items`: the items in its list that name it as their parent. */
 export function subtasksOf(item: Item, items: Item[]): Item[] {
-  return items.filter((i) => i.parent === item.id && repoKey(i) === repoKey(item) && !isDeleted(i));
+  return items.filter((i) => i.parent === item.id && repoKey(i) === repoKey(item) && !isDeleted(i) && !isWontDo(i));
 }
 
 /** The item's open sub-tasks, which keep it from closing. */

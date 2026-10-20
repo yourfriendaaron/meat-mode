@@ -357,7 +357,7 @@ meat-mode add "Approve the footer text" --project . --note "What is needed, why,
 meat-mode done mm-14 --project .
 ```
 
-The first add makes the project, and it shows in the app as its own list, beside your personal list and the repos your machines sync, and in quick add. Its to-dos work like personal ones: you can edit them, make them repeat, add notes and checklists, and they come to the calendar feed. Agents cannot be asked to work on them. `edit`, `done` and `reopen` take `--project` too, and an agent changes only what its own machine added there. A project is named like a repo (`personal` is kept for the personal list). There is nothing to delete: a project leaves the app once nothing in it is open and nothing closed in the last 7 days.
+The first add makes the project, and it shows in the app as its own list, beside your personal list and the repos your machines sync, and in quick add. Its to-dos work like personal ones: you can edit them, make them repeat, add notes and sub-tasks, and they come to the calendar feed. Agents cannot be asked to work on them. `edit`, `done` and `reopen` take `--project` too, and an agent changes only what its own machine added there. A project is named like a repo (`personal` is kept for the personal list). There is nothing to delete: a project leaves the app once nothing in it is open and nothing closed in the last 7 days.
 
 The name set in the app (or `MEAT_MODE_USER` until you set one) is the name your notes are signed with, as `<name>-app`, so agents can tell your replies from their own.
 

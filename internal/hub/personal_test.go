@@ -190,3 +190,32 @@ func TestRepeatOverHTTP(t *testing.T) {
 		t.Fatalf("after the closing done %+v", it)
 	}
 }
+
+// Checklists became sub-tasks: an add or edit that still sends one, from
+// the app or an agent, is refused with the reason.
+func TestChecklistIsRefused(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	w := h.do("POST", "/api/actions", api.NewAction{ID: aid2, Kind: api.KindAdd, Bridge: store.HubBridge, Repo: store.PersonalRepo,
+		Payload: api.Payload{Title: "Water the plants"}}, "")
+	h.expect(w, http.StatusCreated)
+	key := store.ItemKey(store.HubBridge, store.PersonalRepo, decode[api.Action](t, w).BeadID)
+	checks := []any{map[string]any{"text": "Ferns", "done": false}}
+	for name, tc := range map[string]struct {
+		path, token string
+		body        any
+	}{
+		"app edit": {"/api/actions", "", map[string]any{"id": cid3, "kind": "edit", "key": key,
+			"payload": map[string]any{"set": map[string]any{"checklist": checks}}}},
+		"app add": {"/api/actions", "", map[string]any{"id": cid3, "kind": "add", "bridge": "hub", "repo": "personal",
+			"payload": map[string]any{"title": "Mow the lawn", "checklist": checks}}},
+		"agent add": {"/bridge/v1/personal", h.token, map[string]any{"title": "Mow the lawn", "checklist": checks}},
+		"agent edit": {"/bridge/v1/personal/mm-1/actions", h.token, map[string]any{"kind": "edit",
+			"payload": map[string]any{"set": map[string]any{"checklist": []any{}}}}},
+	} {
+		w := h.do("POST", tc.path, tc.body, tc.token)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Checklists are now sub-tasks") {
+			t.Errorf("%s: %d %s", name, w.Code, w.Body)
+		}
+	}
+}

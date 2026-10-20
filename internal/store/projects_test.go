@@ -54,7 +54,7 @@ func TestProjectItemsBehaveLikePersonalOnes(t *testing.T) {
 
 	due := c.t.Add(24 * time.Hour)
 	for i, na := range []api.NewAction{
-		{ID: id2, Kind: api.KindEdit, Key: key, Payload: api.Payload{Set: &api.Edit{Due: &due, Checklist: &[]api.Check{{Text: "Fill the can"}}}}},
+		{ID: id2, Kind: api.KindEdit, Key: key, Payload: api.Payload{Set: &api.Edit{Due: &due, Priority: ptr(1)}}},
 		{ID: id3, Kind: api.KindNote, Key: key, Payload: api.Payload{Text: "The ferns first"}},
 		{ID: id4, Kind: api.KindAdd, Bridge: HubBridge, Repo: garden, Payload: api.Payload{Title: "Mow the lawn", Due: &due, Repeat: &api.Repeat{Every: api.EveryWeek, TimeZone: "UTC"}}},
 	} {
@@ -65,7 +65,7 @@ func TestProjectItemsBehaveLikePersonalOnes(t *testing.T) {
 		}
 	}
 	st := mustState(t, s)
-	if it := item(t, st, key); it.DueAt == nil || !it.DueAt.Equal(due) || len(it.Checklist) != 1 || len(it.Comments) != 1 {
+	if it := item(t, st, key); it.DueAt == nil || !it.DueAt.Equal(due) || it.Priority != 1 || len(it.Comments) != 1 {
 		t.Fatalf("edited item %+v", it)
 	}
 
