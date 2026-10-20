@@ -33,6 +33,7 @@ test.describe("desktop", () => {
     await expect(files).toContainText("No files.");
     // A desktop gets the file picker only.
     await expect(files.getByLabel("Take a photo")).toHaveCount(0);
+    await expect(files.getByLabel("Choose a photo")).toHaveCount(0);
     await axe(page);
 
     await files.getByLabel("Attach a file").setInputFiles([
@@ -121,7 +122,7 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test("offers the camera besides the file picker, and fits the screen", async ({ page, hub }) => {
+  test("offers the camera and the gallery besides the file picker, and fits the screen", async ({ page, hub }) => {
     hub.attach(KEY, "A photo of the fern with a rather long name, taken in the morning.png", PNG);
     const files = await openPlants(page);
     const camera = files.getByLabel("Take a photo");
@@ -129,6 +130,16 @@ test.describe("phone", () => {
     await expect(camera).toHaveAttribute("accept", "image/*");
     await camera.setInputFiles({ name: "image.jpg", mimeType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]) });
     await expect(files.locator(".file")).toHaveCount(2);
+    // Choose a photo opens the gallery: no capture, and several at once.
+    const gallery = files.getByLabel("Choose a photo");
+    await expect(gallery).not.toHaveAttribute("capture");
+    await expect(gallery).toHaveAttribute("accept", "image/*");
+    await expect(gallery).toHaveAttribute("multiple");
+    await gallery.setInputFiles([
+      { name: "fern.png", mimeType: "image/png", buffer: PNG },
+      { name: "basil.png", mimeType: "image/png", buffer: PNG },
+    ]);
+    await expect(files.locator(".file")).toHaveCount(4);
     const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     expect(scroll).toBeLessThanOrEqual(inner);
     await axe(page);

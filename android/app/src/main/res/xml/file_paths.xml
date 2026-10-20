@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the camera's output folder is shared, and only with the camera app
+     the app hands a photo's URI to. -->
+<paths>
+    <cache-path name="photos" path="photos/" />
+</paths>
