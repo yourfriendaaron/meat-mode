@@ -156,6 +156,15 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 			return a, false, invalidf("%s needs payload.on", na.Kind)
 		}
 		p = api.Payload{On: p.On}
+	case api.KindLimits:
+		if p.Limits == nil {
+			return a, false, invalidf("limits needs payload.limits")
+		}
+		c, err := api.CleanLimitsChange(*p.Limits)
+		if err != nil {
+			return a, false, invalidf("%s", err.Error())
+		}
+		p = api.Payload{Limits: &c}
 	case api.KindAsk:
 		// The note is optional: an ask without one only wakes the agent.
 		if strings.TrimSpace(p.Text) == "" {
@@ -203,7 +212,12 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 	}
 	a.Payload = normalisePayload(p)
 
-	if na.Kind == api.KindAdd || na.Kind == api.KindSync || na.Kind == api.KindAgents {
+	if na.Kind == api.KindLimits {
+		if err := checkLimitsAction(tx, na.Bridge, na.Repo, *a.Payload.Limits); err != nil {
+			return a, false, err
+		}
+		a.Bridge = na.Bridge
+	} else if na.Kind == api.KindAdd || na.Kind == api.KindSync || na.Kind == api.KindAgents {
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
 			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
 		}
@@ -333,6 +347,39 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		s.emit(Change{Kind: "items", Bridge: a.Bridge, Repo: a.Repo, NewItems: newItems})
 	}
 	return a, true, nil
+}
+
+// checkLimitsAction refuses a limits change for anything but a paired
+// agent machine whose bridge reported its ceilings, and any value above
+// them. The bridge checks again: it is the one that enforces them.
+func checkLimitsAction(tx *sql.Tx, bridge, repo string, c api.LimitsChange) error {
+	switch {
+	case onHub(bridge):
+		return invalidf(noPersonalAgents)
+	case !ValidBridgeName(bridge):
+		return invalidf("limits needs a bridge")
+	case repo != "":
+		return invalidf("limits is for a machine, not a repo")
+	}
+	var harness string
+	err := tx.QueryRow(`SELECT harness FROM bridges WHERE name = ? AND revoked_at IS NULL`, bridge).Scan(&harness)
+	if errors.Is(err, sql.ErrNoRows) {
+		return notFoundf("no machine %q", bridge)
+	}
+	if err != nil {
+		return err
+	}
+	h, err := decodeHarness(harness)
+	if err != nil {
+		return err
+	}
+	if h == nil || h.Limits == nil {
+		return invalidf("the bridge on %s is too old to take limits from the app; update it, or set MEAT_MODE_AGENT_* there", bridge)
+	}
+	if err := api.CheckLimits(c, h.Limits.Max, bridge); err != nil {
+		return invalidf("%s", err.Error())
+	}
+	return nil
 }
 
 // noPersonalAgents refuses an agent on a list the hub keeps.

@@ -11,13 +11,17 @@ import {
   harnessText,
   installCommand,
   instructionFile,
+  editableLimits,
+  limitError,
+  limitsBoxHTML,
+  limitsChange,
   limitsText,
   machineReposHTML,
   pickMachine,
   PLATFORMS,
 } from "../../src/agents.ts";
 import { ApiError, retryAfterSeconds, waitText } from "../../src/api.ts";
-import type { Bridge, Repo } from "../../src/types.ts";
+import type { AgentLimits, Bridge, Repo, RunLimits } from "../../src/types.ts";
 
 test("each install download is a binary the release workflow builds", () => {
   const workflow = readFileSync(new URL("../../../.github/workflows/release.yml", import.meta.url), "utf8");
@@ -185,4 +189,65 @@ test("time limits read in seconds, minutes or hours", () => {
   assert.equal(durationText(60), "1 minute");
   assert.equal(durationText(3600), "1 hour");
   assert.equal(durationText(7260), "2 hours 1 minute");
+});
+
+const MAX: AgentLimits = { budgetUsd: 20, timeoutSeconds: 14400, runsPerTask: 50, concurrent: 5 };
+const LIMITS: RunLimits = {
+  budgetUsd: 5,
+  timeoutSeconds: 1800,
+  runsPerTask: 10,
+  concurrent: 2,
+  defaults: { budgetUsd: 2, timeoutSeconds: 1800, runsPerTask: 10, concurrent: 2 },
+  max: MAX,
+  set: ["budgetUsd"],
+};
+
+test("a limit is refused below its floor and above the machine's ceiling, naming the variable that raises it", () => {
+  assert.equal(limitError("budgetUsd", "20", MAX, "desk"), "");
+  assert.equal(limitError("budgetUsd", "0", MAX, "desk"), "The spending cap must be more than $0.");
+  assert.equal(limitError("budgetUsd", "", MAX, "desk"), "The spending cap must be more than $0.");
+  assert.equal(
+    limitError("budgetUsd", "20.5", MAX, "desk"),
+    "The spending cap can be at most $20 a run on desk. To allow more, set MEAT_MODE_AGENT_MAX_BUDGET_USD on desk and restart its bridge.",
+  );
+  assert.equal(limitError("timeoutSeconds", "240", MAX, "desk"), "");
+  assert.equal(limitError("timeoutSeconds", "1.5", MAX, "desk"), "The time limit must be a whole number of minutes, at least 1.");
+  assert.match(limitError("timeoutSeconds", "241", MAX, "desk"), /^The time limit can be at most 4 hours a run on desk\. .*MEAT_MODE_AGENT_MAX_TIMEOUT/);
+  assert.equal(limitError("runsPerTask", "0", MAX, "desk"), "Runs per task must be a whole number of 1 or more.");
+  assert.match(limitError("runsPerTask", "51", MAX, "desk"), /^Runs per task can be at most 50 on desk\. .*MEAT_MODE_AGENT_MAX_RUNS_PER_TASK/);
+  assert.match(limitError("concurrent", "6", MAX, "desk"), /MEAT_MODE_AGENT_MAX_CONCURRENT on desk/);
+});
+
+test("the limits form sends only what changed, the time limit in seconds", () => {
+  const shown = { budgetUsd: "5", timeoutSeconds: "30", runsPerTask: "10", concurrent: "2" };
+  assert.deepEqual(limitsChange({ ...shown }, shown, MAX, "desk"), { change: {}, error: "" });
+  assert.deepEqual(limitsChange({ ...shown, timeoutSeconds: "90", concurrent: " 3 " }, shown, MAX, "desk"), {
+    change: { timeoutSeconds: 5400, concurrent: 3 },
+    error: "",
+  });
+  assert.match(limitsChange({ ...shown, budgetUsd: "50" }, shown, MAX, "desk").error, /at most \$20/);
+});
+
+test("the limits box offers the form, a reset for a limit the app set, and none on an older bridge", () => {
+  const b: Bridge = {
+    name: "desk",
+    createdAt: "2026-03-01T09:00:00Z",
+    lastSeen: "2026-03-01T09:05:00Z",
+    harness: { name: "claude", title: "Claude Code", budget: "native", budgetUsd: 5, timeoutSeconds: 1800, limits: LIMITS },
+  };
+  assert.match(limitsBoxHTML(b, { open: false }), /data-act="limits-edit"/);
+  assert.equal(limitsText(b), "Time limit: 30 minutes a run · Stops at $5 a run · 10 runs per task · 2 at once · Notes wait until the agent finishes its turn");
+  const open = limitsBoxHTML(b, { open: true });
+  assert.equal(open.match(/data-act="limit-reset"/g)?.length, 1);
+  assert.match(open, /Up to \$20 · Machine default \$2/);
+  assert.match(open, /name="timeoutSeconds"[^>]*value="30"/);
+  // A harness with no cost has no cap to set.
+  const codex = { ...b, harness: { ...b.harness!, budget: "none" as const } };
+  assert.deepEqual(editableLimits(codex), ["timeoutSeconds", "runsPerTask", "concurrent"]);
+  assert.doesNotMatch(limitsBoxHTML(codex, { open: true }), /name="budgetUsd"/);
+  // An older bridge sends no limits: they show, but cannot change here.
+  const old = { ...b, harness: { ...b.harness!, limits: undefined } };
+  assert.match(limitsBoxHTML(old, { open: true }), /Update the bridge on desk/);
+  assert.equal(limitsBoxHTML({ ...b, lastSeen: null }, { open: false }), "");
+  assert.match(limitsBoxHTML({ ...b, limitsPending: true }, { open: false }), /role="status">Waiting for desk/);
 });

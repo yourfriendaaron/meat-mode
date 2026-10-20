@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -57,6 +58,10 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 			}
 			if res.OK {
 				touched[a.Repo] = true
+			}
+		} else if a.Kind == api.KindLimits {
+			if res, err = b.applyLimits(ctx, a); err != nil {
+				return touched, err
 			}
 		} else if a.Kind == api.KindStop {
 			res = b.stop(a)
@@ -165,6 +170,46 @@ func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (
 	// Report the repo list before the result, so the app never shows the old
 	// position between the two.
 	if err := b.discover(ctx, false); err != nil {
+		return api.ActionResult{}, err
+	}
+	return api.ActionResult{OK: true}, nil
+}
+
+// applyLimits saves a change to the limits on agent runs from the app and
+// reports the limits now in effect before its result. It refuses any value
+// below its floor or above this machine's ceiling, whatever the hub let
+// through: a hub that is taken over cannot widen what agents may do.
+func (b *Bridge) applyLimits(ctx context.Context, a api.Action) (api.ActionResult, error) {
+	switch {
+	case b.Runner == nil:
+		return api.ActionResult{Error: "this bridge does not run agents"}, nil
+	case a.Payload.Limits == nil:
+		return api.ActionResult{Error: "limits has no change"}, nil
+	case b.SaveLimits == nil:
+		return api.ActionResult{Error: "this bridge cannot save limits"}, nil
+	}
+	c, err := api.CleanLimitsChange(*a.Payload.Limits)
+	if err != nil {
+		return api.ActionResult{Error: err.Error()}, nil
+	}
+	cfg := b.Runner.AgentConfig()
+	if err := api.CheckLimits(c, cfg.Max.wire(), cmp.Or(b.name, "this machine")); err != nil {
+		return api.ActionResult{Error: err.Error()}, nil
+	}
+	saved, err := b.SaveLimits(c)
+	if err != nil {
+		return fail(fmt.Errorf("save the limits: %w", err)), nil
+	}
+	b.Runner.SetSaved(saved)
+	cfg.Saved = saved
+	if b.harness != nil {
+		h := *b.harness
+		setLimits(&h, cfg)
+		b.harness = &h
+	}
+	// Report the limits before the result, so the app never shows the old
+	// ones between the two.
+	if _, err := b.Hub.Hello(ctx, b.hello()); err != nil {
 		return api.ActionResult{}, err
 	}
 	return api.ActionResult{OK: true}, nil

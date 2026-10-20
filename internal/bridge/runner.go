@@ -104,6 +104,9 @@ type liveRun struct {
 	ag   tracker.Agent
 	cwd  string
 	proc *agentProc // the process now running, or the last one
+	// limits are the time limit and budget the run started with; a change
+	// in the app reaches only runs that start after it.
+	limits Limits
 
 	held       []string      // notes waiting for the turn to end, without Steer
 	cost       float64       // spending so far, summed for a metered harness
@@ -406,6 +409,7 @@ func (r *AgentRunner) start(req askRequest, rec *beadRecord) {
 		r.saveOrLog()
 		r.log().Info("agent run refused", "repo", req.Repo.Name, "bead", req.BeadID, "reason", reason)
 	}
+	limits := r.Config.Limits()
 	switch {
 	case r.unavailable != nil:
 		refuse(api.ReasonFailed, clipText(r.Harness.Info().Title+" is not available on this machine: "+r.unavailable.Error(), maxDetail))
@@ -413,10 +417,10 @@ func (r *AgentRunner) start(req askRequest, rec *beadRecord) {
 	case !req.Allowed:
 		refuse(api.ReasonNotAllowed, "Agents are switched off for this repo on this machine.")
 		return
-	case rec.Count >= r.Config.RunsPerTask:
-		refuse(api.ReasonRunLimit, fmt.Sprintf("This task has used all %d of its agent runs.", r.Config.RunsPerTask))
+	case rec.Count >= limits.RunsPerTask:
+		refuse(api.ReasonRunLimit, fmt.Sprintf("This task has used all %d of its agent runs.", limits.RunsPerTask))
 		return
-	case len(r.live) >= r.Config.Concurrent:
+	case len(r.live) >= limits.Concurrent:
 		refuse(api.ReasonBusy, fmt.Sprintf("%s already running on this machine, the most it allows.", agents(len(r.live))))
 		return
 	}
@@ -479,13 +483,13 @@ func (r *AgentRunner) launch(req askRequest, rec *beadRecord, run *api.Run) (*li
 	ag := agentOf(req.Repo.Tracker)
 	lr := &liveRun{
 		key: runKey(req.Repo.Name, req.BeadID), rec: rec, run: run, repo: req.Repo, ag: ag, cwd: cwd,
-		done: make(chan struct{}), log: logf,
+		done: make(chan struct{}), log: logf, limits: r.Config.Limits(),
 	}
 	if err := r.spawn(lr, ag.Prompt(req.BeadID)); err != nil {
 		logf.Close()
 		return nil, err
 	}
-	lr.timer = time.AfterFunc(r.Config.Timeout, func() { r.end(lr, api.ReasonTimeout) })
+	lr.timer = time.AfterFunc(lr.limits.Timeout, func() { r.end(lr, api.ReasonTimeout) })
 	return lr, nil
 }
 
@@ -502,7 +506,7 @@ func (r *AgentRunner) spawn(lr *liveRun, prompt string) error {
 		// Another harness's session means nothing to this one.
 		session = ""
 	}
-	l, err := r.Harness.Launch(harness.Spec{Dir: lr.cwd, Prompt: prompt, Session: session, BudgetUSD: r.Config.BudgetUSD})
+	l, err := r.Harness.Launch(harness.Spec{Dir: lr.cwd, Prompt: prompt, Session: session, BudgetUSD: lr.limits.BudgetUSD})
 	if err != nil {
 		return fmt.Errorf("the agent command could not be made: %w", err)
 	}
@@ -650,7 +654,7 @@ func (r *AgentRunner) onEvents(lr *liveRun, p *agentProc, evs []harness.Event) {
 				continue
 			}
 			lr.cost += e.CostUSD
-			if lr.cost > r.Config.BudgetUSD && !lr.overBudget {
+			if lr.cost > lr.limits.BudgetUSD && !lr.overBudget {
 				lr.overBudget = true
 				go r.end(lr, api.ReasonBudget)
 			}
@@ -754,17 +758,17 @@ func (r *AgentRunner) settle(lr *liveRun, p *agentProc, waitErr error) {
 	case ending == api.ReasonStopped:
 		reason = ending
 	case ending == api.ReasonTimeout:
-		reason, detail = ending, "It ran past the time limit of "+humanDuration(r.Config.Timeout)+"."
+		reason, detail = ending, "It ran past the time limit of "+humanDuration(lr.limits.Timeout)+"."
 	case ending == api.ReasonRestarted:
 		reason, detail = ending, restartedDetail
 	case ending == api.ReasonBudget:
-		reason, detail = ending, r.budgetDetail()
+		reason, detail = ending, budgetDetail(lr.limits)
 	case startErr != nil:
 		reason, detail = api.ReasonFailed, clipText(startErr.Error(), maxDetail)
 	case usage != "":
 		reason, detail = api.ReasonUsageLimit, usage
 	case end != nil && end.Budget:
-		reason, detail = api.ReasonBudget, r.budgetDetail()
+		reason, detail = api.ReasonBudget, budgetDetail(lr.limits)
 	case end == nil:
 		reason, detail = api.ReasonCrashed, "The agent process ended before it finished ("+exitText(waitErr)+")."
 	case end.Error:
@@ -795,8 +799,8 @@ func (r *AgentRunner) settle(lr *liveRun, p *agentProc, waitErr error) {
 	}
 }
 
-func (r *AgentRunner) budgetDetail() string {
-	return "It spent its budget of $" + strconv.FormatFloat(r.Config.BudgetUSD, 'f', 2, 64) + " for one run."
+func budgetDetail(l Limits) string {
+	return "It spent its budget of $" + strconv.FormatFloat(l.BudgetUSD, 'f', 2, 64) + " for one run."
 }
 
 // CheckHarness runs the harness's check and returns it as the hello names
@@ -805,13 +809,29 @@ func (r *AgentRunner) CheckHarness(ctx context.Context) *api.HarnessInfo {
 	v, err := r.Harness.Check(ctx)
 	r.mu.Lock()
 	r.unavailable = err
+	cfg := r.Config
 	r.mu.Unlock()
 	if err != nil {
 		v = ""
 		r.log().Warn("the agent harness is not available, so asks will fail; see docs/harnesses.md",
 			"harness", r.Harness.Info().Name, "err", err)
 	}
-	return harnessInfo(r.Harness, r.Config, v)
+	return harnessInfo(r.Harness, cfg, v)
+}
+
+// AgentConfig is the runner's configuration as it stands.
+func (r *AgentRunner) AgentConfig() AgentConfig {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.Config
+}
+
+// SetSaved takes the limits the app set. Runs that start from now on keep
+// them; a live run keeps the limits it started with.
+func (r *AgentRunner) SetSaved(s SavedLimits) {
+	r.mu.Lock()
+	r.Config.Saved = s
+	r.mu.Unlock()
 }
 
 // outcome reads the bead after a run that finished its turn: closed is

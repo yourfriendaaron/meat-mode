@@ -52,6 +52,9 @@ type Bridge struct {
 	// each repo report and before each ask, so a change made with `meat-mode
 	// bridge agents` while the bridge runs takes effect at once.
 	LoadAgents func() (map[string]bool, error)
+	// SaveLimits records a limits change from the app (in bridge.json) and
+	// returns the limits now saved. A nil SaveLimits refuses them.
+	SaveLimits func(api.LimitsChange) (SavedLimits, error)
 	// Runner runs agents for asks; nil on a bridge that runs none.
 	Runner  *AgentRunner
 	Version string

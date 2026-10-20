@@ -393,7 +393,7 @@ The agent machine needs:
 
 ### Settings
 
-The bridge reads these variables (see `.env.example`):
+The bridge reads these variables (see `.env.example`). The four limits, the time limit, the budget, runs per task and runs at once, are the machine's defaults: in the app, under **Settings**, **Agent machines**, **Change limits** sets each one for that machine, up to its ceiling below, and **Use default** puts one back. The bridge keeps what the app set in the `limits` object of its `bridge.json` and refuses any value above a ceiling, so someone who takes over the hub cannot let agents run longer or spend more than the machine allows. A change applies to runs that start after it; a live run keeps the limits it started with.
 
 | Variable | Default | What it sets |
 |---|---|---|
@@ -404,6 +404,12 @@ The bridge reads these variables (see `.env.example`):
 | `MEAT_MODE_AGENT_BUDGET_USD` | `2` | The most one run may spend. A harness that caps its own spending gets it (Claude Code as `--max-budget-usd`); for one that reports its cost the bridge stops the run past it; a harness that reports no cost has the time limit only, and the app says so. |
 | `MEAT_MODE_AGENT_RUNS_PER_TASK` | `10` | How many runs one task may have, ever. Nothing resets the count. |
 | `MEAT_MODE_AGENT_CONCURRENT` | `2` | How many runs may be live at once on the machine. |
+| `MEAT_MODE_AGENT_MAX_TIMEOUT` | `4h` | The longest time limit the app can set. |
+| `MEAT_MODE_AGENT_MAX_BUDGET_USD` | `20` | The highest budget the app can set. |
+| `MEAT_MODE_AGENT_MAX_RUNS_PER_TASK` | `50` | The most runs per task the app can set. |
+| `MEAT_MODE_AGENT_MAX_CONCURRENT` | `5` | The most runs at once the app can set. |
+
+A ceiling left unset is its default above, or the machine's own limit when that is higher, so a machine set to `MEAT_MODE_AGENT_TIMEOUT=6h` gets a `6h` ceiling and nothing gets tighter. A ceiling set below the machine's own limit stops the bridge at start with a message naming both. The app can lower a limit to its floor: a budget above $0, a time limit of 1 minute, 1 run per task and 1 at once.
 
 The bridge service does not read your shell's environment. To set these on Linux, run `systemctl --user edit meat-mode-bridge`, add the lines below, and restart the service:
 
@@ -423,9 +429,9 @@ A run shows **working** while the agent runs. When it ends, the task shows **don
 
 - **stopped**: you stopped it. Stop ends the agent and everything it started.
 - **usage limit**: the agent's account hit its usage limit; the detail says when it resets.
-- **time limit**, **budget**: the run passed `MEAT_MODE_AGENT_TIMEOUT`, or spent `MEAT_MODE_AGENT_BUDGET_USD` (with a harness that reports spending).
-- **run limit**: the task has had its `MEAT_MODE_AGENT_RUNS_PER_TASK` runs.
-- **busy**: `MEAT_MODE_AGENT_CONCURRENT` runs were already live on the machine.
+- **time limit**, **budget**: the run passed its time limit, or spent its budget (with a harness that reports spending): the machine's `MEAT_MODE_AGENT_TIMEOUT` and `MEAT_MODE_AGENT_BUDGET_USD`, or what the app set.
+- **run limit**: the task has had its runs per task (`MEAT_MODE_AGENT_RUNS_PER_TASK`, or what the app set).
+- **busy**: the machine's runs at once (`MEAT_MODE_AGENT_CONCURRENT`, or what the app set) were already live.
 - **not allowed**: agents are switched off for the repo. Switch them on at its machine with `meat-mode bridge agents on <repo>`.
 - **no reply**: the agent ended without a note or closing the bead.
 - **failed**, **crashed**: the harness is not available on the machine, the agent command did not start or reported an error, or its process died before its turn ended.

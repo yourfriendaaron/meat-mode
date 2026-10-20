@@ -104,7 +104,19 @@ func (s *Store) State() (api.State, error) {
 	for i, r := range st.Repos {
 		repoAt[r.Bridge+"/"+r.Name] = i
 	}
+	bridgeAt := map[string]int{}
+	for i, b := range st.Bridges {
+		bridgeAt[b.Name] = i
+	}
 	for _, a := range pending {
+		if a.Kind == api.KindLimits {
+			// A pending limits change shows where it set the limits.
+			if i, ok := bridgeAt[a.Bridge]; ok && a.Payload.Limits != nil {
+				st.Bridges[i].Harness = pendingLimits(st.Bridges[i].Harness, *a.Payload.Limits)
+				st.Bridges[i].LimitsPending = true
+			}
+			continue
+		}
 		i, ok := repoAt[a.Bridge+"/"+a.Repo]
 		if !ok || a.Payload.On == nil {
 			continue
@@ -265,4 +277,56 @@ func (s *Store) eachRow(query string, args []any, fn func(*sql.Rows) error) erro
 		}
 	}
 	return rows.Err()
+}
+
+// pendingLimits is h with a pending limits change applied, as the app shows
+// it until the bridge reports again: a reset limit shows its default. h is
+// not changed.
+func pendingLimits(h *api.HarnessInfo, c api.LimitsChange) *api.HarnessInfo {
+	if h == nil || h.Limits == nil {
+		return h
+	}
+	out := *h
+	l := *h.Limits
+	set := map[string]bool{}
+	for _, n := range l.Set {
+		set[n] = true
+	}
+	for _, n := range c.Reset {
+		set[n] = false
+		switch n {
+		case api.LimitBudget:
+			l.BudgetUSD = l.Defaults.BudgetUSD
+		case api.LimitTimeout:
+			l.TimeoutSeconds = l.Defaults.TimeoutSeconds
+		case api.LimitRunsPerTask:
+			l.RunsPerTask = l.Defaults.RunsPerTask
+		case api.LimitConcurrent:
+			l.Concurrent = l.Defaults.Concurrent
+		}
+	}
+	if c.BudgetUSD != nil {
+		l.BudgetUSD, set[api.LimitBudget] = *c.BudgetUSD, true
+	}
+	if c.TimeoutSeconds != nil {
+		l.TimeoutSeconds, set[api.LimitTimeout] = *c.TimeoutSeconds, true
+	}
+	if c.RunsPerTask != nil {
+		l.RunsPerTask, set[api.LimitRunsPerTask] = *c.RunsPerTask, true
+	}
+	if c.Concurrent != nil {
+		l.Concurrent, set[api.LimitConcurrent] = *c.Concurrent, true
+	}
+	l.Set = nil
+	for _, n := range api.LimitNames {
+		if set[n] {
+			l.Set = append(l.Set, n)
+		}
+	}
+	out.Limits = &l
+	out.TimeoutSeconds = l.TimeoutSeconds
+	if out.Budget != api.BudgetNone {
+		out.BudgetUSD = l.BudgetUSD
+	}
+	return &out
 }
