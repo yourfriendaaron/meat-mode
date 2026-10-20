@@ -138,6 +138,8 @@ const S = {
   /** The open Move dialog: the month entry it moves, and why the day picked was refused. */
   move: null as { key: string; kind: EntryKind; at: string; error: string } | null,
   syncOpen: false,
+  /** The phone's menu drawer, which holds the sidebar. */
+  menuOpen: false,
   qaOpen: false,
   toast: null as Toast | null,
   auth: null as Session | null,
@@ -281,11 +283,6 @@ function visibleKeys(): string[] {
 
 // ---------- render: chrome ----------
 
-/** Views under the phone's Browse tab. */
-function browsing(v: View): boolean {
-  return v === "all" || v === "completed" || v === "deleted" || v === "settings" || v.startsWith("list:");
-}
-
 function renderNav() {
   const all = items();
   const n = now();
@@ -329,14 +326,31 @@ function renderNav() {
       ["today", "Today", ICON.today, ""],
       ["upcoming", "Upcoming", ICON.upcoming, ""],
       ["agents", "Agents", agentsIcon, agentsWorking + (agentNew ? `<span class="tab-badge" aria-label="${agentNew} new">${agentNew}</span>` : "")],
-      ["all", "Browse", ICON.all, ""],
     ]
       .map(([v, label, icon, badge]) => {
-        const active = v === "all" ? browsing(S.view) : current === v;
-        return `<button class="tab" data-act="view" data-view="${v}"${active ? ' aria-current="page"' : ""}>${icon}<span>${label}</span>${badge}</button>`;
+        return `<button class="tab" data-act="view" data-view="${v}"${current === v ? ' aria-current="page"' : ""}>${icon}<span>${label}</span>${badge}</button>`;
       })
       .join(""),
   );
+}
+
+/** The phone opens the sidebar as a drawer from the menu button. */
+function renderMenu() {
+  if (!isPhone()) S.menuOpen = false;
+  $("#app").classList.toggle("menu-open", S.menuOpen);
+  $(".menu-btn").setAttribute("aria-expanded", String(S.menuOpen));
+}
+
+function openMenu() {
+  S.menuOpen = true;
+  render();
+  $<HTMLElement>("#sidebar .nav-item")?.focus();
+}
+
+function closeMenu() {
+  S.menuOpen = false;
+  render();
+  $<HTMLElement>(".menu-btn").focus();
 }
 
 function renderSync() {
@@ -539,24 +553,6 @@ function renderMain() {
   $("#search-form").hidden = isPage(S.view);
   const main = $("#main");
   main.dataset.view = S.view.startsWith("list:") ? "list" : S.view;
-
-  // Browse chips (phone): Everything, each list, Settings.
-  const colours = repoColours(repos());
-  setHTML(
-    $("#browse"),
-    browsing(S.view)
-      ? `<button class="bchip" data-act="view" data-view="all"${S.view === "all" ? ' aria-current="page"' : ""}>Everything</button>` +
-          visibleRepos(repos())
-            .map((r) => {
-              const v = `list:${repoKey(r)}`;
-              return `<button class="bchip" data-act="view" data-view="${esc(v)}"${S.view === v ? ' aria-current="page"' : ""}><span class="dot c${colours.get(repoKey(r)) ?? 0}" aria-hidden="true"></span>${esc(listLabel(r))}</button>`;
-            })
-            .join("") +
-          `<button class="bchip" data-act="view" data-view="completed"${S.view === "completed" ? ' aria-current="page"' : ""}>${ICON.check}Completed</button>` +
-          `<button class="bchip" data-act="view" data-view="deleted"${S.view === "deleted" ? ' aria-current="page"' : ""}>${ICON.trash}Deleted</button>` +
-          `<button class="bchip" data-act="view" data-view="settings"${S.view === "settings" ? ' aria-current="page"' : ""}>${ICON.gear}Settings</button>`
-      : "",
-  );
 
   // Day load (desktop Today).
   const dl = $("#dayload");
@@ -1410,7 +1406,8 @@ function render() {
   renderTheme();
   applySelection();
   renderBulk();
-  $("#scrim").hidden = !(S.snoozeKeys || S.move || (isPhone() && (S.open || S.qaOpen)));
+  renderMenu();
+  $("#scrim").hidden = !(S.snoozeKeys || S.move || (isPhone() && (S.open || S.qaOpen || S.menuOpen)));
   $("#app").classList.toggle("qa-open", S.qaOpen);
 }
 
@@ -1988,6 +1985,7 @@ function showToast(text: string, undo?: () => Promise<void>, tell?: string) {
 
 function setView(v: View) {
   S.view = v;
+  S.menuOpen = false;
   S.selected = null;
   S.selecting = false;
   S.picked = new Set();
@@ -2242,6 +2240,7 @@ function onClick(e: MouseEvent) {
     if (S.snoozeKeys) closeSnooze();
     else if (S.move) closeMove();
     else if (S.qaOpen) closeQuickAdd();
+    else if (S.menuOpen) closeMenu();
     else closeDetail();
     return;
   }
@@ -2413,6 +2412,10 @@ function onClick(e: MouseEvent) {
       qaAsk = !qaWakes($<HTMLSelectElement>("#qa-list").value);
       updateQuickAdd();
       break;
+    case "menu":
+      if (S.menuOpen) closeMenu();
+      else openMenu();
+      break;
     case "sync":
       S.syncOpen = !S.syncOpen;
       syncActions.forget();
@@ -2467,7 +2470,8 @@ function onKey(e: KeyboardEvent) {
       S.syncOpen = false;
       renderSync();
       $<HTMLElement>(".sync-pill:not([hidden])")?.focus();
-    } else if (S.qaOpen) closeQuickAdd();
+    } else if (S.menuOpen) closeMenu();
+    else if (S.qaOpen) closeQuickAdd();
     else if (S.noteEdit && S.open) closeNoteEdit();
     else if (S.edit && S.open) closeEdit();
     else if (document.activeElement?.id === "search-input") {
@@ -2671,7 +2675,7 @@ function setupSwipe(list: HTMLElement) {
 
 function shell(): string {
   return `<div class="shell">
-<aside class="sidebar" aria-label="Navigation">
+<aside id="sidebar" class="sidebar" aria-label="Navigation">
   <button class="btn btn-primary new-task" data-act="new">${ICON.plus}<span>New task</span><kbd aria-hidden="true">n</kbd></button>
   <nav id="nav" class="nav" aria-label="Views"></nav>
   <h2 class="side-h">Lists</h2>
@@ -2682,8 +2686,7 @@ function shell(): string {
   </div>
 </aside>
 <main id="main" class="main">
-  <header class="mhead"><h1 id="view-title">Today</h1><form id="search-form" class="search" role="search" autocomplete="off"><label class="sr" for="search-input">Search</label><input id="search-input" type="search" enterkeyhint="search" placeholder="Search"></form><button id="select-btn" class="btn btn-small btn-ghost" data-act="select-mode" hidden>${ICON.select}Select</button><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
-  <div id="browse" class="browse"></div>
+  <header class="mhead"><button class="icon-btn menu-btn" data-act="menu" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">${ICON.menu}</button><h1 id="view-title">Today</h1><form id="search-form" class="search" role="search" autocomplete="off"><label class="sr" for="search-input">Search</label><input id="search-input" type="search" enterkeyhint="search" placeholder="Search"></form><button id="select-btn" class="btn btn-small btn-ghost" data-act="select-mode" hidden>${ICON.select}Select</button><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
   <form id="qa-form" class="qa" autocomplete="off">
     <div class="qa-head"><h2>New task</h2><button type="button" class="icon-btn" data-act="qa-close" aria-label="Close">${ICON.close}</button></div>
     <div class="qa-bar">
@@ -2705,7 +2708,7 @@ function shell(): string {
 </div>
 <div id="scrim" class="scrim" hidden></div>
 <button class="fab" data-act="new" aria-label="New task">${ICON.plus}</button>
-<nav id="tabs" class="tabbar" aria-label="Views"></nav>
+<nav id="tabs" class="tabbar" aria-label="Tabs"></nav>
 <div id="syncpop" class="popover" role="dialog" aria-labelledby="syncpop-h" hidden></div>
 <div id="snooze" class="dialog-wrap" hidden></div>
 <div id="move" class="dialog-wrap" hidden></div>

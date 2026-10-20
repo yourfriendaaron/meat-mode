@@ -1,4 +1,4 @@
-import { test, expect, openApp, row } from "./setup.ts";
+import { test, expect, openMenu, openApp, row } from "./setup.ts";
 
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
@@ -74,14 +74,13 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test("Browse opens Completed and Deleted", async ({ page, hub }) => {
+  test("the menu opens Completed and Deleted", async ({ page, hub }) => {
     void hub;
     await openApp(page);
-    await page.locator("#tabs").getByRole("button", { name: "Browse" }).click();
-    await page.locator("#browse").getByRole("button", { name: "Completed" }).click();
+    await (await openMenu(page)).getByRole("button", { name: "Completed" }).click();
     await expect(page.locator("#view-title")).toHaveText("Completed");
     await expect(row(page, "Sweep the porch")).toHaveCount(1);
-    await page.locator("#browse").getByRole("button", { name: "Deleted" }).click();
+    await (await openMenu(page)).getByRole("button", { name: "Deleted" }).click();
     await expect(page.locator("#view-title")).toHaveText("Deleted");
     await expect(page.locator(".empty")).toHaveText("Nothing deleted in the last 7 days.");
   });

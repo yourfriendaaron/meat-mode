@@ -25,6 +25,14 @@ export const test = base.extend<{ hub: FakeHub; freshDevice: boolean }>({
 
 export { expect };
 
+/** Opens the phone's menu drawer and returns it. */
+export async function openMenu(page: Page) {
+  await page.locator(".mhead").getByRole("button", { name: "Menu" }).click();
+  const drawer = page.locator("#sidebar");
+  await expect(drawer).toBeVisible();
+  return drawer;
+}
+
 /** Opens the app and waits for the first state to render. */
 export async function openApp(page: Page, path = "/") {
   await page.goto(path);

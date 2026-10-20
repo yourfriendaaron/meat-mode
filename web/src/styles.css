@@ -326,6 +326,124 @@ kbd {
   display: none;
 }
 
+/* The phone opens the sidebar as a drawer from the menu button. */
+.app.menu-open .sidebar {
+  position: fixed;
+  z-index: 40;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(84vw, 300px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(16px + var(--safe-top)) 12px calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
+  background: var(--role-sunk);
+  border-right: 1px solid var(--role-line);
+  box-shadow: var(--role-shadow);
+}
+/* The drawer leaves out what the phone shows elsewhere: the New task button and the sync pill. */
+.app.menu-open .sidebar .new-task,
+.app.menu-open .sidebar .sync-pill {
+  display: none;
+}
+.menu-btn {
+  margin-left: -8px;
+}
+
+/* ---------- sidebar contents ---------- */
+
+.new-task {
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+.new-task kbd {
+  margin-left: auto;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--role-soft);
+  text-align: left;
+}
+.nav-item:hover {
+  background: var(--role-hover);
+  color: var(--role-fg);
+}
+.nav-item[aria-current="page"] {
+  background: var(--role-raise);
+  color: var(--role-fg);
+  font-weight: 600;
+}
+.nav-label,
+.nav-item {
+  min-width: 0;
+}
+.nav-item > span:not(.dot):not(.count):not(.badge-new):not(.tab-ic):not(.sr) {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-item .dot {
+  margin: 0 5px;
+}
+.nav-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--role-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.count {
+  font-size: 12px;
+  color: var(--role-soft);
+}
+.badge-new {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--role-action);
+  color: var(--role-on-accent);
+  line-height: 18px;
+}
+.side-h {
+  margin: 14px 10px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--role-soft);
+}
+.side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: 12px;
+}
+.foot-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .main {
   flex: 1;
   min-height: 0;
@@ -438,36 +556,6 @@ kbd {
 }
 .act-failed .act-state {
   color: var(--role-error);
-}
-
-/* ---------- browse chips (phone) ---------- */
-
-.browse {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 0 16px 8px;
-  scrollbar-width: none;
-}
-.browse:empty {
-  display: none;
-}
-.bchip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  min-height: 32px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--role-line);
-  background: transparent;
-  font-size: 13px;
-}
-.bchip[aria-current="page"] {
-  background: var(--role-action);
-  border-color: var(--role-action);
-  color: var(--role-on-accent);
 }
 
 /* ---------- quick add ---------- */
@@ -1468,7 +1556,7 @@ select.qa-pill {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
   background: var(--role-sunk);
   border-top: 1px solid var(--role-line);
@@ -2034,100 +2122,11 @@ select.qa-pill {
     background: var(--role-sunk);
     border-right: 1px solid var(--role-line);
   }
-  .new-task {
-    justify-content: flex-start;
-    margin-bottom: 10px;
-  }
-  .new-task kbd {
-    margin-left: auto;
-  }
-  .nav {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 34px;
-    padding: 4px 10px;
-    border-radius: 8px;
-    border: 0;
-    background: transparent;
-    color: var(--role-soft);
-    text-align: left;
-  }
-  .nav-item:hover {
-    background: var(--role-hover);
-    color: var(--role-fg);
-  }
-  .nav-item[aria-current="page"] {
-    background: var(--role-raise);
-    color: var(--role-fg);
-    font-weight: 600;
-  }
-  .nav-label,
-  .nav-item {
-    min-width: 0;
-  }
-  .nav-item > span:not(.dot):not(.count):not(.badge-new):not(.tab-ic):not(.sr) {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .nav-item .dot {
-    margin: 0 5px;
-  }
-  .nav-sub {
-    display: block;
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--role-soft);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .count {
-    font-size: 12px;
-    color: var(--role-soft);
-  }
-  .badge-new {
-    font-size: 11px;
-    font-weight: 700;
-    padding: 0 7px;
-    border-radius: 999px;
-    background: var(--role-action);
-    color: var(--role-on-accent);
-    line-height: 18px;
-  }
-  .side-h {
-    margin: 14px 10px 4px;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--role-soft);
-  }
-  .side-foot {
-    margin-top: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    padding-top: 12px;
-  }
-  .foot-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
   .mhead {
     padding: 18px 24px 10px;
   }
   .mhead .sync-pill,
-  .browse,
+  .menu-btn,
   .fab,
   .tabbar,
   .qa-head {

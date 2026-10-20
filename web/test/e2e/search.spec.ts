@@ -1,4 +1,4 @@
-import { test, expect, openApp, row } from "./setup.ts";
+import { test, expect, openMenu, openApp, row } from "./setup.ts";
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -60,7 +60,7 @@ test.describe("phone", () => {
 
   test("the field fits the header without sideways scroll", async ({ page, hub }) => {
     await openApp(page);
-    await page.getByRole("button", { name: "Browse" }).click();
+    await (await openMenu(page)).getByRole("button", { name: /Everything/ }).click();
     await expect(page.locator("#view-title")).toHaveText("Everything");
     await page.locator("#search-input").fill("plants");
     await expect(page.locator("#list .row-title")).toHaveText(["Water the plants"]);

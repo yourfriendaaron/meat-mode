@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, openApp, axe } from "./setup.ts";
+import { test, expect, openMenu, openApp, axe } from "./setup.ts";
 import type { Page } from "@playwright/test";
 
 /** What the test server answers for GET /api/export, standing in for the zip (test/serve.mjs). */
@@ -57,8 +57,7 @@ test.describe("phone", () => {
 
   test("the section fits a phone", async ({ page, hub: _hub }) => {
     await openApp(page);
-    await page.locator("#tabs").getByRole("button", { name: "Browse" }).click();
-    await page.locator("#browse").getByRole("button", { name: "Settings" }).click();
+    await (await openMenu(page)).getByRole("button", { name: "Settings" }).click();
     const section = page.locator("[data-section=data]");
     await expect(section.getByRole("button", { name: "Download your data" })).toBeVisible();
     const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);

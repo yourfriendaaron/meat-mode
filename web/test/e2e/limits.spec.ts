@@ -1,4 +1,4 @@
-import { test, expect, axe, openApp } from "./setup.ts";
+import { test, expect, openMenu, axe, openApp } from "./setup.ts";
 import type { Page } from "@playwright/test";
 import type { HarnessInfo, RunLimits } from "../../src/types.ts";
 
@@ -137,8 +137,7 @@ test.describe("phone", () => {
     hub.bridges.push({ name: "desk", createdAt: hub.now() });
     hub.hello("desk", [], { ...CLAUDE, limits: limits() });
     await openApp(page);
-    await page.locator("#tabs").getByRole("button", { name: "Browse" }).click();
-    await page.locator("#browse").getByRole("button", { name: "Settings" }).click();
+    await (await openMenu(page)).getByRole("button", { name: "Settings" }).click();
     const desk = machine(page, "desk");
     await desk.getByRole("button", { name: "Change the limits on desk" }).click();
     await expect(desk.getByRole("form", { name: "Limits on desk" })).toBeVisible();

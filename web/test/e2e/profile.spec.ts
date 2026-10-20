@@ -1,4 +1,4 @@
-import { test, expect, openApp, axe, wizard, openWizardAt, skipToFinish } from "./setup.ts";
+import { test, expect, openMenu, openApp, axe, wizard, openWizardAt, skipToFinish } from "./setup.ts";
 import type { Page } from "@playwright/test";
 
 async function lightTheme(page: Page) {
@@ -107,8 +107,7 @@ test.describe("phone", () => {
     await axe(page);
     await w.skip.click();
     await w.next.click();
-    await page.locator("#tabs").getByRole("button", { name: "Browse" }).click();
-    await page.locator("#browse").getByRole("button", { name: "Settings" }).click();
+    await (await openMenu(page)).getByRole("button", { name: "Settings" }).click();
     await expect(page.locator("[data-section=profile]")).toBeVisible();
     await noHorizontalScroll(page);
     await axe(page);

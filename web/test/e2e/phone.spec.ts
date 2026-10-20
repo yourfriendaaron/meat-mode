@@ -1,4 +1,4 @@
-import { test, expect, openApp, row, axe } from "./setup.ts";
+import { test, expect, openMenu, openApp, row, axe } from "./setup.ts";
 import type { Locator, Page } from "@playwright/test";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
@@ -24,7 +24,7 @@ async function swipe(page: Page, target: Locator, dx: number, label: string) {
   await fire("pointerup", x0 + dx);
 }
 
-test("tabs switch views; Browse shows lists and settings", async ({ page, hub }) => {
+test("tabs switch views; the menu shows every view, the lists and settings", async ({ page, hub }) => {
   void hub;
   await openApp(page);
   await expect(page.locator(".sidebar")).toBeHidden();
@@ -33,26 +33,53 @@ test("tabs switch views; Browse shows lists and settings", async ({ page, hub })
   await expect(page.locator(".mhead .sync-pill")).toHaveText("Synced");
   await noHorizontalScroll(page);
 
+  const menuBtn = page.locator(".mhead").getByRole("button", { name: "Menu" });
+  await expect(menuBtn).toBeVisible();
   await tabs.getByRole("button", { name: "Upcoming" }).click();
   await expect(page.locator("#view-title")).toHaveText("Upcoming");
+  await expect(menuBtn).toBeVisible();
   await noHorizontalScroll(page);
 
   await expect(tabs.getByRole("button", { name: /Agents/ }).locator(".tab-badge")).toHaveText("2");
   await tabs.getByRole("button", { name: /Agents/ }).click();
   await expect(page.locator("#view-title")).toHaveText("From agents");
+  await expect(menuBtn).toBeVisible();
   await noHorizontalScroll(page);
 
-  await tabs.getByRole("button", { name: "Browse" }).click();
-  await expect(page.locator("#view-title")).toHaveText("Everything");
-  const chips = page.locator("#browse");
-  await expect(chips.getByRole("button")).toHaveText(["Everything", "personal", "garden", "website", "Completed", "Deleted", "Settings"]);
-  await chips.getByRole("button", { name: "garden" }).click();
+  await expect(tabs.getByRole("button")).toHaveCount(3);
+
+  let drawer = await openMenu(page);
+  await expect(menuBtn).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#scrim")).toBeVisible();
+  await expect(drawer.locator("#nav .nav-label")).toHaveText(["Today", "Upcoming", "From agents", "Everything", "Completed", "Deleted"]);
+  await expect(drawer.locator("#lists .nav-label")).toHaveText(["personal", "garden", "website"]);
+  await noHorizontalScroll(page);
+  await axe(page);
+  await drawer.getByRole("button", { name: /garden/ }).click();
   await expect(page.locator("#view-title")).toHaveText("garden");
-  await expect(tabs.getByRole("button", { name: "Browse" })).toHaveAttribute("aria-current", "page");
+  await expect(drawer).toBeHidden();
+  await expect(menuBtn).toHaveAttribute("aria-expanded", "false");
+  await expect(tabs.locator('[aria-current="page"]')).toHaveCount(0);
   await noHorizontalScroll(page);
 
-  await chips.getByRole("button", { name: "Settings" }).click();
+  // The scrim and Escape close it without changing the view.
+  await openMenu(page);
+  await page.locator("#scrim").click({ position: { x: 370, y: 400 } });
+  await expect(drawer).toBeHidden();
+  await openMenu(page);
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(menuBtn).toBeFocused();
+  await expect(page.locator("#view-title")).toHaveText("garden");
+
+  drawer = await openMenu(page);
+  await drawer.getByRole("button", { name: /Everything/ }).click();
+  await expect(page.locator("#view-title")).toHaveText("Everything");
+
+  drawer = await openMenu(page);
+  await drawer.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Reminders" })).toBeVisible();
+  await expect(menuBtn).toBeVisible();
   await noHorizontalScroll(page);
   await axe(page);
 });
@@ -159,8 +186,7 @@ test("login screen fits the phone in both themes, and Log out is in Settings", a
   await pw.fill(hub.password);
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(row(page, "Water the plants")).toBeVisible();
-  await page.locator("#tabs").getByRole("button", { name: "Browse" }).click();
-  await page.locator("#browse").getByRole("button", { name: "Settings" }).click();
+  await (await openMenu(page)).getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(pw).toBeVisible();
   await noHorizontalScroll(page);

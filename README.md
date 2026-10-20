@@ -52,7 +52,7 @@ flowchart LR
 Each task from an agent shows why the agent needs you, which project it came from and the conversation so far. Tap **Done** or **Won't do**, snooze it to tonight or next week where its tracker can, or leave a note. The agent reads your note in its tracker, signed with your name, and can reply. Only the repos you switch on in Settings send tasks.
 
 <p>
-  <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme, grouped into Past due, Today, This evening, Tomorrow and This week. &quot;Call Sam about the weekend&quot; carries a weekend tag, the agent's task &quot;Order compost for the beds&quot; has a New badge, and a tab bar with Today, Upcoming, Agents and Browse sits at the bottom.">
+  <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme, grouped into Past due, Today, This evening, Tomorrow and This week. &quot;Call Sam about the weekend&quot; carries a weekend tag, the agent's task &quot;Order compost for the beds&quot; has a New badge, a menu button opens the lists and other views, and a tab bar with Today, Upcoming and Agents sits at the bottom.">
   <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day and carries a garden tag, and offers Done, Edit and Delete. Under Sub-tasks, one of two is ticked, each with a remove button, above a box to add another; Files offers Attach a file, Take a photo and Choose a photo, then the start of the Snooze list: In 1 hour at 11:00, This evening at 18:00, Tomorrow at 9:00 and This weekend on Saturday at 10:00.">
 </p>
 

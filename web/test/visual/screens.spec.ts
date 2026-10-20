@@ -6,7 +6,7 @@
 // The data is the fake hub's fixed fixtures and the clock is fixed, so
 // nothing on screen changes between runs.
 
-import { test, expect, openApp, wizard, openWizardAt, row } from "../e2e/setup.ts";
+import { test, expect, openMenu, openApp, wizard, openWizardAt, row } from "../e2e/setup.ts";
 import type { Page } from "@playwright/test";
 import type { RunState } from "../../src/types.ts";
 import type { FakeHub } from "../e2e/fake-hub.ts";
@@ -61,8 +61,7 @@ async function snap(page: Page, name: string) {
 
 async function goToSettings(page: Page, size: Size) {
   if (size === "phone") {
-    await page.locator("#tabs").getByRole("button", { name: "Browse" }).click();
-    await page.locator("#browse").getByRole("button", { name: "Settings" }).click();
+    await (await openMenu(page)).getByRole("button", { name: "Settings" }).click();
   } else {
     await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
   }
@@ -199,11 +198,20 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await shot(page, "today");
         });
 
+        if (size === "phone") {
+          test("menu", async ({ page, hub }) => {
+            void hub;
+            await openApp(page);
+            await openMenu(page);
+            await shot(page, "menu");
+          });
+        }
+
         test("month", async ({ page, hub }) => {
           const it = hub.find("hub/personal/pe-1")!;
           it.repeat = { every: "week", weekdays: [1, 4], timeZone: "UTC", start: it.dueAt! };
           await openApp(page);
-          await page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Upcoming/ }).click();
+          await (size === "phone" ? page.locator("#tabs") : page.locator("#nav")).getByRole("button", { name: /Upcoming/ }).click();
           await Promise.all([
             page.waitForResponse((r) => r.url().includes("/api/occurrences")),
             page.getByRole("group", { name: "Show Upcoming as" }).getByRole("button", { name: "Month" }).click(),
