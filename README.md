@@ -5,7 +5,7 @@ Style guide for this page.
 - Public repo: invented examples only (Alex, Sam, example.com, "Water the plants"). Deployment wording stays generic: "an always-on host", "a Tailscale Service", never one operator's names, paths or ports.
 - Shape: name and bold line, screenshot, picture of how it fits, why it exists, what you can do (one heading and one picture or example each), what it works with (a tracker table and a harness table), is this for you, start here table, reference (getting started, contributing, licence).
 - Setup detail lives in docs/deploy.md and the wire contract in docs/api.md; link to them, do not copy. The wizard step list under "Get started" follows web/src/wizard/steps and the step table in docs/deploy.md.
-- Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec (not committed) at deviceScaleFactor 2, phone 390x844 and desktop 1280 wide, with element shots of the new task bar (#qa-form) and the detail pane (#detail), and reduced to 8-bit PNGs; they are not the visual test baselines. The agent images set runs with the fake hub's allowAgents and setRun. Retake them when the screens they show change, and give each alt text that says what it shows.
+- Images live in docs/images/ and show invented data only. They come from the web test fake hub (web/test/e2e/fake-hub.ts) and its fixed clock, shot with a throwaway Playwright spec (not committed) at deviceScaleFactor 2, phone 390x844 and desktop 1280 wide, with element shots of the new task bar (#qa-form) and the detail pane (#detail), and reduced to 8-bit PNGs (ImageMagick `+dither -colors 256 PNG8:` does it); they are not the visual test baselines. Light shots set `meat-mode.theme` to `light` in localStorage before the page loads. Extra fixture data (a repeat, a checklist, tags, a Markdown description, an attachment drawn for the purpose rather than a real photo) goes in the throwaway spec, not in the fake hub. The agent images set runs with the fake hub's allowAgents and setRun. A tall detail pane is shot in a taller viewport and cropped below its last section in view, and the month view is cropped to the sidebar and the month, leaving out the empty detail pane. The images: desktop-today-detail, phone-today-dark, phone-detail, agent-run-sheet, new-task-agent, quick-add-repeat, details-files and month-view. Retake them when the screens they show change, and give each alt text that says what it shows.
 - Private network only: the hub is reached over Tailscale (Serve or a Tailscale Service) or a LAN reverse proxy, never the internet, and always has a password; the hub refuses internet requests and the bridge refuses a public hub. Login, session limits and password-again rules follow docs/api.md "Login". Never suggest Funnel, Cloudflare Tunnel, port forwards or a public calendar feed; detail lives in docs/deploy.md, "Private network only".
 - Agent runs: keep the "This is not a sandbox" caution in "Hand a task to an agent" whenever that section exists. Limits and defaults quoted there follow the table in docs/deploy.md, "Wake an agent on a task".
 - Android app: the install section is short: the badge first, one paragraph, then a collapsed details block for adding it by hand and checking it. It names the Obtainium badge link, APK filter and package ID. The badge link is an apps.obtainium.imranr.dev redirect carrying an obtainium://app/ config (double URL-encoded) with the APK filter and the certificate SHA-256; rebuild it when either changes. The badge image is Obtainium's assets/graphics/badge_obtainium.png, trimmed; keep them in step with docs/api.md "Android app" and docs/android-release.md. The certificate line holds the release key's SHA-256 and changes only with the key.
@@ -16,9 +16,9 @@ Style guide for this page.
 
 **One to-do list for the things only you can do: your own to-dos and the tasks your AI agents hand you, on your phone and your desktop.**
 
-![The Today list on a desktop: personal to-dos such as "Water the plants" and "Call Sam about the weekend" sit beside a task from an agent, "Approve the new footer text", whose details are open with the agent's reason, the command that lets agents work in that repo, Done and Won't do buttons and snooze choices.](docs/images/desktop-today-detail.png)
+![The Today list on a desktop: personal to-dos such as "Water the plants", with a garden tag, and "Call Sam about the weekend" sit beside a task from an agent, "Order compost for the beds". The agent's task "Approve the new footer text" is open on the right with the agent's reason, the command that lets agents work in that repo, Done and Won't do buttons, a sub-task box and snooze choices.](docs/images/desktop-today-detail.png)
 
-Your AI agents work in [beads](https://github.com/gastownhall/beads), an issue tracker that lives in your code repos. When an agent needs you for something it cannot do itself (approve a text, sign in somewhere, make a call), it files a task labelled `human`. Meat Mode gathers those tasks from every repo and every machine into one list, next to your own to-dos. You tick them off, snooze them, say no, or reply with a note, and your answer goes back to the agent in beads. In the repos you allow, one tap also wakes an agent to work on a task, and you watch how it goes on the task itself.
+Your AI agents keep their work in an issue tracker that lives in your code repos, such as [beads](https://github.com/gastownhall/beads). When an agent needs you for something it cannot do itself (approve a text, sign in somewhere, make a call), it files a task labelled `human`. Meat Mode gathers those tasks from every repo and every machine into one list, next to your own to-dos. You tick them off, snooze them, say no, or reply with a note, and your answer goes back to the agent in its tracker. In the repos you allow, one tap also wakes an agent to work on a task, and you watch how it goes on the task itself.
 
 beads is the example on this page. Meat Mode reads Backlog.md and ticket repos the same way, and runs Claude Code, Codex, OpenCode, Antigravity CLI or Pi as the agent: see [What it works with](#what-it-works-with).
 
@@ -31,12 +31,13 @@ flowchart LR
   phone["Your phone and desktop<br/>(the app)"] <--> hub["Meat Mode hub<br/>(always-on host)"]
   hub -- reminders --> phone
   bridge["Bridge<br/>(on your agent machine)"] -- dials out --> hub
-  bridge <--> beads["Task trackers in your repos<br/>(beads, Backlog.md, ticket)"]
-  bridge -- "starts, when you ask" --> agent["An agent<br/>(on its own copy of the repo)"]
+  bridge <-->|"tasks for you,<br/>your answers"| tracker["Your task tracker<br/>(in each repo)"]
+  bridge -- "starts, when you ask" --> agent["Your coding agent<br/>(on its own copy<br/>of the repo)"]
+  agent -- "replies, closes the task" --> tracker
 ```
 
 - **The hub** keeps your list, sends reminders and serves the app. Your personal to-dos need nothing else.
-- **The bridge** is a small background service on the machine your agents use. It finds the repos where your agents track their work, sends their `human` tasks up to the hub and plays your answers back into beads. When you ask, it starts an agent on a task in a repo you allowed. It always connects out to the hub, so the hub never reaches into your agent machine.
+- **The bridge** is a small background service on the machine your agents use. It finds the repos where your agents track their work, whichever tracker each one uses, sends the tasks marked for you up to the hub and plays your answers back into that tracker. When you ask, it starts the coding agent that machine is set to run, on a task in a repo you allowed; the agent replies and closes the task in the tracker, as it would on its own. It always connects out to the hub, so the hub never reaches into your agent machine.
 
 ## Why it exists
 
@@ -51,8 +52,8 @@ flowchart LR
 Each task from an agent shows why the agent needs you, which project it came from and the conversation so far. Tap **Done** or **Won't do**, snooze it to tonight or next week where its tracker can, or leave a note. The agent reads your note in its tracker, signed with your name, and can reply. Only the repos you switch on in Settings send tasks.
 
 <p>
-  <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme, grouped into Past due, Today, This evening, Tomorrow and This week, with a New badge on an agent's task and a tab bar at the bottom.">
-  <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day, has a checklist with one of two entries ticked, and offers Done, Edit, Delete and snooze choices.">
+  <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme, grouped into Past due, Today, This evening, Tomorrow and This week. &quot;Call Sam about the weekend&quot; carries a weekend tag, the agent's task &quot;Order compost for the beds&quot; has a New badge, and a tab bar with Today, Upcoming, Agents and Browse sits at the bottom.">
+  <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day and carries a garden tag, has a checklist with one of two entries ticked, and offers Done, Edit and Delete, a sub-task box, Files with Attach a file and Take a photo, and snooze choices.">
 </p>
 
 ### Hand a task to an agent
@@ -69,7 +70,7 @@ When a task is work an agent can do, wake one from the app. Write a note and tap
 When you add a task to a list where agents may work, the **Agent** button in the new task bar hands it straight to an agent. It starts off every time. **Stop all** in Settings ends every run at once. When a run you did not stop ends, you get one notification saying the agent replied, finished or stopped, with **Reply** and **Open** buttons.
 
 <p>
-  <img src="docs/images/agent-run-sheet.png" width="300" alt="The agent task &quot;Approve the new footer text&quot; open on a desktop. Its card reads &quot;planner replied: Asked which wording to use&quot;, and under the notes a pink button reads Reply to planner.">
+  <img src="docs/images/agent-run-sheet.png" width="300" alt="The agent task &quot;Approve the new footer text&quot; open on a desktop. Its card reads &quot;planner replied: Asked which wording to use&quot;, the notes show the conversation so far, and under the note box a pink button reads Reply to planner.">
   <img src="docs/images/new-task-agent.png" width="450" alt="The new task bar with &quot;Find a cheaper soil sensor&quot; typed in, the garden list chosen and the Agent button turned on, so the Add button turns pink and the line below reads &quot;It reads the task in garden and replies here.&quot;">
 </p>
 
@@ -91,9 +92,13 @@ Descriptions and notes show as Markdown, so an agent's checklist, table or link 
 
 On your own to-dos and projects you can attach files: a photo of the broken part, the PDF of the booking. Photos show as thumbnails and open in a tab; other files download. A file can be up to 25 MB, an item holds 20, and the hub keeps up to 1 GB in all. Agents' tasks take no files, since their trackers have nowhere to carry one back to the agent.
 
+<img src="docs/images/details-files.png" width="380" alt="The to-do &quot;Fix the gate latch&quot; open on a desktop, with the tags home and weekend. Its details show as Markdown: a sentence, a numbered list with &quot;8 mm&quot; in bold, and a link to example.com. Under Files, a thumbnail of a photo of the latch, named gate-latch.jpg, 24 KB, sits above an Attach a file button.">
+
 ### Plan your month
 
 Switch **Upcoming** from **List** to **Month** to see each day's dated items, with repeating to-dos on every later date of their series. To move something to another day, drag it on a desktop, or pick the day in **Move**, which a long press opens on a touch screen. Your own to-do keeps its time of day on its new date. An agent's task moves by a snooze, where its tracker can snooze.
+
+![The Upcoming view as a month on a desktop, October 2026. Today, the 14th, is circled; the 15th is selected and lists the agent's task "Approve the new footer text", "Buy seeds" snoozed until then, and "Put the bins out" at 19:00. The bins come back every week, shown as dashed entries with a repeat icon on the 22nd and 29th, and other to-dos sit on their days through the month.](docs/images/month-view.png)
 
 ### Take your data with you
 
@@ -184,7 +189,7 @@ It is not:
 | Connect the machine your agents run on | [Install the bridge](docs/deploy.md#3-install-the-bridge-on-the-agent-machine) and [Pair](docs/deploy.md#4-pair) |
 | Let an agent work on a task you hand it | [Wake an agent on a task](docs/deploy.md#wake-an-agent-on-a-task) |
 | Choose which coding agent runs a task | [docs/harnesses.md](docs/harnesses.md) |
-| Connect a tracker other than beads | [docs/trackers.md](docs/trackers.md) |
+| Use Backlog.md or ticket, or add a tracker | [docs/trackers.md](docs/trackers.md) |
 | Let agents add to your list from scripts | [Let agents add to your personal list](docs/deploy.md#let-agents-add-to-your-personal-list) |
 | Back up, or move to another host | [Back up](docs/deploy.md#back-up) |
 | Put it at your own domain on your LAN | [Behind a reverse proxy](docs/deploy.md#behind-a-reverse-proxy) |
