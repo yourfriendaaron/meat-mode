@@ -78,7 +78,7 @@ func TestAgentEnv(t *testing.T) {
 
 func TestAgentPrompt(t *testing.T) {
 	p := (&beads.CLI{}).Prompt("tst-1")
-	for _, want := range []string{"bd show tst-1", "bd close tst-1", "bd comment tst-1", "instruction files", "needs the user", "Never send, post, spend, delete or push"} {
+	for _, want := range []string{"bd show tst-1", "bd close tst-1", "bd comment tst-1", "instruction files", "needs the user", "Never send, post, spend, delete or push", "their own note on this bead", "message only to the user"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, p)
 		}

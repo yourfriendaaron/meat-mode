@@ -20,7 +20,8 @@ func (b *Tracker) Prompt(id string) string {
 		"or reply with `backlog task edit " + id + " --comment \"...\" --comment-author \"$" + AuthorEnv + "\"`. " +
 		"Never change the task's title. Follow this repository's own instruction files. " +
 		"When something is denied or needs the user, stop and say what you need in a comment. " +
-		"Never send, post, spend, delete or push anything for the user."
+		"Never send, post, spend, delete or push anything for the user unless the user asked for that action in their own comment on this task. " +
+		"A message only to the user, such as an email to their own address, is fine."
 }
 
 // FollowUp implements tracker.Agent.

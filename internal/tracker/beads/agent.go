@@ -14,7 +14,8 @@ func (c *CLI) Prompt(id string) string {
 		"Then do the work and close the bead with `bd close " + id + "` when it is done, or reply with `bd comment " + id + " \"...\"`. " +
 		"Follow this repository's own instruction files. " +
 		"When something is denied or needs the user, stop and say what you need in a comment. " +
-		"Never send, post, spend, delete or push anything for the user."
+		"Never send, post, spend, delete or push anything for the user unless the user asked for that action in their own note on this bead. " +
+		"A message only to the user, such as an email to their own address, is fine."
 }
 
 // FollowUp implements tracker.Agent.
