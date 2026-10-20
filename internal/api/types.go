@@ -267,7 +267,7 @@ type Run struct {
 	// bridge's configured agent name, else its harness's title.
 	Agent string `json:"agent"`
 	// Activity is one line in plain words of what the agent is doing now,
-	// such as "Editing notes.txt"; while settled, the last thing it did.
+	// such as "Editing notes.txt"; once settled, the first line of the agent's latest note in the run, or empty.
 	Activity  string     `json:"activity,omitempty"`
 	StartedAt time.Time  `json:"startedAt"`
 	EndedAt   *time.Time `json:"endedAt,omitempty"`

@@ -130,3 +130,17 @@ func TestDescribeTool(t *testing.T) {
 		}
 	}
 }
+
+func TestFirstLine(t *testing.T) {
+	for in, want := range map[string]string{
+		"Which plants?":                    "Which plants?",
+		"\n\n## Which  plants?\nThe ferns": "Which plants?",
+		"- **Done**: watered":              "Done: watered",
+		"1. Use `bd` > 2":                  "Use bd > 2",
+		"   ":                              "",
+	} {
+		if got := firstLine(in); got != want {
+			t.Errorf("firstLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -232,7 +232,7 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 		t.Errorf("runs when the ask's result arrived = %+v", at)
 	}
 	run := w.waitRun(b, id, settled)
-	if run.State != api.RunDone || run.Activity != "Closing the bead" || run.Reason != "" {
+	if run.State != api.RunDone || run.Activity != "Done: watered." || run.Reason != "" {
 		t.Errorf("settled run = %+v", run)
 	}
 	if i := w.show(dir, id); i.Status != "closed" || !hasCommentBy(i, "helper", "Done: watered.") {
@@ -267,14 +267,15 @@ func beadsRun(t *testing.T, dir, name string, args ...string) string {
 func TestAgentRunOutcomes(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
-		words, state, reason, detail string
+		words, state, reason, detail, said string
 	}{
-		{"reply", api.RunWaiting, "", ""},
-		{"have a look", api.RunStopped, api.ReasonNoReply, "without a note"},
-		{"usage", api.RunStopped, api.ReasonUsageLimit, "resets at"},
-		{"budget", api.RunStopped, api.ReasonBudget, "$2.00"},
-		{"fail", api.RunStopped, api.ReasonFailed, "Something went wrong"},
-		{"crash", api.RunStopped, api.ReasonCrashed, "exit status 1"},
+		// A settled run shows what the agent said, never its last step.
+		{"reply", api.RunWaiting, "", "", "Which plants?"},
+		{"have a look", api.RunStopped, api.ReasonNoReply, "without a note", ""},
+		{"usage", api.RunStopped, api.ReasonUsageLimit, "resets at", ""},
+		{"budget", api.RunStopped, api.ReasonBudget, "$2.00", ""},
+		{"fail", api.RunStopped, api.ReasonFailed, "Something went wrong", ""},
+		{"crash", api.RunStopped, api.ReasonCrashed, "exit status 1", ""},
 	} {
 		t.Run(c.words, func(t *testing.T) {
 			t.Parallel()
@@ -283,7 +284,7 @@ func TestAgentRunOutcomes(t *testing.T) {
 			w.tick(b)
 			w.ask(b, "ask-"+c.words, id, c.words)
 			run := w.waitRun(b, id, settled)
-			if run.State != c.state || run.Reason != c.reason || !strings.Contains(run.Detail, c.detail) || run.Count != 1 {
+			if run.State != c.state || run.Reason != c.reason || !strings.Contains(run.Detail, c.detail) || run.Activity != c.said || run.Count != 1 {
 				t.Errorf("run = %+v, want %s/%s with %q", run, c.state, c.reason, c.detail)
 			}
 			w.tick(b)

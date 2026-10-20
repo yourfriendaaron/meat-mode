@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -748,7 +749,7 @@ func (r *AgentRunner) settle(lr *liveRun, p *agentProc, waitErr error) {
 	r.mu.Unlock()
 	lr.log.Close()
 
-	state, reason, detail := api.RunStopped, "", ""
+	state, reason, detail, said := api.RunStopped, "", "", ""
 	switch {
 	case ending == api.ReasonStopped:
 		reason = ending
@@ -772,12 +773,15 @@ func (r *AgentRunner) settle(lr *liveRun, p *agentProc, waitErr error) {
 			detail = "The agent reported an error: " + clipText(t, maxDetail-30)
 		}
 	default:
-		state, reason, detail = r.outcome(lr)
+		state, reason, detail, said = r.outcome(lr)
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.settleRun(lr.run, state, reason, detail)
+	// The last step ("Writing a note") is over; a settled run shows what the
+	// agent said instead, or nothing.
+	lr.run.Activity = said
 	closeInbox(p)
 	lr.rec.Process = nil
 	delete(r.live, lr.key)
@@ -812,26 +816,49 @@ func (r *AgentRunner) CheckHarness(ctx context.Context) *api.HarnessInfo {
 
 // outcome reads the bead after a run that finished its turn: closed is
 // done, a note from the agent since the run started is waiting, and
-// anything else is no reply.
-func (r *AgentRunner) outcome(lr *liveRun) (state, reason, detail string) {
+// anything else is no reply. said is the first line of the agent's latest
+// note in the run, "" when it wrote none.
+func (r *AgentRunner) outcome(lr *liveRun) (state, reason, detail, said string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	i, err := lr.repo.Tracker.Show(ctx, lr.repo.Dir, lr.rec.BeadID)
 	if err != nil {
-		return api.RunStopped, api.ReasonNoReply, "The bridge could not read the task after the run."
-	}
-	if i.Status == tracker.StatusClosed {
-		return api.RunDone, "", ""
+		return api.RunStopped, api.ReasonNoReply, "The bridge could not read the task after the run.", ""
 	}
 	since := lr.run.StartedAt.Truncate(time.Second)
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	replied := false
 	for _, c := range i.Comments {
 		if !c.CreatedAt.Before(since) && c.Author != "" && !r.appAuthor(c.Author) {
-			return api.RunWaiting, "", ""
+			replied, said = true, firstLine(c.Text)
 		}
 	}
-	return api.RunStopped, api.ReasonNoReply, "The agent ended without a note or closing the task."
+	r.mu.Unlock()
+	switch {
+	case i.Status == tracker.StatusClosed:
+		return api.RunDone, "", "", said
+	case replied:
+		return api.RunWaiting, "", "", said
+	}
+	return api.RunStopped, api.ReasonNoReply, "The agent ended without a note or closing the task.", ""
+}
+
+// blockMark is a Markdown heading, quote or list mark at a line's start.
+var blockMark = regexp.MustCompile(`^(#+|>|[-*+]|\d+[.)])\s+`)
+
+// inlineMark is Markdown's bold and code marks.
+var inlineMark = strings.NewReplacer("**", "", "__", "", "`", "")
+
+// firstLine is a note's first line with text, without Markdown's marks,
+// clipped to an activity line.
+func firstLine(text string) string {
+	for _, l := range strings.Split(text, "\n") {
+		l = inlineMark.Replace(blockMark.ReplaceAllString(strings.TrimSpace(l), ""))
+		if l = strings.Join(strings.Fields(l), " "); l != "" {
+			return clip(l)
+		}
+	}
+	return ""
 }
 
 func (r *AgentRunner) settleRun(run *api.Run, state, reason, detail string) {
