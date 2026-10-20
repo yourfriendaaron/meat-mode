@@ -5,11 +5,50 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	_ "time/tzdata" // the hub's time zone must resolve on a machine without zone files
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
+// version and commit are set at build time with -ldflags
+// "-X main.version=v1.2.3 -X main.commit=abc1234". Without commit, the Git
+// revision Go stamps into a build from a checkout stands in.
+var (
+	version = "dev"
+	commit  = ""
+)
+
+// fullVersion is the version and its commit, such as "v1.2.3 (abc1234)",
+// which the bridge reports to the hub and Settings shows.
+func fullVersion() string {
+	return versionWithCommit(version, commit, buildRevision())
+}
+
+func versionWithCommit(version, commit, revision string) string {
+	if commit == "" {
+		commit = revision
+	}
+	if len(commit) > 7 {
+		commit = commit[:7]
+	}
+	if commit == "" || commit == version {
+		return version
+	}
+	return version + " (" + commit + ")"
+}
+
+// buildRevision is the Git commit Go stamped into the binary, if any.
+func buildRevision() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.revision" {
+			return s.Value
+		}
+	}
+	return ""
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -27,7 +66,7 @@ func main() {
 	case "hash-password":
 		err = runHashPassword(os.Args[2:])
 	case "version", "--version":
-		fmt.Println(version)
+		fmt.Println(fullVersion())
 	default:
 		usage()
 		os.Exit(2)

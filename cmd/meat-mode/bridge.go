@@ -14,7 +14,7 @@ import (
 func runBridge(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	env, err := bridge.DefaultEnv(version)
+	env, err := bridge.DefaultEnv(fullVersion())
 	if err != nil {
 		return err
 	}
@@ -26,7 +26,7 @@ func runBridge(args []string) error {
 func runPersonal(cmd string, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	env, err := bridge.DefaultEnv(version)
+	env, err := bridge.DefaultEnv(fullVersion())
 	if err != nil {
 		return err
 	}

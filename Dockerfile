@@ -15,8 +15,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/web/static/ web/static/
+# The image has no .git, so the commit comes in as an argument too.
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/meat-mode ./cmd/meat-mode \
+ARG COMMIT=
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o /out/meat-mode ./cmd/meat-mode \
  && mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
