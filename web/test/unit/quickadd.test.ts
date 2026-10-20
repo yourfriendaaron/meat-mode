@@ -60,6 +60,23 @@ test("a past day with no time is that day at 9:00, so the to-do starts out overd
   assert.equal(local(parseQuickAdd("Water the plants last friday at 3pm", now, lists).due), "2026-10-09 15:00");
 });
 
+test("the day before yesterday and the day after tomorrow, with or without the", () => {
+  const cases: [string, string][] = [
+    ["day before yesterday", "2026-10-12 09:00"],
+    ["the day before yesterday", "2026-10-12 09:00"],
+    ["day after tomorrow", "2026-10-16 09:00"],
+    ["the day after tomorrow", "2026-10-16 09:00"],
+    ["day after tomorrow 3pm", "2026-10-16 15:00"],
+    ["day before yesterday at 8am", "2026-10-12 08:00"],
+    ["the day after tomorrow evening", "2026-10-16 20:00"],
+  ];
+  for (const [when, due] of cases) {
+    const r = parseQuickAdd(`Water the plants ${when}`, now, lists);
+    assert.equal(r.title, "Water the plants", when);
+    assert.equal(local(r.due), due, when);
+  }
+});
+
 test("tonight is 20:00 today", () => {
   const r = parseQuickAdd("Water the plants tonight", now, lists);
   assert.equal(r.title, "Water the plants");
