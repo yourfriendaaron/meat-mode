@@ -242,6 +242,11 @@ test("a typed snooze time reads like quick add and refuses the past", () => {
     ["tomorrow morning", "15 9:00", "Tomorrow, 9:00"],
     ["friday 3pm", "16 15:00", "Fri, Oct 16, 15:00"],
     ["today 8am", null, "Pick a time in the future."],
+    ["yesterday", null, "Pick a time in the future."],
+    ["last friday", null, "Pick a time in the future."],
+    ["2 days ago", null, "Pick a time in the future."],
+    ["last week", null, "Pick a time in the future."],
+    ["last night", null, "Pick a time in the future."],
     ["whenever", null, "Could not read that time. Try something like tomorrow 9am."],
   ];
   const fmt = (d: Date | null) => (d ? `${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}` : null);
