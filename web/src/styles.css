@@ -991,39 +991,134 @@ select.qa-pill {
   letter-spacing: 0.04em;
   color: var(--role-soft);
 }
-/* Two even columns and even rows, whatever the labels' lengths. */
-.snooze-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 8px;
+/* Snooze presets: one row each, the name on the left and its time on the right. */
+.snooze-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--role-line);
+  border-radius: 8px;
+  background: var(--role-raise);
+  overflow: hidden;
+}
+.snooze-list li + li {
+  border-top: 1px solid var(--role-line);
 }
 .snz {
-  min-width: 0;
-  min-height: 52px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--role-line);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 0;
   background: transparent;
   text-align: left;
 }
 .snz:hover {
-  border-color: var(--role-due);
+  background: var(--role-hover);
+}
+.snz:focus-visible {
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+.snz-label {
+  min-width: 0;
 }
 .snz-hint {
-  font-size: 12px;
+  flex: none;
+  font-size: 13px;
   color: var(--role-soft);
+  font-variant-numeric: tabular-nums;
 }
-.snooze-pick {
+/* Any other time: one field, typed or picked from the calendar button inside it. */
+.snooze-time {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 12px;
+}
+.snooze-time label {
   font-size: 13px;
+  color: var(--role-soft);
+}
+.snooze-time-row {
+  display: flex;
+  gap: 8px;
+}
+.snooze-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.snooze-field input[data-type-time] {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 44px 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--role-line);
+  background: var(--role-bg);
+  color: var(--role-fg);
+  font-size: 16px;
+}
+.snooze-field input[data-type-time][aria-invalid="true"] {
+  border-color: var(--role-error);
+}
+.snooze-cal {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--role-soft);
+}
+.snooze-cal:hover {
+  background: var(--role-hover);
+  color: var(--role-fg);
+}
+/* The browser's own date and time picker, opened from the calendar button. */
+.snooze-native {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.snooze-time .btn {
+  min-height: 40px;
+  flex: none;
+}
+.snooze-time .btn:disabled {
+  background: var(--role-raise);
+  border-color: var(--role-line);
+  color: var(--role-soft);
+  filter: none;
+  cursor: default;
+}
+@container app (max-width: 879.98px) {
+  .snz,
+  .snooze-field input[data-type-time],
+  .snooze-time .btn {
+    min-height: 44px;
+  }
+}
+@media (pointer: coarse) {
+  .snz,
+  .snooze-field input[data-type-time],
+  .snooze-time .btn {
+    min-height: 44px;
+  }
 }
 .pick-row {
   display: flex;
@@ -1196,7 +1291,7 @@ select.qa-pill {
 .snooze-type-now:empty {
   display: none;
 }
-.snooze-pick:has(input[aria-invalid="true"]) .snooze-type-now {
+.snooze-time:has(input[aria-invalid="true"]) .snooze-type-now {
   color: var(--role-error);
 }
 .edit-form .row-error {

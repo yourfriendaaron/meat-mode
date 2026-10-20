@@ -46,7 +46,7 @@ import { completedGroups, deletedGroups } from "./history.ts";
 import { searchGroups } from "./search.ts";
 import { hasTag, shownTags } from "./tags.ts";
 import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, pickableKeys } from "./bulk.ts";
-import { snoozeOptions, typedSnooze } from "./snooze.ts";
+import { fmtSnoozeTime, snoozeOptions, typedSnooze } from "./snooze.ts";
 import { ADD_ERROR_TEXT, addAction, readQuickAdd, wakesAgent, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
 import { leadSelect, loadLead } from "./lead.ts";
@@ -968,27 +968,32 @@ function renderBulk() {
 
 // ---------- render: detail ----------
 
+/** The snooze choices: the presets as a list, then one field for any other time. */
 function snoozeBlock(prefix: string): string {
-  const n = now();
-  return `<div class="snooze-grid">${snoozeOptions(n)
+  return `<ul class="snooze-list" role="list">${snoozeOptions(now())
     .map(
       (o) =>
-        `<button class="snz" data-act="snooze-opt" data-until="${o.until.toISOString()}"><span class="snz-label">${esc(o.label)}</span><span class="snz-hint">${esc(o.hint)}</span></button>`,
+        `<li><button class="snz" data-act="snooze-opt" data-until="${o.until.toISOString()}"><span class="snz-label">${esc(o.label)}</span><span class="snz-hint">${esc(o.hint)}</span></button></li>`,
     )
-    .join("")}</div><div class="snooze-pick"><label for="${prefix}-pick">Pick a time</label><div class="pick-row"><input id="${prefix}-pick" type="datetime-local" min="${toLocalInput(n)}" data-pick><button class="btn" data-act="snooze-pick">Snooze</button></div></div>${snoozeTypeForm(prefix)}`;
+    .join("")}</ul>${snoozeTypeForm(prefix)}`;
 }
 
 /** Text typed in a snooze time box, by the box's id, so its line survives a redraw. */
 const snoozeTyped = new Map<string, string>();
 
+/**
+ * One field for a time of the user's own: typed the way quick add reads one,
+ * or chosen from the browser's date and time picker behind the calendar button.
+ */
 function snoozeTypeForm(prefix: string): string {
   const id = `${prefix}-type`;
-  const { until, line } = typedSnooze(snoozeTyped.get(id) ?? "", now());
+  const n = now();
+  const { until, line } = typedSnooze(snoozeTyped.get(id) ?? "", n);
   const invalid = !until && line ? ` aria-invalid="true"` : "";
-  return `<form class="snooze-pick" data-form="snooze-type"><label for="${id}">Type a time</label><div class="pick-row"><input id="${id}" type="text" autocomplete="off" enterkeyhint="go" placeholder="8pm, in 2 hours, tomorrow morning" aria-describedby="${id}-now"${invalid} data-type-time><button type="submit" class="btn" aria-label="Snooze to the typed time">Snooze</button></div><p id="${id}-now" class="snooze-type-now" aria-live="polite">${esc(line)}</p></form>`;
+  return `<form class="snooze-time" data-form="snooze-type"><label for="${id}">Or type a time</label><div class="snooze-time-row"><div class="snooze-field"><input id="${id}" type="text" autocomplete="off" enterkeyhint="go" placeholder="8pm, in 2 hours, monday" aria-describedby="${id}-now"${invalid} data-type-time><button type="button" class="snooze-cal" data-act="snooze-cal" aria-label="Choose a date and time">${ICON.upcoming}</button><input id="${id}-pick" class="snooze-native" type="datetime-local" min="${toLocalInput(n)}" tabindex="-1" aria-hidden="true" data-pick></div><button type="submit" class="btn btn-primary"${until ? "" : " disabled"}>Snooze</button></div><p id="${id}-now" class="snooze-type-now" aria-live="polite">${esc(line)}</p></form>`;
 }
 
-/** Updates the line under a snooze time box, and only that, while typing. */
+/** Updates the line under a snooze time box and its Snooze button, and only those, while typing. */
 function updateSnoozeType(input: HTMLInputElement) {
   snoozeTyped.set(input.id, input.value);
   const { until, line } = typedSnooze(input.value, now());
@@ -996,6 +1001,31 @@ function updateSnoozeType(input: HTMLInputElement) {
   if (out) out.textContent = line;
   if (!until && line) input.setAttribute("aria-invalid", "true");
   else input.removeAttribute("aria-invalid");
+  const submit = input.form?.querySelector<HTMLButtonElement>("button[type=submit]");
+  if (submit) submit.disabled = !until;
+}
+
+/** Opens the browser's date and time picker for a snooze time box. */
+function openSnoozePicker(btn: HTMLElement) {
+  const pick = btn.parentElement!.querySelector<HTMLInputElement>("input[data-pick]")!;
+  const typed = typedSnooze(btn.parentElement!.querySelector<HTMLInputElement>("input[data-type-time]")!.value, now()).until;
+  pick.min = toLocalInput(now());
+  if (typed) pick.value = toLocalInput(typed);
+  try {
+    pick.showPicker();
+  } catch {
+    // No showPicker, or the browser refused it: focusing the field opens the picker on phones.
+    pick.focus();
+  }
+}
+
+/** A time chosen in the browser's picker fills the snooze time box with it. */
+function snoozePicked(pick: HTMLInputElement) {
+  const input = pick.parentElement!.querySelector<HTMLInputElement>("input[data-type-time]")!;
+  const d = new Date(pick.value);
+  if (!pick.value || isNaN(d.getTime())) return;
+  input.value = fmtSnoozeTime(d, now());
+  updateSnoozeType(input);
 }
 
 function submitSnoozeType(form: HTMLFormElement) {
@@ -2360,19 +2390,9 @@ function onClick(e: MouseEvent) {
       doSnooze(keys, new Date(btn.dataset.until!));
       break;
     }
-    case "snooze-pick": {
-      const input = btn.closest(".snooze-pick")!.querySelector<HTMLInputElement>("input[data-pick]")!;
-      const until = new Date(input.value);
-      if (!input.value || isNaN(until.getTime()) || until.getTime() <= now().getTime()) {
-        input.setAttribute("aria-invalid", "true");
-        input.focus();
-        return;
-      }
-      input.removeAttribute("aria-invalid");
-      const keys = btn.closest("#snooze") ? S.snoozeKeys ?? [] : S.open ? [S.open] : [];
-      doSnooze(keys, until);
+    case "snooze-cal":
+      openSnoozePicker(btn);
       break;
-    }
     case "snooze-close":
       closeSnooze();
       break;
@@ -2551,7 +2571,8 @@ function onInput(e: Event) {
 
 function onChange(e: Event) {
   const t = e.target as HTMLElement;
-  if (S.edit && t.closest(".edit-form")) editChanged(S.edit.draft, t as HTMLInputElement);
+  if (t.dataset.pick !== undefined) snoozePicked(t as HTMLInputElement);
+  else if (S.edit && t.closest(".edit-form")) editChanged(S.edit.draft, t as HTMLInputElement);
   else if (t.dataset.check !== undefined && S.open) {
     const it = byKey(S.open);
     if (it) setChecklist(it.key, toggleCheck(it.checklist, Number(t.dataset.check)));
