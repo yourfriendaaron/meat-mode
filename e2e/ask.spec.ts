@@ -4,6 +4,8 @@
 // steers it from the note box as a user would. The tests share one world and
 // run in order: the first switches the repo on in Settings and its agents on at the machine.
 
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 import { hasBd, World, type Captured } from "./world.ts";
 
@@ -218,4 +220,32 @@ test("a run that hits the usage limit stops, and Retry starts a new one", async 
   expect(retried.id).not.toBe(stopped.id);
   await expect.poll(() => pushes(w, k, `${AGENT} replied`).length).toBe(1);
   expect(pushes(w, k, stoppedTitle)).toHaveLength(1);
+});
+
+test("sets the machine's limits in Settings, and the bridge keeps them and reports them back", async ({ page, w }) => {
+  await page.goto(w.hubURL + "/");
+  await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+  const laptop = page.locator(".machine", { has: page.locator(".m-name", { hasText: /^laptop$/ }) });
+  await expect(laptop.locator(".m-limits")).toContainText("10 runs per task · 2 at once");
+  await laptop.getByRole("button", { name: "Change the limits on laptop" }).click();
+  const form = laptop.getByRole("form", { name: "Limits on laptop" });
+  // The bridge's ceiling is the default 50 runs per task.
+  await expect(form).toContainText("Up to 50 · Machine default 10");
+  await form.getByLabel("Runs per task", { exact: true }).fill("25");
+  await form.getByRole("button", { name: "Save limits" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(laptop.locator(".m-limits")).toContainText("25 runs per task");
+  // The bridge applied it: nothing waits, and its own config holds the value.
+  await expect(laptop.getByText("Waiting for laptop")).toHaveCount(0);
+  const config = JSON.parse(await readFile(join(w.machine("laptop").home, ".config", "meat-mode", "bridge.json"), "utf8"));
+  expect(config.limits).toEqual({ runsPerTask: 25 });
+  const state = await w.api<{ bridges: { name: string; harness?: { limits?: { runsPerTask: number; set?: string[] } } }[] }>("/api/state");
+  expect(state.bridges.find((b) => b.name === "laptop")?.harness?.limits).toMatchObject({ runsPerTask: 25, set: ["runsPerTask"] });
+
+  // Back to the machine's default.
+  await laptop.getByRole("button", { name: "Change the limits on laptop" }).click();
+  await form.getByRole("button", { name: "Use the machine's default runs per task" }).click();
+  await expect(form.getByLabel("Runs per task", { exact: true })).toHaveValue("10");
+  await expect(laptop.getByText("Waiting for laptop")).toHaveCount(0);
+  await expect.poll(async () => JSON.parse(await readFile(join(w.machine("laptop").home, ".config", "meat-mode", "bridge.json"), "utf8")).limits).toBeUndefined();
 });

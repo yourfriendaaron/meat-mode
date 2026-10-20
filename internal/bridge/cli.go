@@ -361,6 +361,9 @@ func New(s Settings, log *slog.Logger) (*Bridge, error) {
 		SaveAgents: func(repo string, on bool) error {
 			return SaveAgents(env.Paths.Config, repo, on)
 		},
+		SaveLimits: func(c api.LimitsChange) (SavedLimits, error) {
+			return SaveLimits(env.Paths.Config, c)
+		},
 		Runner:  runner,
 		Version: env.Version,
 		Log:     log,

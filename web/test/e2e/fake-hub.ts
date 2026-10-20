@@ -384,6 +384,13 @@ export class FakeHub {
     );
   }
 
+  /** What the bridge does once it applied a limits change: it reports the limits again, no longer pending. */
+  applyLimits(name: string): void {
+    const b = this.bridges.find((x) => x.name === name);
+    if (!b) throw new Error(`no machine ${name}`);
+    b.limitsPending = false;
+  }
+
   /** Switches agents on for a repo, as if the bridge had applied the switch. */
   allowAgents(repo: string, on = true): void {
     const r = this.repos.find((x) => x.name === repo && !x.personal);
@@ -943,6 +950,35 @@ export class FakeHub {
       if (!r || r.bridge === HUB) return this.json(route, 400, { error: "no such repo" });
       r.optedIn = Boolean(a.payload.on);
       r.pending = true;
+    } else if (a.kind === "limits") {
+      const b = this.bridges.find((x) => x.name === bridge);
+      if (!b || bridge === HUB) return this.json(route, 400, { error: "the personal list and projects have no agents" });
+      const l = b.harness?.limits;
+      if (!l) return this.json(route, 400, { error: `the bridge on ${bridge} is too old to take limits from the app; update it, or set MEAT_MODE_AGENT_* there` });
+      const c = a.payload.limits ?? {};
+      // The hub refuses a value above the ceiling the bridge reported (docs/api.md, Harness).
+      for (const n of ["budgetUsd", "timeoutSeconds", "runsPerTask", "concurrent"] as const) {
+        const v = c[n];
+        const what = { budgetUsd: "the spending cap", timeoutSeconds: "the time limit", runsPerTask: "runs per task", concurrent: "runs at once" }[n];
+        if (v !== undefined && v > l.max[n]) return this.json(route, 400, { error: `${what} can be at most ${l.max[n]} on ${bridge}` });
+      }
+      const set = new Set(l.set ?? []);
+      for (const n of c.reset ?? []) {
+        l[n] = l.defaults[n];
+        set.delete(n);
+      }
+      for (const n of ["budgetUsd", "timeoutSeconds", "runsPerTask", "concurrent"] as const) {
+        const v = c[n];
+        if (v === undefined) continue;
+        l[n] = v;
+        set.add(n);
+      }
+      l.set = [...set];
+      if (b.harness) {
+        b.harness.timeoutSeconds = l.timeoutSeconds;
+        if (b.harness.budget !== "none") b.harness.budgetUsd = l.budgetUsd;
+      }
+      b.limitsPending = true;
     } else if (a.kind === "agents") {
       const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
       if (!r || r.bridge === HUB) return this.json(route, 400, { error: "no such repo" });

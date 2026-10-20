@@ -340,7 +340,12 @@ for (const size of Object.keys(SIZES) as Size[]) {
           hub.allowAgents("website");
           hub.setRun("home/website/we-1", { state: "working", activity: "Shortening the second line" });
           // A harness with every limits phrase, so the baseline holds the longest line.
-          hub.bridges[0].harness = { name: "pi", title: "Pi", version: "1.2.0", instructionFile: "AGENTS.md", budget: "none", timeoutSeconds: 1800 };
+          hub.bridges[0].harness = { name: "pi", title: "Pi", version: "1.2.0", instructionFile: "AGENTS.md", budget: "none", timeoutSeconds: 1800,
+            limits: {
+              budgetUsd: 2, timeoutSeconds: 1800, runsPerTask: 10, concurrent: 2,
+              defaults: { budgetUsd: 2, timeoutSeconds: 1800, runsPerTask: 10, concurrent: 2 },
+              max: { budgetUsd: 20, timeoutSeconds: 14400, runsPerTask: 50, concurrent: 5 },
+            } };
           await openApp(page);
           await goToSettings(page, size);
           await expect(page.locator("[data-section=runs]")).toContainText("1 agent working");

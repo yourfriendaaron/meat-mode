@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -43,6 +44,33 @@ func cleanHarness(h *api.HarnessInfo) *api.HarnessInfo {
 		}
 	case api.BudgetNone:
 		out.Budget = h.Budget
+	}
+	out.Limits = cleanRunLimits(h.Limits)
+	return &out
+}
+
+// cleanRunLimits bounds a hello's limits: a value below zero, or a budget
+// that is not a finite amount, reads as zero, and Set keeps only the names
+// of limits. A ceiling of zero lets the app set nothing for that limit.
+func cleanRunLimits(l *api.RunLimits) *api.RunLimits {
+	if l == nil {
+		return nil
+	}
+	clean := func(v api.AgentLimits) api.AgentLimits {
+		if !(v.BudgetUSD > 0) || math.IsInf(v.BudgetUSD, 0) {
+			v.BudgetUSD = 0
+		}
+		v.BudgetUSD = min(v.BudgetUSD, maxBudgetUSD)
+		v.TimeoutSeconds = max(v.TimeoutSeconds, 0)
+		v.RunsPerTask = max(v.RunsPerTask, 0)
+		v.Concurrent = max(v.Concurrent, 0)
+		return v
+	}
+	out := api.RunLimits{AgentLimits: clean(l.AgentLimits), Defaults: clean(l.Defaults), Max: clean(l.Max)}
+	for _, n := range api.LimitNames {
+		if slices.Contains(l.Set, n) {
+			out.Set = append(out.Set, n)
+		}
 	}
 	return &out
 }

@@ -6,7 +6,7 @@
 import { ApiError, errorText } from "./api.ts";
 import { esc } from "./html.ts";
 import { HUB_BRIDGE, repoCan, repoLabel } from "./model.ts";
-import type { Bridge, Repo } from "./types.ts";
+import type { AgentLimits, Bridge, LimitName, LimitsChange, Repo, RunLimits } from "./types.ts";
 
 /** Where release binaries download from; the names match .github/workflows/release.yml. */
 const RELEASES = "https://github.com/yourfriendaaron/meat-mode/releases/latest/download";
@@ -118,7 +118,7 @@ export function durationText(seconds: number): string {
 }
 
 /** A cap in dollars: "$2", "$2.50". */
-function dollars(usd: number): string {
+export function dollars(usd: number): string {
   return Number.isInteger(usd) ? `$${usd}` : `$${usd.toFixed(2)}`;
 }
 
@@ -135,6 +135,7 @@ export function limitsText(b: Pick<Bridge, "harness">): string {
   if (h.timeoutSeconds) out.push(`Time limit: ${durationText(h.timeoutSeconds)} a run`);
   if (h.budget === "none") out.push("No spending cap: a run stops at its time limit");
   else if (h.budgetUsd) out.push(`Stops at ${dollars(h.budgetUsd)} a run`);
+  if (h.limits) out.push(`${h.limits.runsPerTask === 1 ? "1 run" : `${h.limits.runsPerTask} runs`} per task`, `${h.limits.concurrent} at once`);
   if (!h.steer) out.push("Notes wait until the agent finishes its turn");
   return out.join(" · ");
 }
@@ -293,4 +294,135 @@ export function instructionsHTML(user: string, machines: Bridge[], machine: stri
 export function pickMachine(machines: Bridge[], chosen: string): string {
   if (machines.some((b) => b.name === chosen)) return chosen;
   return [...machines].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.name ?? "";
+}
+
+/** The variable on the agent machine that sets each limit's ceiling (docs/deploy.md, Settings). */
+export const LIMIT_MAX_ENV: Record<LimitName, string> = {
+  budgetUsd: "MEAT_MODE_AGENT_MAX_BUDGET_USD",
+  timeoutSeconds: "MEAT_MODE_AGENT_MAX_TIMEOUT",
+  runsPerTask: "MEAT_MODE_AGENT_MAX_RUNS_PER_TASK",
+  concurrent: "MEAT_MODE_AGENT_MAX_CONCURRENT",
+};
+
+/** The limits in the order the app shows them. */
+export const LIMIT_NAMES: LimitName[] = ["budgetUsd", "timeoutSeconds", "runsPerTask", "concurrent"];
+
+/** The limits a machine's bridge reports, or null for one too old for the app to change them. */
+export function runLimits(b: Pick<Bridge, "harness">): RunLimits | null {
+  return b.harness?.limits ?? null;
+}
+
+/** The limits the app offers for a machine: the spending cap only where the harness keeps one. */
+export function editableLimits(b: Pick<Bridge, "harness">): LimitName[] {
+  return LIMIT_NAMES.filter((n) => n !== "budgetUsd" || b.harness?.budget !== "none");
+}
+
+/** A limit's value as the form shows it: dollars, minutes for the time limit, a count otherwise. */
+export function limitFieldValue(name: LimitName, l: AgentLimits): string {
+  if (name === "timeoutSeconds") return String(Math.max(1, Math.round(l.timeoutSeconds / 60)));
+  return String(l[name]);
+}
+
+/** A limit's value in words, as the form's hints show it. */
+export function limitText(name: LimitName, l: AgentLimits): string {
+  switch (name) {
+    case "budgetUsd":
+      return dollars(l.budgetUsd);
+    case "timeoutSeconds":
+      return durationText(l.timeoutSeconds);
+    default:
+      return String(l[name]);
+  }
+}
+
+const LIMIT_LABEL: Record<LimitName, string> = {
+  budgetUsd: "Spending cap a run, in US dollars",
+  timeoutSeconds: "Time limit a run, in minutes",
+  runsPerTask: "Runs per task",
+  concurrent: "Runs at once",
+};
+
+const LIMIT_SHORT: Record<LimitName, string> = {
+  budgetUsd: "spending cap",
+  timeoutSeconds: "time limit",
+  runsPerTask: "runs per task",
+  concurrent: "runs at once",
+};
+
+/**
+ * Why a value typed for a limit cannot be saved, or "" when it can. The
+ * floors and the ceiling message match the hub's (docs/api.md, Harness).
+ */
+export function limitError(name: LimitName, typed: string, max: AgentLimits, machine: string): string {
+  const v = Number(typed.trim());
+  const over = (what: string, ceiling: string) =>
+    `${what} can be at most ${ceiling} on ${machine}. To allow more, set ${LIMIT_MAX_ENV[name]} on ${machine} and restart its bridge.`;
+  switch (name) {
+    case "budgetUsd":
+      if (!typed.trim() || !Number.isFinite(v) || v <= 0) return "The spending cap must be more than $0.";
+      if (v > max.budgetUsd) return over("The spending cap", `${dollars(max.budgetUsd)} a run`);
+      return "";
+    case "timeoutSeconds":
+      if (!typed.trim() || !Number.isInteger(v) || v < 1) return "The time limit must be a whole number of minutes, at least 1.";
+      if (v * 60 > max.timeoutSeconds) return over("The time limit", `${durationText(max.timeoutSeconds)} a run`);
+      return "";
+    default: {
+      const what = name === "runsPerTask" ? "Runs per task" : "Runs at once";
+      if (!typed.trim() || !Number.isInteger(v) || v < 1) return `${what} must be a whole number of 1 or more.`;
+      if (v > max[name]) return over(what, String(max[name]));
+      return "";
+    }
+  }
+}
+
+/**
+ * The change the limits form asks for: each field whose typed value differs
+ * from what the form first showed, as the wire wants it (seconds for the time
+ * limit). error is the first field's refusal; an empty change has nothing to
+ * save.
+ */
+export function limitsChange(
+  typed: Partial<Record<LimitName, string>>,
+  shown: Partial<Record<LimitName, string>>,
+  max: AgentLimits,
+  machine: string,
+): { change: LimitsChange; error: string } {
+  const change: LimitsChange = {};
+  for (const n of LIMIT_NAMES) {
+    const t = typed[n];
+    if (t === undefined || t.trim() === (shown[n] ?? "").trim()) continue;
+    const error = limitError(n, t, max, machine);
+    if (error) return { change: {}, error };
+    change[n] = n === "timeoutSeconds" ? Number(t) * 60 : Number(t);
+  }
+  return { change, error: "" };
+}
+
+/** Where a machine's limits are changed. Its clicks reach the Agent machines section as "limits-edit", "limits-cancel" and "limit-reset", and its form as data-form "limits". */
+export function limitsBoxHTML(b: Bridge, opts: { open: boolean; drafts?: Partial<Record<LimitName, string>>; error?: string; saving?: boolean }): string {
+  if (!b.lastSeen) return "";
+  const l = runLimits(b);
+  const pending = b.limitsPending ? `<p class="muted small" role="status">Waiting for ${esc(b.name)}</p>` : "";
+  if (!l) return `<div class="m-limits-box"><p class="muted small">Update the bridge on ${esc(b.name)} to change its agent limits here.</p></div>`;
+  if (!opts.open) {
+    return `<div class="m-limits-box">${pending}<button class="btn btn-small" data-act="limits-edit" data-bridge="${esc(b.name)}" aria-label="Change the limits on ${esc(b.name)}">Change limits</button></div>`;
+  }
+  const set = new Set(l.set ?? []);
+  const rows = editableLimits(b)
+    .map((n) => {
+      const id = `limit-${b.name}-${n}`;
+      const shown = limitFieldValue(n, l);
+      const value = opts.drafts?.[n] ?? shown;
+      const isMoney = n === "budgetUsd";
+      const max = n === "timeoutSeconds" ? Math.floor(l.max.timeoutSeconds / 60) : l.max[n];
+      const reset = set.has(n)
+        ? `<button class="btn btn-small" type="button" data-act="limit-reset" data-bridge="${esc(b.name)}" data-limit="${n}" aria-label="Use the machine's default ${LIMIT_SHORT[n]}">Use default</button>`
+        : "";
+      return `<div class="limit-row"><label for="${esc(id)}">${esc(LIMIT_LABEL[n])}</label><div class="pick-row"><input id="${esc(id)}" name="${n}" type="number" inputmode="${isMoney ? "decimal" : "numeric"}" min="${isMoney ? "0.01" : "1"}" step="${isMoney ? "0.01" : "1"}" max="${max}" value="${esc(value)}" data-shown="${esc(shown)}" aria-describedby="${esc(id)}-hint">${reset}</div><p class="muted small" id="${esc(id)}-hint">Up to ${esc(limitText(n, l.max))} · Machine default ${esc(limitText(n, l.defaults))}</p></div>`;
+    })
+    .join("");
+  const none = b.harness?.budget === "none" ? `<p class="muted small">${esc(harnessTitle(b))} reports no cost, so no spending cap applies: a run stops at its time limit.</p>` : "";
+  return `<form class="m-limits-box limits-form" data-form="limits" data-bridge="${esc(b.name)}" novalidate aria-label="Limits on ${esc(b.name)}">${pending}${rows}${none}<p class="muted small">A change applies to runs that start after it. Each ceiling is set on ${esc(b.name)}, with a MEAT_MODE_AGENT_MAX_* variable.</p>${
+    opts.error ? `<p class="row-error" role="alert">${esc(opts.error)}</p>` : ""
+  }<div class="limits-buttons"><button class="btn btn-primary" type="submit"${opts.saving ? " disabled" : ""}>Save limits</button><button class="btn" type="button" data-act="limits-cancel">Cancel</button></div></form>`;
 }

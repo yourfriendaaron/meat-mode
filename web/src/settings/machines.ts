@@ -1,13 +1,25 @@
-// The Agent machines section: the paired machines with their repos, Revoke,
-// and the form that adds one and shows its pairing command once.
+// The Agent machines section: the paired machines with their repos, their
+// limits on agent runs, Revoke, and the form that adds one and shows its
+// pairing command once.
 
-import { addMachineError, harnessLinesHTML, machineReposHTML, pairCommand, reauthFieldHTML, trackersText } from "../agents.ts";
+import {
+  addMachineError,
+  harnessLinesHTML,
+  LIMIT_NAMES,
+  limitsBoxHTML,
+  limitsChange,
+  machineReposHTML,
+  pairCommand,
+  reauthFieldHTML,
+  runLimits,
+  trackersText,
+} from "../agents.ts";
 import type { AppContext } from "../app-context.ts";
-import { api, errorText } from "../api.ts";
+import { api, errorText, newId } from "../api.ts";
 import { copyText } from "../clipboard.ts";
 import { fmtAgo } from "../dates.ts";
 import { esc } from "../html.ts";
-import type { NewBridgeReply } from "../types.ts";
+import type { LimitName, LimitsChange, NewBridgeReply } from "../types.ts";
 import { registerSection } from "./registry.ts";
 
 const m = {
@@ -20,7 +32,71 @@ const m = {
   adding: false,
   /** The machine being asked about before it is revoked. */
   revoking: null as string | null,
+  /** The machine whose limits form is open, what was typed in it, and why the hub refused it. */
+  limits: null as string | null,
+  drafts: {} as Partial<Record<LimitName, string>>,
+  limitsError: "",
+  limitsSaving: false,
 };
+
+/** A hub message as a sentence. */
+function sentence(t: string): string {
+  const s = t.trim();
+  return s ? `${s[0].toUpperCase()}${s.slice(1)}${/[.!?]$/.test(s) ? "" : "."}` : s;
+}
+
+function closeLimits() {
+  m.limits = null;
+  m.drafts = {};
+  m.limitsError = "";
+}
+
+/** Posts a limits change for a machine; the bridge applies it and reports the limits back. */
+async function postLimits(bridge: string, change: LimitsChange, ctx: AppContext): Promise<boolean> {
+  try {
+    await api.postAction({ id: newId(), kind: "limits", bridge, payload: { limits: change } });
+    return true;
+  } catch (e) {
+    m.limitsError = sentence(errorText(e));
+    return false;
+  } finally {
+    await ctx.refresh();
+  }
+}
+
+async function saveLimits(form: HTMLFormElement, ctx: AppContext) {
+  const bridge = form.dataset.bridge ?? "";
+  const b = (ctx.state?.bridges ?? []).find((x) => x.name === bridge);
+  const l = b && runLimits(b);
+  if (!l || m.limitsSaving) return;
+  const typed: Partial<Record<LimitName, string>> = {};
+  const shown: Partial<Record<LimitName, string>> = {};
+  for (const n of LIMIT_NAMES) {
+    const f = form.querySelector<HTMLInputElement>(`input[name="${n}"]`);
+    if (!f) continue;
+    typed[n] = f.value;
+    shown[n] = f.dataset.shown ?? "";
+  }
+  m.drafts = typed;
+  const { change, error } = limitsChange(typed, shown, l.max, bridge);
+  if (error) {
+    m.limitsError = error;
+    ctx.render();
+    return;
+  }
+  if (!Object.keys(change).length) {
+    closeLimits();
+    ctx.render();
+    return;
+  }
+  m.limitsSaving = true;
+  m.limitsError = "";
+  ctx.render();
+  const ok = await postLimits(bridge, change, ctx);
+  m.limitsSaving = false;
+  if (ok) closeLimits();
+  ctx.render();
+}
 
 async function add(form: HTMLFormElement, ctx: AppContext) {
   const input = form.querySelector<HTMLInputElement>("input[name=name]")!;
@@ -84,7 +160,7 @@ registerSection({
               m.revoking === b.name
                 ? `<span class="confirm">Revoke ${esc(b.name)}?</span><button class="btn btn-small btn-danger" data-act="revoke-confirm" data-name="${esc(b.name)}">Revoke</button><button class="btn btn-small" data-act="revoke-cancel">Cancel</button>`
                 : `<button class="btn btn-small" data-act="revoke" data-name="${esc(b.name)}">Revoke</button>`;
-            return `<li class="machine"><div><div class="m-name">${esc(b.name)}</div><div class="muted small">${esc(seen)}${b.version ? ` · ${esc(b.version)}` : ""}</div>${trackers ? `<div class="muted small m-trackers">${esc(trackers)}</div>` : ""}${harnessLinesHTML(b)}</div><div class="m-actions">${actions}</div>${machineReposHTML(repos, b.name)}</li>`;
+            return `<li class="machine"><div><div class="m-name">${esc(b.name)}</div><div class="muted small">${esc(seen)}${b.version ? ` · ${esc(b.version)}` : ""}</div>${trackers ? `<div class="muted small m-trackers">${esc(trackers)}</div>` : ""}${harnessLinesHTML(b)}</div><div class="m-actions">${actions}</div>${limitsBoxHTML(b, { open: m.limits === b.name, drafts: m.drafts, error: m.limitsError, saving: m.limitsSaving })}${machineReposHTML(repos, b.name)}</li>`;
           })
           .join("")}</ul>`
       : '<p class="muted">No machines yet.</p>';
@@ -105,9 +181,16 @@ ${
     m.error = "";
     m.reauth = false;
     m.revoking = null;
+    closeLimits();
   },
   submit(form, ctx) {
     if (form.dataset.form === "bridge") return add(form, ctx);
+    if (form.dataset.form === "limits") return saveLimits(form, ctx);
+  },
+  change(el) {
+    // What was typed in the limits form outlives a redraw.
+    const name = el.getAttribute("name") as LimitName | null;
+    if (el instanceof HTMLInputElement && el.closest("[data-form=limits]") && name && LIMIT_NAMES.includes(name)) m.drafts[name] = el.value;
   },
   async act(act, el, ctx) {
     switch (act) {
@@ -127,6 +210,25 @@ ${
         m.copied = true;
         ctx.render();
         break;
+      case "limits-edit":
+        closeLimits();
+        m.limits = el.dataset.bridge ?? null;
+        ctx.render();
+        document.querySelector<HTMLInputElement>(`[data-form=limits] input`)?.focus();
+        break;
+      case "limits-cancel":
+        closeLimits();
+        ctx.render();
+        break;
+      case "limit-reset": {
+        const name = el.dataset.limit as LimitName;
+        if (!LIMIT_NAMES.includes(name)) break;
+        delete m.drafts[name];
+        m.limitsError = "";
+        await postLimits(el.dataset.bridge ?? "", { reset: [name] }, ctx);
+        ctx.render();
+        break;
+      }
       case "token-done":
         m.added = null;
         m.copied = false;

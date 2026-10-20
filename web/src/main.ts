@@ -372,7 +372,7 @@ function renderSync() {
       list
         .map((a) => {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
-          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : (item?.title ?? a.beadId ?? "");
+          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : a.kind === "limits" ? a.bridge : (item?.title ?? a.beadId ?? "");
           const state =
             a.status === "applied" ? (isPersonal(a) ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
@@ -405,6 +405,8 @@ function actionLabel(a: Action): string {
       return "Stop agent on";
     case "agents":
       return a.payload.on ? "Agents on:" : "Agents off:";
+    case "limits":
+      return "Limits on";
     case "snooze":
       return a.payload.until ? `Snooze to ${fmtWhen(new Date(a.payload.until), now())}:` : "Clear snooze on";
     case "edit":

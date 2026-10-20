@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -168,8 +169,13 @@ func TestHelloNamesTheHarness(t *testing.T) {
 	w.tick(b)
 	hellos := w.hub.Hellos()
 	got := hellos[len(hellos)-1].Hello.Harness
-	want := api.HarnessInfo{Name: "fake", Title: "Fake", InstructionFile: "AGENTS.md", Budget: harness.BudgetNone, TimeoutSeconds: 60}
-	if got == nil || *got != want {
+	limits := &api.RunLimits{
+		AgentLimits: api.AgentLimits{BudgetUSD: 2, TimeoutSeconds: 60, RunsPerTask: 10, Concurrent: 2},
+		Defaults:    api.AgentLimits{BudgetUSD: 2, TimeoutSeconds: 60, RunsPerTask: 10, Concurrent: 2},
+		Max:         api.AgentLimits{BudgetUSD: 20, TimeoutSeconds: 4 * 3600, RunsPerTask: 50, Concurrent: 5},
+	}
+	want := api.HarnessInfo{Name: "fake", Title: "Fake", InstructionFile: "AGENTS.md", Budget: harness.BudgetNone, TimeoutSeconds: 60, Limits: limits}
+	if got == nil || !reflect.DeepEqual(*got, want) {
 		t.Fatalf("hello harness = %+v, want %+v", got, want)
 	}
 	w.ask(b, "ask-1", id, "reply")
@@ -184,8 +190,8 @@ func TestHelloNamesTheHarness(t *testing.T) {
 	hellos = w2.hub.Hellos()
 	got = hellos[len(hellos)-1].Hello.Harness
 	want = api.HarnessInfo{Name: "claude", Title: "Claude Code", Version: "1.0.0", InstructionFile: "CLAUDE.md",
-		Budget: harness.BudgetNative, BudgetUSD: 2, TimeoutSeconds: 60, Steer: true}
-	if got == nil || *got != want {
+		Budget: harness.BudgetNative, BudgetUSD: 2, TimeoutSeconds: 60, Steer: true, Limits: limits}
+	if got == nil || !reflect.DeepEqual(*got, want) {
 		t.Errorf("hello harness = %+v, want %+v", got, want)
 	}
 }

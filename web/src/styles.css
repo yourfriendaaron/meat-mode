@@ -1490,6 +1490,32 @@ select.qa-pill {
   margin: 0;
   padding: 0 0 0 12px;
 }
+.m-limits-box {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-left: 12px;
+}
+.limits-form {
+  gap: 10px;
+  max-width: 460px;
+}
+.limit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+.limit-row label {
+  font-size: 13px;
+  color: var(--role-soft);
+}
+.limits-buttons {
+  display: flex;
+  gap: 8px;
+}
 .m-repo {
   display: flex;
   flex-direction: column;

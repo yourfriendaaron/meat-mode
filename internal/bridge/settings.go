@@ -33,7 +33,7 @@ type Settings struct {
 	// interval; 0 keeps the defaults.
 	Poll time.Duration
 	// Agent is the agent harness, its command and its limits from
-	// MEAT_MODE_AGENT_*.
+	// MEAT_MODE_AGENT_*, with the limits the app set in bridge.json.
 	Agent AgentConfig
 
 	// runErr is a bad MEAT_MODE_BRIDGE_POLL or MEAT_MODE_AGENT_* value. Only
@@ -69,6 +69,7 @@ func LoadSettings(env Env) (Settings, error) {
 	var pollErr, agentErr error
 	s.Poll, pollErr = pollOverride(getenv("MEAT_MODE_BRIDGE_POLL"))
 	s.Agent, agentErr = AgentConfigFromEnv(getenv)
+	s.Agent.Saved = saved.Limits
 	s.runErr = errors.Join(pollErr, agentErr)
 	return s, nil
 }
