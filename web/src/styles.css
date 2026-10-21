@@ -754,6 +754,17 @@ select.qa-pill {
 .row.swiping .row-fg {
   transition: none;
 }
+/* A done row slides off over the done colour, then folds shut (main.ts slideAway). */
+.row.swiping.leaving .row-fg {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.row.folding {
+  border-bottom-color: transparent;
+  transition: height 0.18s ease;
+}
+.row.is-leaving {
+  display: none;
+}
 /* A sub-task sits under its parent, indented past the parent's check. */
 .row-sub .row-fg {
   padding-left: 50px;
@@ -1667,6 +1678,12 @@ select.qa-pill {
 .limits-buttons {
   display: flex;
   gap: 8px;
+}
+.set-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .m-repo {
   display: flex;

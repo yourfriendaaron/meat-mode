@@ -86,6 +86,8 @@ Quick add reads dates, times and repeats as you type and shows you what it under
 
 Break a bigger task into sub-tasks from its details, on your own to-dos and on an agent's tasks alike. "Plan the party" shows "Send invitations" and "Book a cake" under it in the list, and a dated sub-task brings its parent onto Today. The parent cannot be marked done until every sub-task is done or deleted, and **Delete** or **Won't do** on the parent takes its open sub-tasks with it. Tick a sub-task off right there in its parent's details, or remove it with the × beside it, and Undo brings it back. Sub-tasks go one level deep. To move one of your to-dos under another, or back to the top, pick it in **Sub-task of** when you edit it. When a repeating parent is done, its done sub-tasks open again for the next date. On an agent's task, a sub-task is a child issue in its tracker, so the agent sees it too.
 
+Ticking a task off plays a soft pop and slides the row away. Tick off several in a row and each pop climbs a note, so clearing your list sounds like a little tune. To keep a device quiet, turn off **Settings**, **Sound** there.
+
 ### Keep the details with the task
 
 Descriptions and notes show as Markdown, so an agent's list of steps, table or link reads as it meant it. Editing stays plain text.

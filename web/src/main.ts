@@ -49,6 +49,7 @@ import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, 
 import { fmtSnoozeTime, snoozeOptions, typedSnooze } from "./snooze.ts";
 import { ADD_ERROR_TEXT, addAction, readQuickAdd, wakesAgent, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
+import { play } from "./sound.ts";
 import { leadSelect, loadLead } from "./lead.ts";
 import { browserZone } from "./profile.ts";
 import {
@@ -102,6 +103,9 @@ interface Toast {
 
 const UNDO_MS = 6000;
 const SWIPE_THRESHOLD = 88;
+/** How long a done row takes to slide off, then to fold shut. */
+const SLIDE_MS = 280;
+const FOLD_MS = 180;
 /** How long a touch holds a month entry before its Move dialog opens, and how far it may wander meanwhile. */
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP = 10;
@@ -534,7 +538,7 @@ function rowHTML(item: Item, showList: boolean, nested = false): string {
   const done = !isOpen(item);
   const picked = !done && S.selecting && S.picked.has(item.key);
   const run = agent && item.run ? item.run : null;
-  return `<li class="row${nested ? " row-sub" : ""}${done ? " is-done" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}${run ? " has-run" : ""}"${run ? runAttrs(item) : ""} data-key="${esc(item.key)}">
+  return `<li class="row${nested ? " row-sub" : ""}${done ? " is-done" : ""}${leaving.has(item.key) ? " is-leaving" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}${run ? " has-run" : ""}"${run ? runAttrs(item) : ""} data-key="${esc(item.key)}">
 <div class="under" aria-hidden="true">${allows(item, "done") ? '<span class="u-done">Done</span>' : ""}${allows(item, "snooze") ? '<span class="u-snooze">Snooze</span>' : ""}</div>
 <div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList && !nested, nested })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
     done && allows(item, "reopen")
@@ -1546,6 +1550,8 @@ async function doDone(key: string) {
     render();
     return;
   }
+  play("done");
+  await slideAway(key);
   moveSelectionOff([key]);
   const h = await actions.perform([{ id: newId(), kind: "done", key, payload: {} }], { onPatched: render });
   const p = h.posted[0];
@@ -1557,6 +1563,46 @@ async function doDone(key: string) {
   }
   if (p) showToast(`Done: ${it.title}`, undoing(h), offersTell(it, repos()) ? key : undefined);
   await refresh();
+  if (p && allClear()) play("clear");
+}
+
+/** Whether the list on screen has nothing left open. */
+function allClear(): boolean {
+  const groups = currentGroups();
+  return groups.length > 0 && !groups.some((g) => g.items.some(isOpen));
+}
+
+/** Keys whose rows are sliding away; a render meanwhile draws them hidden. */
+const leaving = new Set<string>();
+const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Slides a row off to the right over the done colour, then folds it shut. It
+ * slides on from wherever a swipe let go. Resolves at once where motion is
+ * reduced or the row is not on screen.
+ */
+async function slideAway(key: string): Promise<void> {
+  const li = document.querySelector<HTMLElement>(`#list .row[data-key="${CSS.escape(key)}"]`);
+  const fg = li?.querySelector<HTMLElement>(".row-fg");
+  if (!li || !fg) return;
+  if (!li.getClientRects().length || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    fg.style.transform = "";
+    li.classList.remove("swiping");
+    delete li.dataset.swipe;
+    return;
+  }
+  leaving.add(key);
+  li.dataset.swipe = "done";
+  li.classList.add("swiping", "leaving");
+  void fg.offsetWidth;
+  fg.style.transform = "translateX(105%)";
+  await wait(SLIDE_MS);
+  li.style.height = `${li.offsetHeight}px`;
+  void li.offsetHeight;
+  li.classList.add("folding");
+  li.style.height = "0px";
+  await wait(FOLD_MS);
+  leaving.delete(key);
 }
 
 /**
@@ -1581,12 +1627,14 @@ function doDismiss(key: string) {
 async function doRestore(key: string) {
   const it = byKey(key);
   if (!it || isOpen(it) || !allows(it, "reopen")) return;
+  play("undo");
   await closing([{ id: newId(), kind: "reopen", key, payload: {} }], `Restored: ${it.title}`);
 }
 
 async function doReopen(key: string) {
   const it = byKey(key);
   if (!it || isOpen(it) || !allows(it, "reopen")) return;
+  play("undo");
   await actions.perform([{ id: newId(), kind: "reopen", key, payload: {} }], { onPatched: render });
   await refresh();
 }
@@ -1600,6 +1648,7 @@ function doSnooze(keys: string[], until: Date) {
     acts.push({ id: newId(), kind: "snooze", key, payload });
   }
   if (!acts.length) return;
+  play("snooze");
   moveSelectionOff(keys);
   const label = fmtWhen(until, now());
   const text = acts.length > 1 ? `Snoozed ${acts.length} tasks to ${label}` : `Snoozed to ${label}`;
@@ -1688,6 +1737,7 @@ async function bulkDone() {
   if (kept) showToast(kept === 1 ? "One task has open sub-tasks and stays open." : `${kept} tasks have open sub-tasks and stay open.`);
   if (!its.length) return;
   const keys = its.map((i) => i.key);
+  play("done");
   moveSelectionOff(keys);
   const h = await actions.perform(
     keys.map((key) => ({ id: newId(), kind: "done", key, payload: {} })),
@@ -2184,6 +2234,7 @@ async function submitQuickAdd() {
   const { title } = add.qa;
   const { wakes } = add;
   if (await post(add.action)) {
+    play("add");
     input.value = "";
     qaListTouched = false;
     qaAsk = null;
@@ -2398,6 +2449,7 @@ function onClick(e: MouseEvent) {
       if (t?.undo) {
         S.toast = null;
         renderToast();
+        play("undo");
         void t.undo();
       }
       break;
@@ -2656,7 +2708,12 @@ function setupSwipe(list: HTMLElement) {
     const wasSwiping = swiping;
     const dist = dx;
     start.li.classList.remove("armed");
-    reset();
+    // A done swipe leaves the row where the finger let go, so it slides on from there.
+    if (wasSwiping && dist >= SWIPE_THRESHOLD) {
+      start = null;
+      swiping = false;
+      dx = 0;
+    } else reset();
     if (!wasSwiping) return;
     swipeEnded = Date.now();
     if (dist >= SWIPE_THRESHOLD) doDone(key);

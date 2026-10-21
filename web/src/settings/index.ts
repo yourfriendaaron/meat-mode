@@ -15,3 +15,4 @@ import "./profile.ts";
 import "./reminders.ts";
 import "./runs.ts";
 import "./setup.ts";
+import "./sound.ts";
