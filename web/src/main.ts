@@ -145,6 +145,8 @@ const S = {
   /** The phone's menu drawer, which holds the sidebar. */
   menuOpen: false,
   qaOpen: false,
+  /** Whether Today shows the Later section's rows; folded, it shows one summary line. */
+  laterOpen: false,
   toast: null as Toast | null,
   auth: null as Session | null,
   loginError: "",
@@ -434,7 +436,8 @@ function actionLabel(a: Action): string {
 /**
  * An item's chips. In the detail (`detail`) a tag chip is a button that
  * filters the list by it; on a row it sits inside the row's button, so it is
- * text that a tap on it routes to the same filter.
+ * text that a tap on it routes to the same filter. A row shows New and the
+ * date apart from its chips: see attentionDot and whenHTML.
  */
 function chipsFor(item: Item, opts: { list: boolean; nested?: boolean; detail?: boolean }): string {
   const n = now();
@@ -446,13 +449,13 @@ function chipsFor(item: Item, opts: { list: boolean; nested?: boolean; detail?: 
     const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
     out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
   }
-  const att = attention(item, user());
-  if (att === "new") out.push('<span class="chip chip-new">New</span>');
-  if (att === "reply") out.push('<span class="chip chip-new">New reply</span>');
+  if (opts.detail) {
+    const att = attention(item, user());
+    if (att) out.push(`<span class="chip chip-new">${ATTENTION_TEXT[att]}</span>`);
+  }
   const prio = priorityChip(item.priority);
   if (prio) out.push(`<span class="chip ${item.priority === 0 ? "chip-urgent" : "chip-high"}">${esc(prio)}</span>`);
-  const dc = dateChip(item, n);
-  if (dc) out.push(`<span class="chip chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>`);
+  if (opts.detail) out.push(whenHTML(item, "chip"));
   if (item.repeat) out.push(`<span class="chip chip-repeat">${ICON.repeat}${esc(repeatLabel(item.repeat, n))}</span>`);
   if (isWontDo(item)) out.push('<span class="chip chip-wontdo">Won\'t do</span>');
   if (agent && item.createdBy) out.push(`<span class="chip chip-agent">${esc(item.createdBy)}</span>`);
@@ -474,6 +477,20 @@ function chipsFor(item: Item, opts: { list: boolean; nested?: boolean; detail?: 
     );
   }
   return out.join("");
+}
+
+const ATTENTION_TEXT = { new: "New", reply: "New reply" } as const;
+
+/** A row's New or New reply: a dot before the title, its words there for screen readers. */
+function attentionDot(item: Item): string {
+  const att = attention(item, user());
+  return att ? `<span class="chip chip-new attn"><span class="attn-text">${ATTENTION_TEXT[att]}</span></span>` : "";
+}
+
+/** The item's date, time or snooze, in its tone; a row shows it in a column of its own. */
+function whenHTML(item: Item, cls: string): string {
+  const dc = dateChip(item, now());
+  return dc ? `<span class="${cls} chip-${dc.tone}">${dc.snoozed ? ICON.moon : ""}${esc(dc.text)}</span>` : "";
 }
 
 function checkButton(item: Item, agent: boolean): string {
@@ -540,7 +557,7 @@ function rowHTML(item: Item, showList: boolean, nested = false): string {
   const run = agent && item.run ? item.run : null;
   return `<li class="row${nested ? " row-sub" : ""}${done ? " is-done" : ""}${leaving.has(item.key) ? " is-leaving" : ""}${picked ? " is-picked" : ""}${item.pending ? " is-pending" : ""}${run ? " has-run" : ""}"${run ? runAttrs(item) : ""} data-key="${esc(item.key)}">
 <div class="under" aria-hidden="true">${allows(item, "done") ? '<span class="u-done">Done</span>' : ""}${allows(item, "snooze") ? '<span class="u-snooze">Snooze</span>' : ""}</div>
-<div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-title">${esc(item.title)}</span><span class="chips">${chipsFor(item, { list: showList && !nested, nested })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</button>${
+<div class="row-fg">${run?.state === "working" ? TRACER : ""}${checkButton(item, agent)}<button class="row-body" data-act="open" data-key="${esc(item.key)}"><span class="row-main"><span class="row-head">${attentionDot(item)}<span class="row-title">${esc(item.title)}</span></span><span class="chips">${chipsFor(item, { list: showList && !nested, nested })}</span>${run ? runLineHTML(item, false) : ""}${statusLine(item)}</span>${whenHTML(item, "chip row-when")}</button>${
     done && allows(item, "reopen")
       ? isDeleted(item)
         ? `<button class="btn btn-small" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>`
@@ -616,7 +633,9 @@ function renderMain() {
     return;
   }
   const groups = currentGroups();
-  const showList = !S.view.startsWith("list:");
+  // A row names its list only when the rows come from more than one.
+  const showList = !S.view.startsWith("list:") && new Set(groups.flatMap((g) => g.items.map(repoKey))).size > 1;
+  const agenda = S.view === "today" && !searching() && !filtering();
   if (!groups.length) {
     const none = searching()
       ? "No matches."
@@ -640,12 +659,35 @@ function renderMain() {
           g.id === "pastdue" && g.items.filter((i) => allows(i, "snooze")).length > 1
             ? `<button class="btn btn-small btn-ghost" data-act="snooze-all">${ICON.moon}Snooze all to tomorrow</button>`
             : "";
-        return `<section class="group group-${g.id}" aria-labelledby="g-${g.id}"><div class="group-head"><h2 id="g-${g.id}">${esc(g.label)} <span class="group-count">${g.items.length}</span></h2>${extra}</div><ul class="rows">${g.items
+        // Today's own groups stand out as a card; Later folds to one line until opened.
+        const focus = agenda && FOCUS_GROUPS.includes(g.id) ? " group-focus" : "";
+        if (agenda && g.id === "later") {
+          const open = S.laterOpen || S.selecting;
+          return `<section class="group group-later${focus}" aria-labelledby="g-later"><div class="group-head"><h2 id="g-later"><button class="later-toggle" data-act="later" aria-expanded="${open}"><span class="later-label">${esc(g.label)} <span class="group-count">${g.items.length}</span></span>${open ? "" : laterSummary(g.items)}${ICON.right}</button></h2></div>${
+            open ? `<ul class="rows">${g.items.map((i) => rowHTML(i, showList, g.nested?.has(i.key))).join("")}</ul>` : ""
+          }</section>`;
+        }
+        return `<section class="group group-${g.id}${focus}" aria-labelledby="g-${g.id}"><div class="group-head"><h2 id="g-${g.id}">${esc(g.label)} <span class="group-count">${g.items.length}</span></h2>${extra}</div><ul class="rows">${g.items
           .map((i) => rowHTML(i, showList, g.nested?.has(i.key)))
           .join("")}</ul></section>`;
       })
       .join("") + (S.view === "deleted" && !searching() ? '<p class="history-note">Deleted items are removed 7 days after you delete them.</p>' : ""),
   );
+}
+
+/** Today's groups that show as a card above the rest. */
+const FOCUS_GROUPS: Group["id"][] = ["pastdue", "today", "evening"];
+
+/** Folded Later's line: what in it wants attention, and when the next one is. */
+function laterSummary(list: Item[]): string {
+  const replies = list.filter((i) => attention(i, user()) === "reply").length;
+  const news = list.filter((i) => attention(i, user()) === "new").length;
+  const parts: string[] = [];
+  if (replies) parts.push(`<span class="later-attn">${replies} new ${replies === 1 ? "reply" : "replies"}</span>`);
+  if (news) parts.push(`<span class="later-attn">${news} new</span>`);
+  const next = list.map((i) => dateChip(i, now())).find((d) => d);
+  if (next) parts.push(`next ${esc(next.text)}`);
+  return parts.length ? `<span class="later-sum">${parts.join(" · ")}</span>` : "";
 }
 
 // ---------- render: month ----------
@@ -2410,6 +2452,10 @@ function onClick(e: MouseEvent) {
       break;
     case "sub-remove":
       void removeSubtask(key);
+      break;
+    case "later":
+      S.laterOpen = !S.laterOpen;
+      render();
       break;
     case "snooze-all":
       doSnooze(

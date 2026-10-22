@@ -86,6 +86,7 @@ test("Today view: today's agenda from every list, then the rest of the personal 
     item({ title: "Agent closed", status: "closed", closedAt: t(14, 8), repo: "garden" }),
     item({ title: "Undated" }),
     item({ title: "Agent undated", repo: "garden" }),
+    item({ title: "Far off", dueAt: t(30, 9) }),
   ];
   const groups = buildView("today", items, now);
   assert.deepEqual(
@@ -95,7 +96,8 @@ test("Today view: today's agenda from every list, then the rest of the personal 
       ["Today", ["Morning", "Noon"]],
       ["This evening", ["Evening"]],
       ["Tomorrow", ["Tomorrow"]],
-      ["No date", ["Undated"]],
+      ["Any time", ["Undated"]],
+      ["Later", ["Far off"]],
       ["Done today", ["Closed", "Agent closed"]],
     ],
   );

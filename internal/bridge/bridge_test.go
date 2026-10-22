@@ -109,7 +109,13 @@ func (w *world) start() *Bridge {
 	if w.bridge != nil {
 		w.bridge.Journal.Close()
 	}
+	// A parallel test's fork can hold a copy of the closed lock's descriptor
+	// until its child execs, so the lock may stay taken for a moment.
 	j, err := OpenJournal(w.state)
+	for end := time.Now().Add(5 * time.Second); errors.Is(err, errLocked) && time.Now().Before(end); {
+		time.Sleep(20 * time.Millisecond)
+		j, err = OpenJournal(w.state)
+	}
 	if err != nil {
 		w.t.Fatal(err)
 	}

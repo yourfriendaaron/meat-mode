@@ -718,18 +718,79 @@ select.qa-pill {
   padding: 10px 16px 6px;
 }
 .group-head h2 {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--role-soft);
+  color: var(--role-fg);
 }
 .group-pastdue .group-head h2 {
   color: var(--role-overdue);
 }
 .group-count {
-  font-weight: 500;
+  font-weight: 400;
   margin-left: 4px;
+  color: var(--role-soft);
+}
+/* Today's own groups: a card with larger titles, on the pane surface so coloured dates keep their contrast. */
+.group-focus {
+  margin: 8px 12px 0;
+  border: 1px solid var(--role-line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--role-pane);
+}
+.group-focus + .group-focus {
+  margin-top: 12px;
+}
+.group-focus .group-head h2 {
+  font-size: 18px;
+}
+.group-focus .row-fg {
+  background: var(--role-pane);
+}
+.group-focus .row:last-child {
+  border-bottom: 0;
+}
+.group-focus .row-title {
+  font-size: 17px;
+  font-weight: 500;
+}
+/* Folded Later on Today: one line that opens it. */
+.group-later .group-head h2 {
+  flex: 1;
+}
+.later-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.later-toggle svg {
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  color: var(--role-soft);
+  transition: transform 0.15s ease;
+}
+.later-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.later-sum {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--role-soft);
+}
+.later-attn {
+  color: var(--role-action);
+  font-weight: 600;
 }
 .rows {
   list-style: none;
@@ -851,13 +912,35 @@ select.qa-pill {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 5px;
+  gap: 12px;
   padding: 0;
   border: 0;
   background: transparent;
   text-align: left;
+}
+.row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+/* The date column: right-aligned, so dates read down the list. */
+.row .row-when {
+  flex: none;
+  margin-left: auto;
+  font-size: 13px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.row .row-when.chip-date {
+  color: var(--role-soft);
+}
+.row .row-when.chip-soon,
+.row .row-when.chip-overdue {
+  font-weight: 600;
 }
 .row-title {
   overflow-wrap: anywhere;
@@ -900,6 +983,38 @@ select.qa-pill {
 .chip svg {
   width: 12px;
   height: 12px;
+}
+/* On a row the details are one quiet line of text, not pills. */
+.row .chips {
+  gap: 2px 12px;
+}
+.row .chips:empty {
+  display: none;
+}
+.row .chip {
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  font-size: 12.5px;
+}
+/* New or New reply: a dot before the title. */
+.row .attn {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--role-action);
+  vertical-align: 2px;
+}
+.attn-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .chip-overdue {
   color: var(--role-overdue);
