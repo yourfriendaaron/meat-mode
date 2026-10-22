@@ -69,6 +69,8 @@ test("a tag chip filters every list by it, until the filter is cleared", async (
   await page.keyboard.press("Escape");
   await expect(page.locator("#tagbar")).toBeHidden();
   await expect(page.locator("#view-title")).toHaveText("Today");
+  // Today folds Later, where the item is.
+  await page.getByRole("button", { name: /^Later/ }).click();
   await row(page, "Plan the garden layout").locator(".chip-tag", { hasText: "weekend" }).click();
   await expect(titles(page)).toHaveText(["Plan the garden layout"]);
   await page.locator(".sidebar").getByRole("button", { name: "Upcoming" }).click();
@@ -169,7 +171,8 @@ test.describe("phone", () => {
     await expect(bar).toBeHidden();
     await expect(page.locator("#view-title")).toHaveText("Today");
 
-    // From the detail sheet, which makes way for the list.
+    // From the detail sheet, which makes way for the list. Today folds Later, where the item is.
+    await page.getByRole("button", { name: /^Later/ }).tap();
     await row(page, "Plan the garden layout").locator(".row-title").tap();
     await page.locator("#detail").getByRole("button", { name: "Show items tagged weekend" }).tap();
     await expect(page.locator("#app")).not.toHaveClass(/detail-open/);

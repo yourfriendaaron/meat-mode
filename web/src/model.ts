@@ -27,7 +27,8 @@ export const GROUP_LABELS: Record<GroupId, string> = {
 };
 
 const VIEW_GROUPS: Record<"today" | "upcoming" | "all", GroupId[]> = {
-  today: ["pastdue", "today", "evening", "tomorrow", "week", "later", "nodate", "done"],
+  // Undated to-dos are things to do any time, so Today shows them before the far-off ones.
+  today: ["pastdue", "today", "evening", "tomorrow", "week", "nodate", "later", "done"],
   upcoming: ["tomorrow", "week", "later"],
   all: ["pastdue", "today", "evening", "tomorrow", "week", "later", "nodate", "done"],
 };
@@ -331,7 +332,8 @@ export function buildView(view: ViewId, items: Item[], now: Date): Group[] {
         nested.add(s.key);
       }
     }
-    groups.push({ id, label: GROUP_LABELS[id], items: rows, ...(nested.size ? { nested } : {}) });
+    const label = view === "today" && id === "nodate" ? "Any time" : GROUP_LABELS[id];
+    groups.push({ id, label, items: rows, ...(nested.size ? { nested } : {}) });
   }
   return groups;
 }

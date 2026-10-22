@@ -23,6 +23,12 @@ button.chip-tag:hover {
 .row .chip-tag {
   cursor: pointer;
 }
+.row .chip-tag svg {
+  display: none;
+}
+.row .chip-tag::before {
+  content: "#";
+}
 
 .tagbar {
   display: flex;

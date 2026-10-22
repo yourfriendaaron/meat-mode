@@ -33,6 +33,26 @@ test("navigates views and lists", async ({ page, hub }) => {
   void hub;
 });
 
+test("Today folds Later to one line after Any time, and opens it on a click or for Select", async ({ page, hub }) => {
+  hub.items.push({ ...structuredClone(hub.find("hub/personal/pe-5")!), key: "hub/personal/pe-90", id: "pe-90", title: "Book a haircut", dueAt: null });
+  await openApp(page);
+  await expect(groupLabels(page)).toHaveText([/Past due/, /^Today/, /This evening/, /Tomorrow/, /This week/, /Any time/, /Later/, /Done today/]);
+  await expect(page.locator(".group-pastdue, .group-today, .group-evening")).toHaveClass([/group-focus/, /group-focus/, /group-focus/]);
+  const later = page.getByRole("button", { name: /^Later/ });
+  await expect(later).toHaveAttribute("aria-expanded", "false");
+  await expect(later).toContainText("next Fri, Oct 23");
+  await expect(page.locator(".group-later .row")).toHaveCount(0);
+  await later.click();
+  await expect(later).toHaveAttribute("aria-expanded", "true");
+  await expect(row(page, "Plan the garden layout").locator(".row-when")).toHaveText("Fri, Oct 23");
+  await later.click();
+  await expect(page.locator(".group-later .row")).toHaveCount(0);
+  // Select picks from every row, so it shows Later's.
+  await page.getByRole("button", { name: "Select" }).click();
+  await expect(row(page, "Plan the garden layout")).toBeVisible();
+  await axe(page);
+});
+
 test("opens detail, marks it seen, and saves a note", async ({ page, hub }) => {
   await openApp(page);
   await page.getByRole("button", { name: /From agents/ }).click();

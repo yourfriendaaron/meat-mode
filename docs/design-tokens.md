@@ -85,7 +85,7 @@ Do: show a run's state on its surface plus one line of text in the edge colour. 
 | `--role-bg` | The page background. |
 | `--role-sunk` | A surface set below the page: the sidebar, the tab bar, the bulk bar, command boxes. |
 | `--role-raise` | A surface raised above the page: buttons, fields. |
-| `--role-pane` | Panes and the open row: darker than the page in the dark theme, white in the light one, so coloured chip text keeps its contrast. |
+| `--role-pane` | Panes, the open row and the Today card: darker than the page in the dark theme, white in the light one, so coloured chip text keeps its contrast. |
 | `--role-hover` | A row or button under the pointer. |
 | `--role-line` | Borders and dividers. |
 | `--role-fg` | Body text. |
