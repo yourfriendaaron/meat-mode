@@ -12,8 +12,13 @@ test("navigates views and lists", async ({ page, hub }) => {
   await expect(page.locator(".dayload")).toContainText("4 open today");
   await expect(page.getByRole("button", { name: /From agents/ })).toContainText("2 new");
 
-  await page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Upcoming/ }).click();
-  await expect(page.locator("#view-title")).toHaveText("Upcoming");
+  // Calendar opens on the month; its List shows the same items by group.
+  const calendar = page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Calendar/ });
+  await calendar.click();
+  await expect(page.locator("#view-title")).toHaveText("Calendar");
+  await expect(page.locator("#month-h")).toBeVisible();
+  await page.getByRole("group", { name: "Show Calendar as" }).getByRole("button", { name: "List" }).click();
+  await expect(calendar).toHaveAttribute("aria-current", "page");
   await expect(groupLabels(page)).toHaveText([/Tomorrow/, /This week/, /Later/]);
   await expect(row(page, "Buy seeds").locator(".chip-snoozed")).toHaveText("Tomorrow 9:00");
   await expect(row(page, "Plan the garden layout").locator(".chip-date")).toHaveText("Fri, Oct 23");

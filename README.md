@@ -16,7 +16,7 @@ Style guide for this page.
 
 **One to-do list for the things only you can do: your own to-dos and the tasks your AI agents hand you, on your phone and your desktop.**
 
-![The Today list on a desktop: personal to-dos such as "Water the plants", with a garden tag, and "Call Sam about the weekend" sit beside a task from an agent, "Order compost for the beds". The agent's task "Approve the new footer text" is open on the right with the agent's reason, the command that lets agents work in that repo, Done and Won't do buttons, a sub-task box, and a Snooze list with one row per choice, such as "In 1 hour 11:00" and "Tomorrow 9:00".](docs/images/desktop-today-detail.png)
+![The Today list on a desktop: Past due, Today and This evening sit in cards at the top, each row with its time or how overdue it is on the right. Personal to-dos such as "Water the plants", tagged #garden, and "Call Sam about the weekend" sit beside a task from an agent, "Order compost for the beds". The agent's task "Approve the new footer text" is open on the right with the agent's reason, the command that lets agents work in that repo, Done and Won't do buttons, a sub-task box, and a Snooze list with one row per choice, such as "In 1 hour 11:00" and "Tomorrow 9:00".](docs/images/desktop-today-detail.png)
 
 Your AI agents keep their work in an issue tracker that lives in your code repos, such as [beads](https://github.com/gastownhall/beads). When an agent needs you for something it cannot do itself (approve a text, sign in somewhere, make a call), it files a task labelled `human`. Meat Mode gathers those tasks from every repo and every machine into one list, next to your own to-dos. You tick them off, snooze them, say no, or reply with a note, and your answer goes back to the agent in its tracker. In the repos you allow, one tap also wakes an agent to work on a task, and you watch how it goes on the task itself.
 
@@ -52,7 +52,7 @@ flowchart LR
 Each task from an agent shows why the agent needs you, which project it came from and the conversation so far. Tap **Done** or **Won't do**, snooze it to tonight or next week where its tracker can, or leave a note. The agent reads your note in its tracker, signed with your name, and can reply. Only the repos you switch on in Settings send tasks.
 
 <p>
-  <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme, grouped into Past due, Today, This evening, Tomorrow and This week. &quot;Call Sam about the weekend&quot; carries a weekend tag, the agent's task &quot;Order compost for the beds&quot; has a New badge, a menu button opens the lists and other views, and a tab bar with Today, Upcoming and Agents sits at the bottom.">
+  <img src="docs/images/phone-today-dark.png" width="300" alt="The Today list on a phone in the dark theme. Past due, Today and This evening sit in cards at the top, with each time on the right, and Tomorrow and This week follow. &quot;Call Sam about the weekend&quot; is tagged #weekend, a dot before the agent's task &quot;Order compost for the beds&quot; marks it as new, a menu button opens the lists and other views, and a tab bar with Today, Calendar and Agents sits at the bottom.">
   <img src="docs/images/phone-detail.png" width="300" alt="The to-do &quot;Water the plants&quot; open on a phone in the light theme: it repeats every day and carries a garden tag, and offers Done, Edit and Delete. Under Sub-tasks, one of two is ticked, each with a remove button, above a box to add another; Files offers Attach a file, Take a photo and Choose a photo, then the start of the Snooze list: In 1 hour at 11:00, This evening at 18:00, Tomorrow at 9:00 and This weekend on Saturday at 10:00.">
 </p>
 
@@ -80,7 +80,7 @@ Agents work only where you let them. They start off in every repo, and you switc
 
 ### Type a to-do the way you would say it
 
-Quick add reads dates, times and repeats as you type and shows you what it understood before you press Enter. "Water the plants every sunday at 8pm until nov 29" becomes a weekly to-do with an end date. Add `#garden` to put it on another list and `@weekend` to give it a tag. Tags show as chips on the row, and you can filter the list by one or search for it. An agent's task shows the labels its tracker gives it, read-only.
+Quick add reads dates, times and repeats as you type and shows you what it understood before you press Enter. "Water the plants every sunday at 8pm until nov 29" becomes a weekly to-do with an end date. Add `#garden` to put it on another list and `@weekend` to give it a tag. Tags show on the row as #garden, and you can filter the list by one or search for it. An agent's task shows the labels its tracker gives it, read-only.
 
 ![Quick add on a desktop with "Water the plants every sunday at 8pm until nov 29" typed in. The words "every sunday", "at 8pm" and "until nov 29" are highlighted, and chips below read "Due Sun, Oct 18 20:00" and "Every week on Sun until Nov 29".](docs/images/quick-add-repeat.png)
 
@@ -98,9 +98,9 @@ On your own to-dos and projects you can attach files: a photo of the broken part
 
 ### Plan your month
 
-Switch **Upcoming** from **List** to **Month** to see each day's dated items, with repeating to-dos on every later date of their series. To move something to another day, drag it on a desktop, or pick the day in **Move**, which a long press opens on a touch screen. Your own to-do keeps its time of day on its new date. An agent's task moves by a snooze, where its tracker can snooze.
+**Calendar** shows each day's dated items on a month, with repeating to-dos on every later date of their series. Its **List** shows the same items under Tomorrow, This week and Later. To move something to another day, drag it on a desktop, or pick the day in **Move**, which a long press opens on a touch screen. Your own to-do keeps its time of day on its new date. An agent's task moves by a snooze, where its tracker can snooze.
 
-![The Upcoming view as a month on a desktop, October 2026. Today, the 14th, is circled; the 15th is selected and lists the agent's task "Approve the new footer text", "Buy seeds" whose snooze ends then, and "Put the bins out" at 19:00. The bins come back every week, shown as dashed entries with a repeat icon on the 22nd and 29th, and other to-dos sit on their days through the month.](docs/images/month-view.png)
+![Calendar showing a month on a desktop, October 2026. Today, the 14th, is circled; the 15th is selected and lists the agent's task "Approve the new footer text", "Buy seeds" whose snooze ends then, and "Put the bins out" at 19:00. The bins come back every week, shown as dashed entries with a repeat icon on the 22nd and 29th, and other to-dos sit on their days through the month.](docs/images/month-view.png)
 
 ### Take your data with you
 
