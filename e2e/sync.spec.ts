@@ -175,7 +175,14 @@ test("quick add with a date and #list creates a bead in that repo", async ({ pag
   w.ids.set("Buy compost", bead!.id);
   const full = await w.show(garden, bead!.id);
   expect(full.labels).toContain("human");
-  const add = (await actions(w)).find((a) => a.kind === "add" && a.repo === "projects/garden");
+  // The bead lands before the bridge reports the result to the hub.
+  let add: Action | undefined;
+  await expect
+    .poll(async () => {
+      add = (await actions(w)).find((a) => a.kind === "add" && a.repo === "projects/garden");
+      return add?.status;
+    })
+    .toBe("applied");
   expect(add).toMatchObject({ bridge: "laptop", status: "applied", beadId: bead!.id });
   expect(Date.parse(full.due_at!)).toBe(Date.parse(add!.payload.due!));
   const tomorrow9 = new Date();
@@ -425,8 +432,8 @@ test("the personal list works with every bridge stopped and survives a hub resta
     expect(dentist!.comments.map((c) => [c.author, c.text])).toEqual([[`${USER}-app`, "Ask about a morning slot."]]);
     expect(books).toMatchObject({ status: "closed" });
   };
-  await expect.poll(async () => (await personal()).find((i) => i.title === "Book the dentist")?.deferUntil).toBeTruthy();
-  await check();
+  // Done posts once its row has slid away, so it can land after the note and the snooze.
+  await expect(check).toPass();
   const applied = (await actions(w)).filter((a) => a.bridge === "hub");
   expect(applied.length).toBe(5);
   expect(applied.every((a) => a.status === "applied")).toBe(true);
