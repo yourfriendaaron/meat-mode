@@ -41,6 +41,9 @@ type AgentConfig struct {
 	Max Limits
 	// Saved are the limits the app set, as bridge.json keeps them.
 	Saved SavedLimits
+	// KeepWorktrees is how long a task's worktree stays after its last run
+	// ended, while the task is still listed.
+	KeepWorktrees time.Duration
 }
 
 // Limits are the four limits on agent runs.
@@ -64,6 +67,8 @@ func DefaultAgentConfig() AgentConfig {
 		RunsPerTask: 10,
 		Concurrent:  2,
 		Max:         defaultMax,
+
+		KeepWorktrees: 24 * time.Hour,
 	}
 }
 
@@ -110,9 +115,9 @@ func (c AgentConfig) RunLimits() *api.RunLimits {
 }
 
 // AgentConfigFromEnv reads MEAT_MODE_AGENT_HARNESS, _COMMAND, _NAME,
-// _TIMEOUT, _BUDGET_USD, _RUNS_PER_TASK and _CONCURRENT over the defaults,
-// and the ceilings _MAX_BUDGET_USD, _MAX_TIMEOUT, _MAX_RUNS_PER_TASK and
-// _MAX_CONCURRENT.
+// _TIMEOUT, _BUDGET_USD, _RUNS_PER_TASK, _CONCURRENT and _KEEP_WORKTREES
+// over the defaults, and the ceilings _MAX_BUDGET_USD, _MAX_TIMEOUT,
+// _MAX_RUNS_PER_TASK and _MAX_CONCURRENT.
 func AgentConfigFromEnv(getenv func(string) string) (AgentConfig, error) {
 	c := DefaultAgentConfig()
 	if v := strings.TrimSpace(getenv("MEAT_MODE_AGENT_HARNESS")); v != "" {
@@ -133,6 +138,13 @@ func AgentConfigFromEnv(getenv func(string) string) (AgentConfig, error) {
 			return c, fmt.Errorf("MEAT_MODE_AGENT_TIMEOUT must be a positive duration such as 30m, not %q", v)
 		}
 		c.Timeout = d
+	}
+	if v := getenv("MEAT_MODE_AGENT_KEEP_WORKTREES"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return c, fmt.Errorf("MEAT_MODE_AGENT_KEEP_WORKTREES must be a positive duration such as 24h, not %q", v)
+		}
+		c.KeepWorktrees = d
 	}
 	if v := getenv("MEAT_MODE_AGENT_BUDGET_USD"); v != "" {
 		f, err := strconv.ParseFloat(v, 64)

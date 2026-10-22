@@ -404,6 +404,7 @@ The bridge reads these variables (see `.env.example`). The four limits, the time
 | `MEAT_MODE_AGENT_BUDGET_USD` | `2` | The most one run may spend. A harness that caps its own spending gets it (Claude Code as `--max-budget-usd`); for one that reports its cost the bridge stops the run past it; a harness that reports no cost has the time limit only, and the app says so. |
 | `MEAT_MODE_AGENT_RUNS_PER_TASK` | `10` | How many runs one task may have, ever. Nothing resets the count. |
 | `MEAT_MODE_AGENT_CONCURRENT` | `2` | How many runs may be live at once on the machine. |
+| `MEAT_MODE_AGENT_KEEP_WORKTREES` | `24h` | How long a task's worktree stays after its latest run ended (see [Where runs live](#where-runs-live)). |
 | `MEAT_MODE_AGENT_MAX_TIMEOUT` | `4h` | The longest time limit the app can set. |
 | `MEAT_MODE_AGENT_MAX_BUDGET_USD` | `20` | The highest budget the app can set. |
 | `MEAT_MODE_AGENT_MAX_RUNS_PER_TASK` | `50` | The most runs per task the app can set. |
@@ -447,9 +448,15 @@ Each task's runs share a Git worktree on the branch `meat-mode/<bead id>`, in th
 
 - `worktrees/<repo>/<bead id>/`: the worktree. The agent is told never to push, so merge or push its commits yourself.
 - `logs/<repo>/<bead id>/<run id>.jsonl`: the raw stream of each run, with what the agent wrote on its error output next to it in `<run id>.stderr`.
-- `runs.json`: each task's session id and the harness it belongs to, run count and latest run. To look at a finished Claude Code conversation yourself, run `claude --resume <session id>` inside the worktree.
+- `runs.json`: each task's session id and the harness it belongs to, run count and latest run. To look at a finished Claude Code conversation yourself, run `claude --resume <session id>` inside the worktree; if the bridge has removed it, make it again first with `git worktree add <path> meat-mode/<bead id>` from the repo.
 
-When a task leaves the synced set (7 days after it closed, or when it is deleted or loses its `human` label), the bridge removes its worktree if Git calls it clean, and its branch if it has no unmerged commits. A worktree with changes or untracked files, and a branch with unmerged commits, stay for you.
+The bridge removes worktrees no run needs, at start and every 10 minutes:
+
+- A task's worktree, once its latest run ended a day ago (`MEAT_MODE_AGENT_KEEP_WORKTREES`). The task keeps its branch and its conversation: the next ask makes the worktree again at the same path on the same branch, and the agent carries on where it was. Files Git does not track are gone, so the agent installs its dependencies again.
+- A task's worktree and branch once the task leaves the synced set (7 days after it closed, or when it is deleted or loses its `human` label). The branch goes only when the repo's default branch (origin's, or `main` or `master`) holds every commit on it.
+- A folder under `worktrees/` that `runs.json` does not name, once it is a day old, when it is on its task's `meat-mode/` branch.
+
+A worktree stays for you while it has changes, untracked files, or ignored files other than dependencies, caches and build output (such as `node_modules`, `.venv`, `target` or `dist`): an ignored `.env` keeps it. The bridge log says once why each one stays.
 
 ## Moving from a personal beads repo
 

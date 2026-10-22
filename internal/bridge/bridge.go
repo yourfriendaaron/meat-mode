@@ -20,6 +20,7 @@ const (
 	SyncEvery    = 30 * time.Second // how often it lists every synced repo
 	ScanEvery    = 5 * time.Minute  // how often it walks the roots for repos
 	RefreshEvery = 10 * time.Minute // full push even when nothing changed
+	CollectEvery = 10 * time.Minute // how often it removes worktrees no run needs
 	MaxBackoff   = 60 * time.Second
 )
 
@@ -173,6 +174,12 @@ func (b *Bridge) Run(ctx context.Context) error {
 	var changed <-chan struct{}
 	if b.Runner != nil {
 		changed = b.Runner.Changed()
+		collecting := make(chan struct{})
+		go func() {
+			defer close(collecting)
+			b.collect(ctx)
+		}()
+		defer func() { <-collecting }()
 	}
 	backoff := time.Duration(0)
 	next := time.Now()
@@ -198,6 +205,19 @@ func (b *Bridge) Run(ctx context.Context) error {
 		case <-time.After(time.Until(next)):
 		case <-changed:
 			b.flushRuns(ctx)
+		}
+	}
+}
+
+// collect removes the worktrees no run needs (see AgentRunner.Collect), at
+// start and every CollectEvery, until ctx ends.
+func (b *Bridge) collect(ctx context.Context) {
+	for {
+		b.Runner.Collect()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(CollectEvery):
 		}
 	}
 }

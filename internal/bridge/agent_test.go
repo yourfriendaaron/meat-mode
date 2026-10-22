@@ -20,19 +20,19 @@ func TestAgentConfigFromEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.Harness != "claude" || c.Command != nil || c.Name != "" || c.Timeout != 30*time.Minute || c.BudgetUSD != 2 ||
-		c.RunsPerTask != 10 || c.Concurrent != 2 {
+		c.RunsPerTask != 10 || c.Concurrent != 2 || c.KeepWorktrees != 24*time.Hour {
 		t.Errorf("defaults = %+v", c)
 	}
 	c, err = AgentConfigFromEnv(env(map[string]string{
 		"MEAT_MODE_AGENT_HARNESS": "claude", "MEAT_MODE_AGENT_COMMAND": "  my-agent  --flag value ", "MEAT_MODE_AGENT_NAME": "helper",
 		"MEAT_MODE_AGENT_TIMEOUT": "90s", "MEAT_MODE_AGENT_BUDGET_USD": "0.5",
-		"MEAT_MODE_AGENT_RUNS_PER_TASK": "3", "MEAT_MODE_AGENT_CONCURRENT": "1",
+		"MEAT_MODE_AGENT_RUNS_PER_TASK": "3", "MEAT_MODE_AGENT_CONCURRENT": "1", "MEAT_MODE_AGENT_KEEP_WORKTREES": "2h",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(c.Command, []string{"my-agent", "--flag", "value"}) || c.Name != "helper" || c.Timeout != 90*time.Second ||
-		c.BudgetUSD != 0.5 || c.RunsPerTask != 3 || c.Concurrent != 1 {
+		c.BudgetUSD != 0.5 || c.RunsPerTask != 3 || c.Concurrent != 1 || c.KeepWorktrees != 2*time.Hour {
 		t.Errorf("set = %+v", c)
 	}
 	// The command reaches the harness unchanged, as a setting written for
@@ -51,7 +51,7 @@ func TestAgentConfigFromEnv(t *testing.T) {
 	}
 	for k, v := range map[string]string{
 		"MEAT_MODE_AGENT_TIMEOUT": "soon", "MEAT_MODE_AGENT_BUDGET_USD": "-1",
-		"MEAT_MODE_AGENT_RUNS_PER_TASK": "0", "MEAT_MODE_AGENT_CONCURRENT": "two",
+		"MEAT_MODE_AGENT_RUNS_PER_TASK": "0", "MEAT_MODE_AGENT_CONCURRENT": "two", "MEAT_MODE_AGENT_KEEP_WORKTREES": "0s",
 	} {
 		if _, err := AgentConfigFromEnv(env(map[string]string{k: v})); err == nil || !strings.Contains(err.Error(), k) {
 			t.Errorf("%s=%s: err = %v", k, v, err)
