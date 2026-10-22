@@ -448,7 +448,7 @@ Each task's runs share a Git worktree on the branch `meat-mode/<bead id>`, in th
 
 - `worktrees/<repo>/<bead id>/`: the worktree. The agent is told never to push, so merge or push its commits yourself.
 - `logs/<repo>/<bead id>/<run id>.jsonl`: the raw stream of each run, with what the agent wrote on its error output next to it in `<run id>.stderr`.
-- `runs.json`: each task's session id and the harness it belongs to, run count and latest run. To look at a finished Claude Code conversation yourself, run `claude --resume <session id>` inside the worktree.
+- `runs.json`: each task's session id and the harness it belongs to, run count and latest run. To look at a finished Claude Code conversation yourself, run `claude --resume <session id>` inside the worktree; if the bridge has removed it, make it again first with `git worktree add <path> meat-mode/<bead id>` from the repo.
 
 The bridge removes worktrees no run needs, at start and every 10 minutes:
 

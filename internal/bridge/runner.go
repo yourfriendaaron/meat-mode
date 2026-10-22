@@ -92,6 +92,9 @@ type beadRecord struct {
 	Worktree string      `json:"worktree,omitempty"` // where its runs work
 	// Idle is when its latest run ended, kept after Run is dropped.
 	Idle *time.Time `json:"idle,omitempty"`
+	// Main is the repo's main checkout, where the bead's branch is, so the
+	// branch can go after its worktree.
+	Main string `json:"main,omitempty"`
 }
 
 // procRecord is a live run's process. Its pid is also its process group.
@@ -488,6 +491,9 @@ func (r *AgentRunner) launch(req askRequest, rec *beadRecord, run *api.Run) (*li
 		rec.Session = ""
 	}
 	rec.Worktree = wt
+	if common, err := git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
+		rec.Main = filepath.Dir(common)
+	}
 	logDir := r.logDir(req.Repo.Name, req.BeadID)
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return nil, fmt.Errorf("cannot make the run log folder: %w", err)
@@ -1034,7 +1040,7 @@ func (r *AgentRunner) Collect() {
 		r.mu.Unlock()
 		return
 	}
-	now, keep := r.now(), r.Config.KeepWorktrees
+	now, keep := r.now(), cmp.Or(r.Config.KeepWorktrees, DefaultAgentConfig().KeepWorktrees)
 	root := filepath.Join(r.Dir, "worktrees")
 	var jobs []collectJob
 	named := map[string]bool{}
@@ -1079,7 +1085,7 @@ func (r *AgentRunner) collected(j collectJob, removed bool) {
 	defer r.mu.Unlock()
 	delete(r.removing, j.key)
 	if removed && j.left {
-		j.rec.Worktree, j.rec.Session = "", ""
+		j.rec.Worktree, j.rec.Session, j.rec.Main = "", "", ""
 	}
 	if req, ok := r.waiting[j.key]; ok {
 		delete(r.waiting, j.key)

@@ -67,6 +67,10 @@ func (r *AgentRunner) worktree(repo Repo, bead string) (path, cwd string, err er
 // It reports whether the worktree is gone.
 func (r *AgentRunner) removeWorktree(j collectJob) bool {
 	if !isDir(j.path) {
+		// An idle bead's folder went before the bead left the set.
+		if j.left && j.rec.Main != "" && isDir(j.rec.Main) {
+			r.dropBranch(j.rec.Main, j.bead)
+		}
 		return true
 	}
 	main, why := r.removable(j)
@@ -90,14 +94,23 @@ func (r *AgentRunner) removeWorktree(j collectJob) bool {
 	r.mu.Unlock()
 	r.log().Info("removed an agent worktree", "dir", j.path)
 	if j.left {
-		branch := worktreeBranch(j.bead)
-		if landed(main, branch) {
-			_, _ = git(main, "branch", "-D", "--", branch)
-		} else {
-			r.log().Info("keeping an agent branch with commits not on the default branch", "branch", branch)
-		}
+		r.dropBranch(main, j.bead)
 	}
 	return true
+}
+
+// dropBranch deletes the bead's branch in the main checkout main once the
+// default branch holds every commit on it.
+func (r *AgentRunner) dropBranch(main, bead string) {
+	branch := worktreeBranch(bead)
+	if _, err := git(main, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
+		return
+	}
+	if !landed(main, branch) {
+		r.log().Info("keeping an agent branch with commits not on the default branch", "branch", branch)
+		return
+	}
+	_, _ = git(main, "branch", "-D", "--", branch)
 }
 
 // removable returns the main checkout of j's worktree, and why it must stay,

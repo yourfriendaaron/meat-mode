@@ -749,6 +749,54 @@ func TestIdleWorktreeGoesAndComesBack(t *testing.T) {
 	}
 }
 
+func TestBranchGoesWhenTheBeadLeavesAfterAnIdleRemoval(t *testing.T) {
+	t.Parallel()
+	w, dir, id := agentWorld(t)
+	b := w.agentBridge(true, func(c *AgentConfig) { c.KeepWorktrees = time.Hour })
+	w.tick(b)
+	w.ask(b, "ask-1", id, "reply")
+	w.waitRun(b, id, settled)
+	later(b, 2*time.Hour)
+	b.Runner.Collect()
+	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/"+id); !strings.Contains(out, id) {
+		t.Fatalf("the branch went with the idle worktree: %q", out)
+	}
+	b.Runner.Listed("garden", map[string]string{})
+	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/*"); strings.Contains(out, id) {
+		t.Errorf("the merged branch of a bead that left the set stays: %q", out)
+	}
+	if rec := runOf(b, id); rec.Worktree != "" || rec.Session != "" || rec.Main != "" {
+		t.Errorf("record after the bead left = %+v", rec)
+	}
+}
+
+func TestBranchStaysUntilTheDefaultBranchHoldsIt(t *testing.T) {
+	t.Parallel()
+	w, dir, id := agentWorld(t)
+	b := w.agentBridge(true)
+	w.tick(b)
+	w.ask(b, "ask-1", id, "reply")
+	w.waitRun(b, id, settled)
+	wt := filepath.Join(w.state, "agents", "worktrees", "garden", id)
+	if err := os.WriteFile(filepath.Join(wt, "hose.txt"), []byte("Water the plants\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	beadsRun(t, wt, "git", "add", "hose.txt")
+	beadsRun(t, wt, "git", "-c", "user.name=Sam", "-c", "user.email=sam@example.com", "commit", "-q", "-m", "Hose")
+	// The main checkout sits on another branch that holds the commit; the
+	// default branch does not.
+	beadsRun(t, dir, "git", "switch", "-q", "-c", "greenhouse")
+	beadsRun(t, dir, "git", "-c", "user.name=Sam", "-c", "user.email=sam@example.com", "merge", "-q", "--no-edit", "meat-mode/"+id)
+
+	b.Runner.Listed("garden", map[string]string{})
+	if isDir(wt) {
+		t.Error("the clean worktree of a bead that left the set is still there")
+	}
+	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/*"); !strings.Contains(out, id) {
+		t.Errorf("a branch the default branch lacks was deleted: %q", out)
+	}
+}
+
 func TestIdleWorktreeKeepsFilesABuildCannotMake(t *testing.T) {
 	t.Parallel()
 	w, dir, id := agentWorld(t)
