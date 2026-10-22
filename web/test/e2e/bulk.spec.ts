@@ -115,7 +115,10 @@ test("Esc, Cancel and another view leave select mode; pages have no Select", asy
   await expect(select).toBeFocused();
 
   await select.click();
-  await page.locator(".sidebar").getByRole("button", { name: /Upcoming/ }).click();
+  await page.locator(".sidebar").getByRole("button", { name: /Calendar/ }).click();
+  // The month has no Select; Calendar's List does.
+  await expect(select).toBeHidden();
+  await page.getByRole("group", { name: "Show Calendar as" }).getByRole("button", { name: "List" }).click();
   await expect(bar(page)).toBeHidden();
   await expect(select).toBeVisible();
   for (const name of ["Completed", "Deleted", "Settings"]) {

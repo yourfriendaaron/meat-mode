@@ -35,8 +35,8 @@ test("tabs switch views; the menu shows every view, the lists and settings", asy
 
   const menuBtn = page.locator(".mhead").getByRole("button", { name: "Menu" });
   await expect(menuBtn).toBeVisible();
-  await tabs.getByRole("button", { name: "Upcoming" }).click();
-  await expect(page.locator("#view-title")).toHaveText("Upcoming");
+  await tabs.getByRole("button", { name: "Calendar" }).click();
+  await expect(page.locator("#view-title")).toHaveText("Calendar");
   await expect(menuBtn).toBeVisible();
   await noHorizontalScroll(page);
 
@@ -51,7 +51,7 @@ test("tabs switch views; the menu shows every view, the lists and settings", asy
   let drawer = await openMenu(page);
   await expect(menuBtn).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#scrim")).toBeVisible();
-  await expect(drawer.locator("#nav .nav-label")).toHaveText(["Today", "Upcoming", "From agents", "Everything", "Completed", "Deleted"]);
+  await expect(drawer.locator("#nav .nav-label")).toHaveText(["Today", "Calendar", "From agents", "Everything", "Completed", "Deleted"]);
   await expect(drawer.locator("#lists .nav-label")).toHaveText(["personal", "garden", "website"]);
   await noHorizontalScroll(page);
   await axe(page);

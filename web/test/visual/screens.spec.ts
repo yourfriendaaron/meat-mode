@@ -211,10 +211,9 @@ for (const size of Object.keys(SIZES) as Size[]) {
           const it = hub.find("hub/personal/pe-1")!;
           it.repeat = { every: "week", weekdays: [1, 4], timeZone: "UTC", start: it.dueAt! };
           await openApp(page);
-          await (size === "phone" ? page.locator("#tabs") : page.locator("#nav")).getByRole("button", { name: /Upcoming/ }).click();
           await Promise.all([
             page.waitForResponse((r) => r.url().includes("/api/occurrences")),
-            page.getByRole("group", { name: "Show Upcoming as" }).getByRole("button", { name: "Month" }).click(),
+            (size === "phone" ? page.locator("#tabs") : page.locator("#nav")).getByRole("button", { name: /Calendar/ }).click(),
           ]);
           await expect(page.locator(".mgrid")).toBeVisible();
           await shot(page, "month");

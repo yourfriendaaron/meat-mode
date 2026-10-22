@@ -23,6 +23,9 @@ button.chip-tag:hover {
 .row .chip-tag {
   cursor: pointer;
 }
+.row .chip-tag {
+  gap: 0;
+}
 .row .chip-tag svg {
   display: none;
 }

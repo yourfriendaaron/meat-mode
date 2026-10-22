@@ -85,7 +85,7 @@ import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
 import { leaveSettings, sectionsHTML } from "./settings/registry.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
-/** Completed and Deleted show the closed items the hub keeps for 7 days. Month shows Upcoming as a calendar. */
+/** Completed and Deleted show the closed items the hub keeps for 7 days. Month is Calendar's grid, upcoming its list. */
 type View = ViewId | "month" | "completed" | "deleted" | "settings" | "setup";
 
 /** Views that show a page in place of the task list. */
@@ -228,7 +228,7 @@ function viewTitle(v: View): string {
       return "Today";
     case "upcoming":
     case "month":
-      return "Upcoming";
+      return "Calendar";
     case "agents":
       return "From agents";
     case "all":
@@ -299,15 +299,15 @@ function renderNav() {
   const agentsWorking = working ? `<span class="sr">, ${working === 1 ? "an agent is" : `${working} agents are`} working</span>` : "";
   const upcoming = buildView("upcoming", all, n).reduce((s, g) => s + g.items.length, 0);
   const everything = all.filter(isOpen).length;
-  // The month is Upcoming drawn as a calendar, so Upcoming stays current.
-  const current = S.view === "month" ? "upcoming" : S.view;
+  // Calendar opens on the month; its List shows the same items as a list, so Calendar stays current.
+  const current = S.view === "upcoming" ? "month" : S.view;
   const entry = (v: View, label: string, icon: string, count: string) =>
     `<button class="nav-item" data-act="view" data-view="${esc(v)}"${current === v ? ' aria-current="page"' : ""}>${icon}<span class="nav-label">${label}</span>${count}</button>`;
   const plain = (c: number) => (c ? `<span class="count">${c}</span>` : "");
   setHTML(
     $("#nav"),
     entry("today", "Today", ICON.today, plain(openToday(all, n))) +
-      entry("upcoming", "Upcoming", ICON.upcoming, plain(upcoming)) +
+      entry("month", "Calendar", ICON.upcoming, plain(upcoming)) +
       entry("agents", "From agents", agentsIcon, agentsWorking + (agentNew ? `<span class="badge-new">${agentNew} new</span>` : "")) +
       entry("all", "Everything", ICON.all, plain(everything)) +
       entry("completed", "Completed", ICON.check, "") +
@@ -330,7 +330,7 @@ function renderNav() {
     $("#tabs"),
     [
       ["today", "Today", ICON.today, ""],
-      ["upcoming", "Upcoming", ICON.upcoming, ""],
+      ["month", "Calendar", ICON.upcoming, ""],
       ["agents", "Agents", agentsIcon, agentsWorking + (agentNew ? `<span class="tab-badge" aria-label="${agentNew} new">${agentNew}</span>` : "")],
     ]
       .map(([v, label, icon, badge]) => {
@@ -593,7 +593,7 @@ function renderMain() {
     dl.hidden = true;
   }
 
-  // The List / Month switch heads Upcoming, unless a search or a tag shows in its place.
+  // The Month / List switch heads Calendar, unless a search or a tag shows in its place.
   const vs = $("#viewswitch");
   const upcoming = (S.view === "upcoming" || S.view === "month") && !searching() && !filtering();
   vs.hidden = !upcoming;

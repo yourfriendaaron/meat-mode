@@ -186,9 +186,9 @@ export function monthHTML(m: MonthModel): string {
   return `<div class="month">${head}${note}<table class="mgrid" aria-labelledby="month-h"><thead><tr>${cols}</tr></thead><tbody>${body}</tbody></table>${dayListHTML(m)}</div>`;
 }
 
-/** The List / Month switch at the top of Upcoming. */
+/** The Month / List switch at the top of Calendar. */
 export function viewSwitchHTML(month: boolean): string {
   const b = (v: string, label: string, on: boolean) =>
     `<button type="button" class="vswitch-btn" data-act="view" data-view="${v}" aria-pressed="${on}">${label}</button>`;
-  return `<div class="vswitch" role="group" aria-label="Show Upcoming as">${b("upcoming", "List", !month)}${b("month", "Month", month)}</div>`;
+  return `<div class="vswitch" role="group" aria-label="Show Calendar as">${b("month", "Month", month)}${b("upcoming", "List", !month)}</div>`;
 }

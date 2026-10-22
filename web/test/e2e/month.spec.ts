@@ -4,11 +4,10 @@ import type { FakeHub } from "./fake-hub.ts";
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
-/** Opens Upcoming, then its Month switch. */
+/** Opens Calendar, which shows the month. */
 async function openMonth(page: Page) {
   await openApp(page);
-  await page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Upcoming/ }).click();
-  await page.getByRole("group", { name: "Show Upcoming as" }).getByRole("button", { name: "Month" }).click();
+  await page.getByRole("navigation", { name: "Views" }).first().getByRole("button", { name: /Calendar/ }).click();
   await expect(page.locator("#month-h")).toBeVisible();
 }
 
@@ -28,8 +27,8 @@ function weekly(hub: FakeHub) {
 test("the month shows due, snoozed and repeat entries, and moves between months", async ({ page, hub }) => {
   weekly(hub);
   await openMonth(page);
-  await expect(page.locator("#view-title")).toHaveText("Upcoming");
-  await expect(page.locator("#nav").getByRole("button", { name: /Upcoming/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator("#view-title")).toHaveText("Calendar");
+  await expect(page.locator("#nav").getByRole("button", { name: /Calendar/ })).toHaveAttribute("aria-current", "page");
   await expect(page.locator("#month-h")).toHaveText("October 2026");
   await expect(page.locator("#list .mgrid th")).toHaveText(["MonMonday", "TueTuesday", "WedWednesday", "ThuThursday", "FriFriday", "SatSaturday", "SunSunday"]);
   await expect(page.locator("#list .mgrid tbody tr")).toHaveCount(5);
@@ -69,8 +68,7 @@ test("the month shows due, snoozed and repeat entries, and moves between months"
   // The shown month survives a trip to another view.
   await page.getByRole("button", { name: "Next month" }).click();
   await page.locator("#nav").getByRole("button", { name: /Today/ }).click();
-  await page.locator("#nav").getByRole("button", { name: /Upcoming/ }).click();
-  await page.getByRole("button", { name: "Month" }).click();
+  await page.locator("#nav").getByRole("button", { name: /Calendar/ }).click();
   await expect(page.locator("#month-h")).toHaveText("November 2026");
 });
 
@@ -197,10 +195,9 @@ test.describe("phone", () => {
   test("the month fits, counts each day, and a long press opens Move", async ({ page, hub }) => {
     await openApp(page);
     const tabs = page.locator("#tabs");
-    await tabs.getByRole("button", { name: "Upcoming" }).click();
-    await page.getByRole("button", { name: "Month" }).click();
+    await tabs.getByRole("button", { name: "Calendar" }).click();
     await expect(page.locator("#month-h")).toHaveText("October 2026");
-    await expect(tabs.getByRole("button", { name: "Upcoming" })).toHaveAttribute("aria-current", "page");
+    await expect(tabs.getByRole("button", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
     const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     expect(scroll).toBeLessThanOrEqual(inner);
     await expect(cell(page, "2026-10-14").locator(".mcount")).toHaveText("3");
