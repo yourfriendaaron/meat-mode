@@ -64,10 +64,15 @@ type AgentRunner struct {
 	sets    map[string]map[string]string // repo -> the bridge's fingerprints of its last pushed set
 	authors map[string]bool              // who the app writes as; see appAuthor
 	touched map[string]bool              // repos whose beads a run end changed
-	dirty   bool                         // the run list changed since the last send
-	sentAt  time.Time                    // when the run list was last sent
-	changed chan struct{}
-	gone    bool // tests: the process "died"; nothing is written any more
+	// removing holds the beads whose worktree Collect is removing, by
+	// runKey, and waiting an ask for one, which starts once it is gone.
+	removing map[string]bool
+	waiting  map[string]askRequest
+	kept     map[string]string // worktree -> why Collect last kept it, to log each reason once
+	dirty    bool              // the run list changed since the last send
+	sentAt   time.Time         // when the run list was last sent
+	changed  chan struct{}
+	gone     bool // tests: the process "died"; nothing is written any more
 	// unavailable is why the harness's last check failed; asks are refused
 	// while it is set.
 	unavailable error
@@ -85,6 +90,8 @@ type beadRecord struct {
 	Process  *procRecord `json:"process,omitempty"`  // while a run is live
 	Asks     []string    `json:"asks,omitempty"`     // ask action ids applied, newest last
 	Worktree string      `json:"worktree,omitempty"` // where its runs work
+	// Idle is when its latest run ended, kept after Run is dropped.
+	Idle *time.Time `json:"idle,omitempty"`
 }
 
 // procRecord is a live run's process. Its pid is also its process group.
@@ -179,6 +186,9 @@ func (r *AgentRunner) init() {
 		r.sets = map[string]map[string]string{}
 		r.authors = map[string]bool{}
 		r.touched = map[string]bool{}
+		r.removing = map[string]bool{}
+		r.waiting = map[string]askRequest{}
+		r.kept = map[string]string{}
 		r.changed = make(chan struct{}, 1)
 	}
 }
@@ -393,6 +403,12 @@ func (r *AgentRunner) Ask(req askRequest) {
 		}
 		// It is finishing: start again once it has ended.
 		lr.again = &req
+		r.saveOrLog()
+		return
+	}
+	if k := runKey(req.Repo.Name, req.BeadID); r.removing[k] {
+		// Collect is removing its worktree: start once that is done.
+		r.waiting[k] = req
 		r.saveOrLog()
 		return
 	}
@@ -972,42 +988,118 @@ func (r *AgentRunner) Shutdown() {
 // Listed tells the runner a repo's set as last sent to the hub: the bridge's
 // fingerprints by bead id. The runner keeps set and only reads it, so the
 // caller must replace it, never change it. A settled run on a bead that left
-// the set is dropped, and its worktree removed when Git calls it clean (see
-// removeWorktree).
+// the set is dropped, and its worktree removed (see Collect).
 func (r *AgentRunner) Listed(repo string, set map[string]string) {
 	r.mu.Lock()
 	r.init()
 	r.sets[repo] = set
-	var gone []*beadRecord
+	gone := false
 	for k, rec := range r.records {
 		if _, in := set[rec.BeadID]; rec.Repo != repo || in || r.live[k] != nil {
 			continue
 		}
 		if rec.Run != nil {
+			rec.Idle = rec.Run.EndedAt
 			rec.Run = nil
 			r.notify()
 		}
-		if rec.Worktree != "" {
-			gone = append(gone, rec)
-		}
+		gone = gone || rec.Worktree != ""
 	}
-	if len(gone) == 0 {
-		r.saveOrLog()
+	r.saveOrLog()
+	r.mu.Unlock()
+	if gone {
+		r.Collect()
+	}
+}
+
+// collectJob is one worktree Collect removes.
+type collectJob struct {
+	key, path, bead string
+	rec             *beadRecord // nil for a folder the journal does not name
+	left            bool        // the bead left its repo's synced set
+}
+
+// Collect removes the worktrees no run needs, when removeWorktree finds
+// them safe to remove: a bead's once it has left its repo's synced set; a
+// listed bead's once its latest run ended KeepWorktrees ago; and a folder
+// under Dir/worktrees that the journal does not name, once it is that old.
+// A listed bead keeps its branch and its session, so its next ask makes the
+// worktree again at the same path on the same branch and resumes the
+// conversation. An ask that comes while its worktree is being removed starts
+// once that is done.
+func (r *AgentRunner) Collect() {
+	r.mu.Lock()
+	r.init()
+	if r.gone {
 		r.mu.Unlock()
 		return
 	}
-	r.mu.Unlock()
-	for _, rec := range gone {
-		removed := r.removeWorktree(rec.Worktree, rec.BeadID)
-		r.mu.Lock()
-		if removed && r.live[runKey(rec.Repo, rec.BeadID)] == nil {
-			rec.Worktree, rec.Session = "", ""
+	now, keep := r.now(), r.Config.KeepWorktrees
+	root := filepath.Join(r.Dir, "worktrees")
+	var jobs []collectJob
+	named := map[string]bool{}
+	for k, rec := range r.records {
+		if rec.Worktree == "" {
+			continue
 		}
-		r.mu.Unlock()
+		named[filepath.Clean(rec.Worktree)] = true
+		if r.live[k] != nil || r.removing[k] {
+			continue
+		}
+		set, synced := r.sets[rec.Repo]
+		_, in := set[rec.BeadID]
+		left := synced && !in
+		if !left && (!isDir(rec.Worktree) || now.Sub(idleSince(rec)) < keep) {
+			continue
+		}
+		r.removing[k] = true
+		jobs = append(jobs, collectJob{key: k, path: rec.Worktree, bead: rec.BeadID, rec: rec, left: left})
+	}
+	for _, o := range unnamedWorktrees(root, named) {
+		k := runKey(o.repo, o.bead)
+		if r.live[k] != nil || r.removing[k] || now.Sub(o.made) < keep {
+			continue
+		}
+		r.removing[k] = true
+		jobs = append(jobs, collectJob{key: k, path: o.path, bead: o.bead})
+	}
+	r.mu.Unlock()
+	for _, j := range jobs {
+		r.collected(j, r.removeWorktree(j))
 	}
 	r.mu.Lock()
-	r.saveOrLog()
+	removeEmptyDirs(root)
 	r.mu.Unlock()
+}
+
+// collected ends j's removal: a bead that left the set forgets its removed
+// worktree and session, and an ask that waited on the removal starts.
+func (r *AgentRunner) collected(j collectJob, removed bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.removing, j.key)
+	if removed && j.left {
+		j.rec.Worktree, j.rec.Session = "", ""
+	}
+	if req, ok := r.waiting[j.key]; ok {
+		delete(r.waiting, j.key)
+		if !r.gone {
+			r.start(req, r.record(req.Repo.Name, req.BeadID))
+		}
+	}
+	r.saveOrLog()
+}
+
+// idleSince is when rec's latest run ended; the zero time when no run of it
+// is known to have ended.
+func idleSince(rec *beadRecord) time.Time {
+	switch {
+	case rec.Run != nil && rec.Run.EndedAt != nil:
+		return *rec.Run.EndedAt
+	case rec.Run == nil && rec.Idle != nil:
+		return *rec.Idle
+	}
+	return time.Time{}
 }
 
 // putRuns sends a run list to the hub.

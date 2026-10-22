@@ -252,8 +252,10 @@ func toolMatches(want, got harness.Tool) bool {
 const LiveEnv = "MEAT_MODE_HARNESS_LIVE"
 
 // Live runs the installed harness for real, twice: a new run in a fresh
-// git repo, then a resume of its session. It skips unless LiveEnv is 1 and
-// the program is installed and signed in.
+// git repo, then a resume of its session after the repo was deleted and
+// made again at the same path, as the bridge does with an idle task's
+// worktree. The resumed run must still know what the first was told. It
+// skips unless LiveEnv is 1 and the program is installed and signed in.
 func Live(t *testing.T, name string) {
 	if os.Getenv(LiveEnv) != "1" {
 		t.Skipf("set %s=1 to run %s for real; it costs usage", LiveEnv, name)
@@ -269,21 +271,33 @@ func Live(t *testing.T, name string) {
 	if _, err := h.Check(context.Background()); err != nil {
 		t.Skipf("%s: %v", name, err)
 	}
-	dir := t.TempDir()
-	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v: %s", err, out)
+	dir := filepath.Join(t.TempDir(), "repo")
+	gitInit := func() {
+		if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+			t.Fatalf("git init: %v: %s", err, out)
+		}
 	}
-	first := liveRun(t, h, harness.Spec{Dir: dir, Prompt: "Reply with the single word ready. Do not use any tools.", BudgetUSD: 0.5})
+	gitInit()
+	first, _ := liveRun(t, h, harness.Spec{Dir: dir, Prompt: "Remember the word marigold. Reply with the single word ready. Do not use any tools.", BudgetUSD: 0.5})
 	if first == "" {
 		t.Fatal("the run named no session")
 	}
-	again := liveRun(t, h, harness.Spec{Dir: dir, Prompt: "Reply with the single word again. Do not use any tools.", Session: first, BudgetUSD: 0.5})
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	gitInit()
+	again, text := liveRun(t, h, harness.Spec{Dir: dir, Prompt: "Which word did I ask you to remember? Reply with that word only. Do not use any tools.", Session: first, BudgetUSD: 0.5})
 	if again == "" {
 		t.Fatal("the resumed run named no session")
 	}
+	if !strings.Contains(strings.ToLower(text), "marigold") {
+		t.Errorf("the run resumed in a remade folder lost its conversation; it replied %q", text)
+	}
 }
 
-func liveRun(t *testing.T, h harness.Harness, s harness.Spec) string {
+// liveRun runs one turn and returns the session it named and its last
+// reply.
+func liveRun(t *testing.T, h harness.Harness, s harness.Spec) (session, text string) {
 	t.Helper()
 	l := launch(t, h, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -309,7 +323,6 @@ func liveRun(t *testing.T, h harness.Harness, s harness.Spec) string {
 		stdin.Close()
 	}
 	d := h.NewDecoder()
-	var session string
 	var end *harness.End
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
@@ -330,5 +343,5 @@ func liveRun(t *testing.T, h harness.Harness, s harness.Spec) string {
 	if end == nil || end.Error {
 		t.Fatalf("turn end %+v; stderr: %s", end, stderr.String())
 	}
-	return session
+	return session, end.Text
 }

@@ -695,6 +695,148 @@ func TestAgentWorktreeGoesWithTheBead(t *testing.T) {
 	}
 }
 
+// later moves the runner's clock d ahead of the real one.
+func later(b *Bridge, d time.Duration) {
+	b.Runner.mu.Lock()
+	b.Runner.Now = func() time.Time { return time.Now().Add(d) }
+	b.Runner.mu.Unlock()
+}
+
+func TestIdleWorktreeGoesAndComesBack(t *testing.T) {
+	t.Parallel()
+	w, dir, id := agentWorld(t)
+	b := w.agentBridge(true, func(c *AgentConfig) { c.KeepWorktrees = time.Hour })
+	w.tick(b)
+	w.ask(b, "ask-1", id, "reply")
+	if run := w.waitRun(b, id, settled); run.State != api.RunWaiting {
+		t.Fatalf("first run = %+v", run)
+	}
+	wt := filepath.Join(w.state, "agents", "worktrees", "garden", id)
+	session := runOf(b, id).Session
+
+	// Inside the window the worktree stays.
+	b.Runner.Collect()
+	if !isDir(wt) {
+		t.Fatal("a worktree went inside its keep window")
+	}
+
+	// Past it the folder goes; the task is still listed, so its branch,
+	// session and path stay.
+	later(b, 2*time.Hour)
+	b.Runner.Collect()
+	if isDir(wt) {
+		t.Fatal("an idle clean worktree is still there")
+	}
+	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/"+id); !strings.Contains(out, id) {
+		t.Errorf("the branch of a listed task went: %q", out)
+	}
+	if rec := runOf(b, id); rec.Session != session || rec.Worktree != wt {
+		t.Errorf("record after an idle removal = %+v", rec)
+	}
+
+	// The next ask makes it again on the same branch and resumes.
+	w.ask(b, "ask-2", id, "close")
+	two := w.waitRun(b, id, func(r api.Run) bool { return r.Count == 2 && settled(r) })
+	if two.State != api.RunDone {
+		t.Errorf("second run = %+v", two)
+	}
+	if got := strings.TrimSpace(beadsRun(t, wt, "git", "branch", "--show-current")); got != "meat-mode/"+id {
+		t.Errorf("remade worktree branch = %q", got)
+	}
+	logf := filepath.Join(w.state, "agents", "logs", "garden", id, two.ID+".jsonl")
+	if b, _ := os.ReadFile(logf); !strings.Contains(string(b), `"fake_resume":"`+session+`"`) {
+		t.Errorf("the run in the remade worktree did not resume %s:\n%s", session, b)
+	}
+}
+
+func TestIdleWorktreeKeepsFilesABuildCannotMake(t *testing.T) {
+	t.Parallel()
+	w, dir, id := agentWorld(t)
+	b := w.agentBridge(true, func(c *AgentConfig) { c.KeepWorktrees = time.Hour })
+	w.tick(b)
+	w.ask(b, "ask-1", id, "reply")
+	w.waitRun(b, id, settled)
+	wt := filepath.Join(w.state, "agents", "worktrees", "garden", id)
+	exclude := filepath.Join(dir, ".git", "info", "exclude")
+	if err := os.MkdirAll(filepath.Dir(exclude), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exclude, []byte("node_modules/\nplants.secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"node_modules/hose/index.js", "plants.secret"} {
+		p := filepath.Join(wt, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("water\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	later(b, 2*time.Hour)
+	b.Runner.Collect()
+	if _, err := os.Stat(filepath.Join(wt, "plants.secret")); err != nil {
+		t.Fatalf("an ignored file no build makes was removed: %v", err)
+	}
+	if err := os.Remove(filepath.Join(wt, "plants.secret")); err != nil {
+		t.Fatal(err)
+	}
+	b.Runner.Collect()
+	if isDir(wt) {
+		t.Error("a worktree holding only dependencies is still there")
+	}
+}
+
+func TestAskWaitsForItsWorktreeRemoval(t *testing.T) {
+	t.Parallel()
+	w, _, id := agentWorld(t)
+	b := w.agentBridge(true)
+	w.tick(b)
+	k := runKey("garden", id)
+	b.Runner.mu.Lock()
+	b.Runner.removing[k] = true
+	b.Runner.mu.Unlock()
+	w.ask(b, "ask-1", id, "close")
+	if rec := runOf(b, id); rec.Run != nil {
+		t.Fatalf("a run started while its worktree was being removed: %+v", rec.Run)
+	}
+	b.Runner.collected(collectJob{key: k, bead: id}, true)
+	if run := w.waitRun(b, id, settled); run.State != api.RunDone {
+		t.Errorf("the waiting ask's run = %+v", run)
+	}
+}
+
+func TestCollectSweepsWorktreesItHasNoRecordOf(t *testing.T) {
+	t.Parallel()
+	w, dir, _ := agentWorld(t)
+	b := w.agentBridge(true, func(c *AgentConfig) { c.KeepWorktrees = time.Hour })
+	root := filepath.Join(w.state, "agents", "worktrees")
+	stray := filepath.Join(root, "garden", "stray")
+	odd := filepath.Join(root, "garden", "odd")
+	beadsRun(t, dir, "git", "worktree", "add", "-q", "-b", "meat-mode/stray", stray)
+	beadsRun(t, dir, "git", "worktree", "add", "-q", "-b", "trellis", odd)
+	empty := filepath.Join(root, "orchard", "pears")
+	if err := os.MkdirAll(empty, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	b.Runner.Collect()
+	if !isDir(stray) {
+		t.Fatal("a worktree with no record went inside the keep window")
+	}
+	later(b, 2*time.Hour)
+	b.Runner.Collect()
+	if isDir(stray) {
+		t.Error("a stray worktree on its bead's branch is still there")
+	}
+	if !isDir(odd) {
+		t.Error("a worktree on another branch was removed")
+	}
+	if isDir(filepath.Join(root, "orchard")) {
+		t.Error("empty folders are still there")
+	}
+}
+
 // putStub records each run list put, and fails while fail is set.
 type putStub struct {
 	sent [][]api.RunReport
