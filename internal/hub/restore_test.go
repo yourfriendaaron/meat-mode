@@ -70,9 +70,9 @@ func TestRestoreRouteRefusesAHubWithAMachine(t *testing.T) {
 
 func TestRestoreRouteRefusesBadFiles(t *testing.T) {
 	h := newHarness(t, nil, false)
-	newer := strings.Replace(restoreFile(t), `"version": 1,`, `"version": 4,`, 1)
+	newer := strings.Replace(restoreFile(t), `"version": 1,`, `"version": 5,`, 1)
 	for name, c := range map[string]struct{ body, says string }{
-		"newer":      {newer, "the file is version 4, and this hub reads version 3"},
+		"newer":      {newer, "the file is version 5, and this hub reads version 4"},
 		"not export": {`{"items": []}`, "not a Meat Mode export"},
 		"not JSON":   {"Water the plants", "not a Meat Mode export"},
 		"bad item":   {strings.Replace(restoreFile(t), `"title": "Buy seeds"`, `"title": ""`, 1), "title cannot be empty"},

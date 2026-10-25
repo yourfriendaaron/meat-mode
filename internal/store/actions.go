@@ -27,14 +27,14 @@ var uuidRE = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 // ValidActionID reports whether id is a UUID in its usual text form.
 func ValidActionID(id string) bool { return uuidRE.MatchString(id) }
 
-const actionCols = `seq, id, kind, bridge, repo, bead_id, payload, author, status, error, created_at, applied_at`
+const actionCols = `seq, id, kind, bridge, repo, bead_id, payload, author, machine, status, error, created_at, applied_at`
 
 func scanAction(sc interface{ Scan(...any) error }) (api.Action, error) {
 	var a api.Action
 	var payload, created string
 	var applied sql.NullString
 	if err := sc.Scan(&a.Seq, &a.ID, &a.Kind, &a.Bridge, &a.Repo, &a.BeadID, &payload,
-		&a.Author, &a.Status, &a.Error, &created, &applied); err != nil {
+		&a.Author, &a.Machine, &a.Status, &a.Error, &created, &applied); err != nil {
 		return a, err
 	}
 	if err := json.Unmarshal([]byte(payload), &a.Payload); err != nil {
@@ -76,13 +76,14 @@ func (s *Store) Action(id string) (api.Action, error) {
 // at once and logged as applied. If an action with the same id exists, it
 // returns that one unchanged and created is false.
 func (s *Store) AppendAction(na api.NewAction, author string) (a api.Action, created bool, err error) {
-	return s.appendAction(na, author, nil)
+	return s.appendAction(na, author, "", nil)
 }
 
-// appendAction is AppendAction. after, when set, runs in the same
-// transaction once a new action is stored and applied; a repeated id skips
-// it.
-func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx, api.Action) error) (a api.Action, created bool, err error) {
+// appendAction is AppendAction, recording machine as the paired machine
+// whose token posted it ("" for the app). after, when set, runs in the
+// same transaction once a new action is stored and applied; a repeated id
+// skips it.
+func (s *Store) appendAction(na api.NewAction, author, machine string, after func(*sql.Tx, api.Action) error) (a api.Action, created bool, err error) {
 	if !ValidActionID(na.ID) {
 		return a, false, invalidf("action id must be a UUID")
 	}
@@ -100,7 +101,7 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 		return a, false, err
 	}
 
-	a = api.Action{ID: na.ID, Kind: na.Kind, Author: author, Status: api.StatusPending, CreatedAt: s.now()}
+	a = api.Action{ID: na.ID, Kind: na.Kind, Author: author, Machine: machine, Status: api.StatusPending, CreatedAt: s.now()}
 	p := na.Payload
 	switch na.Kind {
 	case api.KindDone, api.KindReopen, api.KindDismiss, api.KindStop:
@@ -319,9 +320,9 @@ func (s *Store) appendAction(na api.NewAction, author string, after func(*sql.Tx
 	if err != nil {
 		return a, false, err
 	}
-	res, err := tx.Exec(`INSERT INTO actions (id, kind, bridge, repo, bead_id, payload, author, status, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.Kind, a.Bridge, a.Repo, a.BeadID, string(payload), a.Author, a.Status, fmtTime(a.CreatedAt))
+	res, err := tx.Exec(`INSERT INTO actions (id, kind, bridge, repo, bead_id, payload, author, machine, status, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.Kind, a.Bridge, a.Repo, a.BeadID, string(payload), a.Author, a.Machine, a.Status, fmtTime(a.CreatedAt))
 	if err != nil {
 		return a, false, err
 	}

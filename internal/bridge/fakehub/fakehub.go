@@ -79,6 +79,8 @@ func New(tokens map[string]string) *Hub {
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
 	mux.HandleFunc("POST /bridge/v1/actions/{id}/result", h.auth(h.result))
 	mux.HandleFunc("POST /bridge/v1/personal", h.auth(h.addPersonal))
+	mux.HandleFunc("GET /bridge/v1/personal", h.auth(h.listPersonal))
+	mux.HandleFunc("GET /bridge/v1/projects", h.auth(h.projects))
 	mux.HandleFunc("GET /bridge/v1/personal/{id}", h.auth(h.getPersonal))
 	mux.HandleFunc("POST /bridge/v1/personal/{id}/actions", h.auth(h.changePersonal))
 	h.Server = httptest.NewServer(mux)
@@ -158,8 +160,8 @@ func (h *Hub) addPersonal(w http.ResponseWriter, r *http.Request, bridge string)
 			return
 		}
 	}
-	if t.Parent != "" && h.ownTodo(bridge, r.URL.Query().Get("project"), t.Parent) < 0 {
-		writeErr(w, http.StatusNotFound, "no personal to-do added from this machine")
+	if t.Parent != "" && h.todo(r.URL.Query().Get("project"), t.Parent) < 0 {
+		writeErr(w, http.StatusNotFound, notFound)
 		return
 	}
 	h.personal = append(h.personal, Personal{Bridge: bridge, Project: r.URL.Query().Get("project"), PersonalTodo: t})
@@ -168,35 +170,110 @@ func (h *Hub) addPersonal(w http.ResponseWriter, r *http.Request, bridge string)
 	_ = json.NewEncoder(w).Encode(h.personalReply(len(h.personal) - 1))
 }
 
-// ownTodo returns the index of the to-do id that bridge added to project,
-// or -1, which the hub answers with 404 whatever the reason.
-func (h *Hub) ownTodo(bridge, project, id string) int {
+// notFound is the fake hub's answer for an id its list does not hold.
+const notFound = "no to-do on this list"
+
+// todo returns the index of the to-do id of project, whichever machine
+// added it, or -1, which the hub answers with 404.
+func (h *Hub) todo(project, id string) int {
 	n, err := strconv.Atoi(strings.TrimPrefix(id, "mm-"))
-	if err != nil || !strings.HasPrefix(id, "mm-") || n < 1 || n > len(h.personal) ||
-		h.personal[n-1].Bridge != bridge || h.personal[n-1].Project != project {
+	if err != nil || !strings.HasPrefix(id, "mm-") || n < 1 || n > len(h.personal) || h.personal[n-1].Project != project {
 		return -1
 	}
 	return n - 1
 }
 
-func (h *Hub) getPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	i := h.ownTodo(bridge, r.URL.Query().Get("project"), r.PathValue("id"))
-	if i < 0 {
-		writeErr(w, http.StatusNotFound, "no personal to-do added from this machine")
-		return
-	}
+// item is the hub's Item for the to-do at i: open, unless a done change
+// closed it.
+func (h *Hub) item(i int) api.Item {
 	p := h.personal[i]
-	it := api.Item{Key: h.personalReply(i).Key, ID: r.PathValue("id"), Title: p.Title, DueAt: p.Due,
+	id := h.personalReply(i).ID
+	it := api.Item{Key: h.personalReply(i).Key, ID: id, Title: p.Title, DueAt: p.Due,
 		Status: "open", Priority: 2, CreatedBy: p.Author, Parent: p.Parent, Labels: p.Labels, Comments: []api.Comment{}}
+	if it.CreatedBy == "" {
+		it.CreatedBy = p.Bridge
+	}
+	for _, c := range h.changes {
+		if c.Project == p.Project && c.Item == id {
+			switch c.Kind {
+			case api.KindDone, api.KindDismiss:
+				it.Status = "closed"
+			case api.KindReopen:
+				it.Status = "open"
+			}
+		}
+	}
 	if p.Repeat != nil && p.Due != nil {
 		// The hub starts the rule at the due time.
 		rule := *p.Repeat
 		rule.Start = p.Due
 		it.Repeat = &rule
 	}
-	writeJSON(w, it)
+	return it
+}
+
+func (h *Hub) getPersonal(w http.ResponseWriter, r *http.Request, _ string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	i := h.todo(r.URL.Query().Get("project"), r.PathValue("id"))
+	if i < 0 {
+		writeErr(w, http.StatusNotFound, notFound)
+		return
+	}
+	writeJSON(w, h.item(i))
+}
+
+// listPersonal answers the list call with the real hub's filters.
+func (h *Hub) listPersonal(w http.ResponseWriter, r *http.Request, _ string) {
+	q := r.URL.Query()
+	status := q.Get("status")
+	if status == "" {
+		status = "open"
+	}
+	if status != "open" && status != "closed" && status != "all" {
+		writeErr(w, http.StatusBadRequest, "status must be open, closed or all")
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := []api.Item{}
+	for i, p := range h.personal {
+		it := h.item(i)
+		if p.Project != q.Get("project") || (status == "open" && it.Status == "closed") || (status == "closed" && it.Status != "closed") ||
+			!strings.Contains(strings.ToLower(it.Title), strings.ToLower(q.Get("q"))) {
+			continue
+		}
+		tagged := true
+		for _, tag := range q["tag"] {
+			tagged = tagged && slices.ContainsFunc(it.Labels, func(l string) bool { return strings.EqualFold(l, tag) })
+		}
+		if tagged {
+			out = append(out, it)
+		}
+	}
+	writeJSON(w, out)
+}
+
+// projects lists the projects to-dos were added to, by name.
+func (h *Hub) projects(w http.ResponseWriter, _ *http.Request, _ string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	open := map[string]int{}
+	for i, p := range h.personal {
+		if p.Project == "" {
+			continue
+		}
+		open[p.Project] += 0
+		if h.item(i).Status != "closed" {
+			open[p.Project]++
+		}
+	}
+	out := []api.Project{}
+	for name, n := range open {
+		out = append(out, api.Project{Name: name, Open: n})
+	}
+	slices.SortFunc(out, func(a, b api.Project) int { return strings.Compare(a.Name, b.Name) })
+	writeJSON(w, out)
 }
 
 // changePersonal keeps each change once by id, as the real hub does.
@@ -210,12 +287,12 @@ func (h *Hub) changePersonal(w http.ResponseWriter, r *http.Request, bridge stri
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	project := r.URL.Query().Get("project")
-	if h.ownTodo(bridge, project, id) < 0 {
-		writeErr(w, http.StatusNotFound, "no personal to-do added from this machine")
+	if h.todo(project, id) < 0 {
+		writeErr(w, http.StatusNotFound, notFound)
 		return
 	}
 	a := api.Action{ID: c.ID, Kind: c.Kind, Bridge: "hub", Repo: listOf(project), BeadID: id, Payload: c.Payload,
-		Author: c.Author, Status: api.StatusApplied}
+		Author: c.Author, Machine: bridge, Status: api.StatusApplied}
 	for _, o := range h.changes {
 		if c.ID != "" && o.ID == c.ID {
 			writeJSON(w, a)
@@ -224,7 +301,7 @@ func (h *Hub) changePersonal(w http.ResponseWriter, r *http.Request, bridge stri
 	}
 	h.changes = append(h.changes, Change{Bridge: bridge, Project: project, Item: id, PersonalChange: c})
 	if set := c.Payload.Set; c.Kind == api.KindEdit && set != nil && set.Labels != nil {
-		h.personal[h.ownTodo(bridge, project, id)].Labels = *set.Labels
+		h.personal[h.todo(project, id)].Labels = *set.Labels
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

@@ -322,6 +322,8 @@ export interface Action {
   beadId?: string;
   payload: Payload;
   author: string;
+  /** The paired machine whose agent posted it, on the hub's own lists; absent for the app's own actions. */
+  machine?: string;
   status: "pending" | "applied" | "failed" | "cancelled";
   error?: string;
   createdAt: string;

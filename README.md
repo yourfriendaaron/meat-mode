@@ -118,7 +118,7 @@ An agent can add a to-do for you with one command on a paired machine, with a da
 meat-mode add "Renew the library card" --due 2026-03-02 --tag errands --note "It expires on Friday."
 ```
 
-The same command can add a sub-task under one of the agent's own to-dos with `--parent`, and `meat-mode edit` changes the to-dos that machine added.
+Agents on any paired machine can also find and change what is on your lists, yours included: `meat-mode list` and `meat-mode show` read them, `--parent` adds a sub-task under any to-do (such as items under your shopping list), and `meat-mode edit`, `done` and `reopen` change one. Each change shows in the app's recent actions with the agent's name and machine.
 
 Setup gives you a short instruction text to paste into your agents' instruction file, so they know how to raise a task for you.
 

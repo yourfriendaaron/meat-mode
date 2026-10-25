@@ -169,7 +169,7 @@ func TestUntil(t *testing.T) {
 			t.Errorf("%v: %v", args, err)
 		}
 	}
-	if err := Edit(ctx, []string{"mm-9", "--no-until"}, env); err == nil || !strings.Contains(err.Error(), "this machine added") {
+	if err := Edit(ctx, []string{"mm-9", "--no-until"}, env); err == nil || !strings.Contains(err.Error(), "on this list") {
 		t.Errorf("unknown to-do: %v", err)
 	}
 	if len(hub.Changes()) != 4 {

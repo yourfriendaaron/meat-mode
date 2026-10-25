@@ -213,7 +213,7 @@ func TestMoveSubtask(t *testing.T) {
 		{"under an unknown item", hall, "mm-404", ErrNotFound},
 		{"a parent with a slash", hall, "a/b", ErrInvalid},
 	} {
-		if err := tryEdit(s, tc.key, api.Edit{Parent: ptr(tc.parent)}); !errors.Is(err, tc.want) {
+		if err := tryEdit(s, tc.key, api.Edit{Parent: ptr(tc.parent)}); (tc.want == nil && err != nil) || !errors.Is(err, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, err, tc.want)
 		}
 	}
@@ -253,7 +253,7 @@ func TestMoveSubtask(t *testing.T) {
 	}
 }
 
-func TestAgentMovesOnlyItsOwnItems(t *testing.T) {
+func TestAgentMovesAnyItem(t *testing.T) {
 	s, _ := open(t)
 	for _, name := range []string{"laptop", "desk"} {
 		_, err := s.CreateBridge(name)
@@ -270,27 +270,34 @@ func TestAgentMovesOnlyItsOwnItems(t *testing.T) {
 	other := add(id3, "Pack the bags", "desk")
 	app := addPersonal(t, s, id4, "Water the plants", nil).BeadID
 
-	a, _, err := s.ChangePersonal("laptop", "", tickets, api.PersonalChange{Kind: api.KindEdit,
-		Payload: api.Payload{Set: &api.Edit{Parent: &trip}}})
-	must(t, err)
-	if w := a.Payload.Was; w == nil || w.Parent == nil || *w.Parent != "" {
-		t.Fatalf("agent move's was %+v", w)
-	}
-	for _, parent := range []string{other, app, "mm-404"} {
-		_, _, err := s.ChangePersonal("laptop", "", tickets, api.PersonalChange{Kind: api.KindEdit,
+	// Under another machine's item and the app's, then back under its own.
+	for _, parent := range []string{other, app, trip} {
+		a, _, err := s.ChangePersonal("laptop", "", tickets, api.PersonalChange{Kind: api.KindEdit,
 			Payload: api.Payload{Set: &api.Edit{Parent: &parent}}})
-		if !errors.Is(err, ErrNotFound) {
-			t.Errorf("move under %s: %v", parent, err)
+		if err != nil {
+			t.Fatalf("move under %s: %v", parent, err)
+		}
+		if w := a.Payload.Was; w == nil || w.Parent == nil {
+			t.Fatalf("agent move's was %+v", w)
 		}
 	}
-	if _, _, err := s.ChangePersonal("laptop", "", trip, api.PersonalChange{Kind: api.KindEdit,
-		Payload: api.Payload{Set: &api.Edit{SubtasksDone: []string{app}}}}); !errors.Is(err, ErrNotFound) {
-		t.Errorf("closing another's item as a sub-task: %v", err)
+	missing := "mm-404"
+	if _, _, err := s.ChangePersonal("laptop", "", tickets, api.PersonalChange{Kind: api.KindEdit,
+		Payload: api.Payload{Set: &api.Edit{Parent: &missing}}}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("move under an unknown item: %v", err)
 	}
-	_, _, err = s.ChangePersonal("laptop", "", trip, api.PersonalChange{Kind: api.KindEdit,
+	if _, _, err := s.ChangePersonal("laptop", "", trip, api.PersonalChange{Kind: api.KindEdit,
+		Payload: api.Payload{Set: &api.Edit{SubtasksDone: []string{missing}}}}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("closing an unknown sub-task: %v", err)
+	}
+	if _, _, err := s.ChangePersonal("laptop", "", trip, api.PersonalChange{Kind: api.KindEdit,
+		Payload: api.Payload{Set: &api.Edit{SubtasksDone: []string{app}}}}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("closing an item that is not a sub-task: %v", err)
+	}
+	_, _, err := s.ChangePersonal("desk", "", trip, api.PersonalChange{Kind: api.KindEdit,
 		Payload: api.Payload{Set: &api.Edit{SubtasksDone: []string{tickets}}}})
 	must(t, err)
-	if it, err := s.PersonalItem("laptop", "", tickets); err != nil || it.Status != "closed" || it.CloseReason != ReasonDone {
+	if it, err := s.PersonalItem("", tickets); err != nil || it.Status != "closed" || it.CloseReason != ReasonDone {
 		t.Fatalf("sub-task after subtasksDone %+v, %v", it, err)
 	}
 }
@@ -311,7 +318,7 @@ func TestAgentAddsASubtask(t *testing.T) {
 	must(t, err)
 	tickets, err := add(id2, "laptop", "", api.PersonalTodo{Title: "Book the tickets", Parent: trip})
 	must(t, err)
-	if it, err := s.PersonalItem("laptop", "", tickets); err != nil || it.Parent != trip {
+	if it, err := s.PersonalItem("", tickets); err != nil || it.Parent != trip {
 		t.Fatalf("sub-task %+v, %v", it, err)
 	}
 	other, err := add(id3, "desk", "", api.PersonalTodo{Title: "Pack the bags"})
@@ -328,14 +335,14 @@ func TestAgentAddsASubtask(t *testing.T) {
 		name, parent string
 		want         error
 	}{
-		{"another machine's item", other, ErrNotFound},
-		{"the app's item", app, ErrNotFound},
+		{"another machine's item", other, nil},
+		{"the app's item", app, nil},
 		{"an item in another list", garden, ErrNotFound},
 		{"an unknown item", "mm-404", ErrNotFound},
 		{"a closed item", done, ErrInvalid},
 		{"a sub-task", tickets, ErrInvalid},
 	} {
-		if _, err := add(uuid.NewString(), "laptop", "", api.PersonalTodo{Title: "Find the passports", Parent: tc.parent}); !errors.Is(err, tc.want) {
+		if _, err := add(uuid.NewString(), "laptop", "", api.PersonalTodo{Title: "Find the passports", Parent: tc.parent}); (tc.want == nil && err != nil) || !errors.Is(err, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, err, tc.want)
 		}
 	}

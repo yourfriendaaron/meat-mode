@@ -17,7 +17,7 @@ const (
 	cid3 = "7a1c2b8e-3d4a-4e5f-9a0b-1c2d3e4f5a63"
 )
 
-func TestAgentChangesItsPersonalTodo(t *testing.T) {
+func TestAgentChangesAnyPersonalTodo(t *testing.T) {
 	h := newHarness(t, nil, false)
 	h.pair()
 	w := h.do("POST", "/api/bridges", map[string]string{"name": "desk"}, "")
@@ -50,15 +50,41 @@ func TestAgentChangesItsPersonalTodo(t *testing.T) {
 		t.Fatalf("item %+v", it)
 	}
 
-	// Another machine's item, an app item and an unknown id answer alike.
+	// Any machine reads and changes another machine's item and one the
+	// user added in the app; the change carries the agent and its machine.
+	for _, tc := range []struct{ token, id string }{{other, id}, {h.token, appID}} {
+		h.expect(h.do("GET", "/bridge/v1/personal/"+tc.id, nil, tc.token), http.StatusOK)
+	}
+	w = h.do("POST", "/bridge/v1/personal/"+appID+"/actions", api.PersonalChange{ID: cid3, Kind: api.KindEdit,
+		Payload: api.Payload{Set: &api.Edit{Title: new("Water the ferns")}}, Author: "gardener"}, other)
+	h.expect(w, http.StatusCreated)
+	if a := decode[api.Action](t, w); a.Author != "gardener" || a.Machine != "desk" || a.Payload.Was == nil {
+		t.Fatalf("change to the app's item %+v", a)
+	}
+	if as := decode[[]api.Action](t, h.do("GET", "/api/actions?limit=1", nil, "")); len(as) != 1 || as[0].Machine != "desk" || as[0].Author != "gardener" {
+		t.Fatalf("the app's action log %+v", as)
+	}
+	w = h.do("GET", "/bridge/v1/personal?q=FERNS", nil, other)
+	h.expect(w, http.StatusOK)
+	if items := decode[[]api.Item](t, w); len(items) != 1 || items[0].ID != appID || items[0].Title != "Water the ferns" {
+		t.Fatalf("search %+v", items)
+	}
+	w = h.do("GET", "/bridge/v1/personal", nil, other)
+	h.expect(w, http.StatusOK)
+	if items := decode[[]api.Item](t, w); len(items) != 2 {
+		t.Fatalf("list %+v", items)
+	}
+	h.expect(h.do("GET", "/bridge/v1/personal?status=done", nil, other), http.StatusBadRequest)
+
+	// An unknown id answers alike for reading and changing.
 	var body string
-	for _, tc := range []struct{ token, id string }{{other, id}, {h.token, appID}, {h.token, "mm-99"}} {
+	for _, bad := range []string{"mm-99", "x..y"} {
 		for _, w := range []*httptest.ResponseRecorder{
-			h.do("GET", "/bridge/v1/personal/"+tc.id, nil, tc.token),
-			h.do("POST", "/bridge/v1/personal/"+tc.id+"/actions", api.PersonalChange{Kind: api.KindDone}, tc.token),
+			h.do("GET", "/bridge/v1/personal/"+bad, nil, h.token),
+			h.do("POST", "/bridge/v1/personal/"+bad+"/actions", api.PersonalChange{Kind: api.KindDone}, h.token),
 		} {
 			h.expect(w, http.StatusNotFound)
-			got := strings.ReplaceAll(w.Body.String(), tc.id, "ID")
+			got := strings.ReplaceAll(w.Body.String(), bad, "ID")
 			if body == "" {
 				body = got
 			} else if got != body {
@@ -105,7 +131,8 @@ func TestAgentChangesItsPersonalTodo(t *testing.T) {
 	if got := lastSeen(); !got.Equal(seen) {
 		t.Errorf("last-seen moved from %v to %v", seen, got)
 	}
-	for _, rt := range [][2]string{{"GET", "/bridge/v1/personal/" + id}, {"POST", "/bridge/v1/personal/" + id + "/actions"}} {
+	for _, rt := range [][2]string{{"GET", "/bridge/v1/personal/" + id}, {"POST", "/bridge/v1/personal/" + id + "/actions"},
+		{"GET", "/bridge/v1/personal"}, {"GET", "/bridge/v1/projects"}} {
 		h.expect(h.do(rt[0], rt[1], "{}", ""), http.StatusUnauthorized)
 	}
 }

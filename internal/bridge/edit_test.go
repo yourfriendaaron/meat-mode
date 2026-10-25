@@ -140,14 +140,20 @@ func TestEditRefuses(t *testing.T) {
 		"priority 5":     {[]string{"mm-1", "--priority", "5"}, "--priority"},
 		"parent and no":  {[]string{"mm-1", "--parent", "mm-2", "--no-parent"}, "not both"},
 		"empty parent":   {[]string{"mm-1", "--parent", ""}, "--no-parent"},
-		"someone else's": {[]string{"mm-2", "--title", "Renew"}, "this machine added"},
-		"not a to-do id": {[]string{"gd-1", "--title", "Renew"}, "this machine added"},
+		"unknown id":     {[]string{"mm-2", "--title", "Renew"}, `no to-do "mm-2" on this list`},
+		"not a to-do id": {[]string{"gd-1", "--title", "Renew"}, "on this list"},
 	} {
 		if err := Edit(ctx, tc.args, env); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)
 		}
 	}
-	// mm-2 was added by another machine.
+	if err := Done(ctx, []string{}, env); err == nil {
+		t.Error("done with no id")
+	}
+	if len(hub.Changes()) != 0 {
+		t.Fatalf("a refused change reached the hub: %+v", hub.Changes())
+	}
+	// mm-2 was added by another machine, and is this one's to change too.
 	other, _, _ := testEnv(t, "")
 	if err := (Config{HubURL: hub.URL, Token: "token-sam"}).Save(other.Paths.Config); err != nil {
 		t.Fatal(err)
@@ -155,14 +161,11 @@ func TestEditRefuses(t *testing.T) {
 	if err := Add(ctx, []string{"Call Sam"}, other); err != nil {
 		t.Fatal(err)
 	}
-	if err := Done(ctx, []string{"mm-2"}, env); err == nil || !strings.Contains(err.Error(), "this machine added") {
+	if err := Done(ctx, []string{"mm-2"}, env); err != nil {
 		t.Errorf("done on another machine's to-do: %v", err)
 	}
-	if err := Done(ctx, []string{}, env); err == nil {
-		t.Error("done with no id")
-	}
-	if len(hub.Changes()) != 0 {
-		t.Fatalf("a refused change reached the hub: %+v", hub.Changes())
+	if cs := hub.Changes(); len(cs) != 1 || cs[0].Bridge != us || cs[0].Item != "mm-2" {
+		t.Fatalf("changes %+v", cs)
 	}
 	unpaired, _, _ := testEnv(t, "")
 	if err := Reopen(ctx, []string{"mm-1"}, unpaired); err == nil || !strings.Contains(err.Error(), "not paired") {

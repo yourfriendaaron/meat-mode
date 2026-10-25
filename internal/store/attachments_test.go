@@ -89,7 +89,7 @@ func TestAttachmentsOnAnAgentsTodo(t *testing.T) {
 	must(t, err)
 	a := attach(t, s, key, "footer.txt", []byte("Made with care"))
 	_, _, id, _ := SplitKey(key)
-	it, err := s.PersonalItem("laptop", "", id)
+	it, err := s.PersonalItem("", id)
 	must(t, err)
 	if len(it.Attachments) != 1 || it.Attachments[0] != a {
 		t.Fatalf("PersonalItem attachments %+v", it.Attachments)

@@ -212,16 +212,46 @@ func (h *Hub) AddPersonal(ctx context.Context, project string, t api.PersonalTod
 	return r, err
 }
 
-// PersonalItem reads a to-do this machine's token added to the personal
-// list or project.
+// ListPersonal lists the to-dos of the personal list, or of project when
+// it is not empty, that f matches.
+func (h *Hub) ListPersonal(ctx context.Context, project string, f api.PersonalFilter) ([]api.Item, error) {
+	q := url.Values{}
+	if project != "" {
+		q.Set("project", project)
+	}
+	if f.Status != "" {
+		q.Set("status", f.Status)
+	}
+	if f.Query != "" {
+		q.Set("q", f.Query)
+	}
+	for _, t := range f.Tags {
+		q.Add("tag", t)
+	}
+	path := "/bridge/v1/personal"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var items []api.Item
+	err := h.do(ctx, http.MethodGet, path, nil, &items)
+	return items, err
+}
+
+// Projects lists the hub's projects.
+func (h *Hub) Projects(ctx context.Context) ([]api.Project, error) {
+	var ps []api.Project
+	err := h.do(ctx, http.MethodGet, "/bridge/v1/projects", nil, &ps)
+	return ps, err
+}
+
+// PersonalItem reads a to-do of the personal list or project.
 func (h *Hub) PersonalItem(ctx context.Context, project, id string) (api.Item, error) {
 	var it api.Item
 	err := h.do(ctx, http.MethodGet, "/bridge/v1/personal/"+url.PathEscape(id)+projectQuery(project), nil, &it)
 	return it, err
 }
 
-// ChangePersonal changes a to-do this machine's token added to the
-// personal list or project.
+// ChangePersonal changes a to-do of the personal list or project.
 func (h *Hub) ChangePersonal(ctx context.Context, project, id string, c api.PersonalChange) (api.Action, error) {
 	var a api.Action
 	err := h.do(ctx, http.MethodPost, "/bridge/v1/personal/"+url.PathEscape(id)+"/actions"+projectQuery(project), c, &a)

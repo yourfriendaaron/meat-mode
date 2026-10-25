@@ -270,7 +270,7 @@ The applied `edit` action carries `was`, an `Edit` with the same fields as `set`
 
 An item's `labels` are its tags. The app calls them tags and shows them as chips on its row and in its detail, filters the list by one and finds items by them in search. It never shows the label `human`, in any case, on any item.
 
-**On the personal list and projects** the user sets tags in the app, and an agent sets them on the to-dos its machine added (see Agents). An `add` with `labels` or an `edit` with `labels` sets them, by these rules:
+**On the personal list and projects** the user sets tags in the app, and an agent sets them on any to-do there (see Agents). An `add` with `labels` or an `edit` with `labels` sets them, by these rules:
 
 - Each tag is trimmed, then 1 to 50 characters (`api.MaxTagLen`) with no whitespace, control character or comma. A tag that breaks a rule is refused with `400` naming it; an empty one after trimming is dropped.
 - Tags compare without case: a repeat of one already in the list is dropped, the first spelling kept. `human` is dropped, since the app never shows it.
@@ -439,11 +439,11 @@ The hub holds the only copy of the personal list, the projects, their attachment
 
 Files are not put in the JSON as base64: that grows them by a third, makes the hub hold the whole file in memory to write and read it, and would need the restore cap raised by the same third. Every app of this kind that restores its own attachments (Memos, Vikunja, Joplin, Trilium) exports a zip or tar of metadata plus raw files ([research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)).
 
-**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 3, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
+**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 4, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
 
 - `settings` is `{"name", "timeZone", "reminderLead", "calendarFeed"}`: the first three as `GET /api/settings` shows them, except that `name` is `""` while none was chosen, and `calendarFeed` whether the calendar feed was on.
 - `items` holds every item of the lists the hub keeps, the personal list and every project, closed ones included however old: the `Item` fields as `GET /api/state` shows them, with `key`, `bridge` (`hub`), `repo` (the list), `firstSeen`, `seenAt`, `labels` (those that pass the rules in Tags: an item moved off a machine's personal repo may hold bead labels that do not, and they are left out so the export always restores) and `attachments` (those not removed, each with `size` and `sha256`), and no `run`, `pending` or `error`. `owner` names the machine whose agents added the item, `""` (left out) for one added in the app.
-- `actions` is the whole action log, every machine's included, oldest first, each as `GET /api/actions` shows it.
+- `actions` is the whole action log, every machine's included, oldest first, each as `GET /api/actions` shows it, `machine` included.
 - `reminders` lists the reminders already sent for those items: `{"key", "kind", "at"}`, where `kind` is `due` (at the due time or a snooze end, `at` being that moment) or `early` (`at` being the due time it came before).
 - `origins` lists the items moved from a machine's personal repo: `{"machine", "beadId", "itemId"}`.
 - `machines` names the machines paired when the export was made, revoked ones left out.
@@ -454,15 +454,16 @@ Files are not put in the JSON as base64: that grows them by a third, makes the h
 
 - Version 1 was a bare JSON file with no attachments and no tags on hub list items. Version 2 made the export a zip and added `labels` and `attachments` to its items. Its upgrade step sets `version` and drops any label of a version 1 item that breaks the rules in Tags: such labels came from beads moved off a machine's personal repo, version 1 never showed them, and a file that restored before must still restore.
 - Version 3 dropped checklists. Its upgrade step turns each item's `checklist` into sub-tasks by the schema 14 rule in Sub-tasks, made at the file's `exportedAt`, and drops `checklist` from the `set` and `was` of the edits in `actions`.
+- Version 4 added `machine` to `actions`: the machine whose token posted an agent's action on the lists the hub keeps. Its upgrade step only sets `version`; an older action names no machine. A restore refuses a `machine` that is not a valid machine name.
 - A restore reads a zip by its first bytes (`PK\x03\x04`) and anything else as bare JSON. A bare JSON of version 2 or later restores only when it lists no attachment; one that lists any is refused, naming how many files it lists, so the user restores the zip it came in.
 
 **Restore.** Restore is offered by the hub part of the setup wizard on a hub whose setup status is `new`, after the password step:
 
 - It refuses with `409` on a hub that already has data: any item, any action, or any machine other than `hub`, revoked ones included. It never merges into or replaces data, so nothing a hub holds is lost to a restore. The settings the wizard has already set do not count as data; the export's replace them.
 - It checks the whole file before it writes anything, and loads it in one transaction, so a file that fails a check changes nothing. It saves an uploaded zip to a temporary file in the data directory, since a zip is read from its end, and deletes that file when done. Attachment files are written before the transaction commits and deleted again if it does not. Each item must belong to the personal list or a valid project name (see Identity), with a valid id unique in its list, a title, a known status and the limits an edit holds to; each action needs a valid id, unique in the file; each `key` must name an item in the file; and the settings must pass `PUT /api/settings`'s checks. Tags must pass the rules in Tags. Each attachment must be on an item of the file, with an id unique in the file, a clean name, and a size within the caps in Attachments; its entry must be in the zip, with that size and SHA-256. A missing entry, a size or hash that does not match, an entry the JSON does not list, or any entry name other than `export.json` and `attachments/<id>` refuses the file, naming the attachment and its item. No file is ever skipped. Entry names are never used as paths: the hub writes each file under the id the JSON gives.
-- It keeps every item's id, key, times, comments, repeat, parent, tags and attachments; every action's id, order, status and times; and each owner, reminder and origin. An action still `pending` is loaded as `cancelled`, with `error` "Not sent: the hub was restored from an export.", so a machine paired again never replays an old change and nothing waits for a hub that will never apply it.
+- It keeps every item's id, key, times, comments, repeat, parent, tags and attachments; every action's id, order, status, times, author and machine; and each owner, reminder and origin. An action still `pending` is loaded as `cancelled`, with `error` "Not sent: the hub was restored from an export.", so a machine paired again never replays an old change and nothing waits for a hub that will never apply it.
 - It does not record the setup wizard as done; the wizard goes on to its next step.
-- The answer counts what it loaded, `attachments` included, and lists what to do again: pair each machine in `machines`, turn the calendar feed on again when `calendarFeed` is true, and turn notifications on, on each device. A machine paired again under its old name gets back the items its agents added.
+- The answer counts what it loaded, `attachments` included, and lists what to do again: pair each machine in `machines`, turn the calendar feed on again when `calendarFeed` is true, and turn notifications on, on each device. A machine paired again under its old name is again the owner of the items its agents added.
 
 
 ## Bridge API
@@ -479,6 +480,8 @@ Every request carries `Authorization: Bearer <token>`. The token names the bridg
 | `POST /bridge/v1/actions/{id}/result` | `{"ok": true, "beadId"?: "…"} ` or `{"ok": false, "error": "…"}` | `204`; marks it `applied` or `failed`. `beadId` is the created bead for `add`. |
 | `PUT /bridge/v1/runs` | `[]RunReport`: `{"repo", "beadId", …Run, "applying"?}` for every run the bridge knows, live and the latest settled one per bead; `applying` is the id of an ask or stop already applied to that run whose result the bridge has not posted yet | `204`; replaces this bridge's run list. The hub shows each on the item it names (see Agent runs) and ignores one whose item it does not hold. |
 | `POST /bridge/v1/personal[?project=<name>]` | `PersonalTodo` | `201` with `{"key", "id"}` of the new item on the personal list or the project, or `200` with the same for a repeated `id` |
+| `GET /bridge/v1/personal[?project=<name>]` | | `200` with `[]Item` of the personal list or the project (see Agents: reading the lists) |
+| `GET /bridge/v1/projects` | | `200` with `[{"name", "open"}]` (see Agents: reading the lists) |
 
 The bridge sends its run list whenever a run changes, at most once a second, and with every full push. It also sends it right before the result of an ask or stop, naming that action in `applying`: the hub then shows the action's note but not its effect on the run, which the list already holds. It keeps a bead's latest settled run while the bead is in its set.
 
@@ -493,7 +496,7 @@ An agent adds a personal to-do with `POST /bridge/v1/personal` and the bridge to
 - `title` is required, up to 1000 characters.
 - `due` is an RFC 3339 time.
 - `repeat` is a `Repeat` (see Repeating to-dos) and needs `due`.
-- `parent` is the `id` of an item this machine added to the same list, open and top-level; the new item is its sub-task (see Sub-tasks). Any other id answers `404`; a closed parent or a sub-task `400`.
+- `parent` is the `id` of an item of the same list, open and top-level, whoever added it; the new item is its sub-task (see Sub-tasks). An id the list does not hold answers `404`; a closed parent or a sub-task `400`.
 - `note`, up to 10000 characters, becomes the item's first comment.
 - `labels` are the item's tags, by the rules in Tags. `meat-mode add --tag <tag>` sets one and repeats for more.
 - `author` is the agent's name, shown as the item's creator and the note's author. It defaults to the token's machine name.
@@ -505,9 +508,20 @@ curl -fsS https://meat-mode.example.com/bridge/v1/personal \
   -d '{"title": "Renew the library card", "due": "2026-03-02T09:00:00Z", "author": "planner"}'
 ```
 
-### Agents: changing their personal to-dos
+### Agents: reading the lists
 
-An agent can read and change a personal to-do that its machine's token added, and no other: an item added from another machine, from the app, or moved from a bridge's personal repo answers `404`, the same as an id that does not exist.
+Any paired machine's token reads every item of the personal list and of every project, whoever added it: the user in the app, any machine's agents, or the move from a bridge's personal repo. A paired machine can therefore read all of the user's personal data on the hub's lists, and change it as below. There is no setting that narrows this; revoking a machine ends it.
+
+| Method and path | Response |
+|---|---|
+| `GET /bridge/v1/personal[?project=<name>][&status=…][&q=…][&tag=…]` | `200` with `[]Item`, oldest first by `firstSeen`, each as `GET /bridge/v1/personal/{id}` shows it. `status` is `open` (the default: every item not closed), `closed` (done or deleted, for the 7 days the app shows them) or `all`; any other value answers `400`. `q` keeps items whose title holds it, without case. `tag` keeps items with that tag, without case, and repeats: an item must have every tag given. Sub-tasks are listed like other items, with `parent`. A project with nothing in it gives `[]`. |
+| `GET /bridge/v1/projects` | `200` with `[{"name", "open"}]` by name: each project the app shows (see Identity) and how many of its items are open. |
+
+`project` and its `400` work as in Agents: projects. These calls leave the bridge's last-seen time alone. On a paired machine, `meat-mode list` (with `--project`, `--closed` or `--all`, `--search` and `--tag`), `meat-mode show <id>` and `meat-mode projects` make them; each takes `--json` to print the hub's answer as it is.
+
+### Agents: changing personal to-dos
+
+An agent can read and change any personal to-do, whoever added it. An id the list does not hold, and a closed item past the 7 days the app shows it, answer `404`.
 
 | Method and path | Body | Response |
 |---|---|---|
@@ -516,7 +530,9 @@ An agent can read and change a personal to-do that its machine's token added, an
 
 Like the add, these calls leave the bridge's last-seen time alone, and take `?project=<name>` for a to-do in a project. An `edit` with `labels` sets the to-do's tags. `meat-mode edit --tag <tag>` adds a tag and `--untag <tag>` removes one, each repeatable: the command reads the to-do, works out the new list and sends it as `labels`. On a paired machine, `meat-mode edit`, `meat-mode done` and `meat-mode reopen` make them with the bridge's own config (see [deploy.md](deploy.md#let-agents-add-to-your-personal-list)).
 
-`PersonalChange` is `{"id"?, "kind", "payload", "author"?}`. `kind` is `edit` (payload `{"set": Edit}`), `done`, `reopen`, `dismiss` or `note` (payload `{"text"}`), with the rules of the app's actions above. `id` and `author` work as for `PersonalTodo`.
+`PersonalChange` is `{"id"?, "kind", "payload", "author"?}`. `kind` is `edit` (payload `{"set": Edit}`), `done`, `reopen`, `dismiss` or `note` (payload `{"text"}`), with the rules of the app's actions above. `id` and `author` work as for `PersonalTodo`. An `edit`'s `parent` and `subtasksDone` name items of the same list, whoever added them; an id the list does not hold answers `404`.
+
+The applied `Action` carries `author` and `machine`, the name of the machine whose token posted it; so do the `add` and its note. The app's recent actions (`GET /api/actions`) show both, and the user undoes an agent's change by hand, as the app offers no Undo from that list. An agent's change sends no notification of its own; a due time it sets reminds as any other does.
 
 ```sh
 curl -fsS https://meat-mode.example.com/bridge/v1/personal/mm-12/actions \
@@ -526,7 +542,7 @@ curl -fsS https://meat-mode.example.com/bridge/v1/personal/mm-12/actions \
 
 ### Agents: projects
 
-`POST /bridge/v1/personal?project=<name>`, `GET /bridge/v1/personal/{id}?project=<name>` and `POST /bridge/v1/personal/{id}/actions?project=<name>` work as above on the project `<name>` instead of the personal list. Without `project` they use the personal list. The first add to a project makes it, and a machine reads and changes only what its own token added there, as on the personal list; an item in another project, or on the personal list, answers `404`. An agent's `edit` with `parent` or `subtasksDone` names only items its machine added; any other id answers `404`. A name that is not a repo name, or is `personal`, answers `400`. On a paired machine, `meat-mode add`, `edit`, `done` and `reopen` take `--project <name>`, and `--project .` names the project after the Git repo of the current folder as the bridge names repos (see Identity), a linked worktree answering for its main checkout.
+`POST /bridge/v1/personal?project=<name>`, `GET /bridge/v1/personal?project=<name>`, `GET /bridge/v1/personal/{id}?project=<name>` and `POST /bridge/v1/personal/{id}/actions?project=<name>` work as above on the project `<name>` instead of the personal list. Without `project` they use the personal list. The first add to a project makes it, and any machine reads and changes every item there, as on the personal list; an item in another project, or on the personal list, answers `404`. A name that is not a repo name, or is `personal`, answers `400`. On a paired machine, `meat-mode add`, `list`, `show`, `edit`, `done` and `reopen` take `--project <name>`, and `--project .` names the project after the Git repo of the current folder as the bridge names repos (see Identity), a linked worktree answering for its main checkout.
 
 ```sh
 curl -fsS 'https://meat-mode.example.com/bridge/v1/personal?project=projects/garden' \

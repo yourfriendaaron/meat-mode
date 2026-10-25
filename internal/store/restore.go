@@ -37,6 +37,19 @@ const CancelledByRestore = "Not sent: the hub was restored from an export."
 var exportUpgrades = []func(json.RawMessage) (json.RawMessage, error){
 	upgradeExportV1,
 	upgradeExportV2,
+	upgradeExportV3,
+}
+
+// upgradeExportV3 turns version 3 into version 4, which added the machine
+// of an agent's action. A version 3 file names none, so only its version
+// changes.
+func upgradeExportV3(raw json.RawMessage) (json.RawMessage, error) {
+	var file map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return nil, err
+	}
+	file["version"] = json.RawMessage("4")
+	return json.Marshal(file)
 }
 
 // upgradeExportV1 turns version 1 into version 2, which added attachments
@@ -379,9 +392,9 @@ func (s *Store) load(ex api.Export) (api.RestoreResult, error) {
 		if err != nil {
 			return res, err
 		}
-		if _, err := tx.Exec(`INSERT INTO actions (seq, id, kind, bridge, repo, bead_id, payload, author, status, error, created_at, applied_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			a.Seq, a.ID, a.Kind, a.Bridge, a.Repo, a.BeadID, string(payload), a.Author, a.Status, a.Error,
+		if _, err := tx.Exec(`INSERT INTO actions (seq, id, kind, bridge, repo, bead_id, payload, author, machine, status, error, created_at, applied_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			a.Seq, a.ID, a.Kind, a.Bridge, a.Repo, a.BeadID, string(payload), a.Author, a.Machine, a.Status, a.Error,
 			fmtTime(a.CreatedAt), fmtTimePtr(a.AppliedAt)); err != nil {
 			return res, err
 		}
@@ -550,6 +563,9 @@ func checkExport(ex *api.Export) error {
 		}
 		if !onHub(a.Bridge) && !ValidBridgeName(a.Bridge) {
 			return invalidf("action %s names a machine %q that is not a valid machine name", a.ID, a.Bridge)
+		}
+		if a.Machine != "" && !ValidBridgeName(a.Machine) {
+			return invalidf("action %s names a machine %q that is not a valid machine name", a.ID, a.Machine)
 		}
 		if overTruncated(a.Author, maxCommentAuthorLen) {
 			return invalidf("action %s has an author longer than %d characters", a.ID, maxCommentAuthorLen)

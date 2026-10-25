@@ -205,7 +205,7 @@ func TestNoteEditDeleteRestore(t *testing.T) {
 	}
 }
 
-func TestAgentChangesOnlyItsOwnPersonalTodos(t *testing.T) {
+func TestAgentChangesAnyPersonalTodo(t *testing.T) {
 	s, c := open(t)
 	for _, name := range []string{"laptop", "desk"} {
 		_, err := s.CreateBridge(name)
@@ -220,20 +220,41 @@ func TestAgentChangesOnlyItsOwnPersonalTodos(t *testing.T) {
 	}
 	app := addPersonal(t, s, id2, "Water the plants", nil).BeadID
 
-	if it, err := s.PersonalItem("laptop", "", id); err != nil || it.Title != "Renew the library card" || it.Key != key {
-		t.Fatalf("own item = %+v, %v", it, err)
+	if it, err := s.PersonalItem("", id); err != nil || it.Title != "Renew the library card" || it.Key != key {
+		t.Fatalf("item = %+v, %v", it, err)
 	}
+	// Any machine reads and changes any item: the app's, and another
+	// machine's. The change carries the agent's name and its machine.
+	if it, err := s.PersonalItem("", app); err != nil || it.Title != "Water the plants" {
+		t.Fatalf("the app's item = %+v, %v", it, err)
+	}
+	a, _, err := s.ChangePersonal("desk", "", app, api.PersonalChange{Kind: api.KindNote, Payload: api.Payload{Text: "Twice a week"}, Author: "planner"})
+	must(t, err)
+	if a.Author != "planner" || a.Machine != "desk" || a.Status != api.StatusApplied {
+		t.Fatalf("change to the app's item %+v", a)
+	}
+	if as, err := s.RecentActions(1); err != nil || as[0].Machine != "desk" {
+		t.Fatalf("logged %+v, %v", as, err)
+	}
+	if it, err := s.PersonalItem("", app); err != nil || len(it.Comments) != 1 || it.Comments[0].Author != "planner" {
+		t.Fatalf("the app's item after the note %+v, %v", it, err)
+	}
+	if a, _, err := s.ChangePersonal("desk", "", id, api.PersonalChange{Kind: api.KindEdit, Payload: api.Payload{Set: &api.Edit{Priority: ptr(1)}}}); err != nil ||
+		a.Author != "desk" || a.Machine != "desk" {
+		t.Fatalf("change to another machine's item %+v, %v", a, err)
+	}
+	// An id the list does not hold answers not found, alike for each.
 	var msg string
-	for _, tc := range []struct{ bridge, id string }{{"desk", id}, {"laptop", app}, {"laptop", "mm-99"}, {"laptop", "../x"}} {
-		_, err := s.PersonalItem(tc.bridge, "", tc.id)
+	for _, bad := range []string{"mm-99", "../x"} {
+		_, err := s.PersonalItem("", bad)
 		if !errors.Is(err, ErrNotFound) {
-			t.Fatalf("%s reading %s: %v", tc.bridge, tc.id, err)
+			t.Fatalf("reading %s: %v", bad, err)
 		}
-		_, _, err = s.ChangePersonal(tc.bridge, "", tc.id, api.PersonalChange{Kind: api.KindDone})
+		_, _, err = s.ChangePersonal("laptop", "", bad, api.PersonalChange{Kind: api.KindDone})
 		if !errors.Is(err, ErrNotFound) {
-			t.Fatalf("%s changing %s: %v", tc.bridge, tc.id, err)
+			t.Fatalf("changing %s: %v", bad, err)
 		}
-		if got := strings.ReplaceAll(err.Error(), tc.id, "ID"); msg == "" {
+		if got := strings.ReplaceAll(err.Error(), bad, "ID"); msg == "" {
 			msg = got
 		} else if got != msg {
 			t.Errorf("message %q differs from %q", got, msg)
@@ -241,7 +262,7 @@ func TestAgentChangesOnlyItsOwnPersonalTodos(t *testing.T) {
 	}
 
 	due := time.Date(2026, 3, 9, 9, 0, 0, 0, time.UTC)
-	a, created, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{ID: id3, Kind: api.KindEdit,
+	a, created, err = s.ChangePersonal("laptop", "", id, api.PersonalChange{ID: id3, Kind: api.KindEdit,
 		Payload: api.Payload{Set: &api.Edit{Due: &due}}, Author: "planner"})
 	must(t, err)
 	if !created || a.Author != "planner" || a.Status != api.StatusApplied || a.Payload.Was == nil || !a.Payload.Was.ClearDue {
@@ -267,21 +288,21 @@ func TestAgentChangesOnlyItsOwnPersonalTodos(t *testing.T) {
 	if _, _, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: api.KindDone, Author: "a\nb"}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("bad author: %v", err)
 	}
-	it, err := s.PersonalItem("laptop", "", id)
+	it, err := s.PersonalItem("", id)
 	must(t, err)
 	if !it.DueAt.Equal(due) || len(it.Comments) != 1 || it.Comments[0].Author != "laptop" {
 		t.Fatalf("item %+v", it)
 	}
 
-	// A closed item stays the agent's for the week the app shows it.
+	// A closed item stays readable for the week the app shows it.
 	_, _, err = s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: api.KindDone})
 	must(t, err)
 	c.t = c.t.Add(6 * 24 * time.Hour)
-	if _, err := s.PersonalItem("laptop", "", id); err != nil {
+	if _, err := s.PersonalItem("", id); err != nil {
 		t.Fatalf("closed item within the week: %v", err)
 	}
 	c.t = c.t.Add(2 * 24 * time.Hour)
-	if _, err := s.PersonalItem("laptop", "", id); !errors.Is(err, ErrNotFound) {
+	if _, err := s.PersonalItem("", id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("closed item past the week: %v", err)
 	}
 	if _, _, err := s.ChangePersonal("laptop", "", id, api.PersonalChange{Kind: api.KindReopen}); !errors.Is(err, ErrNotFound) {
@@ -289,15 +310,16 @@ func TestAgentChangesOnlyItsOwnPersonalTodos(t *testing.T) {
 	}
 }
 
-// Items moved from a bridge's personal repo belong to no machine.
-func TestImportedPersonalItemsHaveNoOwner(t *testing.T) {
+// Items moved from a bridge's personal repo belong to no machine, and any
+// machine's agents read them as they do the rest of the list.
+func TestImportedPersonalItemsAreOnTheList(t *testing.T) {
 	s, _ := open(t)
 	_, err := s.CreateBridge("laptop")
 	must(t, err)
 	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "personal", Personal: true, OptedIn: true}}))
 	must(t, s.ReplaceItems("laptop", "personal", []api.Item{{ID: "td-1", Title: "Call Sam", Status: "open"}}))
-	if _, err := s.PersonalItem("laptop", "", "td-1"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("imported item: %v", err)
+	if it, err := s.PersonalItem("", "td-1"); err != nil || it.Title != "Call Sam" {
+		t.Fatalf("imported item: %+v, %v", it, err)
 	}
 }
 
@@ -496,7 +518,7 @@ func TestAddWithRepeat(t *testing.T) {
 	key, _, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Take the bins out", Due: &due, Repeat: &daily}, "desk", "")
 	must(t, err)
 	_, _, id, _ := SplitKey(key)
-	it, err := s.PersonalItem("desk", "", id)
+	it, err := s.PersonalItem("", id)
 	must(t, err)
 	if it.Repeat == nil || !it.Repeat.Start.Equal(due) {
 		t.Fatalf("agent's repeat %+v", it.Repeat)
@@ -506,7 +528,7 @@ func TestAddWithRepeat(t *testing.T) {
 	}
 	a, _, err := s.ChangePersonal("desk", "", id, api.PersonalChange{Kind: api.KindDone})
 	must(t, err)
-	it, err = s.PersonalItem("desk", "", id)
+	it, err = s.PersonalItem("", id)
 	must(t, err)
 	if it.Status != "open" || !it.DueAt.Equal(due.Add(24*time.Hour)) || a.Payload.Was == nil || !a.Payload.Was.Due.Equal(due) {
 		t.Fatalf("agent's done %+v, item %+v", a, it)

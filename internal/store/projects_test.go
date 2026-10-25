@@ -83,7 +83,7 @@ func TestProjectItemsBehaveLikePersonalOnes(t *testing.T) {
 	}
 }
 
-func TestProjectsKeepEachMachinesItemsApart(t *testing.T) {
+func TestProjectsKeepTheirItemsApart(t *testing.T) {
 	s, _ := open(t)
 	for _, name := range []string{"laptop", "desk"} {
 		_, err := s.CreateBridge(name)
@@ -93,11 +93,15 @@ func TestProjectsKeepEachMachinesItemsApart(t *testing.T) {
 	must(t, err)
 	_, _, id, _ := SplitKey(key)
 
-	if it, err := s.PersonalItem("laptop", garden, id); err != nil || it.Key != key {
-		t.Fatalf("own project item = %+v, %v", it, err)
+	if it, err := s.PersonalItem(garden, id); err != nil || it.Key != key {
+		t.Fatalf("project item = %+v, %v", it, err)
 	}
-	for _, tc := range []struct{ bridge, project string }{{"desk", garden}, {"laptop", ""}, {"laptop", "projects/other"}} {
-		if _, err := s.PersonalItem(tc.bridge, tc.project, id); !errors.Is(err, ErrNotFound) {
+	// Any machine's agents read it in its project, and in no other list.
+	if a, _, err := s.ChangePersonal("desk", garden, id, api.PersonalChange{Kind: api.KindNote, Payload: api.Payload{Text: "Keep it short"}}); err != nil || a.Machine != "desk" {
+		t.Fatalf("another machine's note = %+v, %v", a, err)
+	}
+	for _, tc := range []struct{ bridge, project string }{{"laptop", ""}, {"laptop", "projects/other"}} {
+		if _, err := s.PersonalItem(tc.project, id); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s reading in %q: %v", tc.bridge, tc.project, err)
 		}
 		if _, _, err := s.ChangePersonal(tc.bridge, tc.project, id, api.PersonalChange{Kind: api.KindDone}); !errors.Is(err, ErrNotFound) {
@@ -123,7 +127,7 @@ func TestProjectNames(t *testing.T) {
 		if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Water the plants"}, "laptop", name); !errors.Is(err, ErrInvalid) {
 			t.Errorf("project %q: %v", name, err)
 		}
-		if _, err := s.PersonalItem("laptop", name, "mm-1"); !errors.Is(err, ErrInvalid) {
+		if _, err := s.PersonalItem(name, "mm-1"); !errors.Is(err, ErrInvalid) {
 			t.Errorf("reading in project %q: %v", name, err)
 		}
 	}
@@ -195,7 +199,7 @@ func TestMigrationElevenKeepsOwners(t *testing.T) {
 	s, err = Open(dir)
 	must(t, err)
 	defer s.Close()
-	if it, err := s.PersonalItem("laptop", "", id); err != nil || it.Key != key {
+	if it, err := s.PersonalItem("", id); err != nil || it.Key != key {
 		t.Fatalf("owned item after the migration = %+v, %v", it, err)
 	}
 }
