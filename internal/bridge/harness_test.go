@@ -21,7 +21,8 @@ func (w *world) runLog(bead, run string) string {
 
 // A steering harness takes a note into the live run at once.
 func TestFakeHarnessSteers(t *testing.T) {
-	t.Setenv("FAKEAGENT_STEP", "2s")
+	// Each step outlasts the note's delivery, which runs bd and slows on a busy machine.
+	t.Setenv("FAKEAGENT_STEP", "6s")
 	w, dir, id := agentWorld(t)
 	b := w.agentBridgeWith(true, fakeHarness(t, nil))
 	w.tick(b)
