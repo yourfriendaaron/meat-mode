@@ -50,6 +50,7 @@ test("a sub-task names its parent, and Delete takes open sub-tasks along under o
   await expect(detail.locator(".subtasks .sub")).toHaveCount(2);
   await axe(page);
 
+  await detail.getByRole("button", { name: "More actions" }).click();
   await detail.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.locator(".toast")).toContainText("Deleted: Call Sam about the weekend and 2 sub-tasks");
   expect(hub.posted.filter((a) => a.kind === "dismiss").map((a) => a.key)).toEqual([
@@ -79,16 +80,15 @@ test("a sub-task whose parent is not synced shows on its own row with the parent
   await expect(r.locator(".chip-parent")).toHaveText("Part of Garden plan");
 });
 
-test("the edit form moves an item under another and back to the top level, each with Undo", async ({ page, hub }) => {
+test("the Sub-task of row moves an item under another and back to the top level, each with Undo", async ({ page, hub }) => {
   await openApp(page);
   await row(page, "Call Sam about the weekend").locator(".row-body").click();
   const detail = page.locator("#detail");
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
   const field = detail.getByLabel("Sub-task of");
   await expect(field).toHaveValue("");
   // Only open top-level items of the same list are offered, never the item itself.
   await expect(field.locator("option")).toHaveText([
-    "None, a top-level task",
+    "None",
     "Buy seeds",
     "Fix the gate latch",
     "Plan the garden layout",
@@ -96,8 +96,8 @@ test("the edit form moves an item under another and back to the top level, each 
     "Water the plants",
   ]);
   await axe(page);
+  // The row saves as soon as it changes.
   await field.selectOption({ label: "Water the plants" });
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(() => hub.posted.at(-1)).toEqual({ id: expect.any(String), kind: "edit", key: "hub/personal/pe-3", payload: { set: { parent: "pe-1" } } });
   expect(hub.find("hub/personal/pe-3")!.parent).toBe("pe-1");
   await expect(row(page, "Call Sam about the weekend")).toHaveClass(/row-sub/);
@@ -113,16 +113,13 @@ test("the edit form moves an item under another and back to the top level, each 
   hub.find("hub/personal/pe-3")!.parent = "pe-1";
   await page.reload();
   await row(page, "Water the plants").locator(".row-body").click();
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(detail.locator("#d-title")).toHaveText("Water the plants");
   await expect(detail.getByLabel("Sub-task of")).toHaveCount(0);
-  await detail.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // A sub-task moves to the top level.
   await row(page, "Call Sam about the weekend").locator(".row-body").click();
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(detail.getByLabel("Sub-task of")).toHaveValue("pe-1");
-  await detail.getByLabel("Sub-task of").selectOption({ label: "None, a top-level task" });
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await detail.getByLabel("Sub-task of").selectOption({ label: "None" });
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ parent: "" });
   await expect(row(page, "Call Sam about the weekend")).not.toHaveClass(/row-sub/);
   await expect(detail.locator(".d-parent")).toHaveCount(0);
@@ -134,8 +131,7 @@ test("an agent's item has no move control", async ({ page, hub }) => {
   await row(page, "Order compost for the beds").locator(".row-body").click();
   const detail = page.locator("#detail");
   await expect(detail.locator("#d-title")).toHaveText("Order compost for the beds");
-  await expect(detail.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
-  await expect(detail.locator("#edit-parent")).toHaveCount(0);
+  await expect(detail.locator("#p-parent")).toHaveCount(0);
 });
 
 test.describe("on a phone", () => {
@@ -146,7 +142,6 @@ test.describe("on a phone", () => {
     await openApp(page);
     await row(page, "Call Sam about the weekend").locator(".row-body").click();
     const detail = page.locator("#detail");
-    await detail.getByRole("button", { name: "Edit", exact: true }).click();
     const field = detail.getByLabel("Sub-task of");
     await expect(field).toHaveValue("");
     const box = (await field.boundingBox())!;

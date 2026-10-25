@@ -1408,25 +1408,21 @@ select.qa-pill {
   }
 }
 
-/* ---------- editing personal items ---------- */
+/* ---------- the task sheet of a personal item ---------- */
 
-.edit-form,
 .note-edit {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
-.edit-form label {
-  font-size: 13px;
-  color: var(--role-soft);
-  margin-top: 4px;
-}
-.edit-form input,
-.edit-form select,
-.edit-form textarea,
 .note-edit textarea,
-.d-section > .pick-row input {
+.d-section > .pick-row input,
+.d-section textarea#d-desc,
+.d-title-input,
+.prop-edit input,
+.sched-form input[type="text"],
+.prop-ctl input {
   width: 100%;
   min-width: 0;
   min-height: 36px;
@@ -1436,66 +1432,9 @@ select.qa-pill {
   background: var(--role-bg);
   font-size: 16px;
 }
-.edit-form textarea,
 .note-edit textarea {
   resize: vertical;
 }
-.edit-form .pick-row input {
-  flex: 1;
-}
-.edit-form input[type="checkbox"] {
-  width: 18px;
-  min-height: 18px;
-  margin: 0;
-  flex: none;
-}
-.repeat-opts {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-left: 12px;
-  border-left: 2px solid var(--role-line);
-}
-.repeat-opts .pick-row {
-  align-items: center;
-}
-.repeat-opts .pick-row input {
-  flex: 0 0 88px;
-}
-.repeat-opts .until-row input {
-  flex: 1;
-}
-/* The days on an even grid, so the second row lines up with the first. */
-.weekdays {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0 12px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.weekdays legend {
-  float: left;
-  grid-column: 1 / -1;
-  width: 100%;
-  padding: 0;
-  font-size: 13px;
-  color: var(--role-soft);
-}
-.edit-form .wd,
-.edit-form .check-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  min-height: 36px;
-  font-size: 15px;
-  color: var(--role-fg);
-}
-.repeat-opts .small {
-  margin: 0;
-}
-.edit-due-now,
 .snooze-type-now {
   margin: 0;
   font-size: 13px;
@@ -1507,11 +1446,430 @@ select.qa-pill {
 .snooze-time:has(input[aria-invalid="true"]) .snooze-type-now {
   color: var(--role-error);
 }
-.edit-form .row-error {
+
+/* The title turns into a field in place; the button looks like the heading it replaces. */
+.d-title-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.d-title-input {
+  font-size: 18px;
+  font-weight: 650;
+}
+.inline-form {
   margin: 0;
 }
-.edit-form .btn-row {
+
+/* The schedule card: when, in a sentence, and the way to the Schedule page. */
+.sched-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 40px 12px 14px;
+  border: 1px solid var(--role-line);
+  border-radius: var(--radius);
+  background: var(--role-pane);
+  color: var(--role-fg);
+  text-align: left;
+}
+.sched-card:hover {
+  border-color: var(--role-action);
+}
+.sched-when {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--role-date);
+}
+.sched-when.is-overdue {
+  color: var(--role-overdue);
+}
+.sched-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--role-soft);
+}
+.sched-line svg {
+  width: 15px;
+  height: 15px;
+}
+.sched-chev {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--role-soft);
+}
+
+/* Label and value rows, as a settings list. */
+.props {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--role-line);
+  border-radius: var(--radius);
+  background: var(--role-raise);
+  overflow: hidden;
+}
+.prop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 6px 4px 14px;
+  margin: 0;
+}
+.props > * + * {
+  border-top: 1px solid var(--role-line);
+}
+.prop-label {
+  flex: none;
+  font-size: 15px;
+  color: var(--role-soft);
+}
+.prop-val {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  padding-right: 8px;
+  text-align: right;
+}
+.prop-select {
+  min-width: 0;
+  max-width: 62%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--role-fg);
+  font-size: 15px;
+  text-align: right;
+  text-align-last: right;
+  cursor: pointer;
+}
+.prop-select:hover {
+  border-color: var(--role-line);
+}
+.prop-link {
+  color: var(--role-action);
+  font-size: 15px;
+}
+.prop-edit input {
+  flex: 1;
+}
+.prop-hint {
+  margin: 4px 14px 8px;
+  border-top: 0 !important;
+}
+.props > .row-error {
+  margin: 0;
+  padding: 0 14px 8px;
+  border-top: 0;
+}
+.prop-ctl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.prop-ctl input {
+  width: auto;
+  font-size: 15px;
+}
+.prop-ctl input[type="number"] {
+  width: 76px;
+}
+#sched-unit {
+  min-width: 52px;
+  color: var(--role-soft);
+}
+
+.d-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.d-desc {
+  overflow-wrap: anywhere;
+}
+.d-section textarea#d-desc {
+  min-height: 96px;
+  resize: vertical;
+}
+.add-details {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 8px 2px;
+  border: 0;
+  background: none;
+  color: var(--role-soft);
+}
+.add-details:hover {
+  color: var(--role-fg);
+}
+
+/* The action bar sits on the sheet's bottom edge while the sheet scrolls. It
+   spans the padding, as the head does. */
+.d-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  margin: auto calc(-18px - var(--safe-right)) calc(-20px - var(--safe-bottom)) calc(-18px - var(--safe-left));
+  padding: 10px calc(18px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(18px + var(--safe-left));
+  border-top: 1px solid var(--role-line);
+  background: var(--role-pane);
+}
+.d-bar > .btn {
+  flex: 1;
+  min-height: 44px;
+}
+.more-wrap {
+  position: relative;
+  flex: none;
+}
+.more-wrap > .btn {
+  min-width: 48px;
+  min-height: 44px;
+  padding: 6px 12px;
+}
+.more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--role-line);
+  border-radius: var(--radius);
+  background: var(--role-pane);
+  box-shadow: var(--role-shadow);
+}
+.more-menu[hidden] {
+  display: none;
+}
+.more-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--role-fg);
+  text-align: left;
+}
+.more-item:hover {
+  background: var(--role-hover);
+}
+.more-item code {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--role-soft);
+}
+.more-danger {
+  color: var(--role-danger);
+}
+
+/* A page inside the sheet: Schedule or Snooze. */
+.page-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: -10px calc(-18px - var(--safe-right)) 0 calc(-18px - var(--safe-left));
+  padding: 10px calc(18px + var(--safe-right)) 8px calc(18px + var(--safe-left));
+  background: var(--role-pane);
+}
+.page-back {
+  justify-self: start;
+  min-height: 36px;
+  color: var(--role-action);
+  font-size: 15px;
+}
+.page-back svg {
+  width: 16px;
+  height: 16px;
+}
+.page-title {
+  font-size: 17px;
+  font-weight: 650;
+}
+.page-act {
+  justify-self: end;
+}
+.page-sub {
+  margin: -6px 0 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.sched-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.sched-typed-label {
+  font-size: 13px;
+  color: var(--role-soft);
+}
+.sched-form > input[type="text"] {
+  min-height: 44px;
+  margin-top: -6px;
+}
+.readout {
+  margin: -4px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--role-done);
+  border-radius: 0 8px 8px 0;
+  background: var(--role-run-done-tint);
+  font-size: 14px;
+}
+.readout-bad {
+  border-left-color: var(--role-error);
+  background: var(--role-run-stopped-tint);
+}
+.sched-or {
   margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--role-soft);
+}
+.sched-form .muted.small {
+  margin: -4px 2px 0;
+}
+.seg,
+.days {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.seg legend,
+.days legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--role-soft);
+}
+.seg-row {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--role-line);
+  border-radius: var(--radius);
+  background: var(--role-bg);
+}
+.seg-opt,
+.day-chip {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.seg-opt input,
+.day-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.seg-opt span {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0 4px;
+  border-radius: 7px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.seg-opt input:checked + span {
+  background: var(--role-action);
+  color: var(--role-on-accent);
+  font-weight: 600;
+}
+.seg-opt input:focus-visible + span,
+.day-chip input:focus-visible + span {
+  outline: 2px solid var(--role-focus);
+  outline-offset: 2px;
+}
+.days-row {
+  display: flex;
+  gap: 4px;
+}
+.day-chip span {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  border: 1px solid var(--role-line);
+  border-radius: 8px;
+  background: var(--role-raise);
+  font-size: 13px;
+}
+.day-chip input:checked + span {
+  border-color: var(--role-action);
+  background: var(--role-action);
+  color: var(--role-on-accent);
+  font-weight: 600;
+}
+.days:disabled .day-chip span {
+  opacity: 0.45;
+}
+.days:disabled .day-chip input {
+  cursor: not-allowed;
+}
+.sched-form .row-error {
+  margin: 0;
+  font-size: 14px;
+}
+.sched-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--role-action);
+  border-radius: var(--radius);
+  background: var(--role-new-tint);
+}
+.ask-q {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.sched-ask .muted.small {
+  margin: 0 0 4px;
+}
+.sched-ask .link-btn {
+  align-self: flex-start;
 }
 .subtasks {
   list-style: none;
@@ -2390,6 +2748,18 @@ select.qa-pill {
   .d-head {
     margin: -20px -20px 0;
     padding: 20px 20px 6px;
+  }
+  .page-head {
+    margin: -20px -20px 0;
+    padding: 20px 20px 8px;
+  }
+  /* The pane is full height, so the bar sits on its bottom edge. */
+  .detail-inner {
+    min-height: 100%;
+  }
+  .d-bar {
+    margin: auto -20px -20px;
+    padding: 12px 20px;
   }
   .detail-empty {
     display: grid;

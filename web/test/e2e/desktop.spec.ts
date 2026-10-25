@@ -66,7 +66,9 @@ test("opens detail, marks it seen, and saves a note", async ({ page, hub }) => {
   await expect(detail.getByRole("heading", { name: "Approve the new footer text" })).toBeVisible();
   await expect(detail.locator(".why-label")).toHaveText("planner asks because");
   await expect(detail.locator(".note-unread")).toHaveCount(1);
+  await detail.getByRole("button", { name: "More actions" }).click();
   await expect(detail.getByRole("button", { name: "Won't do" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect.poll(() => hub.requests).toContain("POST /api/items/home%2Fwebsite%2Fwe-1/seen");
   await expect(row(page, "Approve the new footer text").locator(".chip-new")).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get("item")).toBe("home/website/we-1");
@@ -203,6 +205,7 @@ test("Won't do and Snooze all are undoable; Done today reopens", async ({ page, 
   expect(back.every((a) => a.kind === "snooze" && a.payload.until === null)).toBe(true);
 
   await row(page, "Order compost for the beds").locator(".row-body").click();
+  await page.locator("#detail").getByRole("button", { name: "More actions" }).click();
   await page.locator("#detail").getByRole("button", { name: "Won't do" }).click();
   await expect(page.locator(".group-done")).toContainText("Order compost for the beds");
   await page.getByRole("button", { name: "Undo" }).click();
@@ -217,6 +220,7 @@ test("Delete removes a personal task everywhere and is undoable", async ({ page,
   await openApp(page);
   await row(page, "Call Sam about the weekend").locator(".row-body").click();
   const detail = page.locator("#detail");
+  await detail.getByRole("button", { name: "More actions" }).click();
   await expect(detail.getByRole("button", { name: "Won't do" })).toHaveCount(0);
   await detail.getByRole("button", { name: "Delete" }).click();
   await expect(detail.getByRole("heading", { name: "Call Sam about the weekend" })).toHaveCount(0);
@@ -319,6 +323,8 @@ test("snooze to a picked time; failed actions show their error", async ({ page, 
   await expect(row(page, "Fix the gate latch").locator(".row-error")).toHaveText("bd: issue is locked");
   await row(page, "Fix the gate latch").locator(".row-body").click();
   const detail = page.locator("#detail");
+  // Snooze opens its page in the sheet.
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   const typed = detail.getByRole("textbox", { name: "Or type a time" });
   const snooze = detail.getByRole("button", { name: "Snooze", exact: true });
   await expect(snooze).toBeDisabled();
@@ -388,6 +394,7 @@ test("snooze to a typed time", async ({ page, hub }) => {
   await page.getByRole("button", { name: /Everything/ }).click();
   await row(page, "Fix the gate latch").locator(".row-body").click();
   const detail = page.locator("#detail");
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await detail.getByRole("textbox", { name: "Or type a time" }).fill("tomorrow morning");
   await expect(detail.locator(".snooze-type-now")).toHaveText("Tomorrow, 9:00");
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();

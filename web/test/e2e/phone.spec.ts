@@ -103,7 +103,13 @@ test("detail opens in a bottom sheet with a scrim", async ({ page, hub }) => {
 });
 
 test("the detail head stays in view when the sheet scrolls to the note", async ({ page, hub }) => {
-  void hub;
+  // Enough notes that the sheet scrolls.
+  hub.find("home/garden/ga-1")!.comments = Array.from({ length: 8 }, (_, i) => ({
+    id: `n${i}`,
+    author: "planner",
+    text: `Checked the compost supplier, round ${i + 1}.`,
+    createdAt: `2026-10-13T0${i}:00:00Z`,
+  }));
   await openApp(page);
   await row(page, "Order compost for the beds").locator(".row-body").click();
   const sheet = page.locator("#detail");
@@ -114,6 +120,9 @@ test("the detail head stays in view when the sheet scrolls to the note", async (
   const close = (await sheet.getByRole("button", { name: "Close details" }).boundingBox())!;
   expect(close.y).toBeGreaterThanOrEqual(box.y);
   expect(close.y + close.height).toBeLessThanOrEqual(box.y + box.height);
+  // So does the action bar, at the bottom.
+  const done = (await sheet.getByRole("button", { name: "Done", exact: true }).boundingBox())!;
+  expect(done.y + done.height).toBeLessThanOrEqual(box.y + box.height);
   await sheet.getByRole("button", { name: "Close details" }).click();
   await expect(sheet).toBeHidden();
 });

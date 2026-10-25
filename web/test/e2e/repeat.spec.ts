@@ -101,86 +101,97 @@ test("Done moves a repeating item to its next date, and Undo moves it back", asy
   await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
 });
 
-test("the edit form sets, changes and ends a repeat", async ({ page, hub }) => {
+/** Opens the Schedule page from the sheet's schedule card. */
+async function openSchedule(page: Page) {
+  const detail = page.locator("#detail");
+  await detail.locator("#d-sched").click();
+  await expect(detail.getByRole("heading", { name: "Schedule" })).toBeVisible();
+  return detail;
+}
+
+const save = (page: Page) => page.locator("#detail").getByRole("button", { name: "Save", exact: true }).click();
+
+test("the Schedule page sets, changes and ends a repeat", async ({ page, hub }) => {
   await openApp(page);
-  const detail = await openDetail(page, "Call Sam about the weekend");
-  const edit = detail.getByRole("button", { name: "Edit", exact: true });
-  await edit.click();
-  const repeat = detail.getByLabel("Repeat", { exact: true });
-  await expect(repeat).toHaveValue("");
-  await repeat.selectOption({ label: "Weekly" });
+  await openDetail(page, "Call Sam about the weekend");
+  let detail = await openSchedule(page);
+  await expect(detail.getByRole("radio", { name: "Never" })).toBeChecked();
+  await detail.getByRole("radio", { name: "Week" }).check();
   await detail.getByLabel("Every").fill("2");
-  await expect(detail.locator("#edit-unit")).toHaveText("weeks");
-  await detail.getByRole("checkbox", { name: "Mon" }).check();
+  await expect(detail.locator("#sched-unit")).toHaveText("weeks");
   await detail.getByRole("checkbox", { name: "Thu" }).check();
+  await detail.getByRole("checkbox", { name: "Mon" }).check();
+  // Today is a Wednesday, so the date moved to the first day picked.
+  await expect(detail.getByLabel("Date", { exact: true })).toHaveValue("2026-10-15");
+  await expect(detail.locator("#sched-readout")).toHaveText("Every 2 weeks on Mon and Thu at 14:30. Next: Tomorrow.");
   await axe(page);
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
-  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ repeat: { every: "week", interval: 2, weekdays: [1, 4], timeZone: "UTC" } });
-  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every 2 weeks on Mon, Thu");
+  await save(page);
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ due: "2026-10-15T14:30:00.000Z", repeat: { every: "week", interval: 2, weekdays: [1, 4], timeZone: "UTC" } });
+  await expect(detail.locator("#d-sched")).toContainText("Every 2 weeks on Mon and Thu");
   await expect(row(page, "Call Sam about the weekend").locator(".chip-repeat")).toHaveText("Every 2 weeks on Mon, Thu");
 
-  // Counting from done drops the weekdays, which the hub does not take with it.
-  await edit.click();
-  await expect(repeat).toHaveValue("week");
+  // Counting from done keeps the days on screen, greyed out, and leaves them out of the rule.
+  detail = await openSchedule(page);
   await expect(detail.getByLabel("Every")).toHaveValue("2");
-  await detail.getByRole("checkbox", { name: "Count the next date from when it is done" }).check();
-  await expect(detail.getByRole("checkbox", { name: "Mon" })).toHaveCount(0);
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await detail.getByRole("radio", { name: "When I finish" }).check();
+  await expect(detail.getByRole("checkbox", { name: "Mon" })).toBeDisabled();
+  await expect(detail.getByRole("checkbox", { name: "Mon" })).toBeChecked();
+  await expect(detail.locator("#sched-from-hint")).toHaveText("The next one is 2 weeks after the day you finish this one.");
+  await save(page);
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ repeat: { every: "week", interval: 2, fromDone: true, timeZone: "UTC" } });
-  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every 2 weeks after done");
+  await expect(detail.locator("#d-sched")).toContainText("Then 2 weeks after you finish it");
 
-  await edit.click();
-  await repeat.selectOption({ label: "Does not repeat" });
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  detail = await openSchedule(page);
+  await detail.getByRole("radio", { name: "Never" }).check();
+  await save(page);
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ clearRepeat: true });
-  await expect(detail.locator(".chip-repeat")).toHaveCount(0);
+  await expect(detail.locator("#d-sched")).toContainText("Does not repeat");
 
   await expect(page.locator("#toast")).toContainText("Saved");
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toMatchObject({ repeat: { every: "week", interval: 2, fromDone: true } });
-  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every 2 weeks after done");
+  await expect(detail.locator("#d-sched")).toContainText("Then 2 weeks after you finish it");
 });
 
-test("the edit form sets and clears a repeat's end date", async ({ page, hub }) => {
+test("the Schedule page sets and clears a repeat's end date", async ({ page, hub }) => {
   hub.find(KEY)!.repeat = { every: "day", timeZone: "UTC", start: hub.find(KEY)!.dueAt! };
   await openApp(page);
-  const detail = await openDetail(page, "Water the plants");
-  const edit = detail.getByRole("button", { name: "Edit", exact: true });
-  await edit.click();
+  await openDetail(page, "Water the plants");
+  let detail = await openSchedule(page);
   const ends = detail.getByLabel("Ends");
   await expect(ends).toHaveValue("");
 
   // The due date is 14 October: an end before it is refused here.
   await ends.fill("2026-10-01");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await save(page);
   await expect(detail.getByRole("alert")).toHaveText("End the repeat on or after its due date.");
   await expect(ends).toBeFocused();
 
   await ends.fill("2026-11-26");
   await axe(page);
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await save(page);
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ repeat: { every: "day", until: "2026-11-26", timeZone: "UTC" } });
-  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every day until Nov 26");
+  await expect(detail.locator("#d-sched")).toContainText("Every day, until Nov 26");
   expect(hub.find(KEY)!.repeat).toMatchObject({ every: "day", until: "2026-11-26" });
 
-  await edit.click();
+  detail = await openSchedule(page);
   await expect(ends).toHaveValue("2026-11-26");
   await detail.getByRole("button", { name: "No end date" }).click();
   await expect(ends).toHaveValue("");
   await expect(ends).toBeFocused();
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await save(page);
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ repeat: { every: "day", timeZone: "UTC" } });
-  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every day");
+  await expect(detail.locator("#d-sched")).toContainText("Every day");
   expect(hub.find(KEY)!.repeat!.until).toBeUndefined();
 
   // Undo puts the end date back with the whole repeat.
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toMatchObject({ repeat: { every: "day", until: "2026-11-26" } });
-  await expect(detail.locator(".d-chips .chip-repeat")).toHaveText("Every day until Nov 26");
+  await expect(detail.locator("#d-sched")).toContainText("Every day, until Nov 26");
 
   // With no repeat there is no end date to set.
-  await edit.click();
-  await detail.getByLabel("Repeat", { exact: true }).selectOption({ label: "Does not repeat" });
+  detail = await openSchedule(page);
+  await detail.getByRole("radio", { name: "Never" }).check();
   await expect(ends).toHaveCount(0);
 });
 
@@ -196,60 +207,64 @@ test("Done after a repeat's last date closes the item, and Undo reopens it", asy
   await expect(row(page, "Water the plants").locator(".chip-repeat")).toHaveText("Every day until Oct 14");
 });
 
-test("a repeat needs a due date, and clearing the due date ends it", async ({ page, hub }) => {
+test("a repeat needs a date, and clearing the date ends it", async ({ page, hub }) => {
   hub.find(KEY)!.repeat = { every: "day", timeZone: "UTC", start: hub.find(KEY)!.dueAt! };
   await openApp(page);
   const before = hub.posted.length;
 
-  const detail = await openDetail(page, "Buy seeds");
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
-  await detail.getByLabel("Repeat", { exact: true }).selectOption({ label: "Daily" });
+  await openDetail(page, "Buy seeds");
+  let detail = await openSchedule(page);
+  await expect(detail.locator("#d-sched")).toHaveCount(0);
+  await detail.getByRole("radio", { name: "Day" }).check();
   await detail.getByLabel("Every").fill("0");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await save(page);
   await expect(detail.getByRole("alert")).toHaveText("Repeat every 1 to 100.");
   await expect(detail.getByLabel("Every")).toBeFocused();
   await detail.getByLabel("Every").fill("1");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(detail.getByRole("alert")).toContainText("A repeat needs a due date");
-  await expect(detail.getByLabel("Due")).toBeFocused();
+  await expect(detail.locator("#sched-readout")).toHaveText("Add a date for the repeat to start from.");
+  await save(page);
+  await expect(detail.getByRole("alert")).toContainText("A repeat needs a date");
+  await expect(detail.getByLabel("Date", { exact: true })).toBeFocused();
   expect(hub.posted.length).toBe(before);
-  await detail.getByLabel("Due").fill("tomorrow 7am");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await detail.getByLabel("Date", { exact: true }).fill("2026-10-15");
+  await detail.getByLabel("Time", { exact: true }).fill("07:00");
+  await save(page);
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ due: "2026-10-15T07:00:00.000Z", repeat: { every: "day", timeZone: "UTC" } });
 
   await openDetail(page, "Water the plants");
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(detail.getByLabel("Repeat", { exact: true })).toHaveValue("day");
-  await detail.getByRole("button", { name: "Clear" }).click();
-  await expect(detail.getByLabel("Repeat", { exact: true })).toHaveValue("");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  detail = await openSchedule(page);
+  await expect(detail.getByRole("radio", { name: "Day" })).toBeChecked();
+  await detail.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(detail.getByRole("radio", { name: "Never" })).toBeChecked();
+  await expect(detail.locator("#sched-readout")).toHaveText("No date. It stays on your list until you do it.");
+  await save(page);
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ clearDue: true });
   expect(hub.find(KEY)!.repeat).toBeNull();
   await expect(row(page, "Water the plants").locator(".chip-repeat")).toHaveCount(0);
+  await expect(detail.locator("#d-sched")).toContainText("Add a date");
 });
 
-test("a personal item sets its own early reminder or uses the default", async ({ page, hub }) => {
+test("a personal item sets its own early reminder or uses the default, saved from its row", async ({ page, hub }) => {
   hub.reminderLead = 60;
   await openApp(page);
   const detail = await openDetail(page, "Water the plants");
-  const edit = detail.getByRole("button", { name: "Edit", exact: true });
-  await edit.click();
-  const lead = detail.getByLabel("Remind me early");
+  const lead = detail.getByLabel("Remind early");
   await expect(lead.locator("option:checked")).toHaveText("Use default (1 hour before)");
   await lead.selectOption({ label: "30 minutes before" });
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ remindBefore: 30 });
   expect(hub.find(KEY)!.remindBefore).toBe(30);
-
-  await edit.click();
+  await expect(page.locator("#toast")).toContainText("Saved");
   await expect(lead).toHaveValue("30");
+
   await lead.selectOption({ label: "No early reminder" });
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ remindBefore: 0 });
 
-  await edit.click();
-  await lead.selectOption({ label: "Use default (1 hour before)" });
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  // The Schedule page sets it too, with the rest of the schedule.
+  await openSchedule(page);
+  const pageLead = detail.getByLabel("Remind early");
+  await expect(pageLead).toHaveValue("0");
+  await pageLead.selectOption({ label: "Use default (1 hour before)" });
+  await save(page);
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ clearRemindBefore: true });
   expect(hub.find(KEY)!.remindBefore).toBeNull();
 });
@@ -330,21 +345,28 @@ test.describe("Settings", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 375, height: 740 } });
 
-  test("the repeat fields fit the edit sheet", async ({ page, hub }) => {
+  test("the Schedule page fits the sheet", async ({ page, hub }) => {
     hub.find("hub/personal/pe-3")!.remindBefore = 45;
     await openApp(page);
-    const detail = await openDetail(page, "Call Sam about the weekend");
-    await detail.getByRole("button", { name: "Edit", exact: true }).click();
-    await detail.getByLabel("Repeat", { exact: true }).selectOption({ label: "Weekly" });
+    await openDetail(page, "Call Sam about the weekend");
+    const detail = await openSchedule(page);
+    // The keyboard waits until the field is tapped.
+    await expect(detail.getByRole("heading", { name: "Schedule" })).toBeFocused();
+    await detail.getByRole("radio", { name: "Week" }).check();
     await expect(detail.getByRole("checkbox", { name: "Sun" })).toBeVisible();
     await detail.getByLabel("Ends").fill("2026-11-26");
     await expect(detail.getByRole("button", { name: "No end date" })).toBeVisible();
-    await expect(detail.getByLabel("Remind me early").locator("option:checked")).toHaveText("45 minutes before");
+    await expect(detail.getByLabel("Remind early").locator("option:checked")).toHaveText("45 minutes before");
     const [scroll, inner] = await page.evaluate(() => {
       const el = document.querySelector("#detail .detail-inner")!;
       return [el.scrollWidth, el.clientWidth];
     });
     expect(scroll).toBeLessThanOrEqual(inner);
+    for (const name of ["Mon", "Sun"]) {
+      const box = (await detail.getByRole("checkbox", { name }).boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(375);
+    }
     await axe(page);
   });
 });

@@ -147,6 +147,35 @@ export function repeatLabel(r: RepeatRule, now: Date): string {
   return until ? `${out} until ${fmtDate(until, now)}` : out;
 }
 
+const FULL_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** "Mon and Thu", "Mon, Wed and Fri". */
+function dayList(days: number[]): string {
+  const names = weekOrder(days).map((d) => DAY_NAMES[d]);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
+}
+
+/**
+ * A repeat as a sentence for the task sheet: "Every Sunday", "Every 2 weeks
+ * on Mon and Thu, until Dec 31", "Then 1 week after you finish it".
+ */
+export function repeatWords(r: RepeatRule, now: Date): string {
+  const n = r.interval && r.interval > 1 ? r.interval : 1;
+  const unit = `${n} ${r.every}${n === 1 ? "" : "s"}`;
+  let out: string;
+  if (r.fromDone) out = `Then ${unit} after you finish it`;
+  else {
+    const days = r.every === "week" ? weekOrder(r.weekdays ?? []) : [];
+    if (!days.length) out = n === 1 ? `Every ${r.every}` : `Every ${unit}`;
+    else if (n > 1) out = `Every ${unit} on ${dayList(days)}`;
+    else if (days.join() === "1,2,3,4,5") out = "Every weekday";
+    else if (days.length === 1) out = `Every ${FULL_DAY_NAMES[days[0]]}`;
+    else out = `Every ${dayList(days)}`;
+  }
+  const until = r.until ? fromYmd(r.until) : null;
+  return until ? `${out}, until ${fmtDate(until, now)}` : out;
+}
+
 /** Whether two rules repeat the same way and end on the same date, whatever their zone and start. */
 export function sameRule(a: RepeatRule | null | undefined, b: RepeatRule | null | undefined): boolean {
   if (!a || !b) return !a && !b;

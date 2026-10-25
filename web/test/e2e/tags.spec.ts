@@ -31,8 +31,8 @@ test("tags show as chips on rows and in the detail, never human; an agent's are 
   const detail = await openDetail(page, "Check the tomato labels");
   await expect(detail.locator(".d-chips .chip-tag")).toHaveText(["Garden", "outdoor"]);
   await expect(detail.getByRole("button", { name: "Show items tagged outdoor" })).toBeVisible();
-  // An agent's item has no edit form, so its tags cannot be changed here.
-  await expect(detail.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  // An agent's item has no Tags row, so its tags cannot be changed here.
+  await expect(detail.getByRole("button", { name: /^(Add|Change) tags$/ })).toHaveCount(0);
   await axe(page);
 });
 
@@ -89,42 +89,46 @@ test("search finds an item by its tag, with or without the @", async ({ page, hu
   await expect(page.locator("#list .empty")).toHaveText("No matches.");
 });
 
-test("the edit form sets and removes tags, and Undo puts them back", async ({ page, hub }) => {
+test("the Tags row sets and removes tags, and Undo puts them back", async ({ page, hub }) => {
   seedTags(hub);
   await openApp(page);
   const detail = await openDetail(page, "Water the plants");
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(detail.locator(".prop .chip-tag")).toHaveText(["garden"]);
+  await detail.getByRole("button", { name: "Change tags" }).click();
   const field = detail.getByLabel("Tags");
+  await expect(field).toBeFocused();
   await expect(field).toHaveValue("garden");
 
   // The hub's rules apply before anything is sent.
   await field.fill(`garden ${"a".repeat(51)}`);
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(detail.locator(".edit-form [role=alert]")).toHaveText(`The tag "${"a".repeat(51)}" is longer than 50 characters.`);
+  await field.press("Enter");
+  await expect(detail.getByRole("alert")).toHaveText(`The tag "${"a".repeat(51)}" is longer than 50 characters.`);
   await expect(field).toBeFocused();
   expect(hub.posted).toEqual([]);
 
   await field.fill("@weekend, Errands garden WEEKEND");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await field.press("Enter");
   await expect.poll(() => hub.posted.at(-1)).toEqual({
     id: expect.any(String),
     kind: "edit",
     key: "hub/personal/pe-1",
     payload: { set: { labels: ["weekend", "Errands", "garden"] } },
   });
-  await expect(detail.locator(".d-chips .chip-tag")).toHaveText(["weekend", "Errands", "garden"]);
+  await expect(detail.locator(".prop .chip-tag")).toHaveText(["weekend", "Errands", "garden"]);
   await expect(row(page, "Water the plants").locator(".chip-tag")).toHaveText(["weekend", "Errands", "garden"]);
+  await expect(detail.getByRole("button", { name: "Change tags" })).toBeFocused();
 
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ labels: ["garden"] });
   await expect(row(page, "Water the plants").locator(".chip-tag")).toHaveText(["garden"]);
 
-  // An empty field clears them.
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
+  // An empty field clears them; leaving the field saves too.
+  await detail.getByRole("button", { name: "Change tags" }).click();
   await detail.getByLabel("Tags").fill("");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await detail.getByLabel("Priority").focus();
   await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ labels: [] });
   await expect(row(page, "Water the plants").locator(".chip-tag")).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "Add tags" })).toBeVisible();
 });
 
 test("quick add reads @word as a tag on the personal list, and leaves it in the title on a tracker's", async ({ page, hub }) => {
@@ -179,14 +183,14 @@ test.describe("phone", () => {
     await expect(titles(page)).toHaveText(["Plan the garden layout"]);
   });
 
-  test("the edit sheet sets a tag", async ({ page, hub }) => {
+  test("the sheet sets a tag", async ({ page, hub }) => {
     await openApp(page);
     await row(page, "Call Sam about the weekend").locator(".row-title").tap();
     const detail = page.locator("#detail");
-    await detail.getByRole("button", { name: "Edit", exact: true }).tap();
+    await detail.getByRole("button", { name: "Add tags" }).tap();
     await detail.getByLabel("Tags").fill("family");
-    await detail.getByRole("button", { name: "Save", exact: true }).tap();
+    await detail.getByLabel("Tags").press("Enter");
     await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ labels: ["family"] });
-    await expect(detail.locator(".d-chips .chip-tag")).toHaveText(["family"]);
+    await expect(detail.locator(".prop .chip-tag")).toHaveText(["family"]);
   });
 });

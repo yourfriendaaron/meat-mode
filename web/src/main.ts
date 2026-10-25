@@ -4,7 +4,7 @@
 
 import { ApiError, api, errorText, newId, setUnauthorizedHandler } from "./api.ts";
 import { createActions, inverse, movedOn, type Handle } from "./actions.ts";
-import { MAX_REPEAT_INTERVAL, type Action, type Comment, type Item, type NewAction, type Occurrence, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
+import { MAX_REPEAT_INTERVAL, type Action, type Comment, type Edit, type Item, type NewAction, type Occurrence, type Payload, type Repo, type RunState, type Session, type State } from "./types.ts";
 import {
   DAY_CAPACITY,
   type Capability,
@@ -49,6 +49,7 @@ import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, 
 import { fmtSnoozeTime, snoozeOptions, typedSnooze } from "./snooze.ts";
 import { ADD_ERROR_TEXT, addAction, readQuickAdd, wakesAgent, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
+import { countFromHint, fitWeekdays, readTyped, scheduleCard, scheduleReadout, scheduleSave } from "./schedule.ts";
 import { play } from "./sound.ts";
 import { leadSelect, loadLead } from "./lead.ts";
 import { browserZone } from "./profile.ts";
@@ -59,7 +60,6 @@ import {
   diffEdit,
   draftOf,
   dueLabel,
-  dueOutcome,
   editError,
   moveTargets,
   priorityChip,
@@ -101,6 +101,30 @@ interface Toast {
   tell?: string;
 }
 
+/** The title, details or tags of a personal item, while they are a field. */
+interface Inline {
+  key: string;
+  field: "title" | "description" | "tags";
+  text: string;
+  error: string;
+}
+
+/** The Schedule page: the draft it saves, and the draft the controls last made, which the typed field starts from. */
+interface SchedulePage {
+  kind: "schedule";
+  key: string;
+  draft: EditDraft;
+  base: EditDraft;
+  typed: string;
+  typedError: string;
+  error: string;
+  /** Set while it asks whether a moved repeating task moves just this once. */
+  ask: { set: Edit; until: Date } | null;
+}
+
+/** A page that takes the sheet's place, never a second sheet on top of it. */
+type SheetPage = SchedulePage | { kind: "snooze"; key: string };
+
 const UNDO_MS = 6000;
 const SWIPE_THRESHOLD = 88;
 /** How long a done row takes to slide off, then to fold shut. */
@@ -130,8 +154,12 @@ const S = {
   open: null as string | null,
   openSeenAt: null as string | null | undefined,
   drafts: new Map<string, string>(),
-  /** The open edit form of a personal item. */
-  edit: null as { key: string; draft: EditDraft; error: string } | null,
+  /** The page shown in the sheet in place of the task. */
+  page: null as SheetPage | null,
+  /** The personal item's field being changed in place. */
+  inline: null as Inline | null,
+  /** The sheet's More menu. */
+  moreOpen: false,
   /** The note being edited, on a personal item. */
   noteEdit: null as { key: string; commentId: string; text: string } | null,
   /** Unsent text of each item's add-a-sub-task field. */
@@ -183,6 +211,8 @@ function isPhone(): boolean {
 }
 
 const cache = new WeakMap<Element, string>();
+/** Set while setHTML rewrites a region, so the blur of a field it removes is not a user's. */
+let writing = false;
 /**
  * Writes a region only when its HTML changed. Typed values and focus of
  * inputs with an id survive the rewrite, since values never live in the HTML.
@@ -198,7 +228,12 @@ function setHTML(el: Element, html: string): boolean {
     active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
       ? [active.selectionStart, active.selectionEnd]
       : null;
-  el.innerHTML = html;
+  writing = true;
+  try {
+    el.innerHTML = html;
+  } finally {
+    writing = false;
+  }
   for (const [id, value] of kept) {
     const f = el.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${CSS.escape(id)}`);
     if (f && !f.value && value) f.value = value;
@@ -1071,50 +1106,126 @@ function submitSnoozeType(form: HTMLFormElement) {
   snoozeTyped.delete(input.id);
   input.value = "";
   doSnooze(keys, until);
+  if (!form.closest("#snooze")) leaveSnoozePage();
 }
 
-/** The edit form of a personal item: title, due, details and priority. Values are set after the HTML is written. */
-function editFormHTML(item: Item): string {
-  const e = S.edit!;
-  const d = e.draft;
-  const prio = priorityOptions(item.priority)
-    .map((o) => `<option value="${o.value}"${o.value === d.priority ? " selected" : ""}>${esc(o.label)}</option>`)
-    .join("");
-  return `<form class="edit-form" data-form="edit" aria-labelledby="d-edit-h" novalidate>
-<h3 id="d-edit-h" class="sr">Edit task</h3>
-<label for="edit-title">Title</label><input id="edit-title" type="text" maxlength="${TITLE_MAX}" autocomplete="off" required>
-<label for="edit-due">Due</label><div class="pick-row"><input id="edit-due" type="text" autocomplete="off" enterkeyhint="done" placeholder="tomorrow 9am" aria-describedby="edit-due-now"><button type="button" class="btn" data-act="edit-clear-due">Clear</button></div><p id="edit-due-now" class="edit-due-now" aria-live="polite">${esc(dueText(item, d))}</p>
-${repeatFieldsHTML(item, d)}
-<label for="edit-lead">Remind me early</label>${leadSelect("edit-lead", d.remindBefore, true)}
-<label for="edit-desc">Details</label><textarea id="edit-desc" rows="4" maxlength="${TEXT_MAX}"></textarea>
-<label for="edit-prio">Priority</label><select id="edit-prio">${prio}</select>
-<label for="edit-tags">Tags</label><input id="edit-tags" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" placeholder="garden errands" aria-describedby="edit-tags-hint"><p class="muted small tags-hint" id="edit-tags-hint">One word each, separated by spaces.</p>
-${parentFieldHTML(item, d)}
-${e.error ? `<p class="row-error" role="alert">${esc(e.error)}</p>` : ""}
-<div class="btn-row"><button type="submit" class="btn btn-primary">${ICON.check}Save</button><button type="button" class="btn" data-act="edit-cancel">Cancel</button></div>
-</form>`;
+/** The title of the sheet: a button that turns into a field on a personal item, text on an agent's. */
+function titleHTML(item: Item, editable: boolean): string {
+  if (!editable) return `<h2 id="d-title" class="d-title">${esc(item.title)}</h2>`;
+  if (S.inline?.key === item.key && S.inline.field === "title") {
+    return `<h2 id="d-title" class="d-title"><form class="inline-form" data-form="inline"><input id="d-title-input" class="d-title-input" type="text" maxlength="${TITLE_MAX}" autocomplete="off" enterkeyhint="done" aria-label="Title"${S.inline.error ? ' aria-invalid="true" aria-describedby="d-inline-error"' : ""}></form></h2>`;
+  }
+  return `<h2 id="d-title" class="d-title"><button class="d-title-btn" data-act="inline" data-field="title" title="Rename">${esc(item.title)}</button></h2>`;
+}
+
+/** The inline field's error, under it. */
+function inlineErrorHTML(item: Item, field: Inline["field"]): string {
+  const e = S.inline;
+  return e?.key === item.key && e.field === field && e.error ? `<p id="d-inline-error" class="row-error" role="alert">${esc(e.error)}</p>` : "";
+}
+
+/** The schedule card: when it is due and how it repeats, in plain words. It opens the Schedule page. */
+function scheduleCardHTML(item: Item): string {
+  const n = now();
+  const card = scheduleCard(item, n);
+  const overdue = item.dueAt && isOpen(item) && new Date(item.dueAt) < n ? " is-overdue" : "";
+  const snoozed = item.deferUntil && new Date(item.deferUntil) > n ? `<span class="sched-line sched-snz">${ICON.moon}Snoozed until ${esc(fmtWhenAt(new Date(item.deferUntil), n))}</span>` : "";
+  const repeat = card.repeat ? `<span class="sched-line">${item.repeat ? ICON.repeat : ""}${esc(card.repeat)}</span>` : "";
+  return `<button class="sched-card" id="d-sched" data-act="schedule" data-key="${esc(item.key)}"><span class="sr">Schedule: </span><span class="sched-when${overdue}">${esc(card.when)}</span>${repeat}${snoozed}<span class="sched-chev" aria-hidden="true">${ICON.right}</span></button>`;
 }
 
 /**
- * The edit form's "Sub-task of": the top level, or an item of the same list
- * to move it under. Left out when there is nowhere to move it.
+ * The rows under the schedule card, label on the left and value on the
+ * right. Each change saves on the spot. The list shows where the task lives;
+ * there is no move between lists.
  */
-function parentFieldHTML(item: Item, d: EditDraft): string {
+function propsHTML(item: Item): string {
+  const r = repos().find((x) => repoKey(x) === repoKey(item));
+  const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
+  const list = `<div class="prop"><span class="prop-label">List</span><span class="prop-val"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? repoLabel(r) : item.repo)}</span></div>`;
+  const lead = `<div class="prop"><label class="prop-label" for="p-lead">Remind early</label>${leadSelect("p-lead", item.remindBefore ?? null, true, ' class="prop-select"')}</div>`;
+  const prio = `<div class="prop"><label class="prop-label" for="p-prio">Priority</label><select id="p-prio" class="prop-select">${priorityOptions(item.priority)
+    .map((o) => `<option value="${o.value}"${o.value === item.priority ? " selected" : ""}>${esc(o.label)}</option>`)
+    .join("")}</select></div>`;
+  return `<div class="props">${list}${lead}${tagsRowHTML(item)}${prio}${parentRowHTML(item)}</div>`;
+}
+
+/** The Tags row: each tag filters the list by it, and Add or Change turns the row into a field. */
+function tagsRowHTML(item: Item): string {
+  const tags = shownTags(item);
+  if (S.inline?.key === item.key && S.inline.field === "tags") {
+    return `<form class="prop prop-edit inline-form" data-form="inline"><label class="prop-label" for="p-tags">Tags</label><input id="p-tags" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" placeholder="garden errands" aria-describedby="p-tags-hint${S.inline.error ? " d-inline-error" : ""}"${S.inline.error ? ' aria-invalid="true"' : ""}></form><p class="muted small prop-hint" id="p-tags-hint">One word each, separated by spaces.</p>${inlineErrorHTML(item, "tags")}`;
+  }
+  const chips = tags
+    .map((t) => `<button type="button" class="chip chip-tag" data-act="tag" data-tag="${esc(t)}" aria-label="${esc(`Show items tagged ${t}`)}">${ICON.tag}${esc(t)}</button>`)
+    .join("");
+  return `<div class="prop"><span class="prop-label">Tags</span><span class="prop-val prop-tags">${chips}<button class="link-btn prop-link" data-act="inline" data-field="tags" aria-label="${tags.length ? "Change tags" : "Add tags"}">${tags.length ? "Change" : "Add"}</button></span></div>`;
+}
+
+/**
+ * The "Sub-task of" row: the top level, or an item of the same list to move
+ * it under. Left out when there is nowhere to move it.
+ */
+function parentRowHTML(item: Item): string {
   const opts = moveTargets(item, items()).map((t) => [t.id, t.title]);
   if (item.parent && !opts.some(([id]) => id === item.parent)) opts.unshift([item.parent, parentTitle(item, items()) || item.parent]);
   if (!opts.length) return "";
-  const pick = [["", "None, a top-level task"], ...opts]
-    .map(([v, label]) => `<option value="${esc(v)}"${v === d.parent ? " selected" : ""}>${esc(label)}</option>`)
-    .join("");
-  return `<label for="edit-parent">Sub-task of</label><select id="edit-parent">${pick}</select>`;
+  const cur = item.parent ?? "";
+  const pick = [["", "None"], ...opts].map(([v, label]) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(label)}</option>`).join("");
+  return `<div class="prop"><label class="prop-label" for="p-parent">Sub-task of</label><select id="p-parent" class="prop-select">${pick}</select></div>`;
 }
 
-const REPEAT_CHOICES: [EditDraft["repeat"], string][] = [
-  ["", "Does not repeat"],
-  ["day", "Daily"],
-  ["week", "Weekly"],
-  ["month", "Monthly"],
-  ["year", "Yearly"],
+/** Details: Markdown to read, and a field that saves when it loses focus. */
+function detailsHTML(item: Item): string {
+  const head = '<h3 id="d-desc-h">Details</h3>';
+  if (S.inline?.key === item.key && S.inline.field === "description") {
+    return `<section class="d-section" aria-labelledby="d-desc-h">${head}<textarea id="d-desc" rows="4" maxlength="${TEXT_MAX}" aria-labelledby="d-desc-h" aria-describedby="d-desc-hint"></textarea><p class="muted small" id="d-desc-hint">Saves when you leave the field. Markdown works.</p>${inlineErrorHTML(item, "description")}</section>`;
+  }
+  if (!item.description) return `<button class="add-details" data-act="inline" data-field="description">${ICON.edit}Add details</button>`;
+  return `<section class="d-section" aria-labelledby="d-desc-h"><div class="d-sec-head">${head}<button class="link-btn" data-act="inline" data-field="description" aria-label="Edit details" title="Edit details">${ICON.edit}</button></div><div class="md d-desc">${renderMarkdown(item.description)}</div></section>`;
+}
+
+/**
+ * The bar pinned to the bottom of the sheet: the main action, Snooze, and
+ * More for the rest. A closed item's main action brings it back.
+ */
+function actionBarHTML(item: Item): string {
+  const key = esc(item.key);
+  const agent = isAgentItem(item);
+  const open = isOpen(item);
+  let main = "";
+  if (open && allows(item, "done")) main = `<button class="btn btn-primary" data-act="done" data-key="${key}">${ICON.check}Done</button>`;
+  else if (!open && allows(item, "reopen")) {
+    main = isDeleted(item)
+      ? `<button class="btn btn-primary" data-act="restore" data-key="${key}">${ICON.undo}Restore</button>`
+      : `<button class="btn btn-primary" data-act="reopen" data-key="${key}">${ICON.undo}Reopen</button>`;
+  }
+  const snooze = open && allows(item, "snooze") ? `<button class="btn" id="d-snooze" data-act="snooze-page" data-key="${key}">${ICON.moon}Snooze</button>` : "";
+  const more = [
+    open && allows(item, "dismiss")
+      ? `<button class="more-item${agent ? "" : " more-danger"}" data-act="dismiss" data-key="${key}">${agent ? `${ICON.ban}Won't do` : `${ICON.trash}Delete`}</button>`
+      : "",
+    `<button class="more-item" data-act="copy-id" data-key="${key}">Copy id <code>${esc(item.id)}</code></button>`,
+  ].join("");
+  const shown = S.moreOpen && S.open === item.key;
+  return `<div class="d-bar">${main}${snooze}<div class="more-wrap"><button class="btn btn-icon" id="d-more" data-act="more" aria-label="More actions" title="More actions" aria-haspopup="true" aria-expanded="${shown}" aria-controls="d-more-menu">${ICON.more}</button><div id="d-more-menu" class="more-menu"${shown ? "" : " hidden"}>${more}</div></div></div>`;
+}
+
+/** A page inside the sheet: its head with the way back, its title and an optional action. */
+function pageHeadHTML(title: string, action = ""): string {
+  return `<div class="grip" aria-hidden="true"></div><div class="page-head"><button class="link-btn page-back" data-act="page-back" aria-label="Back to the task">${ICON.left}Task</button><h2 id="pg-h" class="page-title" tabindex="-1">${esc(title)}</h2><span class="page-act">${action}</span></div>`;
+}
+
+function snoozePageHTML(item: Item): string {
+  return `<div class="detail-inner sheet-page" role="region" aria-labelledby="pg-h">${pageHeadHTML("Snooze")}<p class="muted small page-sub">${esc(item.title)}</p>${snoozeBlock("d")}</div>`;
+}
+
+const REPEAT_SEGMENTS: [EditDraft["repeat"], string][] = [
+  ["", "Never"],
+  ["day", "Day"],
+  ["week", "Week"],
+  ["month", "Month"],
+  ["year", "Year"],
 ];
 /** Monday first, as people list a week. */
 const WEEK: [number, string][] = [
@@ -1132,38 +1243,66 @@ function unitText(d: EditDraft): string {
   return d.repeat ? `${d.repeat}${d.interval.trim() === "1" ? "" : "s"}` : "";
 }
 
-/** The edit form's repeat: how often, a weekly rule's days, whether to count from done, and its end date. */
-function repeatFieldsHTML(item: Item, d: EditDraft): string {
-  const pick = REPEAT_CHOICES.map(([v, label]) => `<option value="${v}"${v === d.repeat ? " selected" : ""}>${esc(label)}</option>`).join("");
-  const select = `<label for="edit-repeat">Repeat</label><select id="edit-repeat">${pick}</select>`;
-  if (!d.repeat) return select;
-  const days =
-    d.repeat === "week" && !d.fromDone
-      ? `<fieldset class="weekdays" aria-describedby="edit-wd-hint"><legend>On</legend>${WEEK.map(
-          ([n, name]) => `<label class="wd"><input type="checkbox" id="edit-wd-${n}" data-weekday="${n}"${d.weekdays.includes(n) ? " checked" : ""}>${name}</label>`,
-        ).join("")}</fieldset><p class="muted small" id="edit-wd-hint">With none picked, it repeats on the due date's day.</p>`
-      : "";
-  return `${select}<div class="repeat-opts"><label for="edit-interval">Every</label><div class="pick-row"><input id="edit-interval" type="number" min="1" max="${MAX_REPEAT_INTERVAL}" step="1" inputmode="numeric"><span id="edit-unit">${unitText(d)}</span></div>${days}<label class="check-row"><input type="checkbox" id="edit-from-done"${d.fromDone ? " checked" : ""}>Count the next date from when it is done</label>${untilFieldHTML(item, d)}</div>`;
+/** A row of radio buttons drawn as one segmented control. */
+function segmentsHTML(name: string, legend: string, choices: [string, string][], value: string, describedBy = ""): string {
+  return `<fieldset class="seg"${describedBy ? ` aria-describedby="${describedBy}"` : ""}><legend>${esc(legend)}</legend><div class="seg-row">${choices
+    .map(([v, label]) => `<label class="seg-opt"><input type="radio" name="${name}" value="${esc(v)}"${v === value ? " checked" : ""}><span>${esc(label)}</span></label>`)
+    .join("")}</div></fieldset>`;
 }
 
-/** A repeat's optional end date; empty, it repeats for good. */
-function untilFieldHTML(item: Item, d: EditDraft): string {
-  const due = dueOutcome(item, d, now());
-  const min = due.kind === "set" || (due.kind === "keep" && due.at) ? ` min="${ymd(due.at!)}"` : "";
-  return `<label for="edit-until">Ends</label><div class="pick-row until-row"><input id="edit-until" type="date"${min} aria-describedby="edit-until-hint"><button type="button" class="btn" data-act="edit-clear-until">No end date</button></div><p class="muted small" id="edit-until-hint">The last date it may land on. With none, it repeats for good.</p>`;
-}
-
-/** What the due field will save, in words. */
-function dueText(item: Item, d: EditDraft): string {
-  const due = dueOutcome(item, d, now());
-  switch (due.kind) {
-    case "invalid":
-      return "Could not read that date.";
-    case "clear":
-      return "No due date";
-    default:
-      return due.at ? dueLabel(due.at, now()) : "No due date";
+/**
+ * The Schedule page: a typed field read with quick add's parser and a
+ * readout of what the draft will save, then the same schedule as controls.
+ * Both edit one draft. Moving a repeating task asks first whether only this
+ * one moves.
+ */
+function schedulePageHTML(item: Item, p: SchedulePage): string {
+  const n = now();
+  const d = p.draft;
+  const readout = p.typedError || scheduleReadout(d, n);
+  const bad = p.typedError ? " readout-bad" : "";
+  let repeat = "";
+  let ends = "";
+  if (d.repeat) {
+    const days =
+      d.repeat === "week"
+        ? `<fieldset class="days" aria-describedby="sched-days-hint"${d.fromDone ? " disabled" : ""}><legend>On</legend><div class="days-row">${WEEK.map(
+            ([wd, name]) => `<label class="day-chip"><input type="checkbox" data-weekday="${wd}"${d.weekdays.includes(wd) ? " checked" : ""}><span>${name}</span></label>`,
+          ).join("")}</div></fieldset><p class="muted small" id="sched-days-hint">${
+            d.fromDone ? "Days need The schedule: When I finish counts from the day you finish it." : "With none picked, it repeats on the date's day."
+          }</p>`
+        : "";
+    repeat = `<div class="props"><div class="prop"><label class="prop-label" for="sched-interval">Every</label><span class="prop-ctl"><input id="sched-interval" type="number" min="1" max="${MAX_REPEAT_INTERVAL}" step="1" inputmode="numeric"><span id="sched-unit">${unitText(d)}</span></span></div></div>${days}${segmentsHTML(
+      "sched-from",
+      "Count the next one from",
+      [
+        ["schedule", "The schedule"],
+        ["done", "When I finish"],
+      ],
+      d.fromDone ? "done" : "schedule",
+      "sched-from-hint",
+    )}<p class="muted small" id="sched-from-hint">${esc(countFromHint(d))}</p>`;
+    ends = `<div class="prop"><label class="prop-label" for="sched-until">Ends</label><span class="prop-ctl"><input id="sched-until" type="date"${d.date ? ` min="${esc(d.date)}"` : ""}><button type="button" class="link-btn" data-act="sched-clear-until">No end date</button></span></div>`;
   }
+  const ask = p.ask
+    ? `<div class="sched-ask" role="group" aria-labelledby="ask-h"><p id="ask-h" class="ask-q" tabindex="-1">This task repeats. Move only this one, or the whole schedule?</p><button type="button" class="btn btn-primary" data-act="sched-once" aria-describedby="ask-once">Just this one</button><p class="muted small" id="ask-once">Snoozes it to ${esc(fmtWhenAt(p.ask.until, n))}. The repeat stays as it is.</p><button type="button" class="btn" data-act="sched-all" aria-describedby="ask-all">From now on</button><p class="muted small" id="ask-all">Moves the schedule to count on from ${esc(fmtWhenAt(p.ask.until, n))}.</p><button type="button" class="link-btn" data-act="sched-ask-cancel">Cancel</button></div>`
+    : "";
+  return `<div class="detail-inner sheet-page" role="region" aria-labelledby="pg-h">${pageHeadHTML("Schedule", `<button type="submit" form="sched-form" class="btn btn-primary btn-small">Save</button>`)}
+<p class="muted small page-sub">${esc(item.title)}</p>
+${ask}
+<form id="sched-form" class="sched-form" data-form="schedule" novalidate>
+<label class="sched-typed-label" for="sched-typed">Type when</label><input id="sched-typed" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" placeholder="every sunday 12pm" aria-describedby="sched-readout"${p.typedError ? ' aria-invalid="true"' : ""}>
+<p id="sched-readout" class="readout${bad}" aria-live="polite">${esc(readout)}</p>
+<h3 class="sched-or">Or set it here</h3>
+<div class="props">
+<div class="prop"><label class="prop-label" for="sched-date">Date</label><span class="prop-ctl"><input id="sched-date" type="date"><button type="button" class="link-btn" data-act="sched-clear-date"${d.date ? "" : " hidden"}>Clear</button></span></div>
+<div class="prop"><label class="prop-label" for="sched-time">Time</label><span class="prop-ctl"><input id="sched-time" type="time"></span></div>
+</div>
+${segmentsHTML("sched-repeat", "Repeat", REPEAT_SEGMENTS, d.repeat)}
+${repeat}
+<div class="props">${ends}<div class="prop"><label class="prop-label" for="sched-lead">Remind early</label>${leadSelect("sched-lead", d.remindBefore, true, ' class="prop-select"')}</div></div>
+${p.error ? `<p class="row-error" role="alert">${esc(p.error)}</p>` : ""}
+</form></div>`;
 }
 
 /**
@@ -1277,10 +1416,24 @@ function renderDetail() {
     setHTML(el, '<div class="detail-empty"><p>Select a task to see its details.</p></div>');
     return;
   }
+  if (S.page && S.page.key !== item.key) S.page = null;
+  const p = S.page;
+  if (p?.kind === "snooze") {
+    setHTML(el, snoozePageHTML(item));
+    return;
+  }
+  if (p?.kind === "schedule") {
+    setHTML(el, schedulePageHTML(item, p));
+    // Values never live in the HTML: the draft sets them, where they differ.
+    setValue("#sched-typed", p.typed);
+    setValue("#sched-date", p.draft.date);
+    setValue("#sched-time", p.draft.time);
+    setValue("#sched-interval", p.draft.interval);
+    setValue("#sched-until", p.draft.until);
+    return;
+  }
   const agent = isAgentItem(item);
   const editable = canEdit(item);
-  const editing = editable && S.edit?.key === item.key;
-  const open = isOpen(item);
   const allowed = agent && agentsAllowed(item, repos());
   const why = agent
     ? runCardHTML(item, allowed, allows(item, "ask"))
@@ -1289,46 +1442,32 @@ function renderDetail() {
       : "";
   const queued = queuedComments(item, user());
   const comments = (item.comments ?? []).map((c) => noteHTML(item, c, editable, queued.has(c.id))).join("");
-  const reopen = allows(item, "reopen");
-  const actions = `<div class="d-actions">${
-    open
-      ? `${allows(item, "done") ? `<button class="btn btn-primary" data-act="done" data-key="${esc(item.key)}">${ICON.check}Done</button>` : ""}${
-          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
-        }${allows(item, "dismiss") ? `<button class="btn" data-act="dismiss" data-key="${esc(item.key)}">${agent ? `${ICON.ban}Won't do` : `${ICON.trash}Delete`}</button>` : ""}`
-      : isDeleted(item)
-        ? reopen ? `<button class="btn btn-primary" data-act="restore" data-key="${esc(item.key)}">${ICON.undo}Restore</button>` : ""
-        : `${reopen ? `<button class="btn btn-primary" data-act="reopen" data-key="${esc(item.key)}">${ICON.undo}Reopen</button>` : ""}${
-          editable ? `<button class="btn" id="d-edit" data-act="edit" data-key="${esc(item.key)}">${ICON.edit}Edit</button>` : ""
-        }`
-  }</div>`;
+  const att = attention(item, user());
+  const chips = editable
+    ? att ? `<div class="chips d-chips"><span class="chip chip-new">${ATTENTION_TEXT[att]}</span></div>` : ""
+    : `<div class="chips d-chips">${chipsFor(item, { list: true, detail: true })}<code class="bead-id">${esc(item.id)}</code></div>`;
+  const body = editable ? `${scheduleCardHTML(item)}${propsHTML(item)}${detailsHTML(item)}` : why;
   const html = `<div class="detail-inner" role="region" aria-labelledby="d-title">
 <div class="grip" aria-hidden="true"></div>
-<div class="d-head">${checkButton(item, agent)}<h2 id="d-title" class="d-title">${esc(item.title)}</h2><button class="icon-btn" data-act="close-detail" aria-label="Close details">${ICON.close}</button></div>
-<div class="chips d-chips">${chipsFor(item, { list: true, detail: true })}<code class="bead-id">${esc(item.id)}</code></div>
+<div class="d-head">${checkButton(item, agent)}${titleHTML(item, editable)}<button class="icon-btn" data-act="close-detail" aria-label="Close details">${ICON.close}</button></div>
+${inlineErrorHTML(item, "title")}
+${chips}
 ${statusLine(item) ? `<p class="d-status">${statusLine(item)}</p>` : ""}
-${editing ? editFormHTML(item) : why + actions}
+${body}
 ${subtasksHTML(item)}
 ${attachmentsHTML(item, editable)}
-${open && allows(item, "snooze") ? `<section class="d-section" aria-labelledby="d-snz"><h3 id="d-snz">Snooze</h3>${snoozeBlock("d")}</section>` : ""}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
 ${noteBoxHTML(item, allowed)}</section>
+${actionBarHTML(item)}
 </div>`;
   if (setHTML(el, html)) {
     const ta = el.querySelector<HTMLTextAreaElement>("#note-input");
     if (ta) ta.value = S.drafts.get(item.key) ?? "";
     const sub = el.querySelector<HTMLInputElement>("#sub-input");
     if (sub) sub.value = S.subDrafts.get(item.key) ?? "";
-    if (editing) {
-      const d = S.edit!.draft;
-      setValue("#edit-title", d.title);
-      setValue("#edit-due", d.dueText);
-      setValue("#edit-desc", d.description);
-      setValue("#edit-interval", d.interval);
-      setValue("#edit-until", d.until);
-      setValue("#edit-tags", d.tags);
-    }
     if (S.noteEdit?.key === item.key) setValue("#note-edit-input", S.noteEdit.text);
   }
+  if (S.inline?.key === item.key) setValue(INLINE_FIELD[S.inline.field], S.inline.text);
 }
 
 /** Sets a field's value only when it differs, so a rewrite keeps the caret where it was. */
@@ -1892,24 +2031,6 @@ async function switchAgents(bridge: string, repo: string) {
 
 // ---------- editing personal items ----------
 
-function openEdit(key: string) {
-  const it = byKey(key);
-  if (!it || !canEdit(it)) return;
-  S.edit = { key, draft: draftOf(it, browserZone()), error: "" };
-  S.noteEdit = null;
-  // The lead time choice names the hub's default.
-  loadLead(ctx);
-  render();
-  $<HTMLInputElement>("#edit-title").focus();
-}
-
-/** Closes the edit form and puts focus back on its Edit button. */
-function closeEdit() {
-  S.edit = null;
-  render();
-  document.getElementById("d-edit")?.focus({ preventScroll: true });
-}
-
 /** Performs an action on a personal item, offering Undo with `toast` when given. */
 async function postEdit(a: NewAction, toast?: string) {
   const h = await actions.perform([a], { onPatched: render });
@@ -1917,52 +2038,223 @@ async function postEdit(a: NewAction, toast?: string) {
   await refresh();
 }
 
-function saveEdit() {
-  const e = S.edit;
-  const it = byKey(e?.key ?? null);
-  if (!e || !it) return;
-  const err = editError(it, e.draft, now());
+/**
+ * Saves one change of a personal item as an edit holding only what changed,
+ * with Undo. Returns why it cannot be saved, or "".
+ */
+function saveField(key: string, change: (d: EditDraft) => void): string {
+  const it = byKey(key);
+  if (!it || !canEdit(it)) return "";
+  const d = draftOf(it, browserZone());
+  change(d);
+  const err = editError(it, d, now());
+  if (err) return err;
+  const set = diffEdit(it, d, now());
+  if (set) void postEdit({ id: newId(), kind: "edit", key, payload: { set } }, "Saved");
+  return "";
+}
+
+/** The field each inline edit writes in. */
+const INLINE_FIELD: Record<Inline["field"], string> = { title: "#d-title-input", description: "#d-desc", tags: "#p-tags" };
+/** What focus goes back to once an inline edit ends. */
+const INLINE_RETURN: Record<Inline["field"], string> = {
+  title: ".d-title-btn",
+  description: "[data-act=inline][data-field=description]",
+  tags: "[data-act=inline][data-field=tags]",
+};
+
+/** Turns the title, details or tags of the open personal item into a field. */
+function startInline(field: Inline["field"]) {
+  const it = byKey(S.open);
+  if (!it || !canEdit(it)) return;
+  const text = field === "title" ? it.title : field === "description" ? (it.description ?? "") : shownTags(it).join(" ");
+  S.inline = { key: it.key, field, text, error: "" };
+  S.noteEdit = null;
+  S.moreOpen = false;
+  render();
+  const f = $<HTMLInputElement>(INLINE_FIELD[field]);
+  f.focus();
+  if (field !== "description") f.select();
+}
+
+/** Ends an inline edit without saving, and puts focus back where it started. */
+function cancelInline() {
+  const e = S.inline;
+  S.inline = null;
+  render();
+  if (e) document.querySelector<HTMLElement>(`#detail ${INLINE_RETURN[e.field]}`)?.focus({ preventScroll: true });
+}
+
+/** Saves an inline edit; a value the hub would refuse keeps the field open with the reason. */
+function commitInline() {
+  const e = S.inline;
+  if (!e) return;
+  const err = saveField(e.key, (d) => {
+    if (e.field === "title") d.title = e.text;
+    else if (e.field === "description") d.description = e.text;
+    else d.tags = e.text;
+  });
   if (err) {
     e.error = err;
     render();
-    // Tag errors first: a tag may hold any of the words matched below.
-    const field = /^(The tag |An item has at most)/.test(err)
-      ? "#edit-tags"
-      : /title/i.test(err)
-      ? "#edit-title"
-      : /^Repeat every/.test(err)
-        ? "#edit-interval"
-        : /^End the repeat/.test(err)
-          ? "#edit-until"
-          : /date/i.test(err)
-            ? "#edit-due"
-            : "#edit-desc";
-    $<HTMLElement>(field).focus();
+    document.querySelector<HTMLElement>(INLINE_FIELD[e.field])?.focus();
     return;
   }
-  const set = diffEdit(it, e.draft, now());
-  closeEdit();
-  if (!set) return;
-  const a: NewAction = { id: newId(), kind: "edit", key: it.key, payload: { set } };
-  void postEdit(a, "Saved");
+  S.inline = null;
+  render();
+  document.querySelector<HTMLElement>(`#detail ${INLINE_RETURN[e.field]}`)?.focus({ preventScroll: true });
 }
 
-function clearDue() {
-  if (!S.edit) return;
-  S.edit.draft.clearDue = true;
-  S.edit.draft.dueText = "";
-  // The hub ends the repeat with the due date.
-  S.edit.draft.repeat = "";
-  setValue("#edit-due", "");
+/** A row's select changed: it saves at once. */
+function propChanged(t: HTMLSelectElement) {
+  if (!S.open) return;
+  const v = t.value;
+  const err = saveField(S.open, (d) => {
+    if (t.id === "p-prio") d.priority = Number(v);
+    else if (t.id === "p-lead") d.remindBefore = v === "" ? null : Number(v);
+    else if (t.id === "p-parent") d.parent = v;
+  });
+  if (err) {
+    showToast(err);
+    render();
+  }
+}
+
+function toggleMore(show = !S.moreOpen) {
+  S.moreOpen = show;
   render();
-  $<HTMLInputElement>("#edit-due").focus();
+  if (show) document.querySelector<HTMLElement>("#d-more-menu .more-item")?.focus();
+}
+
+// ---------- pages inside the sheet ----------
+
+/** Opens the Schedule page of the open personal item, with a draft of its schedule. */
+function openSchedule(key: string) {
+  const it = byKey(key);
+  if (!it || !canEdit(it)) return;
+  const draft = draftOf(it, browserZone());
+  S.page = { kind: "schedule", key, draft, base: draft, typed: "", typedError: "", error: "", ask: null };
+  S.inline = null;
+  S.moreOpen = false;
+  S.noteEdit = null;
+  // The lead time choice names the hub's default.
+  loadLead(ctx);
+  render();
+  $("#detail").scrollTop = 0;
+  // On a phone the keyboard would cover the controls, so focus waits on the title.
+  (isPhone() ? $<HTMLElement>("#pg-h") : $<HTMLInputElement>("#sched-typed")).focus();
+}
+
+function openSnoozePage(key: string) {
+  const it = byKey(key);
+  if (!it || !isOpen(it) || !allows(it, "snooze")) return;
+  snoozeTyped.delete("d-type");
+  S.page = { kind: "snooze", key };
+  S.inline = null;
+  S.moreOpen = false;
+  render();
+  $("#detail").scrollTop = 0;
+  $<HTMLElement>("#detail .snz").focus();
+}
+
+/** Back to the task, with focus on what opened the page. */
+function closePage() {
+  const p = S.page;
+  if (!p) return;
+  S.page = null;
+  render();
+  document.getElementById(p.kind === "schedule" ? "d-sched" : "d-snooze")?.focus({ preventScroll: true });
+}
+
+/** After a snooze from its page, back to the task. */
+function leaveSnoozePage() {
+  if (S.page?.kind !== "snooze") return;
+  S.page = null;
+  render();
+  document.getElementById("d-snooze")?.focus({ preventScroll: true });
+}
+
+function schedulePage(): SchedulePage | null {
+  return S.page?.kind === "schedule" ? S.page : null;
+}
+
+/** The typed field changed: it sets the draft from the one the controls last made. */
+function scheduleTyped(text: string) {
+  const p = schedulePage();
+  if (!p) return;
+  p.typed = text;
+  const r = readTyped(text, now(), p.base);
+  p.typedError = r && "error" in r ? r.error : "";
+  p.draft = r && "draft" in r ? r.draft : p.base;
+  p.error = "";
+  p.ask = null;
+  render();
+}
+
+/** A control changed the draft: the typed text no longer says what it holds, so it clears. */
+function scheduleControl(change: (d: EditDraft) => EditDraft | void) {
+  const p = schedulePage();
+  if (!p) return;
+  const d: EditDraft = { ...p.draft, weekdays: [...p.draft.weekdays] };
+  p.draft = change(d) ?? d;
+  p.base = p.draft;
+  p.typed = "";
+  p.typedError = "";
+  p.error = "";
+  p.ask = null;
+  render();
+}
+
+/** Save on the Schedule page: one edit, or first the question a moved repeating task asks. */
+function saveSchedule() {
+  const p = schedulePage();
+  const it = byKey(p?.key ?? null);
+  if (!p || !it) return;
+  if (p.typedError) {
+    p.error = p.typedError;
+    render();
+    $<HTMLInputElement>("#sched-typed").focus();
+    return;
+  }
+  const r = scheduleSave(it, p.draft, now(), allows(it, "snooze"));
+  switch (r.kind) {
+    case "none":
+      closePage();
+      return;
+    case "error": {
+      p.error = r.text;
+      render();
+      const field = /^Repeat every/.test(r.text) ? "#sched-interval" : /^End the repeat/.test(r.text) ? "#sched-until" : "#sched-date";
+      document.querySelector<HTMLElement>(field)?.focus();
+      return;
+    }
+    case "ask":
+      p.ask = { set: r.set, until: r.until };
+      render();
+      $<HTMLElement>("#ask-h").focus();
+      return;
+    case "edit":
+      closePage();
+      void postEdit({ id: newId(), kind: "edit", key: it.key, payload: { set: r.set } }, "Saved");
+  }
+}
+
+/** The answer to "Just this one, or from now on?". */
+function answerAsk(once: boolean) {
+  const p = schedulePage();
+  if (!p?.ask) return;
+  const { set, until } = p.ask;
+  const key = p.key;
+  closePage();
+  if (once) doSnooze([key], until);
+  else void postEdit({ id: newId(), kind: "edit", key, payload: { set } }, "Saved");
 }
 
 function openNoteEdit(key: string, commentId: string) {
   const c = byKey(key)?.comments?.find((x) => x.id === commentId);
   if (!c) return;
   S.noteEdit = { key, commentId, text: c.text };
-  S.edit = null;
+  S.inline = null;
   render();
   $<HTMLTextAreaElement>("#note-edit-input").focus();
 }
@@ -2104,9 +2396,13 @@ function openItem(key: string) {
   const it = byKey(key);
   if (!it) return;
   if (S.open !== key) {
-    S.edit = null;
+    S.page = null;
+    S.inline = null;
+    S.moreOpen = false;
     S.noteEdit = null;
   }
+  // The Remind early row names the hub's default.
+  if (canEdit(it)) loadLead(ctx);
   S.open = key;
   S.selected = key;
   S.openSeenAt = it.seenAt;
@@ -2120,7 +2416,9 @@ function closeDetail() {
   if (!S.open) return;
   const key = S.open;
   S.open = null;
-  S.edit = null;
+  S.page = null;
+  S.inline = null;
+  S.moreOpen = false;
   S.noteEdit = null;
   setURL(null);
   render();
@@ -2341,6 +2639,11 @@ function onClick(e: MouseEvent) {
     S.syncOpen = false;
     renderSync();
   }
+  // A tap outside the More menu closes it.
+  if (S.moreOpen && !target.closest("#d-more-menu") && !target.closest("#d-more")) {
+    S.moreOpen = false;
+    render();
+  }
   const btn = target.closest<HTMLElement>("[data-act]");
   if (!btn) return;
   const key = btn.dataset.key ?? "";
@@ -2425,22 +2728,51 @@ function onClick(e: MouseEvent) {
     case "agents-on-copy":
       void copyText(btn.dataset.copy ?? "").then(() => showToast("Copied"));
       break;
-    case "edit":
-      openEdit(key);
+    case "inline":
+      startInline(btn.dataset.field as Inline["field"]);
       break;
-    case "edit-cancel":
-      closeEdit();
+    case "schedule":
+      openSchedule(key);
       break;
-    case "edit-clear-due":
-      clearDue();
+    case "snooze-page":
+      openSnoozePage(key);
       break;
-    case "edit-clear-until":
-      if (S.edit) {
-        S.edit.draft.until = "";
-        setValue("#edit-until", "");
-        $<HTMLInputElement>("#edit-until").focus();
-      }
+    case "page-back":
+      closePage();
       break;
+    case "more":
+      toggleMore();
+      break;
+    case "copy-id": {
+      const it = byKey(key);
+      S.moreOpen = false;
+      render();
+      $<HTMLElement>("#d-more").focus();
+      if (it) void copyText(it.id).then(() => showToast(`Copied ${it.id}`));
+      break;
+    }
+    case "sched-clear-date":
+      // The hub ends a repeat with its due date.
+      scheduleControl((d) => ({ ...d, date: "", time: "", repeat: "" }));
+      $<HTMLInputElement>("#sched-date").focus();
+      break;
+    case "sched-clear-until":
+      scheduleControl((d) => ({ ...d, until: "" }));
+      $<HTMLInputElement>("#sched-until").focus();
+      break;
+    case "sched-once":
+      answerAsk(true);
+      break;
+    case "sched-all":
+      answerAsk(false);
+      break;
+    case "sched-ask-cancel": {
+      const p = schedulePage();
+      if (p) p.ask = null;
+      render();
+      $<HTMLInputElement>("#sched-typed").focus();
+      break;
+    }
     case "note-edit":
       if (S.open) openNoteEdit(S.open, btn.dataset.id ?? "");
       break;
@@ -2466,6 +2798,7 @@ function onClick(e: MouseEvent) {
     case "snooze-opt": {
       const keys = btn.closest("#snooze") ? S.snoozeKeys ?? [] : S.open ? [S.open] : [];
       doSnooze(keys, new Date(btn.dataset.until!));
+      if (!btn.closest("#snooze")) leaveSnoozePage();
       break;
     }
     case "snooze-cal":
@@ -2571,7 +2904,16 @@ function onKey(e: KeyboardEvent) {
     } else if (S.menuOpen) closeMenu();
     else if (S.qaOpen) closeQuickAdd();
     else if (S.noteEdit && S.open) closeNoteEdit();
-    else if (S.edit && S.open) closeEdit();
+    else if (S.moreOpen) {
+      S.moreOpen = false;
+      render();
+      $<HTMLElement>("#d-more").focus();
+    } else if (S.inline) cancelInline();
+    else if (S.page?.kind === "schedule" && S.page.ask) {
+      S.page.ask = null;
+      render();
+      $<HTMLInputElement>("#sched-typed").focus();
+    } else if (S.page) closePage();
     else if (document.activeElement?.id === "search-input") {
       S.query = "";
       (document.activeElement as HTMLInputElement).value = "";
@@ -2634,28 +2976,27 @@ function onInput(e: Event) {
   else if (t.id === "note-input" && S.open) S.drafts.set(S.open, (t as HTMLTextAreaElement).value);
   else if (t.id === "sub-input" && S.open) S.subDrafts.set(S.open, (t as HTMLInputElement).value);
   else if (t.id === "note-edit-input" && S.noteEdit) S.noteEdit.text = (t as HTMLTextAreaElement).value;
-  else if (S.edit && t.closest(".edit-form")) {
-    const d = S.edit.draft;
+  else if (S.inline && t.id === INLINE_FIELD[S.inline.field].slice(1)) S.inline.text = (t as HTMLInputElement).value;
+  else if (t.id === "sched-typed") scheduleTyped((t as HTMLInputElement).value);
+  else if (t.id === "sched-date" || t.id === "sched-time" || t.id === "sched-interval" || t.id === "sched-until") {
     const v = (t as HTMLInputElement).value;
-    if (t.id === "edit-title") d.title = v;
-    else if (t.id === "edit-desc") d.description = v;
-    else if (t.id === "edit-due") {
-      d.dueText = v;
-      const it = byKey(S.edit.key);
-      // Only the line under the field changes while typing a date.
-      if (it) $("#edit-due-now").textContent = dueText(it, d);
-    } else if (t.id === "edit-interval") {
-      d.interval = v;
-      $("#edit-unit").textContent = unitText(d);
-    } else if (t.id === "edit-until") d.until = v;
-    else if (t.id === "edit-tags") d.tags = v;
+    scheduleControl((d) => {
+      if (t.id === "sched-date") {
+        d.date = v;
+        // A date picked with no time yet takes the hour quick add gives one.
+        if (v && !d.time) d.time = "09:00";
+      } else if (t.id === "sched-time") d.time = v;
+      else if (t.id === "sched-interval") d.interval = v;
+      else d.until = v;
+    });
   }
 }
 
 function onChange(e: Event) {
   const t = e.target as HTMLElement;
   if (t.dataset.pick !== undefined) snoozePicked(t as HTMLInputElement);
-  else if (S.edit && t.closest(".edit-form")) editChanged(S.edit.draft, t as HTMLInputElement);
+  else if (t.id === "p-prio" || t.id === "p-lead" || t.id === "p-parent") propChanged(t as HTMLSelectElement);
+  else if (schedulePage() && t.closest("#sched-form")) scheduleChanged(t as HTMLInputElement);
   else if (t.id === "qa-list") {
     qaListTouched = true;
     updateQaAgent((t as HTMLSelectElement).value);
@@ -2663,22 +3004,23 @@ function onChange(e: Event) {
   else if (shellUp) extChange(e.target as HTMLElement, ctx);
 }
 
-/** A select or checkbox of the edit form changed. Fields that show or hide with it redraw. */
-function editChanged(d: EditDraft, t: HTMLInputElement) {
-  if (t.id === "edit-prio") d.priority = Number(t.value);
-  else if (t.id === "edit-lead") d.remindBefore = t.value === "" ? null : Number(t.value);
-  else if (t.id === "edit-parent") d.parent = t.value;
-  else if (t.id === "edit-repeat") {
-    d.repeat = t.value as EditDraft["repeat"];
-    render();
-  } else if (t.id === "edit-from-done") {
-    d.fromDone = t.checked;
-    render();
-  } else if (t.dataset.weekday !== undefined) {
+/** A radio, checkbox or select of the Schedule page changed. */
+function scheduleChanged(t: HTMLInputElement) {
+  const v = t.value;
+  if (t.name === "sched-repeat") scheduleControl((d) => ({ ...d, repeat: v as EditDraft["repeat"] }));
+  else if (t.name === "sched-from") scheduleControl((d) => fitWeekdays({ ...d, fromDone: v === "done" }, now()));
+  else if (t.dataset.weekday !== undefined) {
     const n = Number(t.dataset.weekday);
-    d.weekdays = t.checked ? [...d.weekdays, n] : d.weekdays.filter((x) => x !== n);
-    render();
-  }
+    scheduleControl((d) => fitWeekdays({ ...d, weekdays: t.checked ? [...d.weekdays, n] : d.weekdays.filter((x) => x !== n) }, now()));
+  } else if (t.id === "sched-lead") scheduleControl((d) => ({ ...d, remindBefore: v === "" ? null : Number(v) }));
+}
+
+/** Leaving an inline field saves it, unless focus only moved within its form. */
+function onFocusOut(e: FocusEvent) {
+  if (writing || !S.inline) return;
+  const t = e.target as HTMLElement;
+  if (t.id !== INLINE_FIELD[S.inline.field].slice(1)) return;
+  commitInline();
 }
 
 function onSubmit(e: SubmitEvent) {
@@ -2688,7 +3030,8 @@ function onSubmit(e: SubmitEvent) {
   else if (form.dataset.form === "pw-claim" && form.closest(".claim")) void submitClaim(form);
   else if (form.id === "qa-form") void submitQuickAdd();
   else if (form.id === "search-form") (document.activeElement as HTMLElement | null)?.blur();
-  else if (form.dataset.form === "edit") saveEdit();
+  else if (form.dataset.form === "inline") commitInline();
+  else if (form.dataset.form === "schedule") saveSchedule();
   else if (form.dataset.form === "note-edit") saveNoteEdit();
   else if (form.dataset.form === "sub-add" && S.open) void addSubtask(S.open);
   else if (form.dataset.form === "snooze-type") submitSnoozeType(form);
@@ -3004,6 +3347,7 @@ function boot() {
   document.addEventListener("input", onInput);
   document.addEventListener("change", onChange);
   document.addEventListener("submit", onSubmit);
+  document.addEventListener("focusout", onFocusOut);
   new ResizeObserver(() => render()).observe(app);
   trackKeyboard();
   document.addEventListener("visibilitychange", () => {

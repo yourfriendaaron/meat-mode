@@ -21,6 +21,7 @@ test.describe("desktop", () => {
   test("a deleted item is listed in Deleted, Restore brings it back, Undo deletes it again", async ({ page, hub }) => {
     await openApp(page);
     await row(page, "Call Sam about the weekend").locator(".row-body").click();
+    await page.locator("#detail").getByRole("button", { name: "More actions" }).click();
     await page.locator("#detail").getByRole("button", { name: "Delete" }).click();
     await expect(row(page, "Call Sam about the weekend")).toHaveCount(0);
 
@@ -46,6 +47,7 @@ test.describe("desktop", () => {
   test("a deleted item's details offer Restore, and x restores it from the list", async ({ page, hub }) => {
     await openApp(page);
     await row(page, "Call Sam about the weekend").locator(".row-body").click();
+    await page.locator("#detail").getByRole("button", { name: "More actions" }).click();
     await page.locator("#detail").getByRole("button", { name: "Delete" }).click();
     await page.locator(".sidebar").getByRole("button", { name: "Deleted" }).click();
 
@@ -64,6 +66,7 @@ test.describe("desktop", () => {
     void hub;
     await openApp(page);
     await row(page, "Order compost for the beds").locator(".row-body").click();
+    await page.locator("#detail").getByRole("button", { name: "More actions" }).click();
     await page.locator("#detail").getByRole("button", { name: "Won't do" }).click();
     await page.locator(".sidebar").getByRole("button", { name: "Completed" }).click();
     await expect(row(page, "Order compost for the beds").locator(".chip-wontdo")).toHaveText("Won't do");

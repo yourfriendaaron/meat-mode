@@ -1,11 +1,11 @@
-// Editing personal items: the edit form's diff and priority helpers,
+// Editing personal items: the task sheet's draft, its diff and priority helpers,
 // and the Undo of the edit actions (docs/api.md, Edit rules). Pure: callers
 // pass `now`.
 
 import { MAX_REPEAT_INTERVAL, type Action, type Comment, type Edit, type Item, type NewAction, type RepeatUnit } from "./types.ts";
 import { isOpen, isPersonal, repoKey } from "./model.ts";
 import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
-import { parseQuickAdd } from "./quickadd.ts";
+import { DEFAULT_HOUR } from "./quickadd.ts";
 import { sameRule, type RepeatRule } from "./repeat.ts";
 import { cleanTags, sameTags, shownTags, typedTags } from "./tags.ts";
 
@@ -41,17 +41,24 @@ export function dueLabel(d: Date, now: Date): string {
   return `Due ${fmtWhenAt(d, now)}`;
 }
 
-/** A due date typed the way quick add reads one ("tomorrow 9am"); null when it holds none. */
-export function parseDue(text: string, now: Date): Date | null {
-  return parseQuickAdd(text, now, [], { repeat: false }).due;
+/** The hour a date picked without a time takes, as quick add gives one. */
+export const DRAFT_HOUR = DEFAULT_HOUR;
+
+/** "09:05": a time as an <input type="time"> holds it. */
+export function hhmm(d: Date): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-/** The edit form as typed. `dueText` "" keeps the due date unless `clearDue` is set. */
+/**
+ * A personal item's fields as the sheet edits them. The due time is `date`
+ * ("YYYY-MM-DD", "" for none) and `time` ("HH:MM", "" for the default hour),
+ * in local time.
+ */
 export interface EditDraft {
   title: string;
   description: string;
-  dueText: string;
-  clearDue: boolean;
+  date: string;
+  time: string;
   priority: number;
   /** "" for no repeat. */
   repeat: RepeatUnit | "";
@@ -74,11 +81,12 @@ export interface EditDraft {
 
 export function draftOf(item: Item, timeZone = ""): EditDraft {
   const r = item.repeat;
+  const due = item.dueAt ? new Date(item.dueAt) : null;
   return {
     title: item.title,
     description: item.description ?? "",
-    dueText: "",
-    clearDue: false,
+    date: due ? ymd(due) : "",
+    time: due ? hhmm(due) : "",
     priority: item.priority,
     repeat: r?.every ?? "",
     interval: String(r?.interval || 1),
@@ -124,13 +132,25 @@ export function draftRule(d: EditDraft): RepeatRule | null | undefined {
 /** What the due field will save: a date, none, or the text it could not read. */
 export type DueOutcome = { kind: "keep"; at: Date | null } | { kind: "set"; at: Date } | { kind: "clear" } | { kind: "invalid" };
 
-export function dueOutcome(item: Item, d: EditDraft, now: Date): DueOutcome {
-  if (d.dueText.trim()) {
-    const at = parseDue(d.dueText, now);
-    return at ? { kind: "set", at } : { kind: "invalid" };
-  }
-  if (d.clearDue) return { kind: "clear" };
-  return { kind: "keep", at: item.dueAt ? new Date(item.dueAt) : null };
+/** The due time the draft's date and time make: null for none, undefined when either is not a real one. */
+export function draftDue(d: Pick<EditDraft, "date" | "time">): Date | null | undefined {
+  if (!d.date) return null;
+  const day = fromYmd(d.date);
+  if (!day) return undefined;
+  if (!d.time) return new Date(day.getFullYear(), day.getMonth(), day.getDate(), DRAFT_HOUR, 0);
+  const m = /^(\d{2}):(\d{2})$/.exec(d.time);
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return undefined;
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number(m[1]), Number(m[2]));
+}
+
+/** What the draft does to the due time. The item's own time, to the minute, keeps it. */
+export function dueOutcome(item: Item, d: EditDraft): DueOutcome {
+  const at = draftDue(d);
+  const had = item.dueAt ? new Date(item.dueAt) : null;
+  if (at === undefined) return { kind: "invalid" };
+  if (at === null) return had ? { kind: "clear" } : { kind: "keep", at: null };
+  if (had && ymd(had) === d.date && hhmm(had) === hhmm(at)) return { kind: "keep", at: had };
+  return { kind: "set", at };
 }
 
 /** The reason the form cannot be saved, or "". */
@@ -139,11 +159,11 @@ export function editError(item: Item, d: EditDraft, now: Date): string {
   if (!title) return "Add a title.";
   if (title.length > TITLE_MAX) return `Keep the title to ${TITLE_MAX} characters.`;
   if (d.description.length > TEXT_MAX) return `Keep the details to ${TEXT_MAX} characters.`;
-  const due = dueOutcome(item, d, now);
-  if (due.kind === "invalid") return "Could not read that date. Try something like tomorrow 9am.";
+  const due = dueOutcome(item, d);
+  if (due.kind === "invalid") return "Pick a real date and time.";
   const rule = draftRule(d);
   if (rule === undefined) return `Repeat every 1 to ${MAX_REPEAT_INTERVAL}.`;
-  if (rule && (due.kind === "clear" || (due.kind === "keep" && !due.at))) return "A repeat needs a due date. Add one, or pick Does not repeat.";
+  if (rule && (due.kind === "clear" || (due.kind === "keep" && !due.at))) return "A repeat needs a date. Add one, or pick Never.";
   if (rule?.until && !fromYmd(rule.until)) return "End the repeat on a real date, or pick No end date.";
   if (rule?.until && (due.kind === "set" || due.kind === "keep") && due.at && rule.until < ymd(due.at)) return "End the repeat on or after its due date.";
   const tags = cleanTags(typedTags(d.tags));
@@ -157,7 +177,7 @@ export function diffEdit(item: Item, d: EditDraft, now: Date): Edit | null {
   const title = d.title.trim();
   if (title !== item.title) set.title = title;
   if (d.description !== (item.description ?? "")) set.description = d.description;
-  const due = dueOutcome(item, d, now);
+  const due = dueOutcome(item, d);
   const had = item.dueAt ? new Date(item.dueAt).getTime() : null;
   if (due.kind === "set" && due.at.getTime() !== had) set.due = due.at.toISOString();
   if (due.kind === "clear" && had !== null) set.clearDue = true;

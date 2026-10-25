@@ -83,6 +83,7 @@ test("picking a view from the sidebar ends the search", async ({ page, hub }) =>
 test("a deleted item found by search offers Restore", async ({ page, hub }) => {
   await openApp(page);
   await row(page, "Call Sam about the weekend").locator(".row-body").click();
+  await page.locator("#detail").getByRole("button", { name: "More actions" }).click();
   await page.locator("#detail").getByRole("button", { name: "Delete" }).click();
   await page.locator("#search-input").fill("call sam");
   await expect(page.locator("#list .group-head h2")).toHaveText([/Deleted/]);
