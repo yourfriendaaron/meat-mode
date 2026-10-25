@@ -53,6 +53,7 @@ The guard only refuses. A forged header can make a request look more public, nev
 | `POST /api/actions` | `NewAction` | `201` with `Action` (or `200` with the stored one for a duplicate id) |
 | `POST /api/actions/{id}/cancel` | | `200` with `Action` (status `cancelled`) when it was not yet applied; `409` when it already was |
 | `GET /api/actions?limit=n` | | Recent actions, newest first, for the sync popover; `limit` defaults to 50 and is capped at 500 |
+| `GET /api/items/{key}/history?limit=n` | | The actions on one item, newest first, for the task sheet's History: every action on it, whatever its status, and the `add` of each of its sub-tasks. `limit` works as for `GET /api/actions`. The hub keeps the whole action log, so it reaches back to the item's `add`. `404` for an item the hub does not hold, `400` for a key that is not one |
 | `POST /api/items/{key}/seen` | | `204`; marks replies on the item read |
 | `GET /api/push/key` | | `{"publicKey": "<VAPID public key>"}` |
 | `POST /api/push/subscriptions` | `PushSubscription`: the browser's JSON, plus optional `"kind"` (`web`, the default, or `app`) and `"name"` (up to 64 characters; the hub trims it and uses `Browser` or `Android app` when it is empty) | `web`: `204` (upsert by endpoint); `400` unless the endpoint is an https URL on a known push service (Mozilla, FCM, Apple, Windows). `app`: `202` with `{"device": "<id>"}` and the hub pushes a confirmation to the endpoint (see Devices); `204` when that endpoint already belongs to a confirmed device, which renews it and keeps its token, and the hub pushes it a fresh code too, so an app that lost its token gets a new one by confirming (the old token stops then); `400` unless the endpoint passes the endpoint rule (see Devices). The hub keeps the 20 newest subscriptions of both kinds. |
@@ -265,6 +266,21 @@ An item's `parent` is the id of the item it is a sub-task of, in the same list; 
 - `subtasksDone` lists ids of the item's own sub-tasks to mark done. The hub puts it in the `was` of a repeating `done`, so that Undo closes the sub-tasks the repeat reopened; ids that are not the item's sub-tasks are refused. A named sub-task is closed outright, a repeating one included: it does not move on to its next date, as a `done` on it in the app would.
 
 The applied `edit` action carries `was`, an `Edit` with the same fields as `set` holding the values before it (`labels: []` for no tags, `clearDue: true` for a due date that was not set, `clearRepeat: true` for no repeat, `clearRemindBefore: true` for no lead time of its own; an edit that clears the due date of a repeating item records its `repeat` too). Its Undo is an `edit` with `set` = `was`. The Undo of `note-edit` is a `note-edit` back to the text of the `comment` the applied action carries; the Undo of `note-delete` is `note-restore` with the `comment` the applied action carries.
+
+### Item history
+
+The task sheet of a personal or project item has a History section, folded with its count. Open, it lists the item's applied changes from `GET /api/items/{key}/history`, newest first, five at a time with Show all: each in plain words ("Moved to Sun, Nov 1 at 12:00", "Marked done", "Added sub-task Buy soil", "Tags: +garden"), who made it ("You" for the app's own actions, `<author> on <machine>` for an agent's) and when. History reaches back to the item's `add`, as the hub never drops actions, for as long as the app shows the item: a closed item leaves it 7 days after it closed. An item moved from a bridge's personal repo starts its history at the move.
+
+A change offers Undo when it is the latest change to every field it touched and the item still shows what it set. A later change to another field leaves it undoable; a later change to the same field, by anyone, takes the Undo over. Undo posts the app's usual opposite:
+
+- `edit`: an `edit` with `set` = `was`. An edit without `was`, or one that names `subtasksDone`, offers none.
+- `done` that moved a repeating item on: an `edit` with `set` = `was`, while the item is open.
+- `done` and `dismiss` that closed the item: `reopen`, when the item was open before them.
+- `reopen`: `dismiss` after a delete, or `done` after a done on an item that does not repeat.
+- `snooze`: `snooze` back to `previous`, while the snooze still holds.
+- `note-edit`, `note-delete` and `note-restore`: the note back as it was.
+
+An `add`, a `note`, a sub-task's `add`, an `ask` and a `stop` offer none: the sheet's own buttons remove an item, a note or a sub-task. Undoing is itself a change, so it shows in History with its own Undo. Undoing an agent's change sends no notification, as the change did not.
 
 ### Tags
 
@@ -532,7 +548,7 @@ Like the add, these calls leave the bridge's last-seen time alone, and take `?pr
 
 `PersonalChange` is `{"id"?, "kind", "payload", "author"?}`. `kind` is `edit` (payload `{"set": Edit}`), `done`, `reopen`, `dismiss` or `note` (payload `{"text"}`), with the rules of the app's actions above. `id` and `author` work as for `PersonalTodo`. An `edit`'s `parent` and `subtasksDone` name items of the same list, whoever added them; an id the list does not hold answers `404`.
 
-The applied `Action` carries `author` and `machine`, the name of the machine whose token posted it; so do the `add` and its note. The app's recent actions (`GET /api/actions`) show both, and the user undoes an agent's change by hand, as the app offers no Undo from that list. An agent's change sends no notification of its own; a due time it sets reminds as any other does.
+The applied `Action` carries `author` and `machine`, the name of the machine whose token posted it; so do the `add` and its note. The app's recent actions (`GET /api/actions`) and the item's History in the task sheet (`GET /api/items/{key}/history`) show both, and History offers Undo on the change (see Item history). An agent's change sends no notification of its own; a due time it sets reminds as any other does.
 
 ```sh
 curl -fsS https://meat-mode.example.com/bridge/v1/personal/mm-12/actions \

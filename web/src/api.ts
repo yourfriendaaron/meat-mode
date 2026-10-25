@@ -129,6 +129,8 @@ export const api = {
   /** Throws ApiError 409 when the action was already applied; actions.ts then posts its inverse. */
   cancelAction: (id: string) => call<Action>("POST", `/api/actions/${encodeURIComponent(id)}/cancel`),
   actions: (limit = 30) => call<Action[]>("GET", `/api/actions?limit=${limit}`),
+  /** The actions on one item, newest first, its sub-tasks' adds included (docs/api.md, Item history). */
+  history: (key: string, limit = 500) => call<Action[]>("GET", `/api/items/${encodeURIComponent(key)}/history?limit=${limit}`),
   seen: (key: string) => call<void>("POST", `/api/items/${encodeURIComponent(key)}/seen`),
   pushKey: () => call<{ publicKey: string }>("GET", "/api/push/key"),
   /** Registers a push subscription. An `app` one answers `{device}` and waits for its confirmation; a `web` one answers nothing. */

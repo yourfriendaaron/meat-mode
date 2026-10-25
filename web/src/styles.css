@@ -9,6 +9,7 @@
 @import "./attachments.css";
 @import "./tags.css";
 @import "./month.css";
+@import "./changes.css";
 
 /* ---------- tokens ----------
    The one token block: the three :root rules below. Palette tokens (--palette-*) hold

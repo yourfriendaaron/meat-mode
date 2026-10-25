@@ -706,6 +706,23 @@ export class FakeHub {
       if (s.before && idx >= 0) this.items[idx] = s.before;
       return this.json(route, 200, s.action);
     }
+    m = path.match(/^\/api\/items\/([^/]+)\/history$/);
+    if (method === "GET" && m) {
+      // The actions on one item and its sub-tasks' adds, newest first (docs/api.md, Item history).
+      const it = this.find(decodeURIComponent(m[1]));
+      if (!it) return this.json(route, 404, { error: "no such item" });
+      const limit = Number(url.searchParams.get("limit") || 50);
+      const mine = (a: Action) => a.bridge === it.bridge && a.repo === it.repo && (a.beadId === it.id || (a.kind === "add" && a.payload.parent === it.id));
+      return this.json(
+        route,
+        200,
+        [...this.log]
+          .reverse()
+          .map((s) => s.action)
+          .filter(mine)
+          .slice(0, limit),
+      );
+    }
     m = path.match(/^\/api\/items\/([^/]+)\/seen$/);
     if (method === "POST" && m) {
       const it = this.find(decodeURIComponent(m[1]));

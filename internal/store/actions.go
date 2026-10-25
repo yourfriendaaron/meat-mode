@@ -423,6 +423,29 @@ func (s *Store) RecentActions(limit int) ([]api.Action, error) {
 	return s.queryActions(`SELECT `+actionCols+` FROM actions ORDER BY seq DESC LIMIT ?`, limit)
 }
 
+// ItemHistory returns up to limit actions on one item, newest first: every
+// action on it, whatever its status, and the adds of its sub-tasks. The hub
+// keeps the whole action log, so it reaches back to the item's add. An item
+// the hub does not hold is notFound.
+func (s *Store) ItemHistory(key string, limit int) ([]api.Action, error) {
+	b, r, id, ok := SplitKey(key)
+	if !ok {
+		return nil, invalidf("item key %q is not valid", key)
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM items WHERE bridge = ? AND repo = ? AND id = ?`, b, r, id).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, notFoundf("no item %q", key)
+	}
+	return s.queryActions(`SELECT `+actionCols+` FROM actions WHERE bridge = ? AND repo = ? AND bead_id = ?
+		UNION ALL
+		SELECT `+actionCols+` FROM actions WHERE bridge = ? AND repo = ? AND kind = ? AND bead_id <> ?
+			AND json_extract(payload, '$.parent') = ?
+		ORDER BY seq DESC LIMIT ?`, b, r, id, b, r, api.KindAdd, id, id, limit)
+}
+
 // ReportResult records a bridge's result for one of its actions. A result
 // for an action that already has one changes nothing, so a bridge can retry.
 // A success for a cancelled action is recorded as applied, because beads did

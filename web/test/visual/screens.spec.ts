@@ -230,8 +230,16 @@ for (const size of Object.keys(SIZES) as Size[]) {
           const it = hub.find("hub/personal/pe-1")!;
           it.priority = 1;
           it.comments = [{ id: "n1", author: "alex-app", text: "Use the rain water.", createdAt: "2026-10-14T08:00:00Z" }];
+          // The user added it; an agent on a paired machine raised its priority.
+          const base = { bridge: "hub", repo: "personal", beadId: "pe-1", status: "applied" as const };
+          hub.log.push(
+            { before: null, action: { ...base, id: "h-1", seq: 1, kind: "add", payload: { title: it.title }, author: "alex-app", createdAt: "2026-10-13T09:00:00Z" } },
+            { before: null, action: { ...base, id: "h-2", seq: 2, kind: "edit", payload: { set: { priority: 1 }, was: { priority: 2 } }, author: "planner", machine: "desk", createdAt: "2026-10-14T08:30:00Z" } },
+          );
           await openApp(page, "/?item=" + encodeURIComponent("hub/personal/pe-1"));
           await expect(page.locator("#detail h2#d-title")).toHaveText(it.title);
+          await page.locator("#detail").getByRole("button", { name: /^History/ }).click();
+          await expect(page.locator(".hist")).toHaveCount(2);
           await shot(page, "personal-detail");
         });
 
