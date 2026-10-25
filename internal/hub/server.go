@@ -116,6 +116,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.HandleFunc("GET /api/actions", s.handleListActions)
 	m.HandleFunc("POST /api/actions/{id}/cancel", s.handleCancel)
 	m.HandleFunc("POST /api/items/{key}/seen", s.handleSeen)
+	m.HandleFunc("GET /api/items/{key}/history", s.handleItemHistory)
 	m.HandleFunc("GET /api/push/key", s.handlePushKey)
 	m.HandleFunc("POST /api/push/subscriptions", s.handlePushSubscribe)
 	m.HandleFunc("DELETE /api/push/subscriptions", s.handlePushUnsubscribe)
@@ -313,17 +314,40 @@ func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, a)
 }
 
-func (s *Server) handleListActions(w http.ResponseWriter, r *http.Request) {
+// actionLimit reads a list of actions' ?limit=: 50 when absent, at most 500.
+// False when it wrote a 400.
+func actionLimit(w http.ResponseWriter, r *http.Request) (int, bool) {
 	limit := 50
 	if v := r.URL.Query().Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 {
 			writeError(w, http.StatusBadRequest, "limit must be a positive whole number")
-			return
+			return 0, false
 		}
 		limit = min(n, 500)
 	}
+	return limit, true
+}
+
+func (s *Server) handleListActions(w http.ResponseWriter, r *http.Request) {
+	limit, ok := actionLimit(w, r)
+	if !ok {
+		return
+	}
 	as, err := s.store.RecentActions(limit)
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, as)
+}
+
+func (s *Server) handleItemHistory(w http.ResponseWriter, r *http.Request) {
+	limit, ok := actionLimit(w, r)
+	if !ok {
+		return
+	}
+	as, err := s.store.ItemHistory(r.PathValue("key"), limit)
 	if err != nil {
 		s.storeError(w, r, err)
 		return

@@ -92,6 +92,8 @@ Ticking a task off plays a soft pop and slides the row away. Tick off several in
 
 Descriptions and notes show as Markdown, so an agent's list of steps, table or link reads as it meant it. Editing stays plain text.
 
+Each of your to-dos keeps its **History** at the foot of its details: what changed, in plain words, who changed it and when. When an agent on one of your machines moves a date or renames a task, History names the agent and the machine, and **Undo** puts it back. Undo shows on a change while nothing has changed that field since. An agent's change sends no notification of its own.
+
 On your own to-dos and projects you can attach files: a photo of the broken part, the PDF of the booking. On a phone you can take a photo there and then, or choose one from your gallery. Photos show as thumbnails and open in a tab; other files download. A file can be up to 25 MB, an item holds 20, and the hub keeps up to 1 GB in all. Agents' tasks take no files, since their trackers have nowhere to carry one back to the agent.
 
 <img src="docs/images/details-files.png" width="380" alt="The to-do &quot;Fix the gate latch&quot; open on a desktop, with the tags home and weekend. Its details show as Markdown: a sentence, a numbered list with &quot;8 mm&quot; in bold, and a link to example.com. Under Files, a thumbnail of a photo of the latch, named gate-latch.jpg, 24 KB, sits above an Attach a file button.">

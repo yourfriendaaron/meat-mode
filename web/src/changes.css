@@ -1,0 +1,70 @@
+/* The task sheet's History section (changes.ts). */
+
+.hist-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.hist-toggle svg {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+.hist-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.d-history {
+  gap: 0;
+}
+.hists {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hist {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 4px 10px;
+  border-left: 3px solid var(--role-you);
+}
+.hist-agent {
+  border-left-color: var(--role-agent);
+}
+.hist-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hist-what {
+  overflow-wrap: anywhere;
+}
+.hist-by {
+  font-size: 12px;
+  color: var(--role-soft);
+}
+.hist-undo {
+  flex: none;
+}
+.hist-all {
+  align-self: flex-start;
+  margin-top: 6px;
+  min-height: 44px;
+}

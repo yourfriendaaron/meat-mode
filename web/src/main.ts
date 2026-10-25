@@ -73,7 +73,8 @@ import { esc } from "./html.ts";
 import { agentsOnHTML } from "./agents.ts";
 import { copyText } from "./clipboard.ts";
 import { ICON } from "./icons.ts";
-import { remote } from "./remote.ts";
+import { remote, type Remote } from "./remote.ts";
+import { HISTORY_SHOWN, byLine, changeText, shownChanges, undoFor, type HistoryContext } from "./changes.ts";
 import { agentName, agentsAllowed, askLabel, isWorking, noAgentReason, offersTell, queuedComments, runEnded, runLine, workingItems } from "./runs.ts";
 import { initPush, remindersOn, subscribePush } from "./push.ts";
 import type { AppContext } from "./app-context.ts";
@@ -161,6 +162,9 @@ const S = {
   inline: null as Inline | null,
   /** The sheet's More menu. */
   moreOpen: false,
+  /** The item whose History section is open, and the one whose History shows every change. */
+  historyOpen: null as string | null,
+  historyAll: null as string | null,
   /** The note being edited, on a personal item. */
   noteEdit: null as { key: string; commentId: string; text: string } | null,
   /** Unsent text of each item's add-a-sub-task field. */
@@ -1260,6 +1264,78 @@ function actionBarHTML(item: Item): string {
   return `<div class="d-bar">${main}${snooze}<div class="more-wrap"><button class="btn btn-icon" id="d-more" data-act="more" aria-label="More actions" title="More actions" aria-haspopup="true" aria-expanded="false" aria-controls="d-more-menu">${ICON.more}</button><div id="d-more-menu" class="more-menu" hidden inert>${more}</div></div></div>`;
 }
 
+/** The open sheet's item history, loaded from the hub; it follows the item on screen. */
+let historyKey = "";
+let itemHistory: Remote<Action[]> = remote(async () => []);
+function historyOf(key: string): Remote<Action[]> {
+  if (key !== historyKey) {
+    historyKey = key;
+    itemHistory = remote(() => api.history(key));
+  }
+  return itemHistory;
+}
+
+function historyContext(item: Item): HistoryContext {
+  return { now: now(), title: (id) => byKey(`${item.bridge}/${item.repo}/${id}`)?.title ?? "" };
+}
+
+/**
+ * The History section near the foot of the sheet: folded with its count,
+ * open it lists the newest changes, each with who made it and when, and
+ * Undo where the change can still be undone (changes.ts, undoFor).
+ */
+function historyHTML(item: Item): string {
+  const h = historyOf(item.key);
+  const list = h.get(renderHistory);
+  const changes = list ? shownChanges(list) : null;
+  const open = S.historyOpen === item.key;
+  const count = changes?.length ? ` <span class="group-count">${changes.length}</span>` : "";
+  const head = `<h3 id="d-hist"><button class="hist-toggle" id="d-hist-toggle" data-act="history" aria-expanded="${open}" aria-controls="d-hist-body">History${count}${ICON.right}</button></h3>`;
+  if (!open) return `<section class="d-section d-history" aria-labelledby="d-hist">${head}</section>`;
+  let body: string;
+  if (!changes) body = `<p class="muted small">${h.error() ? "Could not load the history." : "Loading"}</p>`;
+  else if (!changes.length) body = '<p class="muted small">No changes yet.</p>';
+  else {
+    const all = S.historyAll === item.key;
+    const ctx = historyContext(item);
+    const shown = all ? changes : changes.slice(0, HISTORY_SHOWN);
+    const rows = shown
+      .map((a, i) => {
+        const text = changeText(a, item, ctx);
+        const undo = undoFor(changes, i, item, "")
+          ? `<button class="btn btn-small hist-undo" data-act="history-undo" data-id="${esc(a.id)}" aria-label="${esc(`Undo: ${text}`)}">${ICON.undo}Undo</button>`
+          : "";
+        const when = new Date(a.createdAt);
+        return `<li class="hist${a.machine ? " hist-agent" : ""}"><div class="hist-main"><span class="hist-what">${esc(text)}</span><span class="hist-by" title="${esc(when.toLocaleString())}">${esc(byLine(a, now()))}</span></div>${undo}</li>`;
+      })
+      .join("");
+    const more = !all && changes.length > HISTORY_SHOWN ? `<button class="link-btn hist-all" data-act="history-all">Show all ${changes.length}</button>` : "";
+    body = `<ol class="hists">${rows}</ol>${more}`;
+  }
+  return `<section class="d-section d-history" aria-labelledby="d-hist">${head}<div id="d-hist-body">${body}</div></section>`;
+}
+
+/** Undoes one change from the History section, then offers to undo that in turn. */
+async function undoChange(id: string) {
+  const it = byKey(S.open);
+  const list = itemHistory.peek();
+  if (!it || !list || historyKey !== it.key) return;
+  const changes = shownChanges(list);
+  const i = changes.findIndex((a) => a.id === id);
+  const back = i < 0 ? null : undoFor(changes, i, it, newId());
+  if (!back) {
+    showToast("That change can no longer be undone.");
+    render();
+    return;
+  }
+  const text = changeText(changes[i], it, historyContext(it));
+  const h = await actions.perform([back], { onPatched: render });
+  if (h.posted.length) showToast(`Undone: ${text}`, undoing(h));
+  await refresh();
+  // The entry's Undo is gone once the history reloads; keep focus in the section.
+  if (!document.activeElement || document.activeElement === document.body) document.getElementById("d-hist-toggle")?.focus();
+}
+
 /** A page inside the sheet: its head with the way back, its title and an optional action. */
 function pageHeadHTML(title: string, action = ""): string {
   return `<div class="grip" aria-hidden="true"></div><div class="page-head"><button class="link-btn page-back" data-act="page-back" aria-label="Back to the task">${ICON.left}Task</button><h2 id="pg-h" class="page-title" tabindex="-1">${esc(title)}</h2><span class="page-act">${action}</span></div>`;
@@ -1548,6 +1624,7 @@ ${subtasksHTML(item)}
 ${attachmentsHTML(item, editable)}
 <section class="d-section" aria-labelledby="d-notes"><h3 id="d-notes">Notes and replies</h3>${comments ? `<ol class="notes">${comments}</ol>` : '<p class="muted small">No notes yet.</p>'}
 ${noteBoxHTML(item, allowed)}</section>
+${editable ? '<div id="d-hist-slot"></div>' : ""}
 ${actionBarHTML(item)}
 </div>`;
   const fresh = setHTML(el, html);
@@ -1560,7 +1637,18 @@ ${actionBarHTML(item)}
     if (S.noteEdit?.key === item.key) setValue("#note-edit-input", S.noteEdit.text);
   }
   if (S.inline?.key === item.key) setValue(INLINE_FIELD[S.inline.field], S.inline.text);
+  renderHistory();
   return fresh;
+}
+
+/**
+ * Draws the History section into its own slot, so its load landing
+ * rewrites only the section and leaves focus elsewhere in the sheet alone.
+ */
+function renderHistory() {
+  const slot = document.getElementById("d-hist-slot");
+  const item = byKey(S.open);
+  if (slot && item) setHTML(slot, historyHTML(item));
 }
 
 /** Opens or closes the More menu on the node the sheet has, so it animates both ways. */
@@ -1771,6 +1859,8 @@ async function refresh(): Promise<void> {
       if (!Number.isNaN(server)) S.offset = server - Date.now();
       if (S.selected && !byKey(S.selected)) S.selected = null;
       if (S.syncOpen) void syncActions.reload(renderSync);
+      // The open item's History follows every change.
+      if (S.open && S.open === historyKey) void itemHistory.reload(renderHistory);
     } catch (e) {
       S.loadError = errorText(e);
     }
@@ -2942,6 +3032,17 @@ function onClick(e: MouseEvent) {
       break;
     case "sub-remove":
       void removeSubtask(key);
+      break;
+    case "history":
+      S.historyOpen = S.historyOpen === S.open ? null : S.open;
+      render();
+      break;
+    case "history-all":
+      S.historyAll = S.open;
+      render();
+      break;
+    case "history-undo":
+      void undoChange(btn.dataset.id ?? "");
       break;
     case "later":
       S.laterOpen = !S.laterOpen;
