@@ -96,6 +96,23 @@ Do: show a run's state on its surface plus one line of text in the edge colour. 
 
 Do: build every surface from these. Don't: use a role from the tables above as a background for a whole pane.
 
+## Motion
+
+Motion says where something came from and where it went: a sheet slides from its edge, a menu grows from its button, a page pushes in from the side. It is short and never stands between a tap and its result.
+
+| Token | Means |
+|---|---|
+| `--motion-quick` | Hover and press feedback, the check filling. |
+| `--motion-in` | Something small arriving: a menu, popover, dialog, toast, page, row. |
+| `--motion-out` | Something small leaving. Shorter than arriving. |
+| `--motion-sheet-in` | A sheet or drawer sliding in from a screen edge. |
+| `--motion-sheet-out` | A sheet or drawer sliding back out. |
+| `--ease-out` | Entering: fast, then settling. |
+| `--ease-in` | Leaving: gathering speed as it goes. |
+| `--ease-move` | Moving or changing in place. |
+
+Do: animate transform and opacity, and take the duration and easing from these tokens; `web/src/motion.ts` reads them for entrances CSS cannot reach. Don't: bounce, or write a duration into a rule; the one exception is the done slide, whose timings main.ts waits on (`SLIDE_MS`, `FOLD_MS`). `prefers-reduced-motion: reduce` sets every duration to 0, so motion turns into an instant change.
+
 ## Outside the stylesheets
 
 The browser's theme colour (`<meta name="theme-color">`) is set from `web/src/theme.ts`, which repeats the two background values. Change it there when `--palette-bg` changes.

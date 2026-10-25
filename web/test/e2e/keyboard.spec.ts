@@ -67,8 +67,9 @@ test("the New task sheet rides above the keyboard and settles back when it close
   const input = page.getByRole("textbox", { name: "New task" });
   const add = form.getByRole("button", { name: "Add" });
   await expect(input).toBeFocused();
+  // The sheet slides up as it opens; wait for it to come to rest on the bottom edge.
+  await expect.poll(async () => Math.round(((b) => b.y + b.height)((await form.boundingBox())!))).toBe(844);
   const rest = (await form.boundingBox())!;
-  expect(rest.y + rest.height).toBeCloseTo(844, 0);
 
   await keyboard(page, KEYBOARD);
   await expectInVisualViewport(page, add);
