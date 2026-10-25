@@ -208,6 +208,8 @@ test("done, snooze, note and won't do reach bd", async ({ page, w }) => {
   const detail = page.locator("#detail");
   const until = new Date(Date.now() + 3 * 24 * 3600 * 1000);
   until.setUTCHours(8, 30, 0, 0);
+  // Snooze opens its page in the sheet.
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await detail.getByRole("button", { name: "Choose a date and time" }).click();
   await detail.locator("input[data-pick]").fill(until.toISOString().slice(0, 16));
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();
@@ -226,6 +228,7 @@ test("done, snooze, note and won't do reach bd", async ({ page, w }) => {
     .toContainEqual([`${USER}-app`, "Two bags is enough."]);
 
   await row(page, "Prune the roses").locator(".row-body").click();
+  await detail.getByRole("button", { name: "More actions" }).click();
   await detail.getByRole("button", { name: "Won't do" }).click();
   await expect.poll(async () => (await w.show(garden, id(w, "Prune the roses"))).status).toBe("closed");
 
@@ -248,6 +251,7 @@ test("a sub-task added in the app is a child bead, and Won't do on the parent cl
   await expect(row(page, "Pick a supplier")).toHaveClass(/row-sub/);
   await expect(row(page, "Pick a supplier")).not.toContainText("Waiting for sync");
 
+  await detail.getByRole("button", { name: "More actions" }).click();
   await detail.getByRole("button", { name: "Won't do" }).click();
   const statuses = async () => (await w.list(garden)).filter((i) => i.id === parent || i.parent === parent).map((i) => i.status);
   await expect.poll(statuses).toEqual(["closed", "closed"]);
@@ -415,6 +419,8 @@ test("the personal list works with every bridge stopped and survives a hub resta
   await detail.getByRole("button", { name: "Save note" }).click();
   const until = new Date(Date.now() + 2 * 24 * 3600 * 1000);
   until.setUTCHours(8, 30, 0, 0);
+  // Snooze opens its page in the sheet.
+  await detail.getByRole("button", { name: "Snooze", exact: true }).click();
   await detail.getByRole("button", { name: "Choose a date and time" }).click();
   await detail.locator("input[data-pick]").fill(until.toISOString().slice(0, 16));
   await detail.getByRole("button", { name: "Snooze", exact: true }).click();

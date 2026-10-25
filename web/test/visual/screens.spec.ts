@@ -256,16 +256,19 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await shot(page, "subtasks");
         });
 
-        test("edit a personal task", async ({ page, hub }) => {
+        test("schedule page of a personal task", async ({ page, hub }) => {
           const it = hub.find("hub/personal/pe-1")!;
-          it.repeat = { every: "week", weekdays: [1, 4], timeZone: "UTC", start: it.dueAt! };
+          it.dueAt = "2026-10-14T18:00:00Z";
+          it.repeat = { every: "week", fromDone: true, timeZone: "UTC", start: it.dueAt };
           await openApp(page, "/?item=" + encodeURIComponent("hub/personal/pe-1"));
           await expect(page.locator("#detail h2#d-title")).toHaveText(it.title);
-          await page.locator("#detail").getByRole("button", { name: "Edit", exact: true }).click();
-          await expect(page.locator("#detail").getByLabel("Title")).toBeFocused();
+          await page.locator("#detail #d-sched").click();
+          await expect(page.locator("#detail #pg-h")).toHaveText("Schedule");
           // The lead time choice names the hub's default once it has loaded.
-          await expect(page.locator("#edit-lead option:checked")).toHaveText("Use default (none)");
-          await shot(page, "edit");
+          await expect(page.locator("#sched-lead option:checked")).toHaveText("Use default (none)");
+          await page.locator("#sched-typed").fill("every sunday 12pm");
+          await expect(page.locator("#sched-readout")).toHaveText("Every Sunday at 12:00. Next: Sun, Oct 18.");
+          await shot(page, "schedule");
         });
 
         test("snooze", async ({ page, hub }) => {

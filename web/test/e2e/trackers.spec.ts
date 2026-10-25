@@ -28,8 +28,11 @@ test("a list's tracker hides what it cannot do, and Done still works", async ({ 
   await expect(detail.getByLabel("Add a sub-task")).toHaveCount(0);
   // No agents switch to point at either: the tracker runs none.
   await expect(detail.locator(".run-off")).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "Snooze", exact: true })).toHaveCount(0);
+  await detail.getByRole("button", { name: "More actions" }).click();
   await expect(detail.getByRole("button", { name: "Won't do" })).toBeVisible();
   await axe(page);
+  await page.keyboard.press("Escape");
 
   // The snooze key does nothing on it.
   await detail.locator("#d-title").click();

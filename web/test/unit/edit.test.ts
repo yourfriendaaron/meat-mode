@@ -50,7 +50,7 @@ test("an unchanged form sets nothing", () => {
 
 test("the set holds only the changed fields", () => {
   const it = item();
-  const d = { ...draftOf(it), title: "  Water the ferns ", priority: 1, dueText: "friday 5pm" };
+  const d = { ...draftOf(it), title: "  Water the ferns ", priority: 1, date: "2026-10-16", time: "17:00" };
   assert.deepEqual(diffEdit(it, d, now), {
     title: "Water the ferns",
     priority: 1,
@@ -58,15 +58,24 @@ test("the set holds only the changed fields", () => {
   });
 });
 
-test("a due date typed as the one it has is no change", () => {
+test("the draft holds the due time as a local date and time, and the same minute is no change", () => {
   const it = item();
-  assert.equal(diffEdit(it, { ...draftOf(it), dueText: "tomorrow 9am" }, now), null);
+  const d = draftOf(it);
+  assert.deepEqual([d.date, d.time], ["2026-10-15", "09:00"]);
+  assert.equal(diffEdit(it, { ...d, time: "09:00" }, now), null);
+  // A due time with seconds keeps them while the minute stays.
+  const odd = item({ dueAt: new Date(2026, 9, 15, 9, 0, 30).toISOString() });
+  assert.equal(diffEdit(odd, draftOf(odd), now), null);
+  // A date with no time takes 9:00.
+  assert.deepEqual(diffEdit(it, { ...d, date: "2026-10-16", time: "" }, now), { due: new Date(2026, 9, 16, 9, 0).toISOString() });
+  const none = draftOf(item({ dueAt: null }));
+  assert.deepEqual([none.date, none.time], ["", ""]);
 });
 
 test("clearing the due date sends clearDue only when there was one", () => {
-  assert.deepEqual(diffEdit(item(), { ...draftOf(item()), clearDue: true }, now), { clearDue: true });
+  assert.deepEqual(diffEdit(item(), { ...draftOf(item()), date: "" }, now), { clearDue: true });
   const none = item({ dueAt: null });
-  assert.equal(diffEdit(none, { ...draftOf(none), clearDue: true }, now), null);
+  assert.equal(diffEdit(none, { ...draftOf(none), date: "" }, now), null);
 });
 
 test("a cleared description is sent as an empty string", () => {
@@ -80,7 +89,8 @@ test("editError names what blocks saving", () => {
   assert.match(editError(it, { ...draftOf(it), title: "   " }, now), /title/);
   assert.match(editError(it, { ...draftOf(it), title: "x".repeat(1001) }, now), /1000/);
   assert.match(editError(it, { ...draftOf(it), description: "x".repeat(10001) }, now), /10000/);
-  assert.match(editError(it, { ...draftOf(it), dueText: "whenever" }, now), /date/);
+  assert.match(editError(it, { ...draftOf(it), date: "2026-02-30" }, now), /real date/);
+  assert.match(editError(it, { ...draftOf(it), time: "25:00" }, now), /real date/);
 });
 
 test("priority: 0 and 1 show a chip, and the picker keeps 0 and 4", () => {
@@ -174,17 +184,18 @@ test("weekdays go only with a weekly rule that does not count from done", () => 
 test("ending a repeat sends clearRepeat, except when the due date is cleared, which ends it on the hub", () => {
   const it = item({ repeat: daily });
   assert.deepEqual(diffEdit(it, { ...draftOf(it), repeat: "" }, now), { clearRepeat: true });
-  assert.deepEqual(diffEdit(it, { ...draftOf(it), repeat: "", clearDue: true }, now), { clearDue: true });
+  assert.deepEqual(diffEdit(it, { ...draftOf(it), repeat: "", date: "" }, now), { clearDue: true });
 });
 
 test("a repeat needs a due date and an interval from 1 to 100", () => {
   const it = item({ dueAt: null });
   const d = { ...draftOf(it), repeat: "day" as const };
-  assert.match(editError(it, d, now), /needs a due date/);
-  assert.equal(editError(it, { ...d, dueText: "tomorrow 8am" }, now), "");
-  assert.match(editError(item(), { ...draftOf(item()), repeat: "day", clearDue: true }, now), /needs a due date/);
-  for (const interval of ["0", "101", "1.5", "two", ""]) assert.match(editError(item(), { ...d, interval }, now), /^Repeat every 1 to 100/);
-  assert.equal(editError(item(), { ...d, interval: "100" }, now), "");
+  assert.match(editError(it, d, now), /needs a date/);
+  assert.equal(editError(it, { ...d, date: "2026-10-15", time: "08:00" }, now), "");
+  assert.match(editError(item(), { ...draftOf(item()), repeat: "day", date: "" }, now), /needs a date/);
+  const dated = { ...draftOf(item()), repeat: "day" as const };
+  for (const interval of ["0", "101", "1.5", "two", ""]) assert.match(editError(item(), { ...dated, interval }, now), /^Repeat every 1 to 100/);
+  assert.equal(editError(item(), { ...dated, interval: "100" }, now), "");
 });
 
 test("an end date resends the whole repeat with it, and clearing it resends the repeat without", () => {
@@ -208,7 +219,7 @@ test("an end date must be a real date on or after the due date", () => {
   assert.equal(editError(it, { ...d, until: "2026-10-15" }, now), "");
   assert.match(editError(it, { ...d, until: "2026-10-14" }, now), /^End the repeat on or after its due date/);
   assert.match(editError(it, { ...d, until: "2026-02-30" }, now), /^End the repeat on a real date/);
-  assert.equal(editError(it, { ...d, until: "2026-10-14", dueText: "today 8pm" }, now), "");
+  assert.equal(editError(it, { ...d, until: "2026-10-14", date: "2026-10-14", time: "20:00" }, now), "");
   assert.equal(editError(it, { ...d, until: "2026-10-01", repeat: "" }, now), "");
 });
 

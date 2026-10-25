@@ -19,88 +19,83 @@ function seedNotes(hub: FakeHub) {
   ];
 }
 
-test("edits title, due, details and priority, and Undo puts them back", async ({ page, hub }) => {
+test("the title, details and priority each save on their own, and Undo puts them back", async ({ page, hub }) => {
   await openApp(page);
   const detail = await openDetail(page, "Call Sam about the weekend");
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(detail.getByLabel("Title")).toBeFocused();
-  await expect(detail.getByLabel("Title")).toHaveValue("Call Sam about the weekend");
-  await expect(detail.locator("#edit-due-now")).toHaveText("Due 14:30");
+  // No edit mode: the sheet shows its fields as they are.
+  await expect(detail.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  await expect(detail.locator("#d-sched")).toContainText("Today at 14:30");
 
-  await detail.getByLabel("Title").fill("Call Sam about Saturday");
-  await detail.getByLabel("Due").fill("friday 5pm");
-  await expect(detail.locator("#edit-due-now")).toHaveText("Due Fri, Oct 16 17:00");
-  await detail.getByLabel("Details", { exact: true }).fill("Ask about the train times.");
-  await detail.getByLabel("Priority").selectOption({ label: "High" });
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
-
+  await detail.locator(".d-title-btn").click();
+  const title = detail.getByRole("textbox", { name: "Title" });
+  await expect(title).toBeFocused();
+  await expect(title).toHaveValue("Call Sam about the weekend");
+  await title.fill("Call Sam about Saturday");
+  await title.press("Enter");
   await expect.poll(() => hub.posted.at(-1)).toEqual({
     id: expect.any(String),
     kind: "edit",
     key: "hub/personal/pe-3",
-    payload: {
-      set: { title: "Call Sam about Saturday", due: "2026-10-16T17:00:00.000Z", description: "Ask about the train times.", priority: 1 },
-    },
+    payload: { set: { title: "Call Sam about Saturday" } },
   });
   await expect(detail.locator("#d-title")).toHaveText("Call Sam about Saturday");
-  await expect(detail.locator(".why-label")).toHaveText("Details");
-  await expect(detail.locator(".why p")).toHaveText("Ask about the train times.");
-  await expect(detail.locator(".d-chips .chip-high")).toHaveText("High priority");
-  await expect(row(page, "Call Sam about Saturday").locator(".chip-high")).toHaveText("High priority");
-  await expect(detail.getByRole("button", { name: "Edit", exact: true })).toBeFocused();
-
+  await expect(detail.locator(".d-title-btn")).toBeFocused();
   await expect(page.locator("#toast")).toContainText("Saved");
+
+  await detail.getByRole("button", { name: "Add details" }).click();
+  const desc = detail.getByRole("textbox", { name: "Details" });
+  await expect(desc).toBeFocused();
+  await desc.fill("Ask about the **train** times.");
+  // Leaving the field saves it.
+  await detail.getByLabel("Priority").focus();
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ description: "Ask about the **train** times." });
+  await expect(detail.locator(".d-desc strong")).toHaveText("train");
+
+  await detail.getByLabel("Priority").selectOption({ label: "High" });
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ priority: 1 });
+  await expect(row(page, "Call Sam about Saturday").locator(".chip-high")).toHaveText("High priority");
+
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
-  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({
-    title: "Call Sam about the weekend",
-    due: "2026-10-14T14:30:00.000Z",
-    description: "",
-    priority: 2,
-  });
-  await expect(detail.locator("#d-title")).toHaveText("Call Sam about the weekend");
-  await expect(detail.locator(".chip-high")).toHaveCount(0);
-  await expect(detail.locator(".why")).toHaveCount(0);
-  await expect(row(page, "Call Sam about the weekend").locator(".chip-soon")).toHaveText("14:30");
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ priority: 2 });
+  await expect(row(page, "Call Sam about Saturday").locator(".chip-high")).toHaveCount(0);
+  await expect(detail.getByLabel("Priority")).toHaveValue("2");
 });
 
-test("the edit form: Escape and Cancel close it, nothing changed posts nothing, a bad date blocks saving, Clear removes the due date", async ({ page, hub }) => {
+test("renaming: Escape cancels, nothing changed posts nothing, an empty title is refused", async ({ page, hub }) => {
   await openApp(page);
   const detail = await openDetail(page, "Water the plants");
-  const edit = detail.getByRole("button", { name: "Edit", exact: true });
+  const before = hub.posted.length;
 
-  await edit.click();
+  await detail.locator(".d-title-btn").click();
   await page.keyboard.type("x");
   await page.keyboard.press("Escape");
-  await expect(detail.locator(".edit-form")).toHaveCount(0);
+  await expect(detail.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(page.locator("#detail #d-title")).toHaveText("Water the plants");
-  await expect(edit).toBeFocused();
+  await expect(detail.locator(".d-title-btn")).toBeFocused();
 
-  await edit.click();
-  await detail.getByRole("button", { name: "Cancel" }).click();
-  await expect(detail.locator(".edit-form")).toHaveCount(0);
-
-  const before = hub.posted.length;
-  await edit.click();
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(detail.locator(".edit-form")).toHaveCount(0);
+  await detail.locator(".d-title-btn").click();
+  await detail.getByRole("textbox", { name: "Title" }).press("Enter");
+  await expect(detail.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   expect(hub.posted.length).toBe(before);
 
-  await edit.click();
-  await detail.getByLabel("Due").fill("whenever");
-  await expect(detail.locator("#edit-due-now")).toHaveText("Could not read that date.");
-  await detail.getByLabel("Due").press("Enter");
-  await expect(detail.getByRole("alert")).toContainText("Could not read that date");
-  await expect(detail.getByLabel("Due")).toBeFocused();
+  await detail.locator(".d-title-btn").click();
+  await detail.getByRole("textbox", { name: "Title" }).fill("  ");
+  await detail.getByRole("textbox", { name: "Title" }).press("Enter");
+  await expect(detail.getByRole("alert")).toHaveText("Add a title.");
+  await expect(detail.getByRole("textbox", { name: "Title" })).toBeFocused();
   expect(hub.posted.length).toBe(before);
+  await page.keyboard.press("Escape");
+  await expect(detail.getByRole("alert")).toHaveCount(0);
 
-  await detail.getByRole("button", { name: "Clear" }).click();
-  await expect(detail.locator("#edit-due-now")).toHaveText("No due date");
-  await expect(detail.getByLabel("Due")).toHaveValue("");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
-  await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "edit", key: KEY, payload: { set: { clearDue: true } } });
-  expect(Object.keys(hub.posted.at(-1)!.payload.set!)).toEqual(["clearDue"]);
-  await expect(hub.find(KEY)!.dueAt).toBeNull();
-  await expect(row(page, "Water the plants").locator(".chip-overdue, .chip-soon, .chip-date")).toHaveCount(0);
+  // Details already set read as Markdown, with a button to change them.
+  hub.find(KEY)!.description = "Use the *rain* water.";
+  await page.reload();
+  await expect(detail.locator(".d-desc em")).toHaveText("rain");
+  await detail.getByRole("button", { name: "Edit details" }).click();
+  await expect(detail.getByRole("textbox", { name: "Details" })).toHaveValue("Use the *rain* water.");
+  await page.keyboard.press("Escape");
+  await expect(detail.getByRole("button", { name: "Edit details" })).toBeFocused();
+  expect(hub.posted.length).toBe(before);
 });
 
 test("high priority shows a chip on personal and agent items", async ({ page, hub }) => {
@@ -116,7 +111,6 @@ test("high priority shows a chip on personal and agent items", async ({ page, hu
 
   // An item at 0 keeps it unless the user picks another.
   await openDetail(page, "Water the plants");
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(detail.getByLabel("Priority")).toHaveValue("0");
   await expect(detail.getByLabel("Priority").locator("option")).toHaveText(["Urgent", "High", "Normal", "Low"]);
 });
@@ -158,14 +152,16 @@ test("edits a note, deletes one and Undo restores it, and the add-note draft sur
   await expect(detail.getByLabel("Add a note")).toHaveValue("Half a can is enough.");
 });
 
-test("an agent item shows none of the edit controls", async ({ page, hub }) => {
+test("an agent item shows none of the edit controls, and the same action bar", async ({ page, hub }) => {
   void hub;
   await openApp(page);
   await page.getByRole("button", { name: /From agents/ }).click();
   const detail = await openDetail(page, "Approve the new footer text");
   await expect(detail.locator(".note")).toHaveCount(3);
-  await expect(detail.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  await expect(detail.locator("#d-sched, .props, .d-title-btn")).toHaveCount(0);
   await expect(detail.locator(".note-tools")).toHaveCount(0);
+  await expect(detail.locator(".d-bar").getByRole("button")).toHaveText(["Done", "Snooze", ""]);
+  await detail.getByRole("button", { name: "More actions" }).click();
   await expect(detail.getByRole("button", { name: "Won't do" })).toBeVisible();
 });
 
@@ -174,13 +170,21 @@ function seedSubtask(hub: FakeHub, title: string) {
   hub.items.push({ ...structuredClone(hub.find(KEY)!), key: `${KEY}1`, id: "pe-11", title, parent: "pe-1", dueAt: null, comments: [], status: "closed", closeReason: "Done in Meat Mode", closedAt: "2026-10-14T08:00:00Z" });
 }
 
-test("the edit form, notes and sub-tasks pass axe", async ({ page, hub }) => {
+test("the sheet, its fields, notes and sub-tasks pass axe", async ({ page, hub }) => {
   seedNotes(hub);
   seedSubtask(hub, "Fill the watering can");
   hub.find(KEY)!.priority = 1;
+  hub.find(KEY)!.labels = ["garden"];
   await openApp(page);
   const detail = await openDetail(page, "Water the plants");
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
+  await axe(page);
+  await detail.locator(".d-title-btn").click();
+  await axe(page);
+  await page.keyboard.press("Escape");
+  await detail.getByRole("button", { name: "More actions" }).click();
+  await axe(page);
+  await page.keyboard.press("Escape");
+  await expect(detail.getByRole("button", { name: "More actions" })).toBeFocused();
   await detail.locator(".note").first().getByRole("button", { name: "Edit note" }).click();
   await axe(page);
 });
@@ -188,22 +192,22 @@ test("the edit form, notes and sub-tasks pass axe", async ({ page, hub }) => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true });
 
-  test("the forms fit the detail sheet", async ({ page, hub }) => {
+  test("the sheet fits the screen, and its action bar stays in view", async ({ page, hub }) => {
     seedNotes(hub);
     seedSubtask(hub, "Fill the watering can with the long spout from the shed");
+    hub.find(KEY)!.labels = ["garden", "weekend", "errands"];
     await openApp(page);
     const detail = await openDetail(page, "Water the plants");
-    await detail.getByRole("button", { name: "Edit", exact: true }).click();
     await detail.locator(".note").first().getByRole("button", { name: "Edit note" }).click();
-    await detail.getByRole("button", { name: "Edit", exact: true }).click();
-    await expect(detail.locator(".edit-form")).toBeVisible();
+    await page.waitForTimeout(300);
+    await expect(detail.getByRole("button", { name: "Done", exact: true })).toBeInViewport();
     const fit = await page.evaluate(() => {
       const d = document.querySelector("#detail")!;
       return { page: document.documentElement.scrollWidth, inner: window.innerWidth, sheet: d.scrollWidth, sheetBox: d.clientWidth };
     });
     expect(fit.page).toBeLessThanOrEqual(fit.inner);
     expect(fit.sheet).toBeLessThanOrEqual(fit.sheetBox);
-    for (const sel of ["#edit-title", "#edit-due", "#edit-desc", "#edit-prio", "#sub-input", ".sub-remove"]) {
+    for (const sel of ["#d-sched", "#p-lead", "#p-prio", "#sub-input", ".sub-remove", "#d-more"]) {
       const box = (await detail.locator(sel).boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(375);

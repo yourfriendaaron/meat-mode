@@ -16,14 +16,16 @@ test("a project shows as its own list and behaves like the personal list", async
   await row(page, "Approve the footer text").locator(".row-body").click();
   const detail = page.locator("#detail");
   await expect(detail.locator("#d-title")).toHaveText("Approve the footer text");
-  await expect(detail.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
-  await expect(detail.getByRole("button", { name: "Delete" })).toBeVisible();
+  await expect(detail.locator("#d-sched")).toBeVisible();
   await expect(detail.getByRole("button", { name: /Ask agent/ })).toHaveCount(0);
+  await detail.getByRole("button", { name: "More actions" }).click();
+  await expect(detail.getByRole("button", { name: "Delete" })).toBeVisible();
   await axe(page);
+  await page.keyboard.press("Escape");
 
-  await detail.getByRole("button", { name: "Edit", exact: true }).click();
-  await detail.getByLabel("Title").fill("Approve the header text");
-  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await detail.locator(".d-title-btn").click();
+  await detail.getByRole("textbox", { name: "Title" }).fill("Approve the header text");
+  await detail.getByRole("textbox", { name: "Title" }).press("Enter");
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "edit", key: "hub/projects/attic/mm-90", payload: { set: { title: "Approve the header text" } } });
 
   // A new task starts in the list being viewed, and repeats as a personal one does.

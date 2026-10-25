@@ -37,7 +37,7 @@ test("a description and notes render as Markdown, with no CSP violation", async 
   it.comments = [{ id: "c1", author: hub.user, text: "Done with *most* of it.\nOne pot left.", createdAt: hub.now() }];
   await openApp(page);
   await row(page, "Water the plants").locator(".row-body").click();
-  const md = page.locator("#detail .why .md");
+  const md = page.locator("#detail .md.d-desc");
 
   await expect(md.locator(".md-h")).toHaveText("Steps");
   await expect(md.locator("strong")).toHaveText("watering can");
@@ -79,7 +79,7 @@ test("a plain-text description keeps its lines and blank lines", async ({ page, 
   hub.find("hub/personal/pe-1")!.description = "Front pots\nBack pots\n\nNot the cactus.";
   await openApp(page);
   await row(page, "Water the plants").locator(".row-body").click();
-  const md = page.locator("#detail .why .md");
+  const md = page.locator("#detail .md.d-desc");
   await expect(md.locator("p")).toHaveCount(2);
   const [first, second] = await md.locator("p").evaluateAll((ps) => ps.map((p) => p.getBoundingClientRect()));
   const lineHeight = await md.locator("p").first().evaluate((p) => parseFloat(getComputedStyle(p).lineHeight));

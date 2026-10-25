@@ -47,8 +47,10 @@ test.describe("desktop", () => {
     await expect(card(page).getByRole("button", { name: "Stop planner" })).toBeVisible();
     await expect(sheet(page).getByRole("button", { name: "Send to planner" })).toBeVisible();
     await expect(sheet(page).getByRole("button", { name: "Done", exact: true })).toBeVisible();
+    await sheet(page).getByRole("button", { name: "More actions" }).click();
     await expect(sheet(page).getByRole("button", { name: "Won't do" })).toBeVisible();
     await axe(page);
+    await page.keyboard.press("Escape");
 
     // The row carries the run too, and the Agents entry its light.
     await agentsView(page);
@@ -198,6 +200,7 @@ test.describe("desktop", () => {
   test("Won't do offers Tell too, but not where agents are off", async ({ page, hub }) => {
     hub.allowAgents("garden");
     await openApp(page, "/?item=" + encodeURIComponent(COMPOST));
+    await sheet(page).getByRole("button", { name: "More actions" }).click();
     await sheet(page).getByRole("button", { name: "Won't do" }).click();
     await expect(page.locator("#toast").getByRole("button", { name: "Tell planner" })).toBeVisible();
 
