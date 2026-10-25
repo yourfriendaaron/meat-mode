@@ -62,8 +62,8 @@ test("a fresh hub is restored from an older hub's JSON export in the setup wizar
     page.getByLabel("Export file").setInputFiles({ name, mimeType: "application/json", buffer: Buffer.from(text) });
 
   await test.step("a file from a newer hub is refused", async () => {
-    await choose("newer.json", file.replace('"version": 1,', '"version": 4,'));
-    await expect(wiz.getByRole("alert")).toContainText("the file is version 4, and this hub reads version 3 and older");
+    await choose("newer.json", file.replace('"version": 1,', '"version": 5,'));
+    await expect(wiz.getByRole("alert")).toContainText("the file is version 5, and this hub reads version 4 and older");
   });
 
   await test.step("the export loads and the step lists what to do again", async () => {
