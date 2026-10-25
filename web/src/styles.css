@@ -48,7 +48,28 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --tabbar-h: 60px;
+  /* Motion. Entering eases out, leaving eases in, moving on screen uses both.
+     prefers-reduced-motion sets every duration to 0 (below), so motion becomes an
+     instant change; motion.ts reads the same tokens for what CSS cannot reach. */
+  --motion-quick: 120ms;
+  --motion-in: 200ms;
+  --motion-out: 150ms;
+  --motion-sheet-in: 260ms;
+  --motion-sheet-out: 200ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-move: cubic-bezier(0.4, 0, 0.2, 1);
   color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-quick: 0ms;
+    --motion-in: 0ms;
+    --motion-out: 0ms;
+    --motion-sheet-in: 0ms;
+    --motion-sheet-out: 0ms;
+  }
 }
 
 :root[data-theme="light"] {
@@ -322,12 +343,10 @@ kbd {
   height: 100%;
 }
 
+/* The phone opens the sidebar as a drawer from the menu button. It slides in
+   from the left edge and back out; closed, visibility keeps it out of focus and
+   the accessibility tree, and flips only once the slide is over. */
 .sidebar {
-  display: none;
-}
-
-/* The phone opens the sidebar as a drawer from the menu button. */
-.app.menu-open .sidebar {
   position: fixed;
   z-index: 40;
   top: 0;
@@ -343,11 +362,25 @@ kbd {
   background: var(--role-sunk);
   border-right: 1px solid var(--role-line);
   box-shadow: var(--role-shadow);
+  transform: translateX(-100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform var(--motion-sheet-out) var(--ease-in),
+    visibility 0s linear var(--motion-sheet-out);
+}
+.app.menu-open .sidebar {
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform var(--motion-sheet-in) var(--ease-out);
 }
 /* The drawer leaves out what the phone shows elsewhere: the New task button and the sync pill. */
-.app.menu-open .sidebar .new-task,
-.app.menu-open .sidebar .sync-pill {
-  display: none;
+@container app (max-width: 879.98px) {
+  .sidebar .new-task,
+  .sidebar .sync-pill {
+    display: none;
+  }
 }
 .menu-btn {
   margin-left: -8px;
@@ -560,10 +593,8 @@ kbd {
 
 /* ---------- quick add ---------- */
 
+/* The phone's New task sheet slides up from the bottom edge and back down, like the detail sheet. */
 .qa {
-  display: none;
-}
-.app.qa-open .qa {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -580,6 +611,18 @@ kbd {
   border-top: 1px solid var(--role-line);
   border-radius: 16px 16px 0 0;
   box-shadow: var(--role-shadow);
+  transform: translateY(105%);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform var(--motion-sheet-out) var(--ease-in),
+    visibility 0s linear var(--motion-sheet-out);
+}
+.app.qa-open .qa {
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform var(--motion-sheet-in) var(--ease-out);
 }
 .qa-head {
   display: flex;
@@ -778,7 +821,7 @@ select.qa-pill {
   height: 18px;
   margin-left: auto;
   color: var(--role-soft);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-in) var(--ease-move);
 }
 .later-toggle[aria-expanded="true"] svg {
   transform: rotate(90deg);
@@ -810,7 +853,8 @@ select.qa-pill {
   padding: 10px 16px;
   background: var(--role-bg);
   touch-action: pan-y;
-  transition: transform 0.18s ease;
+  /* A swipe let go short of its action springs back. */
+  transition: transform var(--motion-in) var(--ease-out);
 }
 .row.swiping .row-fg {
   transition: none;
@@ -1104,6 +1148,8 @@ select.qa-pill {
   bottom: var(--kb-inset, 0px);
   max-height: min(88%, calc(var(--kb-room, 100%) - 8px));
   overflow-y: auto;
+  /* A page pushed in from the side must not scroll the sheet sideways. */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   background: var(--role-pane);
   border-top: 1px solid var(--role-line);
@@ -1111,14 +1157,16 @@ select.qa-pill {
   box-shadow: var(--role-shadow);
   transform: translateY(105%);
   visibility: hidden;
+  pointer-events: none;
   transition:
-    transform 0.22s ease,
-    visibility 0s linear 0.22s;
+    transform var(--motion-sheet-out) var(--ease-in),
+    visibility 0s linear var(--motion-sheet-out);
 }
 .app.detail-open .detail {
   transform: none;
   visibility: visible;
-  transition: transform 0.22s ease;
+  pointer-events: auto;
+  transition: transform var(--motion-sheet-in) var(--ease-out);
 }
 .detail-empty {
   display: none;
@@ -2192,7 +2240,7 @@ select.qa-pill {
   height: 18px;
   border-radius: 50%;
   background: var(--role-soft);
-  transition: transform 0.15s;
+  transition: transform var(--motion-quick) var(--ease-move);
 }
 .switch[aria-checked="true"] {
   background: var(--role-done);
@@ -2603,6 +2651,9 @@ select.qa-pill {
   }
 
   .sidebar {
+    position: static;
+    z-index: auto;
+    width: auto;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -2611,6 +2662,11 @@ select.qa-pill {
     padding: 16px 12px 12px;
     background: var(--role-sunk);
     border-right: 1px solid var(--role-line);
+    box-shadow: none;
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition: none;
   }
   .mhead {
     padding: 18px 24px 10px;
@@ -2636,6 +2692,12 @@ select.qa-pill {
     border: 0;
     box-shadow: none;
     border-radius: 0;
+    /* In the page, under the scrim: drop the phone sheet's layer and slide. */
+    z-index: auto;
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition: none;
   }
   /* One bar: the task, then its list, the Agent pill and Add inside the same border. */
   .qa-bar {
@@ -2732,6 +2794,7 @@ select.qa-pill {
     max-height: none;
     transform: none;
     visibility: visible;
+    pointer-events: auto;
     transition: none;
     border-top: 0;
     border-left: 1px solid var(--role-line);
@@ -2904,4 +2967,198 @@ select.qa-pill {
   overflow: auto;
   white-space: pre-wrap;
   user-select: text;
+}
+
+/* ---------- motion ----------
+   Overlays that the app shows and hides with the hidden attribute keep their
+   display through the exit (allow-discrete), so they fade or slide out before
+   they go; @starting-style gives each its way in. A leaving overlay takes no
+   pointer events, so motion never stands between a tap and what is under it.
+   The tokens are at the top of this file; reduced motion sets them to 0.
+   Content a rewrite replaces (a page in the sheet, a new row, a month) enters
+   through motion.ts instead, since CSS cannot tell a new node from a rewrite. */
+
+.scrim,
+.popover,
+.dialog-wrap,
+.more-menu,
+.bulkbar {
+  transition:
+    opacity var(--motion-in) var(--ease-out),
+    transform var(--motion-in) var(--ease-out),
+    display var(--motion-in) allow-discrete;
+}
+.scrim[hidden],
+.popover[hidden],
+.dialog-wrap[hidden],
+.more-menu[hidden],
+.bulkbar[hidden] {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: var(--motion-out);
+  transition-timing-function: var(--ease-in);
+}
+@starting-style {
+  .scrim:not([hidden]),
+  .dialog-wrap:not([hidden]) {
+    opacity: 0;
+  }
+}
+
+/* The Recent actions popover drops from the sync pill. */
+.popover {
+  transform-origin: top center;
+}
+.popover[hidden] {
+  transform: translateY(-6px) scale(0.98);
+}
+@starting-style {
+  .popover:not([hidden]) {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+/* A dialog rises from the bottom edge on a phone. */
+.dialog-card {
+  transition: transform var(--motion-in) var(--ease-out);
+}
+.dialog-wrap[hidden] .dialog-card {
+  transform: translateY(24px);
+  pointer-events: none;
+  transition: transform var(--motion-out) var(--ease-in);
+}
+@starting-style {
+  .dialog-wrap:not([hidden]) .dialog-card {
+    transform: translateY(24px);
+  }
+}
+
+/* The More menu grows out of its button, at the menu's bottom right. */
+.more-menu {
+  transform-origin: bottom right;
+}
+.more-menu[hidden] {
+  display: none;
+  transform: translateY(4px) scale(0.96);
+}
+@starting-style {
+  .more-menu:not([hidden]) {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+}
+
+/* The bulk bar comes up over the tab bar. */
+.bulkbar[hidden] {
+  transform: translateY(100%);
+}
+@starting-style {
+  .bulkbar:not([hidden]) {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+/* The toast rises in and sinks away (main.ts keeps a leaving toast until it has). */
+.toast {
+  transition:
+    opacity var(--motion-in) var(--ease-out),
+    transform var(--motion-in) var(--ease-out);
+}
+.toast.leaving {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition-duration: var(--motion-out);
+  transition-timing-function: var(--ease-in);
+}
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Done fills the check before the row slides away (main.ts doDone). */
+.check {
+  transition:
+    background-color var(--motion-quick) var(--ease-out),
+    border-color var(--motion-quick) var(--ease-out),
+    color var(--motion-quick) var(--ease-out),
+    transform var(--motion-quick) var(--ease-out);
+}
+.check svg {
+  transition: transform var(--motion-in) var(--ease-out);
+}
+.check.filling {
+  background: var(--role-done);
+  border-color: var(--role-done);
+  color: var(--role-on-accent);
+}
+/* An empty check holds its tick small, so hover previews it and Done grows it. */
+.check:not(.checked):not(.filling) svg {
+  transform: scale(0.6);
+}
+
+/* The sync dot changes colour gently when the hub's state does. */
+.pill-dot {
+  transition: background-color var(--motion-in) var(--ease-move);
+}
+
+/* Hover and press: colours ease, and a pressed control gives a little. */
+.btn,
+.icon-btn,
+.link-btn,
+.more-item,
+.nav-item,
+.tab,
+.sync-pill,
+.fab {
+  transition:
+    background-color var(--motion-quick) var(--ease-out),
+    border-color var(--motion-quick) var(--ease-out),
+    color var(--motion-quick) var(--ease-out),
+    filter var(--motion-quick) var(--ease-out),
+    transform var(--motion-quick) var(--ease-out);
+}
+.btn:active:not(:disabled),
+.icon-btn:active,
+.fab:active,
+.tab:active,
+.check:active {
+  transform: scale(0.96);
+}
+
+@container app (min-width: 880px) {
+  /* The desktop popover sits low in the sidebar, so it rises from below. */
+  .popover {
+    transform-origin: bottom left;
+  }
+  .popover[hidden] {
+    transform: translateY(6px) scale(0.98);
+  }
+  @starting-style {
+    .popover:not([hidden]) {
+      transform: translateY(6px) scale(0.98);
+    }
+  }
+  /* A desktop dialog sits mid-screen, so it settles from a touch smaller. */
+  .dialog-wrap[hidden] .dialog-card {
+    transform: scale(0.97);
+  }
+  @starting-style {
+    .dialog-wrap:not([hidden]) .dialog-card {
+      transform: scale(0.97);
+    }
+  }
+  /* The desktop bulk bar is part of the page under the list: it fades. */
+  .bulkbar[hidden] {
+    transform: none;
+  }
+  @starting-style {
+    .bulkbar:not([hidden]) {
+      transform: none;
+    }
+  }
 }
