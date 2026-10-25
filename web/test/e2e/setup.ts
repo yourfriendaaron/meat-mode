@@ -43,7 +43,24 @@ export function row(page: Page, title: string) {
   return page.locator("#list .row", { has: page.locator(".row-title", { hasText: title }) });
 }
 
+/**
+ * Waits for every animation that ends to end, so checks read the screen at
+ * rest rather than halfway through a fade or slide. Endless ones (a run's
+ * pulse) are left running.
+ */
+export async function settle(page: Page) {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
+}
+
 export async function axe(page: Page) {
+  await settle(page);
   const result = await new AxeBuilder({ page }).analyze();
   const summary = result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
   expect(summary, "axe violations").toEqual([]);

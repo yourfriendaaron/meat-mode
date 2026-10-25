@@ -1,4 +1,4 @@
-import { test, expect, openApp, row, axe } from "./setup.ts";
+import { test, expect, openApp, row, axe, settle } from "./setup.ts";
 import type { Page } from "@playwright/test";
 
 test.use({ viewport: { width: 1280, height: 800 } });
@@ -138,6 +138,7 @@ test.describe("phone", () => {
     await pick(page, "Order compost for the beds").tap();
     await expect(bar(page)).toContainText("2 selected");
     await expect(page.locator(".fab")).toBeHidden();
+    await settle(page);
     const b = (await bar(page).boundingBox())!;
     const tabs = (await page.locator("#tabs").boundingBox())!;
     expect(b.y + b.height).toBeLessThanOrEqual(tabs.y + 1);
