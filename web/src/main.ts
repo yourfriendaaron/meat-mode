@@ -84,6 +84,7 @@ import { renderMarkdown } from "./markdown.ts";
 import { trackKeyboard } from "./keyboard.ts";
 import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
 import { leaveSettings, sectionsHTML } from "./settings/registry.ts";
+import { duration, enter } from "./motion.ts";
 import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
 /** Completed and Deleted show the closed items the hub keeps for 7 days. Month is Calendar's grid, upcoming its list. */
@@ -402,14 +403,16 @@ function renderSync() {
   if (!shellUp) return;
   const st = S.state;
   const status = st ? syncStatus(st, now()) : { tone: "waiting" as const, text: S.loadError ? "Hub unreachable" : "Loading" };
-  const html = `<span class="pill-dot" aria-hidden="true"></span><span>${esc(status.text)}</span>`;
   for (const el of document.querySelectorAll<HTMLElement>(".sync-pill")) {
     el.dataset.tone = status.tone;
     el.setAttribute("aria-expanded", String(S.syncOpen));
-    setHTML(el, html);
+    // The dot stays put across changes, so its colour eases from one tone to the next.
+    setHTML(el, '<span class="pill-dot" aria-hidden="true"></span><span class="pill-text"></span>');
+    setHTML($(".pill-text", el), esc(status.text));
   }
   const pop = $("#syncpop");
   pop.hidden = !S.syncOpen;
+  pop.inert = !S.syncOpen;
   if (!S.syncOpen) return;
   const list = syncActions.peek();
   let body: string;
@@ -719,6 +722,48 @@ function renderMain() {
 /** Today's groups that show as a card above the rest. */
 const FOCUS_GROUPS: Group["id"][] = ["pastdue", "today", "evening"];
 
+/** What the main area showed last, which decides how the next one enters. */
+let shownList: { scene: string; step: string; month: number; day: number; rows: Set<string> } | null = null;
+
+/**
+ * How what the main area shows arrives: another view, tag or search fades in,
+ * the next month slides in from its side, another day's list fades in, and a
+ * row that was not there rises into place. Rows that change while a search is
+ * typed just change.
+ */
+function listMotion() {
+  const scene = `${S.view}|${S.tag ?? ""}|${searching() ? "search" : ""}|${S.state ? "" : "loading"}`;
+  const step = document.querySelector<HTMLElement>("#wizard .wiz-step")?.dataset.step ?? "";
+  const month = showingMonth() ? S.month!.month.getTime() : 0;
+  const day = showingMonth() ? S.month!.selected.getTime() : 0;
+  const rows = new Set([...document.querySelectorAll<HTMLElement>("#list .row[data-key]")].map((r) => r.dataset.key!));
+  const before = shownList;
+  shownList = { scene, step, month, day, rows };
+  if (!before) return;
+  if (before.scene !== scene) {
+    enter(S.view === "settings" ? $("#settings") : S.view === "setup" ? $("#wizard") : $("#list"), "fade");
+    return;
+  }
+  if (before.step !== step) {
+    enter(document.querySelector("#wizard .wiz-step"), "fade");
+    return;
+  }
+  if (before.month !== month) {
+    enter(document.querySelectorAll("#list .mgrid, #list .mlist"), month > before.month ? "push" : "pop");
+    return;
+  }
+  if (before.day !== day) {
+    enter(document.querySelector("#list .mlist"), "fade");
+    return;
+  }
+  if (searching()) return;
+  const added = [...rows].filter((k) => !before.rows.has(k));
+  enter(
+    added.map((k) => document.querySelector(`#list .row[data-key="${CSS.escape(k)}"]`)).filter((r): r is Element => r !== null),
+    "rise",
+  );
+}
+
 /** Folded Later's line: what in it wants attention, and when the next one is. */
 function laterSummary(list: Item[]): string {
   const replies = list.filter((i) => attention(i, user()) === "reply").length;
@@ -958,8 +1003,9 @@ function renderMoveDialog() {
   const dlg = $("#move");
   const m = S.move;
   dlg.hidden = !m;
+  dlg.inert = !m;
   if (!m) {
-    setHTML(dlg, "");
+    clearAfterExit(dlg);
     return;
   }
   const err = m.error ? ' aria-invalid="true" aria-describedby="move-error"' : "";
@@ -1014,8 +1060,9 @@ function renderBulk() {
   $("#app").classList.toggle("selecting", S.selecting);
   const bar = $("#bulkbar");
   bar.hidden = !S.selecting;
+  bar.inert = !S.selecting;
   if (!S.selecting) {
-    setHTML(bar, "");
+    clearAfterExit(bar);
     return;
   }
   const pickable = pickableKeys(currentGroups());
@@ -1213,8 +1260,8 @@ function actionBarHTML(item: Item): string {
       : "",
     `<button class="more-item" data-act="copy-id" data-key="${key}">Copy id <code>${esc(item.id)}</code></button>`,
   ].join("");
-  const shown = S.moreOpen && S.open === item.key;
-  return `<div class="d-bar">${main}${snooze}<div class="more-wrap"><button class="btn btn-icon" id="d-more" data-act="more" aria-label="More actions" title="More actions" aria-haspopup="true" aria-expanded="${shown}" aria-controls="d-more-menu">${ICON.more}</button><div id="d-more-menu" class="more-menu"${shown ? "" : " hidden"}>${more}</div></div></div>`;
+  // Open or closed is set after the write (showMore), so the menu animates on the node it has.
+  return `<div class="d-bar">${main}${snooze}<div class="more-wrap"><button class="btn btn-icon" id="d-more" data-act="more" aria-label="More actions" title="More actions" aria-haspopup="true" aria-expanded="false" aria-controls="d-more-menu">${ICON.more}</button><div id="d-more-menu" class="more-menu" hidden inert>${more}</div></div></div>`;
 }
 
 /** The open sheet's item history, loaded from the hub; it follows the item on screen. */
@@ -1404,7 +1451,7 @@ function subtasksHTML(item: Item): string {
       const remove = canRemoveSubtask(c)
         ? `<button class="link-btn sub-remove" data-act="sub-remove" data-key="${esc(c.key)}" aria-label="${esc(`Remove: ${c.title}`)}" title="${agent ? "Won't do" : "Delete"}">${ICON.close}</button>`
         : "";
-      return `<li class="sub${isOpen(c) ? "" : " sub-done"}">${checkButton(c, agent)}<button class="sub-title" data-act="open" data-key="${esc(c.key)}">${esc(c.title)}</button>${remove}</li>`;
+      return `<li class="sub${isOpen(c) ? "" : " sub-done"}" data-entry="${esc(c.key)}">${checkButton(c, agent)}<button class="sub-title" data-act="open" data-key="${esc(c.key)}">${esc(c.title)}</button>${remove}</li>`;
     })
     .join("");
   const count = subtaskChip(item, items());
@@ -1482,33 +1529,74 @@ function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): st
       : "";
   // A follow-up the live run has not read yet carries the running light until it does.
   const flying = queued ? `<span class="run-line" data-run="working">On its way to ${esc(agentName(item))}</span>` : "";
-  return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}"${queued ? ' data-run="working"' : ""}>${queued ? TRACER : ""}<div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-new">New</span>' : ""}${flying}${tools}</div>${body}</li>`;
+  return `<li class="note ${mine ? "note-own" : "note-agent"}${unread ? " note-unread" : ""}" data-entry="${esc(c.id)}"${queued ? ' data-run="working"' : ""}>${queued ? TRACER : ""}<div class="note-head"><span class="note-author">${esc(mine ? "You" : c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), now()))}</span>${unread ? '<span class="chip chip-new">New</span>' : ""}${flying}${tools}</div>${body}</li>`;
 }
 
+const DETAIL_EMPTY = '<div class="detail-empty"><p>Select a task to see its details.</p></div>';
+/** The item and page the sheet or pane showed last, which decide how the next one enters. */
+let shownDetail: { key: string; page: string } | null = null;
+let detailClear: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * The sheet or pane, and how what it shows arrives: another task fades in, a
+ * page inside the sheet pushes in from the right and the way back pops in from
+ * the left, and a new sub-task or note rises into its list. The phone's sheet
+ * itself slides (styles.css), and slides down still showing its task.
+ */
 function renderDetail() {
   const el = $("#detail");
   const item = byKey(S.open);
-  const app = $("#app");
-  app.classList.toggle("detail-open", !!item);
+  $("#app").classList.toggle("detail-open", !!item);
   if (!item) {
-    setHTML(el, '<div class="detail-empty"><p>Select a task to see its details.</p></div>');
+    shownDetail = null;
+    const ms = isPhone() && el.querySelector(".detail-inner") ? duration("--motion-sheet-out") : 0;
+    if (!ms) {
+      clearTimeout(detailClear);
+      detailClear = undefined;
+      setHTML(el, DETAIL_EMPTY);
+    } else if (detailClear === undefined) {
+      detailClear = setTimeout(() => {
+        detailClear = undefined;
+        if (!byKey(S.open)) setHTML(el, DETAIL_EMPTY);
+      }, ms);
+    }
     return;
   }
+  clearTimeout(detailClear);
+  detailClear = undefined;
   if (S.page && S.page.key !== item.key) S.page = null;
+  const page = S.page?.kind ?? "task";
+  const before = shownDetail;
+  shownDetail = { key: item.key, page };
+  const same = before?.key === item.key && before.page === page;
+  const had = same ? entryIds(el) : null;
+  if (!writeDetail(el, item)) return;
+  const inner = el.querySelector(".detail-inner");
+  if (had) enter([...el.querySelectorAll("[data-entry]")].filter((n) => !had.has((n as HTMLElement).dataset.entry!)), "rise");
+  else if (before?.key === item.key) enter(inner, page === "task" ? "pop" : "push");
+  else if (before || !isPhone()) enter(inner, "fade");
+}
+
+/** The sub-tasks and notes on show, by their data-entry. */
+function entryIds(el: Element): Set<string> {
+  return new Set([...el.querySelectorAll<HTMLElement>("[data-entry]")].map((n) => n.dataset.entry!));
+}
+
+/** Writes the item's sheet or pane; whether the HTML changed. */
+function writeDetail(el: HTMLElement, item: Item): boolean {
   const p = S.page;
   if (p?.kind === "snooze") {
-    setHTML(el, snoozePageHTML(item));
-    return;
+    return setHTML(el, snoozePageHTML(item));
   }
   if (p?.kind === "schedule") {
-    setHTML(el, schedulePageHTML(item, p));
+    const fresh = setHTML(el, schedulePageHTML(item, p));
     // Values never live in the HTML: the draft sets them, where they differ.
     setValue("#sched-typed", p.typed);
     setValue("#sched-date", p.draft.date);
     setValue("#sched-time", p.draft.time);
     setValue("#sched-interval", p.draft.interval);
     setValue("#sched-until", p.draft.until);
-    return;
+    return fresh;
   }
   const agent = isAgentItem(item);
   const editable = canEdit(item);
@@ -1539,7 +1627,9 @@ ${noteBoxHTML(item, allowed)}</section>
 ${editable ? '<div id="d-hist-slot"></div>' : ""}
 ${actionBarHTML(item)}
 </div>`;
-  if (setHTML(el, html)) {
+  const fresh = setHTML(el, html);
+  showMore();
+  if (fresh) {
     const ta = el.querySelector<HTMLTextAreaElement>("#note-input");
     if (ta) ta.value = S.drafts.get(item.key) ?? "";
     const sub = el.querySelector<HTMLInputElement>("#sub-input");
@@ -1548,6 +1638,7 @@ ${actionBarHTML(item)}
   }
   if (S.inline?.key === item.key) setValue(INLINE_FIELD[S.inline.field], S.inline.text);
   renderHistory();
+  return fresh;
 }
 
 /**
@@ -1558,6 +1649,38 @@ function renderHistory() {
   const slot = document.getElementById("d-hist-slot");
   const item = byKey(S.open);
   if (slot && item) setHTML(slot, historyHTML(item));
+}
+
+/** Opens or closes the More menu on the node the sheet has, so it animates both ways. */
+function showMore() {
+  const menu = document.getElementById("d-more-menu");
+  if (!menu) return;
+  const shown = S.moreOpen && S.open !== null;
+  menu.hidden = !shown;
+  menu.inert = !shown;
+  document.getElementById("d-more")?.setAttribute("aria-expanded", String(shown));
+}
+
+const exitTimers = new WeakMap<Element, ReturnType<typeof setTimeout>>();
+/**
+ * Empties an overlay the hidden attribute has just closed, once its exit
+ * transition (styles.css, motion) has played; at once where motion is reduced.
+ * It keeps whatever it shows again meanwhile.
+ */
+function clearAfterExit(el: HTMLElement) {
+  if (!el.firstChild || exitTimers.has(el)) return;
+  const ms = duration("--motion-out");
+  if (!ms) {
+    setHTML(el, "");
+    return;
+  }
+  exitTimers.set(
+    el,
+    setTimeout(() => {
+      exitTimers.delete(el);
+      if (el.hidden) setHTML(el, "");
+    }, ms),
+  );
 }
 
 /** Sets a field's value only when it differs, so a rewrite keeps the caret where it was. */
@@ -1572,8 +1695,9 @@ function renderSnoozeDialog() {
   const dlg = $("#snooze");
   const keys = S.snoozeKeys;
   dlg.hidden = !keys;
+  dlg.inert = !keys;
   if (!keys) {
-    setHTML(dlg, "");
+    clearAfterExit(dlg);
     return;
   }
   const item = byKey(keys[0]);
@@ -1584,10 +1708,37 @@ function renderSnoozeDialog() {
   );
 }
 
+/**
+ * The toast. A new message gets a new bar, which rises in; the same message
+ * shown again keeps its bar. A bar that goes sinks away first (styles.css, motion).
+ */
 function renderToast() {
   if (!shellUp) return;
+  const region = $("#toast");
   const t = S.toast;
-  setHTML($("#toast"), t ? `<div class="toast"><span>${esc(t.text)}</span>${t.undo ? '<button class="btn btn-small toast-undo" data-act="undo">Undo</button>' : ""}${tellHTML(t)}</div>` : "");
+  let bar = region.querySelector<HTMLElement>(".toast:not(.leaving)");
+  if (!t) {
+    if (bar) leaveToast(bar);
+    return;
+  }
+  if (!bar || bar.dataset.text !== t.text) {
+    bar = document.createElement("div");
+    bar.className = "toast";
+    bar.dataset.text = t.text;
+    region.replaceChildren(bar);
+  }
+  setHTML(bar, `<span>${esc(t.text)}</span>${t.undo ? '<button class="btn btn-small toast-undo" data-act="undo">Undo</button>' : ""}${tellHTML(t)}`);
+}
+
+function leaveToast(bar: HTMLElement) {
+  const ms = duration("--motion-out");
+  if (!ms) {
+    bar.remove();
+    return;
+  }
+  bar.inert = true;
+  bar.classList.add("leaving");
+  setTimeout(() => bar.remove(), ms);
 }
 
 /** The undo bar's agent button: Tell <agent>, or a Stop square while the run it started works. */
@@ -1674,6 +1825,7 @@ function render() {
   renderNav();
   renderSync();
   renderMain();
+  listMotion();
   renderDetail();
   renderSnoozeDialog();
   renderMoveDialog();
@@ -1824,9 +1976,13 @@ async function doDone(key: string) {
     return;
   }
   play("done");
+  // The check fills as the row slides; a rewrite drops the class, and so does a failed post.
+  const checks = document.querySelectorAll<HTMLElement>(`.check[data-key="${CSS.escape(key)}"]`);
+  for (const c of checks) c.classList.add("filling");
   await slideAway(key);
   moveSelectionOff([key]);
   const h = await actions.perform([{ id: newId(), kind: "done", key, payload: {} }], { onPatched: render });
+  for (const c of checks) c.classList.remove("filling");
   const p = h.posted[0];
   if (p && movedOn(p)) {
     await refresh();
