@@ -34,10 +34,21 @@ func TestProjectOverHTTP(t *testing.T) {
 	}
 
 	h.expect(h.do("GET", "/bridge/v1/personal/"+reply.ID+q, nil, h.token), http.StatusOK)
-	h.expect(h.do("GET", "/bridge/v1/personal/"+reply.ID+q, nil, other), http.StatusNotFound)
+	h.expect(h.do("GET", "/bridge/v1/personal/"+reply.ID+q, nil, other), http.StatusOK)
 	h.expect(h.do("GET", "/bridge/v1/personal/"+reply.ID, nil, h.token), http.StatusNotFound)
-	h.expect(h.do("POST", "/bridge/v1/personal/"+reply.ID+"/actions"+q, api.PersonalChange{Kind: api.KindDone}, other), http.StatusNotFound)
-	h.expect(h.do("POST", "/bridge/v1/personal/"+reply.ID+"/actions"+q, api.PersonalChange{Kind: api.KindDone}, h.token), http.StatusCreated)
+	h.expect(h.do("POST", "/bridge/v1/personal/"+reply.ID+"/actions", api.PersonalChange{Kind: api.KindDone}, other), http.StatusNotFound)
+	w = h.do("GET", "/bridge/v1/projects", nil, other)
+	h.expect(w, http.StatusOK)
+	if ps := decode[[]api.Project](t, w); len(ps) != 1 || ps[0] != (api.Project{Name: "projects/garden", Open: 1}) {
+		t.Fatalf("projects %+v", ps)
+	}
+	w = h.do("GET", "/bridge/v1/personal"+q, nil, other)
+	h.expect(w, http.StatusOK)
+	if items := decode[[]api.Item](t, w); len(items) != 1 || items[0].ID != reply.ID {
+		t.Fatalf("project list %+v", items)
+	}
+	h.expect(h.do("GET", "/bridge/v1/personal?project=personal", nil, other), http.StatusBadRequest)
+	h.expect(h.do("POST", "/bridge/v1/personal/"+reply.ID+"/actions"+q, api.PersonalChange{Kind: api.KindDone}, other), http.StatusCreated)
 	if it := decode[api.Item](t, h.do("GET", "/bridge/v1/personal/"+reply.ID+q, nil, h.token)); it.Status != "closed" {
 		t.Errorf("item after done %+v", it)
 	}
@@ -63,8 +74,8 @@ func TestHelloKeepsTrackerTitleAndRaise(t *testing.T) {
 	}
 }
 
-// An agent adds a sub-task only under an open top-level item its machine
-// added to the same list; any other parent is one it cannot see.
+// An agent adds a sub-task under any open top-level item of the same list,
+// whoever added it; a parent in another list is one it cannot see.
 func TestAgentAddsSubtaskOverHTTP(t *testing.T) {
 	h := newHarness(t, nil, false)
 	h.pair()
@@ -93,7 +104,7 @@ func TestAgentAddsSubtaskOverHTTP(t *testing.T) {
 
 	theirs := add(other, "", api.PersonalTodo{Title: "Pack the bags"}, http.StatusCreated)
 	garden := add(h.token, "projects/garden", api.PersonalTodo{Title: "Plant the beans"}, http.StatusCreated)
-	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: theirs}, http.StatusNotFound)
+	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: theirs}, http.StatusCreated)
 	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: garden}, http.StatusNotFound)
 	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: "mm-404"}, http.StatusNotFound)
 	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: tickets}, http.StatusBadRequest)

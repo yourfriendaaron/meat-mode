@@ -303,11 +303,11 @@ func ProjectRepo(project string) (string, error) {
 	return project, nil
 }
 
-// ownedPersonal returns item id of the hub's list repo when bridge's token
-// added it and the app still shows it. Every other case is the same
-// not-found error, so an agent cannot learn which ids exist.
-func (s *Store) ownedPersonal(bridge, repo, id string) (api.Item, error) {
-	gone := notFoundf("no to-do %q added from this machine", id)
+// shownPersonal returns item id of the hub's list repo while the app still
+// shows it, whoever added it: any paired machine's agents read and change
+// every item of the personal list and the projects.
+func (s *Store) shownPersonal(repo, id string) (api.Item, error) {
+	gone := notFoundf("no to-do %q on this list", id)
 	if !validSegment(id) {
 		return api.Item{}, gone
 	}
@@ -316,14 +316,6 @@ func (s *Store) ownedPersonal(bridge, repo, id string) (api.Item, error) {
 		return api.Item{}, err
 	}
 	defer tx.Rollback()
-	var owner string
-	err = tx.QueryRow(`SELECT bridge FROM personal_owners WHERE repo = ? AND item_id = ?`, repo, id).Scan(&owner)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && owner != bridge) {
-		return api.Item{}, gone
-	}
-	if err != nil {
-		return api.Item{}, err
-	}
 	it, err := hubItem(tx, repo, id)
 	if errors.Is(err, ErrNotFound) || (err == nil && hiddenClosed(it, s.now())) {
 		return api.Item{}, gone
@@ -331,14 +323,14 @@ func (s *Store) ownedPersonal(bridge, repo, id string) (api.Item, error) {
 	return it, err
 }
 
-// PersonalItem returns a to-do that bridge's token added to the personal
-// list, or to the project when it is not empty, for its agents to read.
-func (s *Store) PersonalItem(bridge, project, id string) (api.Item, error) {
+// PersonalItem returns a to-do of the personal list, or of the project
+// when it is not empty, for an agent to read.
+func (s *Store) PersonalItem(project, id string) (api.Item, error) {
 	repo, err := ProjectRepo(project)
 	if err != nil {
 		return api.Item{}, err
 	}
-	it, err := s.ownedPersonal(bridge, repo, id)
+	it, err := s.shownPersonal(repo, id)
 	if err != nil {
 		return it, err
 	}
@@ -347,9 +339,10 @@ func (s *Store) PersonalItem(bridge, project, id string) (api.Item, error) {
 	return items[0], err
 }
 
-// ChangePersonal applies an agent's change to a to-do its machine's token
-// added to the personal list, or to the project when it is not empty. The
-// author is c.Author, or the machine's name when it is empty. A repeated
+// ChangePersonal applies an agent's change to a to-do of the personal
+// list, or of the project when it is not empty, whoever added it. The
+// author is c.Author, or the name of bridge, the machine whose token posts
+// it, when it is empty; the action records that machine too. A repeated
 // c.ID returns the action it made and changes nothing.
 func (s *Store) ChangePersonal(bridge, project, id string, c api.PersonalChange) (api.Action, bool, error) {
 	repo, err := ProjectRepo(project)
@@ -367,18 +360,17 @@ func (s *Store) ChangePersonal(bridge, project, id string, c api.PersonalChange)
 	if err != nil {
 		return api.Action{}, false, err
 	}
-	if _, err := s.ownedPersonal(bridge, repo, id); err != nil {
+	if _, err := s.shownPersonal(repo, id); err != nil {
 		return api.Action{}, false, err
 	}
 	if set := c.Payload.Set; c.Kind == api.KindEdit && set != nil {
-		// The items an edit moves under or closes are the machine's own
-		// too, so an agent cannot learn which other ids exist.
+		// The items an edit moves under or closes must be on the list too.
 		others := slices.Clone(set.SubtasksDone)
 		if set.Parent != nil && strings.TrimSpace(*set.Parent) != "" {
 			others = append(others, strings.TrimSpace(*set.Parent))
 		}
 		for _, other := range others {
-			if _, err := s.ownedPersonal(bridge, repo, strings.TrimSpace(other)); err != nil {
+			if _, err := s.shownPersonal(repo, strings.TrimSpace(other)); err != nil {
 				return api.Action{}, false, err
 			}
 		}
@@ -386,8 +378,8 @@ func (s *Store) ChangePersonal(bridge, project, id string, c api.PersonalChange)
 	if c.ID == "" {
 		c.ID = uuid.NewString()
 	}
-	a, created, err := s.AppendAction(api.NewAction{ID: c.ID, Kind: c.Kind,
-		Key: ItemKey(HubBridge, repo, id), Payload: c.Payload}, author)
+	a, created, err := s.appendAction(api.NewAction{ID: c.ID, Kind: c.Kind,
+		Key: ItemKey(HubBridge, repo, id), Payload: c.Payload}, author, bridge, nil)
 	if err != nil {
 		return a, false, err
 	}

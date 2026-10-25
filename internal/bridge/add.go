@@ -19,7 +19,7 @@ const defaultDueHour = 9
 // Add runs `meat-mode add`: it puts a to-do on the hub's personal list, or
 // on the project --project names, with the hub URL and token of this
 // machine's bridge config, and prints its id for `meat-mode edit`, `done`
-// and `reopen`. --parent makes it a sub-task of a to-do this machine added.
+// and `reopen`. --parent makes it a sub-task of any open to-do of that list.
 func Add(ctx context.Context, args []string, env Env) error {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -27,7 +27,7 @@ func Add(ctx context.Context, args []string, env Env) error {
 	note := fs.String("note", "", "a note, added as the first comment")
 	author := fs.String("author", "", "the agent's name (default: this machine's bridge name)")
 	id := fs.String("id", "", "a UUID for this to-do; adding the same id again changes nothing")
-	parent := fs.String("parent", "", "the id of an open to-do this machine added to the same list; the new one is its sub-task")
+	parent := fs.String("parent", "", "the id of an open to-do of the same list, whoever added it; the new one is its sub-task")
 	var tags tagFlag
 	fs.Var(&tags, "tag", "a tag for it, one word; repeat the flag for more")
 	every, fromDone, until := repeatFlags(fs)
@@ -77,7 +77,7 @@ func Add(ctx context.Context, args []string, env Env) error {
 	reply, err := hub.AddPersonal(ctx, list, t)
 	if err != nil {
 		if t.Parent != "" {
-			return notOurs(t.Parent, err)
+			return notOnList(t.Parent, err)
 		}
 		return err
 	}

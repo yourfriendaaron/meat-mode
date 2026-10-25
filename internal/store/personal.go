@@ -440,8 +440,8 @@ var noteNamespace = uuid.MustParse("5d0c2f3a-7b1e-4c6d-9a48-2e1f0b7c3d95")
 // project when it is not empty, with its note as the first comment, for
 // the agents of the machine whose token is bridge's. The first add to a
 // project makes it. Both are by t.Author, or by the machine's name when it
-// is empty. The item is recorded as that machine's, so its agents may
-// change it later. A repeated t.ID returns the item it added and changes
+// is empty, and carry the machine. The item is recorded as that machine's,
+// which an export keeps as its owner. A repeated t.ID returns the item it added and changes
 // nothing, except that a note lost to a failure after the add is written.
 func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key string, created bool, err error) {
 	repo, err := ProjectRepo(project)
@@ -471,11 +471,10 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 	}
 	t.Parent = strings.TrimSpace(t.Parent)
 	if t.Parent != "" {
-		// The parent is one this machine added, like any item its agents
-		// read; a retry of an add already made skips the check, since the
-		// parent may have closed since.
+		// The parent is any item the list shows; a retry of an add already
+		// made skips the check, since the parent may have closed since.
 		if _, err := s.Action(t.ID); errors.Is(err, ErrNotFound) {
-			if _, err := s.ownedPersonal(bridge, repo, t.Parent); err != nil {
+			if _, err := s.shownPersonal(repo, t.Parent); err != nil {
 				return "", false, err
 			}
 		} else if err != nil {
@@ -483,7 +482,7 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 		}
 	}
 	a, created, err := s.appendAction(api.NewAction{ID: t.ID, Kind: api.KindAdd, Bridge: HubBridge, Repo: repo,
-		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat, Parent: t.Parent, Labels: t.Labels}}, author, func(tx *sql.Tx, a api.Action) error {
+		Payload: api.Payload{Title: t.Title, Due: t.Due, Repeat: t.Repeat, Parent: t.Parent, Labels: t.Labels}}, author, bridge, func(tx *sql.Tx, a api.Action) error {
 		return recordOwner(tx, a.Repo, a.BeadID, bridge)
 	})
 	if err != nil {
@@ -496,8 +495,8 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 	// The note's id comes from the add's, so a retry after a failure between
 	// the two writes stores the note once and a plain retry adds none.
 	if t.Note != "" {
-		if _, _, err := s.AppendAction(api.NewAction{ID: uuid.NewSHA1(noteNamespace, []byte(t.ID)).String(), Kind: api.KindNote, Key: key,
-			Payload: api.Payload{Text: t.Note}}, author); err != nil && (created || !errors.Is(err, ErrNotFound)) {
+		if _, _, err := s.appendAction(api.NewAction{ID: uuid.NewSHA1(noteNamespace, []byte(t.ID)).String(), Kind: api.KindNote, Key: key,
+			Payload: api.Payload{Text: t.Note}}, author, bridge, nil); err != nil && (created || !errors.Is(err, ErrNotFound)) {
 			// A retry for an item since deleted or moved has nothing to add to.
 			return key, created, err
 		}

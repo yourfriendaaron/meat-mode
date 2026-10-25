@@ -32,6 +32,7 @@ func runPersonal(cmd string, args []string) error {
 	}
 	run := map[string]func(context.Context, []string, bridge.Env) error{
 		"add": bridge.Add, "edit": bridge.Edit, "done": bridge.Done, "reopen": bridge.Reopen,
+		"list": bridge.List, "show": bridge.Show, "projects": bridge.Projects,
 	}[cmd]
 	return run(ctx, args, env)
 }

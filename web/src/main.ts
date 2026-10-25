@@ -386,7 +386,9 @@ function renderSync() {
           const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : a.kind === "limits" ? a.bridge : (item?.title ?? a.beadId ?? "");
           const state =
             a.status === "applied" ? (isPersonal(a) ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
-          return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
+          // An agent's change names the agent and its machine.
+          const by = a.machine ? ` · ${a.author === a.machine ? a.machine : `${a.author} on ${a.machine}`}` : "";
+          return `<li class="act act-${esc(a.status)}"><span class="act-what"><span class="act-kind">${esc(actionLabel(a))}</span> ${esc(title)}</span><span class="act-state">${esc(state)}${esc(by)} · ${esc(fmtAgo(new Date(a.createdAt), now()))}</span></li>`;
         })
         .join("") +
       "</ul>";

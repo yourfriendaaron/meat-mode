@@ -367,14 +367,17 @@ type NewAction struct {
 
 // Action is one entry in the append-only action log.
 type Action struct {
-	ID        string     `json:"id"`
-	Seq       int64      `json:"seq"`
-	Kind      string     `json:"kind"`
-	Bridge    string     `json:"bridge"`
-	Repo      string     `json:"repo"`
-	BeadID    string     `json:"beadId,omitempty"` // empty for add until applied
-	Payload   Payload    `json:"payload"`
-	Author    string     `json:"author"` // <MEAT_MODE_USER>-app
+	ID      string  `json:"id"`
+	Seq     int64   `json:"seq"`
+	Kind    string  `json:"kind"`
+	Bridge  string  `json:"bridge"`
+	Repo    string  `json:"repo"`
+	BeadID  string  `json:"beadId,omitempty"` // empty for add until applied
+	Payload Payload `json:"payload"`
+	Author  string  `json:"author"` // <MEAT_MODE_USER>-app
+	// Machine is the paired machine whose token posted an agent's change
+	// to a list the hub keeps; empty for the app's own actions.
+	Machine   string     `json:"machine,omitempty"`
 	Status    string     `json:"status"`
 	Error     string     `json:"error,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
@@ -479,19 +482,36 @@ type PersonalTodo struct {
 	Title  string     `json:"title"`
 	Due    *time.Time `json:"due,omitempty"`
 	Repeat *Repeat    `json:"repeat,omitempty"` // needs Due
-	Parent string     `json:"parent,omitempty"` // id of an item this machine added to the same list; the new one is its sub-task
+	Parent string     `json:"parent,omitempty"` // id of an open top-level item of the same list; the new one is its sub-task
 	Note   string     `json:"note,omitempty"`   // added as the first comment, by Author
 	Labels []string   `json:"labels,omitempty"` // tags, as an edit's Labels
 	Author string     `json:"author,omitempty"` // the agent's name; defaults to the token's machine name
 }
 
-// PersonalChange is what an agent posts to change a personal to-do its
-// machine added. Kind is edit, done, reopen, dismiss or note.
+// PersonalChange is what an agent posts to change a to-do of the personal
+// list or a project, whoever added it. Kind is edit, done, reopen, dismiss
+// or note.
 type PersonalChange struct {
 	ID      string  `json:"id,omitempty"` // optional UUID; posting it again changes nothing
 	Kind    string  `json:"kind"`
 	Payload Payload `json:"payload"` // edit: set; note: text
 	Author  string  `json:"author,omitempty"`
+}
+
+// PersonalFilter narrows GET /bridge/v1/personal. Status is open (the
+// default), closed or all; Query matches titles without case; each of Tags
+// must be on the item, compared without case.
+type PersonalFilter struct {
+	Status string
+	Query  string
+	Tags   []string
+}
+
+// Project is one project in GET /bridge/v1/projects: its name and how many
+// of its items are open.
+type Project struct {
+	Name string `json:"name"`
+	Open int    `json:"open"`
 }
 
 // PersonalTodoReply names the personal item an agent added.

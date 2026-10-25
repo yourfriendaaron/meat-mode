@@ -158,15 +158,11 @@ func TestRestoreLoadsAnExport(t *testing.T) {
 		t.Fatalf("origin %q %v", origin, ok)
 	}
 
-	// The owner's agents may change the items it added, and only those.
-	if _, err := s.PersonalItem("laptop", "", "mm-1"); err != nil {
-		t.Fatalf("owner lost: %v", err)
-	}
-	if _, err := s.PersonalItem("laptop", "projects/garden", "mm-3"); err != nil {
-		t.Fatalf("project owner lost: %v", err)
-	}
-	if _, err := s.PersonalItem("laptop", "", "mm-2"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("an item added in the app answers %v", err)
+	// Agents read every restored item, the app's included.
+	for _, tc := range [][2]string{{"", "mm-1"}, {"projects/garden", "mm-3"}, {"", "mm-2"}} {
+		if _, err := s.PersonalItem(tc[0], tc[1]); err != nil {
+			t.Fatalf("%s in %q: %v", tc[1], tc[0], err)
+		}
 	}
 
 	// The project is a list again.
@@ -338,6 +334,7 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 		"action author long": {func(ex map[string]any) {
 			exportList(ex, "actions", 5)["author"] = strings.Repeat("a", maxCommentAuthorLen+2)
 		}, "author longer than"},
+		"action machine":        {func(ex map[string]any) { exportList(ex, "actions", 5)["machine"] = "Laptop" }, "not a valid machine name"},
 		"action author control": {func(ex map[string]any) { exportList(ex, "actions", 5)["author"] = "alex\n" }, "control character"},
 		"reminder key":          {func(ex map[string]any) { exportList(ex, "reminders", 1)["key"] = "hub/personal/mm-9" }, "not an item in the file"},
 		"reminder kind":         {func(ex map[string]any) { exportList(ex, "reminders", 1)["kind"] = "late" }, "unknown kind"},

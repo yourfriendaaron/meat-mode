@@ -224,7 +224,7 @@ func TestAddToProject(t *testing.T) {
 		t.Fatalf("changes = %+v", cs)
 	}
 	// Without --project the to-do is looked for on the personal list.
-	if err := Done(ctx, []string{"mm-2"}, env); err == nil || !strings.Contains(err.Error(), "this machine added") {
+	if err := Done(ctx, []string{"mm-2"}, env); err == nil || !strings.Contains(err.Error(), "on this list") {
 		t.Errorf("done without the project: %v", err)
 	}
 	if err := Done(ctx, []string{"hub/projects/shed/mm-1", "--project", "."}, env); err == nil {
@@ -259,7 +259,7 @@ func TestAddSubtask(t *testing.T) {
 		t.Fatalf("personal = %+v", ps)
 	}
 	if err := Add(ctx, []string{"Find the old card", "--parent", "mm-9"}, env); err == nil ||
-		!strings.Contains(err.Error(), `"mm-9" that this machine added`) {
+		!strings.Contains(err.Error(), `"mm-9" on this list`) {
 		t.Errorf("unknown parent: %v", err)
 	}
 	if err := Add(ctx, []string{"Find the old card", "--parent", " "}, env); err == nil || !strings.Contains(err.Error(), "--parent") {

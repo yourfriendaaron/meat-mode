@@ -160,7 +160,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 14
+const schemaVersion = 15
 
 var migrations = []string{
 	// 1: initial schema.
@@ -350,6 +350,8 @@ CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id
 `,
 	// 14: checklists become sub-tasks, by goMigrations.
 	``,
+	// 15: actions.machine, by goMigrations.
+	``,
 }
 
 // goMigrations are the schema steps written in Go, run in the same
@@ -358,6 +360,20 @@ CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id
 // migrations run them again.
 var goMigrations = map[int]func(*Store, *sql.Tx) error{
 	14: (*Store).migrateChecklists,
+	15: (*Store).migrateActionMachine,
+}
+
+// migrateActionMachine adds actions.machine: the machine whose token posted
+// an agent's action on a list the hub keeps, ” for the app's own actions
+// and a bridge's. It is Go so that the tests of older migrations, which
+// step user_version back, can run it again.
+func (s *Store) migrateActionMachine(tx *sql.Tx) error {
+	var n int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('actions') WHERE name = 'machine'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := tx.Exec(`ALTER TABLE actions ADD COLUMN machine TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 func (s *Store) migrate() error {

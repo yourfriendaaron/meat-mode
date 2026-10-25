@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"slices"
 	"strings"
 
@@ -13,8 +12,8 @@ import (
 )
 
 // Edit runs `meat-mode edit`: it changes the title, description, due time,
-// repeat, priority, parent or tags of a to-do this machine added to the personal
-// list or a project, and prints its
+// repeat, priority, parent or tags of a to-do of the personal list or a
+// project, whoever added it, and prints its
 // id. --until and --no-until apply to the --every given with them, or else
 // to the to-do's own repeat, which is sent back whole with the new end.
 func Edit(ctx context.Context, args []string, env Env) error {
@@ -28,7 +27,7 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	every, fromDone, until := repeatFlags(fs)
 	noUntil := fs.Bool("no-until", false, "let its repeat go on for good")
 	noRepeat := fs.Bool("no-repeat", false, "stop it repeating")
-	parent := fs.String("parent", "", "make it a sub-task of this to-do, one this machine added to the same list")
+	parent := fs.String("parent", "", "make it a sub-task of this to-do, an open one of the same list")
 	noParent := fs.Bool("no-parent", false, "make it a to-do of its own, not a sub-task")
 	var addTags, dropTags tagFlag
 	fs.Var(&addTags, "tag", "add this tag; repeat the flag for more")
@@ -125,7 +124,7 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	var it api.Item
 	if (endChanged && w.repeat == nil) || len(addTags)+len(dropTags) > 0 {
 		if it, err = hub.PersonalItem(ctx, list, item); err != nil {
-			return notOurs(item, err)
+			return notOnList(item, err)
 		}
 	}
 	if len(addTags)+len(dropTags) > 0 {
@@ -150,7 +149,7 @@ func Edit(ctx context.Context, args []string, env Env) error {
 	}
 	// The hub's not found may be for either to-do.
 	if _, err := hub.ChangePersonal(ctx, list, item, c); err != nil {
-		return notOurs(item, err, *set.Parent)
+		return notOnList(item, err, *set.Parent)
 	}
 	fmt.Fprintln(env.Stdout, item)
 	return nil
@@ -174,13 +173,14 @@ func changeTags(tags, add, drop []string) []string {
 	return out
 }
 
-// Done runs `meat-mode done`: it closes a to-do this machine added.
+// Done runs `meat-mode done`: it closes a to-do of the personal list or a
+// project.
 func Done(ctx context.Context, args []string, env Env) error {
 	return closeOrReopen(ctx, api.KindDone, args, env)
 }
 
-// Reopen runs `meat-mode reopen`: it opens a closed to-do this machine
-// added again.
+// Reopen runs `meat-mode reopen`: it opens a closed to-do of the personal
+// list or a project again.
 func Reopen(ctx context.Context, args []string, env Env) error {
 	return closeOrReopen(ctx, api.KindReopen, args, env)
 }
@@ -191,7 +191,7 @@ func closeOrReopen(ctx context.Context, kind string, args []string, env Env) err
 	author, id, project := changeFlags(fs)
 	fs.Usage = func() {
 		fmt.Fprintf(env.Stderr, "usage: meat-mode %s <id> [--project NAME|.] [--author NAME] [--id UUID]\n", kind)
-		fmt.Fprintf(env.Stderr, "Marks a to-do this machine added as %s.\n", map[string]string{api.KindDone: "done", api.KindReopen: "open"}[kind])
+		fmt.Fprintf(env.Stderr, "Marks a to-do of the personal list, or of the project --project names, as %s.\n", map[string]string{api.KindDone: "done", api.KindReopen: "open"}[kind])
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -245,22 +245,8 @@ func itemArg(fs *flag.FlagSet, env Env, cmd string, pos []string, project string
 // change posts c and prints the item's id.
 func change(ctx context.Context, hub *Hub, env Env, list, item string, c api.PersonalChange) error {
 	if _, err := hub.ChangePersonal(ctx, list, item, c); err != nil {
-		return notOurs(item, err)
+		return notOnList(item, err)
 	}
 	fmt.Fprintln(env.Stdout, item)
 	return nil
-}
-
-// notOurs explains the hub's not found for a to-do, or for either of two:
-// it is not one this machine added to the list.
-func notOurs(item string, err error, other ...string) error {
-	var herr *HTTPError
-	if !errors.As(err, &herr) || herr.Status != http.StatusNotFound {
-		return err
-	}
-	what := fmt.Sprintf("%q", item)
-	for _, o := range other {
-		what += fmt.Sprintf(" or %q", o)
-	}
-	return fmt.Errorf("the hub has no to-do %s that this machine added to this list; an agent can change only the to-dos its own machine added", what)
 }

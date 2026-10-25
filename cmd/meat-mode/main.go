@@ -61,7 +61,7 @@ func main() {
 		err = runHub(os.Args[2:])
 	case "bridge":
 		err = runBridge(os.Args[2:])
-	case "add", "edit", "done", "reopen":
+	case "add", "edit", "done", "reopen", "list", "show", "projects":
 		err = runPersonal(os.Args[1], os.Args[2:])
 	case "hash-password":
 		err = runHashPassword(os.Args[2:])
@@ -87,14 +87,18 @@ func usage() {
   meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME] [--note TEXT] [--author NAME] [--id UUID]
                                       add a to-do to the personal list, or to a project with --project
                                       ("." for this folder's repo), with this machine's bridge config;
-                                      --parent makes it a sub-task of a to-do this machine added;
+                                      --parent makes it a sub-task of any open to-do of that list;
                                       prints its id
+  meat-mode list [--project NAME|.] [--closed | --all] [--search TEXT] [--tag TAG]... [--json]
+                                      list the to-dos of the personal list or a project, whoever added them
+  meat-mode show <id> [--json]        show one to-do, with its description and notes
+  meat-mode projects [--json]         list the projects
   meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--priority N]
                  [--parent ID | --no-parent]
-                                      change a to-do this machine added
-  meat-mode done <id>                 mark a to-do this machine added as done
-  meat-mode reopen <id>               open a to-do this machine added again
-                                      (edit, done and reopen take --project as add does)
+                                      change a to-do, whoever added it
+  meat-mode done <id>                 mark a to-do as done
+  meat-mode reopen <id>               open a to-do again
+                                      (show, edit, done and reopen take --project as add does)
   meat-mode hash-password             print the hash of a login password for MEAT_MODE_PASSWORD_HASH
   meat-mode version`)
 }

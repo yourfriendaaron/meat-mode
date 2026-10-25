@@ -141,6 +141,8 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.Handle("POST /bridge/v1/actions/{id}/result", s.bridgeAuth(s.handleResult))
 	m.Handle("PUT /bridge/v1/runs", s.bridgeAuth(s.handlePutRuns))
 	m.Handle("POST /bridge/v1/personal", s.tokenAuth(s.handleAddPersonal))
+	m.Handle("GET /bridge/v1/personal", s.tokenAuth(s.handleListPersonal))
+	m.Handle("GET /bridge/v1/projects", s.tokenAuth(s.handleListProjects))
 	m.Handle("GET /bridge/v1/personal/{id}", s.tokenAuth(s.handleGetPersonal))
 	m.Handle("POST /bridge/v1/personal/{id}/actions", s.tokenAuth(s.handleChangePersonal))
 
@@ -593,10 +595,32 @@ func (s *Server) handleAddPersonal(w http.ResponseWriter, r *http.Request, bridg
 	writeJSON(w, status, api.PersonalTodoReply{Key: key, ID: id})
 }
 
-// handleGetPersonal lets an agent read a to-do its machine added to the
-// personal list or a project.
-func (s *Server) handleGetPersonal(w http.ResponseWriter, r *http.Request, bridge string) {
-	it, err := s.store.PersonalItem(bridge, r.URL.Query().Get("project"), r.PathValue("id"))
+// handleListPersonal lets any paired machine's agents list the personal
+// list or a project, narrowed by status, q and tag.
+func (s *Server) handleListPersonal(w http.ResponseWriter, r *http.Request, _ string) {
+	q := r.URL.Query()
+	items, err := s.store.ListPersonal(q.Get("project"), api.PersonalFilter{Status: q.Get("status"), Query: q.Get("q"), Tags: q["tag"]})
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// handleListProjects lets any paired machine's agents list the projects.
+func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request, _ string) {
+	ps, err := s.store.Projects()
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ps)
+}
+
+// handleGetPersonal lets an agent read any to-do of the personal list or
+// a project.
+func (s *Server) handleGetPersonal(w http.ResponseWriter, r *http.Request, _ string) {
+	it, err := s.store.PersonalItem(r.URL.Query().Get("project"), r.PathValue("id"))
 	if err != nil {
 		s.storeError(w, r, err)
 		return
@@ -604,8 +628,8 @@ func (s *Server) handleGetPersonal(w http.ResponseWriter, r *http.Request, bridg
 	writeJSON(w, http.StatusOK, it)
 }
 
-// handleChangePersonal lets an agent change a to-do its machine added to
-// the personal list or a project.
+// handleChangePersonal lets an agent change any to-do of the personal list
+// or a project, recording its machine on the action.
 func (s *Server) handleChangePersonal(w http.ResponseWriter, r *http.Request, bridge string) {
 	var c api.PersonalChange
 	if !readChange(w, r, &c) {

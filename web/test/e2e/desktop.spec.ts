@@ -471,3 +471,18 @@ test("Settings has no detail pane; a task view brings it back", async ({ page, h
   await page.getByRole("button", { name: /Everything/ }).click();
   await expect(page.locator("#detail")).toBeVisible();
 });
+
+test("recent actions name the agent and machine behind a change to a personal to-do", async ({ page, hub }) => {
+  await openApp(page);
+  const at = hub.now();
+  hub.log.push({
+    action: {
+      id: "a7c1e2d3-4b5a-4c6d-8e7f-9a0b1c2d3e4f", seq: ++hub.seq, kind: "edit", bridge: "hub", repo: "personal", beadId: "pe-3",
+      payload: { set: { title: "Call Sam" } }, author: "planner", machine: "desk", status: "applied", createdAt: at, appliedAt: at,
+    },
+    before: null,
+  });
+  await page.locator(".sidebar .sync-pill").click();
+  const pop = page.getByRole("dialog", { name: "Recent actions" });
+  await expect(pop.locator(".act-state").first()).toContainText("Saved · planner on desk ·");
+});

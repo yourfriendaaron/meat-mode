@@ -330,22 +330,30 @@ It prints the new item's id (such as `mm-12`), and the to-do appears in the app 
 - `--due` takes a date and time (`2026-03-02 18:30`) or a date alone (`2026-03-02`, due at 9:00), read in the hub's time zone, not the machine's: the one set in the wizard's **Name and time zone** step or in **Settings**. The command asks the hub for it, so an agent on a server running in UTC still gets your 9:00. A time with an offset (`2026-03-02T09:00:00Z`) is used as written. While the hub has no time zone, the machine's own is used.
 - `--every` makes the to-do repeat, and needs `--due`, its first date. It takes `day`, `week`, `month` or `year`, a number of them (`"3 days"`, `"2 weeks"`), `weekday` for Monday to Friday, days of the week (`mon,thu`), or both (`"2 weeks on mon,thu"`). When the to-do is done it stays on the list and moves to its next date, at the same time of day in the hub's time zone. `--from-done` counts the next date from the day it is done instead: `--every "3 days" --from-done` comes back 3 days after each done. `--until 2026-11-26` ends the series on that date: the to-do repeats up to it, and the done after its last date closes it.
 - `--tag garden` gives the new to-do a tag, one word, and repeats for more (`--tag garden --tag errands`). The hub keeps the list in the order given, drops a repeat without case, and refuses a tag with a space or comma or one over 50 characters.
-- `--parent mm-12` makes the new to-do a sub-task of `mm-12`, which shows it under that to-do in the app. The parent must be an open to-do this machine added to the same list, and not a sub-task itself: sub-tasks go one level deep. A parent is done only once its sub-tasks are closed, and done on a repeating parent opens again the sub-tasks that were done.
+- `--parent mm-12` makes the new to-do a sub-task of `mm-12`, which shows it under that to-do in the app. The parent must be an open to-do of the same list, whoever added it (you in the app, or any machine), and not a sub-task itself: sub-tasks go one level deep. A parent is done only once its sub-tasks are closed, and done on a repeating parent opens again the sub-tasks that were done.
 - `--author` is the agent's name, shown as the creator. It defaults to the machine's name.
 - `--id` takes a UUID the agent generates. Running the command again with the same id changes nothing, so an agent can retry safely.
 
-An agent can change a to-do its own machine added, by that id:
+An agent on any paired machine can read and change every to-do on your personal list and in every project: the ones you added in the app, the ones any machine added, and the ones moved from an older bridge. Pairing a machine therefore lets its agents read all of your personal to-dos, their notes and attachments' names included, and change or delete them. Pair only machines whose agents you trust with that.
 
 ```sh
+meat-mode list --search shopping
+meat-mode show mm-12
+meat-mode add "Oat milk" --parent mm-12 --author planner
 meat-mode edit mm-12 --due "2026-03-09 18:30" --priority 1 --author planner
 meat-mode done mm-12
 meat-mode reopen mm-12
 ```
 
-- `meat-mode edit` changes only the fields it is given: `--title`, `--description` (`""` clears it), `--due` (read as for `add`) or `--clear-due`, `--every` (with `--from-done`, read as for `add`) or `--no-repeat`, `--until DATE` or `--no-until` for the end of the to-do's repeat, given with `--every` or kept from the one it has, `--priority` from 0 (highest) to 4, and `--parent ID` to move it under another to-do this machine added, by the rules of `add --parent`, or `--no-parent` to make a sub-task a to-do of its own, and `--tag TAG` to add a tag or `--untag TAG` to remove one (each repeats, and `--untag` matches without case): the command reads the to-do's tags and sends the new list. A to-do with sub-tasks of its own cannot become a sub-task. `--every` needs a due date, already set or given with `--due`; `--clear-due` also stops a to-do repeating.
+- `meat-mode list` prints the open to-dos, one a line with its id, due time and tags, sub-tasks under their parent. `--closed` lists those done or deleted in the last 7 days instead, `--all` both; `--search TEXT` keeps titles holding the text and `--tag TAG` those with the tag, both without case (`--tag` repeats, for to-dos with every tag given). `--json` prints the hub's items as they are.
+- `meat-mode show mm-12` prints one to-do with its description and notes, or with `--json` the hub's item.
+- `meat-mode projects` lists the projects, each with how many of its to-dos are open.
+
+- `meat-mode edit` changes only the fields it is given: `--title`, `--description` (`""` clears it), `--due` (read as for `add`) or `--clear-due`, `--every` (with `--from-done`, read as for `add`) or `--no-repeat`, `--until DATE` or `--no-until` for the end of the to-do's repeat, given with `--every` or kept from the one it has, `--priority` from 0 (highest) to 4, and `--parent ID` to move it under another to-do, by the rules of `add --parent`, or `--no-parent` to make a sub-task a to-do of its own, and `--tag TAG` to add a tag or `--untag TAG` to remove one (each repeats, and `--untag` matches without case): the command reads the to-do's tags and sends the new list. A to-do with sub-tasks of its own cannot become a sub-task. `--every` needs a due date, already set or given with `--due`; `--clear-due` also stops a to-do repeating.
 - `meat-mode done` marks the to-do done, or moves a repeating one to its next date; `meat-mode reopen` opens it again.
 - Each takes `--author` and `--id` as `add` does, and prints the to-do's id.
-- A to-do you added in the app, or one another machine added, is not the agent's to change: the command says the hub has no such to-do from this machine. A closed to-do can be changed for the 7 days the app still shows it.
+- An id the list does not hold, or a closed to-do older than the 7 days the app shows it, is refused: the command says the hub has no such to-do on this list.
+- Each change carries the agent's `--author` and its machine, and the app's recent actions (the sync status button) show both, such as "planner on desk". A change by an agent sends you no notification.
 
 ### Projects, for repos with no tracker
 
@@ -357,11 +365,11 @@ meat-mode add "Approve the footer text" --project . --note "What is needed, why,
 meat-mode done mm-14 --project .
 ```
 
-The first add makes the project, and it shows in the app as its own list, beside your personal list and the repos your machines sync, and in quick add. Its to-dos work like personal ones: you can edit them, make them repeat, add notes and sub-tasks, and they come to the calendar feed. Agents cannot be asked to work on them. `edit`, `done` and `reopen` take `--project` too, and an agent changes only what its own machine added there. A project is named like a repo (`personal` is kept for the personal list). There is nothing to delete: a project leaves the app once nothing in it is open and nothing closed in the last 7 days.
+The first add makes the project, and it shows in the app as its own list, beside your personal list and the repos your machines sync, and in quick add. Its to-dos work like personal ones: you can edit them, make them repeat, add notes and sub-tasks, and they come to the calendar feed. Agents cannot be asked to work on them. `list`, `show`, `edit`, `done` and `reopen` take `--project` too, and agents read and change every to-do there, as on the personal list. A project is named like a repo (`personal` is kept for the personal list). There is nothing to delete: a project leaves the app once nothing in it is open and nothing closed in the last 7 days.
 
 The name set in the app (or `MEAT_MODE_USER` until you set one) is the name your notes are signed with, as `<name>-app`, so agents can tell your replies from their own.
 
-To tell your agents about all this, copy the text from the setup wizard's **Tell your agents** step, or from **Settings**, **Instructions for agents**, into the instruction file they read on that machine, such as `AGENTS.md` or `CLAUDE.md`. It covers raising a task for you with the command of each tracker the machine runs (such as `bd create … -l human`), or with `meat-mode add --project .` in a repo with no tracker, and adding to your list with `meat-mode add`, names the machine, and holds no token or address. Until the machine's bridge has connected and said which trackers it runs, the text uses beads.
+To tell your agents about all this, copy the text from the setup wizard's **Tell your agents** step, or from **Settings**, **Instructions for agents**, into the instruction file they read on that machine, such as `AGENTS.md` or `CLAUDE.md`. It covers raising a task for you with the command of each tracker the machine runs (such as `bd create … -l human`), or with `meat-mode add --project .` in a repo with no tracker, adding to your list with `meat-mode add`, and finding and changing your to-dos with `meat-mode list`, `show` and `edit`; it names the machine and holds no token or address. Until the machine's bridge has connected and said which trackers it runs, the text uses beads.
 
 The fields and the HTTP calls behind these commands are in [api.md](api.md#agents-adding-to-the-personal-list). Revoking the machine in Settings takes its agents' access back too.
 
