@@ -84,17 +84,20 @@ func usage() {
   meat-mode bridge run                run the bridge in the foreground
   meat-mode bridge status             show config, repos and hub reachability
   meat-mode bridge uninstall          remove the user service and config
-  meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME] [--note TEXT] [--author NAME] [--id UUID]
+  meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME [--every RULE [--from-done] [--until DATE]]]
+                [--tag TAG]... [--note TEXT] [--author NAME] [--id UUID]
                                       add a to-do to the personal list, or to a project with --project
                                       ("." for this folder's repo), with this machine's bridge config;
                                       --parent makes it a sub-task of any open to-do of that list;
+                                      --every makes it repeat ("week", "2 weeks on mon,thu");
                                       prints its id
   meat-mode list [--project NAME|.] [--closed | --all] [--search TEXT] [--tag TAG]... [--json]
                                       list the to-dos of the personal list or a project, whoever added them
   meat-mode show <id> [--json]        show one to-do, with its description and notes
   meat-mode projects [--json]         list the projects
-  meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due] [--priority N]
-                 [--parent ID | --no-parent]
+  meat-mode edit <id> [--title TEXT] [--description TEXT] [--due TIME | --clear-due]
+                 [--every RULE [--from-done] | --no-repeat] [--until DATE | --no-until] [--priority N]
+                 [--parent ID | --no-parent] [--tag TAG]... [--untag TAG]...
                                       change a to-do, whoever added it
   meat-mode done <id>                 mark a to-do as done
   meat-mode reopen <id>               open a to-do again
