@@ -198,6 +198,7 @@ test.describe("phone", () => {
     hub.find(KEY)!.labels = ["garden", "weekend", "errands"];
     await openApp(page);
     const detail = await openDetail(page, "Water the plants");
+    await detail.getByRole("button", { name: /^Done \d/ }).click();
     await detail.locator(".note").first().getByRole("button", { name: "Edit note" }).click();
     await page.waitForTimeout(300);
     await expect(detail.getByRole("button", { name: "Done", exact: true })).toBeInViewport();

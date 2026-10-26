@@ -164,6 +164,8 @@ const S = {
   moreOpen: false,
   /** The item whose History section is open, and the one whose History shows every change. */
   historyOpen: null as string | null,
+  /** The item whose done sub-tasks show; folded under their count otherwise. */
+  subsDoneOpen: null as string | null,
   historyAll: null as string | null,
   /** The note being edited, on a personal item. */
   noteEdit: null as { key: string; commentId: string; text: string } | null,
@@ -1445,22 +1447,30 @@ function subtasksHTML(item: Item): string {
   const subs = subtasksOf(item, items());
   const canAdd = isOpen(item) && !item.id.startsWith("pending-") && allows(item, "subtask");
   if (!subs.length && !canAdd) return "";
-  const rows = subs
-    .map((c) => {
-      const agent = isAgentItem(c);
-      const remove = canRemoveSubtask(c)
-        ? `<button class="link-btn sub-remove" data-act="sub-remove" data-key="${esc(c.key)}" aria-label="${esc(`Remove: ${c.title}`)}" title="${agent ? "Won't do" : "Delete"}">${ICON.close}</button>`
-        : "";
-      return `<li class="sub${isOpen(c) ? "" : " sub-done"}" data-entry="${esc(c.key)}">${checkButton(c, agent)}<button class="sub-title" data-act="open" data-key="${esc(c.key)}">${esc(c.title)}</button>${remove}</li>`;
-    })
-    .join("");
+  const row = (c: Item) => {
+    const agent = isAgentItem(c);
+    const remove = canRemoveSubtask(c)
+      ? `<button class="link-btn sub-remove" data-act="sub-remove" data-key="${esc(c.key)}" aria-label="${esc(`Remove: ${c.title}`)}" title="${agent ? "Won't do" : "Delete"}">${ICON.close}</button>`
+      : "";
+    return `<li class="sub${isOpen(c) ? "" : " sub-done"}" data-entry="${esc(c.key)}">${checkButton(c, agent)}<button class="sub-title" data-act="open" data-key="${esc(c.key)}">${esc(c.title)}</button>${remove}</li>`;
+  };
+  const open = subs.filter(isOpen);
+  const done = subs.filter((c) => !isOpen(c));
   const count = subtaskChip(item, items());
   const add = canAdd
     ? `<form class="pick-row" data-form="sub-add"><label class="sr" for="sub-input">Add a sub-task</label><input id="sub-input" type="text" maxlength="${TITLE_MAX}" autocomplete="off" enterkeyhint="done" placeholder="Add a sub-task"><button type="submit" class="btn">${ICON.plus}Add</button></form>`
     : "";
   return `<section class="d-section" aria-labelledby="d-subs"><h3 id="d-subs">Sub-tasks${count ? ` <span class="group-count">${count}</span>` : ""}</h3>${
-    rows ? `<ul class="subtasks">${rows}</ul>` : ""
-  }${add}</section>`;
+    open.length ? `<ul class="subtasks">${open.map(row).join("")}</ul>` : ""
+  }${add}${doneSubtasksHTML(item, done, row)}</section>`;
+}
+
+/** The done sub-tasks below the open ones, folded under their count until opened. */
+function doneSubtasksHTML(item: Item, done: Item[], row: (c: Item) => string): string {
+  if (!done.length) return "";
+  const shown = S.subsDoneOpen === item.key;
+  const fold = `<button class="hist-toggle sub-fold" data-act="subs-done" aria-expanded="${shown}" aria-controls="d-subs-done">Done <span class="group-count">${done.length}</span>${ICON.right}</button>`;
+  return `${fold}${shown ? `<ul class="subtasks" id="d-subs-done">${done.map(row).join("")}</ul>` : ""}`;
 }
 
 /**
@@ -3032,6 +3042,10 @@ function onClick(e: MouseEvent) {
       break;
     case "sub-remove":
       void removeSubtask(key);
+      break;
+    case "subs-done":
+      S.subsDoneOpen = S.subsDoneOpen === S.open ? null : S.open;
+      render();
       break;
     case "history":
       S.historyOpen = S.historyOpen === S.open ? null : S.open;

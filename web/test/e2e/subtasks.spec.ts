@@ -202,14 +202,24 @@ test("a personal item's sub-tasks tick, and the remove button deletes one with U
   await openApp(page);
   await row(page, "Water the plants").locator(".row-body").click();
   const subs = page.locator("#detail .subtasks");
+  const fold = page.locator("#detail").getByRole("button", { name: /^Done \d/ });
+  // Done sub-tasks fold below the open ones under their count.
+  await expect(subs.locator(".sub-title")).toHaveText(["Fill the watering can"]);
+  await expect(fold).toHaveText("Done 1");
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await fold.click();
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
   await expect(subs.locator(".sub-title")).toHaveText(["Fill the watering can", "Move the fern out of the sun"]);
 
-  // Tick and Undo.
+  // Tick moves it into the done ones, and Undo moves it back.
   await subs.getByRole("button", { name: "Mark done: Fill the watering can" }).click();
   await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "done", key: "hub/personal/pe-11" });
   await expect(page.locator("#toast")).toContainText("Done: Fill the watering can");
+  await expect(fold).toHaveText("Done 2");
+  await expect(subs.locator(".sub-done .sub-title")).toHaveText(["Fill the watering can", "Move the fern out of the sun"]);
   await page.locator("#toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => hub.find("hub/personal/pe-11")?.status).toBe("open");
+  await expect(subs.locator(".sub-title")).toHaveText(["Fill the watering can", "Move the fern out of the sun"]);
 
   // Remove an open one: it is deleted, and Undo brings it back open.
   await subs.getByRole("button", { name: "Remove: Fill the watering can" }).click();

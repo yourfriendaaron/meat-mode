@@ -1948,6 +1948,12 @@ select.qa-pill {
   overflow-wrap: anywhere;
   cursor: pointer;
 }
+.hist-toggle.sub-fold {
+  min-height: 36px;
+  color: var(--role-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
 .sub-done .sub-title {
   color: var(--role-soft);
   text-decoration: line-through;
