@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
@@ -85,7 +86,9 @@ func (t *Ticket) Check(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("tk not found: %w", err)
 	}
-	out, err := exec.CommandContext(ctx, path, "--version").Output()
+	cmd := exec.CommandContext(ctx, path, "--version")
+	cmd.Env = tracker.ChildEnv(os.Environ(), "TICKETS_DIR")
+	out, err := cmd.Output()
 	if err != nil {
 		return "", nil
 	}
@@ -132,9 +135,13 @@ func (t *Ticket) List(_ context.Context, dir string) ([]tracker.Issue, error) {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".md") {
 			continue
 		}
-		is, err := read(dir, strings.TrimSuffix(f.Name(), ".md"))
+		id := strings.TrimSuffix(f.Name(), ".md")
+		if !validID(id) {
+			continue // not a ticket name, even with an .md suffix
+		}
+		is, err := read(dir, id)
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			if errors.Is(err, tracker.ErrNotFound) || errors.Is(err, fs.ErrNotExist) {
 				continue // removed between the listing and the read
 			}
 			return nil, err
@@ -200,22 +207,44 @@ func (*Ticket) Defer(context.Context, string, string, *time.Time, string) error 
 	return tracker.ErrUnsupported
 }
 
-// Dismiss closes the ticket and notes why, since ticket has no status for
-// it; List reads the note back as the close reason.
+// Dismiss notes why the ticket is closed, since ticket has no status for it,
+// and then closes it; List reads the note back as the close reason. The note
+// goes first: a close without it would read as Done, and a second attempt
+// after a crash finds the note already there instead of adding it twice.
 func (t *Ticket) Dismiss(ctx context.Context, dir, id, actor string) error {
-	if err := t.run(ctx, dir, id, "close", id); err != nil {
+	is, err := read(dir, id)
+	if err != nil {
 		return err
 	}
-	return t.AddComment(ctx, dir, id, actor, dismissedNote)
+	author := noteAuthor(actor)
+	if author == "" {
+		author = defaultAuthor
+	}
+	last := len(is.Comments) - 1
+	if last < 0 || is.Comments[last].Text != dismissedNote || is.Comments[last].Author != author {
+		if err := t.AddComment(ctx, dir, id, actor, dismissedNote); err != nil {
+			return err
+		}
+	}
+	return t.run(ctx, dir, id, "close", id)
+}
+
+// noteAuthor is author as a note's first line can carry it: a line break or
+// other control character becomes a space, and every other character stays,
+// so a name with spaces comes back from parse as written.
+func noteAuthor(author string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, author)
 }
 
 // AddComment writes the note with its author on a first line, which Show
 // strips off again.
 func (t *Ticket) AddComment(ctx context.Context, dir, id, author, text string) error {
-	if author != "" && strings.ContainsAny(author, " \t\n") {
-		author = strings.Join(strings.Fields(author), "-")
-	}
-	if author != "" {
+	if author = noteAuthor(author); author != "" {
 		text = "by " + author + ":\n\n" + text
 	}
 	return t.run(ctx, dir, id, "add-note", id, text)

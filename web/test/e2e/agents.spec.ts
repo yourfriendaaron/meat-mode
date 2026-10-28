@@ -24,6 +24,21 @@ function outcome(page: Page, title: string) {
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 }, permissions: ["clipboard-read", "clipboard-write"] });
 
+  test("the pairing token is gone once setup is left and resumed", async ({ page, hub, baseURL }) => {
+    await openWizardAt(page, hub, "agents");
+    const w = wizard(page);
+    await w.region.getByRole("button", { name: "Yes, add a machine" }).click();
+    await page.getByLabel("Machine name").fill("laptop");
+    await w.region.getByRole("button", { name: "Add machine" }).click();
+    await expect(page.locator("#agents-pair-cmd")).toHaveText(`meat-mode bridge pair ${baseURL} test-token`);
+
+    await page.locator(".sidebar").getByRole("button", { name: "Today" }).click();
+    await page.locator("#setup-banner").getByRole("button", { name: "Continue setup" }).click();
+    await expect(w.heading).toHaveText("Agent machines");
+    await expect(page.getByLabel("Add another machine")).toBeVisible();
+    await expect(page.locator("#agents-pair-cmd")).toHaveCount(0);
+  });
+
   test("pairs a machine, waits for its hello, then chooses repos and copies the instructions", async ({ page, hub, baseURL }) => {
     await openWizardAt(page, hub, "agents");
     const w = wizard(page);

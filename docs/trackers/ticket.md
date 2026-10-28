@@ -32,7 +32,7 @@ Put `sync: true` in `.meat-mode.yaml` at the repo root, or turn the repo's switc
 |---|---|
 | Done | `tk close <id>` |
 | Reopen | `tk reopen <id>` |
-| Won't do | `tk close <id>`, then a note "Dismissed in Meat Mode". The app reads the note back as the close reason, so a reopen works as for any task. |
+| Won't do | a note "Dismissed in Meat Mode", then `tk close <id>`. The app reads the note back as the close reason, so a reopen works as for any task. The note goes first, so a close cut short never reads as Done. |
 | Note | `tk add-note <id> ...` |
 | Add | `tk create <title> --tags human -a <actor> --external-ref meat-mode:<action id>`; the external ref is how a retried add finds the task it already made |
 | Sub-task | the same with `--parent <id>` |

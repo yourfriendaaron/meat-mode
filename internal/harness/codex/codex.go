@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -64,7 +65,9 @@ var versionNumber = regexp.MustCompile(`\d+\.\d+\.\d+\S*`)
 
 // Check runs `codex --version`, which prints "codex-cli 0.163.0".
 func (c *Codex) Check(ctx context.Context) (string, error) {
-	out, err := exec.CommandContext(ctx, c.command[0], "--version").Output()
+	cmd := exec.CommandContext(ctx, c.command[0], "--version")
+	cmd.Env = harness.StripEnv(os.Environ())
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("codex --version: %w", err)
 	}

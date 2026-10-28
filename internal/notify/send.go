@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -145,6 +146,12 @@ func (r *Registry) deliver(ctx context.Context, t target, payload []byte, ttl, a
 			return false, r.remove(ctx, t)
 		}
 		r.failed(ctx, t, payload, attempt, retry)
+		// A *url.Error quotes the request URL, and a push endpoint is a
+		// capability. Keep only the cause, such as a dial or TLS failure.
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			err = uerr.Err
+		}
 		return false, fmt.Errorf("web push: %w", err)
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
@@ -206,6 +213,9 @@ func retryAfter(v string, now time.Time) time.Duration {
 // remove drops a subscription its push service no longer knows, or whose
 // endpoint the hub no longer accepts.
 func (r *Registry) remove(ctx context.Context, t target) error {
+	r.mu.Lock()
+	delete(r.holds, t.endpoint)
+	r.mu.Unlock()
 	_, err := r.db.ExecContext(ctx, `DELETE FROM push_subscriptions WHERE endpoint = ?`, t.endpoint)
 	return err
 }

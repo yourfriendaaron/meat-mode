@@ -568,6 +568,28 @@ func TestSendResults(t *testing.T) {
 		}
 	})
 
+	t.Run("removing or renewing a device drops its 429 hold", func(t *testing.T) {
+		for _, renew := range []bool{false, true} {
+			r, a, _ := setup(t, 429, nil)
+			r.Notify(ctx, Message{Title: "T"})
+			ep := a.endpoint("/up")
+			if _, held := r.held(ep, a.now); !held {
+				t.Fatalf("renew %v: no hold after a 429", renew)
+			}
+			if renew {
+				a.status["/up"] = 201
+				if _, _, err := r.RegisterApp(ctx, "", newAppSub(t, ep).PushSubscription); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := r.remove(ctx, target{endpoint: ep}); err != nil {
+				t.Fatal(err)
+			}
+			if _, held := r.held(ep, a.now); held {
+				t.Errorf("renew %v: the hold outlived the subscription", renew)
+			}
+		}
+	})
+
 	t.Run("429 holds every send until Retry-After", func(t *testing.T) {
 		for _, tc := range []struct {
 			retryAfter string
@@ -637,11 +659,17 @@ func TestSendResults(t *testing.T) {
 		}
 	})
 
-	t.Run("network errors are retried", func(t *testing.T) {
+	t.Run("network errors are retried, without the endpoint in the error", func(t *testing.T) {
 		r, a, _ := setup(t, 201, nil)
+		endpoint := a.endpoint("/up")
 		a.srv.Close()
-		if err := r.Notify(ctx, Message{Title: "T"}); err == nil {
+		err := r.Notify(ctx, Message{Title: "T"})
+		if err == nil {
 			t.Error("no error")
+		}
+		// The endpoint is a capability, and callers log the error.
+		if err != nil && strings.Contains(err.Error(), endpoint) {
+			t.Errorf("the error names the endpoint: %v", err)
 		}
 		if len(a.retries) != 1 || a.retries[0].after != time.Minute {
 			t.Errorf("retries %+v", a.retries)

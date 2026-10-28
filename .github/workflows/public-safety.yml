@@ -18,7 +18,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Shellcheck
-        run: shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit .githooks/pre-push
+        run: shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit .githooks/commit-msg .githooks/pre-push
       - name: Guard tests
         run: bash tests/public-safety.test.sh
       - name: Scan tracked files

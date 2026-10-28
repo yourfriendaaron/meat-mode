@@ -210,6 +210,16 @@ export async function wizardAct(act: string, el: HTMLElement, ctx: AppContext): 
   return true;
 }
 
+/**
+ * Call when the setup view is left, or the app logs out: the step on screen
+ * drops what must not outlive it, such as a one-time token, and the run keeps
+ * its place for Continue setup.
+ */
+export function leaveSetupView(ctx: AppContext): void {
+  const r = run(ctx);
+  r?.run.steps[r.index].leave?.();
+}
+
 /** The step on screen, for events inside it. */
 export function currentStep(id: string | undefined): Step | undefined {
   return progress ? findStep(id) : undefined;

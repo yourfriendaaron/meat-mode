@@ -262,7 +262,7 @@ func (s *Server) storeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, store.ErrForbidden):
 		writeError(w, http.StatusForbidden, err.Error())
 	default:
-		s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
+		s.log.Error("request failed", "method", r.Method, "path", logPath(r.URL.Path), "err", err)
 		writeError(w, http.StatusInternalServerError, "the hub hit an internal error; see its log")
 	}
 }

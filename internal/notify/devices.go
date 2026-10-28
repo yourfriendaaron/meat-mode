@@ -95,6 +95,9 @@ func (r *Registry) writeDevice(tx *sql.Tx, d *device) error {
 	if _, err := tx.Exec(`DELETE FROM push_subscriptions WHERE id = ? OR endpoint = ?`, d.ID, d.Endpoint); err != nil {
 		return err
 	}
+	r.mu.Lock()
+	delete(r.holds, d.Endpoint)
+	r.mu.Unlock()
 	now := r.now().Unix()
 	if _, err := tx.Exec(`INSERT INTO push_subscriptions (endpoint, p256dh, auth, session_id, renewed_at, id, kind, name,
 		confirmed, created_at, last_seen, last_push, failing_since, code_hash, code_expires, token_hash)

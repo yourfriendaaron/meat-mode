@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -68,7 +69,9 @@ func (o *OpenCode) Check(ctx context.Context) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, bin, "--version").Output()
+	cmd := exec.CommandContext(ctx, bin, "--version")
+	cmd.Env = harness.StripEnv(os.Environ())
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("%s --version: %w", o.command[0], err)
 	}

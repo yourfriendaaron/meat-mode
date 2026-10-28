@@ -190,9 +190,9 @@ func pair(ctx context.Context, args []string, env Env) error {
 	// service, which does not get this shell's environment, checks the same.
 	cfg.TrustedNetworks = effective.TrustedNetworks
 	allowInsecure := effective.AllowInsecureHTTP || *insecure
-	if *insecure {
-		cfg.AllowInsecureHTTP = true
-	}
+	// The flag is what is saved, so a pairing without it clears an earlier
+	// one. The environment override still applies to this command's checks.
+	cfg.AllowInsecureHTTP = *insecure
 	if len(roots) > 0 {
 		abs := make([]string, 0, len(roots))
 		for _, r := range roots {

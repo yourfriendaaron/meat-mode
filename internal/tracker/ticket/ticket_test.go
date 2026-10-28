@@ -107,6 +107,105 @@ func TestDismissReason(t *testing.T) {
 	}
 }
 
+// A name with a space is the author as written, not a dashed form of it.
+func TestParseAuthorWithASpace(t *testing.T) {
+	data := "---\nid: a-1\nstatus: open\n---\n# Renew the card\n\n## Notes\n\n**2026-01-20T08:00:00Z**\n\nby Alex Smith:\n\nDone once.\n"
+	is := parseTicket([]byte(data)).issue("a-1", "v", time.Now())
+	if len(is.Comments) != 1 || is.Comments[0].Author != "Alex Smith" || is.Comments[0].Text != "Done once." {
+		t.Fatalf("comments %+v", is.Comments)
+	}
+}
+
+// The note's author line survives a round trip through tk.
+func TestCommentKeepsAnAuthorWithASpace(t *testing.T) {
+	if _, err := exec.LookPath("tk"); err != nil {
+		t.Skip("tk is not installed")
+	}
+	ctx := context.Background()
+	dir := t.TempDir()
+	tr := &Ticket{bin: "tk", look: exec.LookPath}
+	id, err := tr.Create(ctx, dir, tracker.NewIssue{Title: "Renew the library card", Actor: "alex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.AddComment(ctx, dir, id, "Alex Smith", "Done once."); err != nil {
+		t.Fatal(err)
+	}
+	is, err := tr.Show(ctx, dir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range is.Comments {
+		if c.Text == "Done once." {
+			if c.Author != "Alex Smith" {
+				t.Fatalf("author %q, want %q", c.Author, "Alex Smith")
+			}
+			return
+		}
+	}
+	t.Fatalf("note not found in %+v", is.Comments)
+}
+
+// A first Dismiss attempt that wrote its note but did not close must not
+// write the note again on the next attempt.
+func TestDismissAfterANoteOnlyAttempt(t *testing.T) {
+	if _, err := exec.LookPath("tk"); err != nil {
+		t.Skip("tk is not installed")
+	}
+	ctx := context.Background()
+	dir := t.TempDir()
+	tr := &Ticket{bin: "tk", look: exec.LookPath}
+	id, err := tr.Create(ctx, dir, tracker.NewIssue{Title: "Renew the library card", Actor: "alex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.AddComment(ctx, dir, id, "Alex Smith", dismissedNote); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Dismiss(ctx, dir, id, "Alex Smith"); err != nil {
+		t.Fatal(err)
+	}
+	is, err := tr.Show(ctx, dir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if is.Status != tracker.StatusClosed || is.CloseReason != "dismissed" {
+		t.Errorf("status %q, close reason %q; want closed and dismissed", is.Status, is.CloseReason)
+	}
+	notes := 0
+	for _, c := range is.Comments {
+		if c.Text == dismissedNote {
+			notes++
+		}
+	}
+	if notes != 1 {
+		t.Errorf("%d dismissed notes, want 1: %+v", notes, is.Comments)
+	}
+}
+
+// A file whose name cannot be an id is not a ticket, and must not fail the
+// whole list.
+func TestListSkipsAnInvalidFileName(t *testing.T) {
+	dir := t.TempDir()
+	store := filepath.Join(dir, storeDir)
+	if err := os.Mkdir(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store, ".hidden.md"), []byte("not a ticket"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store, "a-1.md"), []byte("---\nid: a-1\nstatus: open\ntags: [human]\n---\n# Water the plants\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	is, err := (&Ticket{}).List(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(is) != 1 || is[0].ID != "a-1" {
+		t.Fatalf("listed %+v", is)
+	}
+}
+
 func TestDetect(t *testing.T) {
 	tr := &Ticket{}
 	detect := func(setup func(dir string)) bool {
@@ -185,5 +284,31 @@ func TestExecHidesBridgeEnvironment(t *testing.T) {
 	if !strings.Contains(got, "PATH=") || !strings.Contains(got, "TICKETS_DIR="+filepath.Join(repo, storeDir)+"\n") ||
 		strings.Contains(got, "/elsewhere") {
 		t.Errorf("tk got the wrong environment:\n%s", got)
+	}
+}
+
+// Check runs tk too, and gives it the same stripped environment.
+func TestCheckHidesBridgeEnvironment(t *testing.T) {
+	t.Setenv("MEAT_MODE_BRIDGE_TOKEN", "example-secret")
+	t.Setenv("TICKETS_DIR", "/elsewhere")
+	dir := t.TempDir()
+	seen := filepath.Join(dir, "env")
+	bin := filepath.Join(dir, "tk")
+	script := "#!/bin/sh\nenv > '" + seen + "'\necho 'tk 1.2.3'\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tr := &Ticket{bin: bin, look: exec.LookPath}
+	v, err := tr.Check(context.Background())
+	if err != nil || v != "1.2.3" {
+		t.Fatalf("Check = %q, %v", v, err)
+	}
+	b, err := os.ReadFile(seen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(b); strings.Contains(got, "MEAT_MODE_") || strings.Contains(got, "example-secret") ||
+		strings.Contains(got, "/elsewhere") {
+		t.Errorf("tk --version saw the bridge environment:\n%s", got)
 	}
 }

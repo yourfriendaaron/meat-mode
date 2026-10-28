@@ -238,7 +238,10 @@ func (b *Bridge) known(ctx context.Context, st *repoState, a api.Action, listed 
 		}
 		ids = make(map[string]bool, len(list))
 		for _, i := range list {
-			ids[i.ID] = true
+			// As in syncRepo: an id the hub cannot take was never sent.
+			if api.ValidBeadID(i.ID) {
+				ids[i.ID] = true
+			}
 		}
 		listed[st.Name] = ids
 	}
@@ -341,12 +344,21 @@ func (b *Bridge) add(ctx context.Context, a api.Action, r Repo, actor string, re
 			return fail(err)
 		}
 		if id != "" {
-			return api.ActionResult{OK: true, BeadID: id}
+			return created(id)
 		}
 	}
 	id, err := r.Tracker.Create(ctx, r.Dir, newIssue(a, title, actor))
 	if err != nil {
 		return fail(err)
+	}
+	return created(id)
+}
+
+// created is the result of an add whose tracker gave back id. An id the hub
+// cannot take, which would also be a path on this machine, is a failure.
+func created(id string) api.ActionResult {
+	if !api.ValidBeadID(id) {
+		return fail(fmt.Errorf("the tracker made a task with an id the hub cannot take: %q", id))
 	}
 	return api.ActionResult{OK: true, BeadID: id}
 }

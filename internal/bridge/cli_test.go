@@ -358,6 +358,33 @@ func TestPairDoesNotSaveInsecureEnvOverride(t *testing.T) {
 	}
 }
 
+// A --allow-insecure-http from an earlier pairing does not survive a later
+// pairing that did not ask for it.
+func TestPairClearsAnEarlierInsecureOptIn(t *testing.T) {
+	t.Setenv("MEAT_MODE_ALLOW_INSECURE_HTTP", "")
+	t.Setenv("MEAT_MODE_HUB_URL", "")
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	env, _, out := testEnv(t, fakeBD(t, "1.3.1"))
+	pair := func(args ...string) Config {
+		t.Helper()
+		if err := Main(context.Background(), append([]string{"pair", hub.URL, token, "--no-service"}, args...), env); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		cfg, err := readConfigFile(env.Paths.Config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	if cfg := pair("--allow-insecure-http"); !cfg.AllowInsecureHTTP {
+		t.Fatal("the flag was not saved")
+	}
+	if cfg := pair(); cfg.AllowInsecureHTTP {
+		t.Error("an earlier --allow-insecure-http survived a pairing without it")
+	}
+}
+
 // The service does not inherit the shell, so pair refuses to install one
 // that could only reach the hub with this shell's opt-in to plain HTTP.
 func TestPairRefusesAServiceThatNeedsTheInsecureEnv(t *testing.T) {

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Block a commit message that would publish personal data or machine state:
+# the message is published with the commit.
+set -euo pipefail
+msg=$(mktemp)
+trap 'rm -f "$msg"' EXIT
+git stripspace --strip-comments < "$1" > "$msg"
+"$(cd "$(dirname "$0")/.." && pwd)/scripts/public-safety.sh" --message "$msg"

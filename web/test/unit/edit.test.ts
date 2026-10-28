@@ -296,6 +296,21 @@ test("tags: the form shows them without human and sends the whole list when it c
   assert.equal(diffEdit(item(), { ...draftOf(item()), tags: "human" }, now), null);
 });
 
+test("tags: a save that leaves the field alone keeps a stored tag that starts with @", () => {
+  const it = item({ labels: ["@home"] });
+  const d = draftOf(it);
+  assert.deepEqual(diffEdit(it, { ...d, title: "Water the ferns" }, now), { title: "Water the ferns" });
+  assert.equal(editError(it, { ...d, title: "Water the ferns" }, now), "");
+  assert.deepEqual(diffEdit(it, { ...d, tags: "@home garden" }, now), { labels: ["home", "garden"] });
+});
+
+test("the length limits count characters as the hub does, not UTF-16 units", () => {
+  const it = item();
+  assert.equal(editError(it, { ...draftOf(it), title: "🌱".repeat(1000) }, now), "");
+  assert.equal(editError(it, { ...draftOf(it), description: "🌱".repeat(10000) }, now), "");
+  assert.match(editError(it, { ...draftOf(it), title: "🌱".repeat(1001) }, now), /1000/);
+});
+
 test("tags: the hub's rules refuse the form before it sends", () => {
   const it = item();
   assert.equal(editError(it, { ...draftOf(it), tags: "a".repeat(51) }, now), `The tag "${"a".repeat(51)}" is longer than 50 characters.`);

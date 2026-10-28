@@ -47,7 +47,7 @@ else
 fi
 
 step "public safety"
-shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit .githooks/pre-push
+shellcheck scripts/*.sh tests/*.sh .githooks/pre-commit .githooks/commit-msg .githooks/pre-push
 bash tests/public-safety.test.sh
 scripts/public-safety.sh
 

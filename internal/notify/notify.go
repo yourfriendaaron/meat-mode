@@ -14,7 +14,8 @@ type Message struct {
 	URL   string // opened when the notification is tapped
 	Tag   string // same tag replaces an earlier notification
 	// Actions are the notification's buttons, and Key the item they act on;
-	// see docs/api.md, Agent push. A reminder has none.
+	// see docs/api.md, Agent push. An agent notification also has reply,
+	// open and retry buttons; a reminder gets Done and Snooze.
 	Actions []Action
 	Key     string
 	Channel string // ChannelReminders, ChannelAgents or ChannelTest
@@ -39,7 +40,7 @@ const (
 
 // Action is one button on a notification.
 type Action struct {
-	Action string `json:"action"` // ActionReply, ActionOpen or ActionRetry
+	Action string `json:"action"` // ActionReply, ActionOpen, ActionRetry, ActionDone or ActionSnooze
 	Title  string `json:"title"`
 	// URL is the page a reply or open button shows, for ntfy's view
 	// actions. Web Push leaves it to the service worker.

@@ -361,6 +361,12 @@ func (r *AgentRunner) Ask(req askRequest) {
 	if r.gone || agentOf(req.Repo.Tracker) == nil {
 		return
 	}
+	// The id names the run's worktree, log folder and branch, so it must be
+	// one path segment; the hub never holds any other.
+	if !api.ValidBeadID(req.BeadID) {
+		r.log().Warn("agent run refused: the task id cannot be a folder name", "repo", req.Repo.Name, "bead", req.BeadID)
+		return
+	}
 	if req.Author != "" {
 		r.authors[req.Author] = true
 	}

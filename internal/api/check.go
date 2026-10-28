@@ -122,8 +122,8 @@ func CheckRepos(repos []Repo) ([]Repo, error) {
 }
 
 // CheckItems validates the item set of PUT /bridge/v1/items and cleans it
-// in place: hub-only fields cleared, text truncated to the limits, and nil
-// comments made empty. The repo it names is checked by ValidRepoName, and
+// in place: hub-only and personal-only fields cleared, text truncated to the
+// limits, and nil comments made empty. The repo it names is checked by ValidRepoName, and
 // against the bridge's repo list by the hub.
 func CheckItems(items []Item) error {
 	seen := map[string]bool{}
@@ -141,6 +141,7 @@ func CheckItems(items []Item) error {
 		seen[it.ID] = true
 		it.Key, it.Bridge, it.Repo = "", "", ""
 		it.Pending, it.SeenAt, it.Error, it.FirstSeen, it.Run = false, nil, "", time.Time{}, nil
+		it.Repeat, it.RemindBefore = nil, nil
 		if it.Parent != "" && (!ValidSegment(it.Parent) || it.Parent == it.ID) {
 			return Invalidf("item %q has a parent %q that is not valid", it.ID, it.Parent)
 		}

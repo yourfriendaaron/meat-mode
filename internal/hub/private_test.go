@@ -207,6 +207,21 @@ func TestNetGuardLogsOncePerKindPerMinute(t *testing.T) {
 	}
 }
 
+// A calendar feed's address is its only credential, so a refusal's log line
+// must not keep the secret part of its path.
+func TestRefusalLogHidesTheCalendarSecret(t *testing.T) {
+	s := guardServer(t, Config{PublicURL: "https://meat-mode.example.com"})
+	var buf bytes.Buffer
+	s.guard.net.log = slog.New(slog.NewTextHandler(&buf, nil))
+	netReq(s, "/calendar/feed-secret.ics", "127.0.0.1:41000", hdr("X-Forwarded-For", "203.0.113.5"))
+	if got := buf.String(); strings.Contains(got, "feed-secret") || !strings.Contains(got, "/calendar/…") {
+		t.Fatalf("refusal log names the feed secret:\n%s", got)
+	}
+	if got := logPath("/api/state"); got != "/api/state" {
+		t.Errorf("logPath of an ordinary path = %q", got)
+	}
+}
+
 func TestConfigTrustedNetworks(t *testing.T) {
 	cfg := Config{PublicURL: "https://meat-mode.example.com", TrustedNetworks: "2001:db8:1::/48, 198.51.100.0/24"}
 	if err := cfg.Validate(); err != nil {

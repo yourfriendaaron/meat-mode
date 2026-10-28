@@ -87,7 +87,7 @@ import { trackKeyboard } from "./keyboard.ts";
 import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
 import { leaveSettings, sectionsHTML } from "./settings/registry.ts";
 import { duration, enter } from "./motion.ts";
-import { bannerHTML, initSetup, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
+import { bannerHTML, initSetup, leaveSetupView, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
 /** Completed and Deleted show the closed items the hub keeps for 7 days. Month is Calendar's grid, upcoming its list. */
 type View = ViewId | "month" | "completed" | "deleted" | "settings" | "setup";
@@ -2697,6 +2697,7 @@ function showToast(text: string, undo?: () => Promise<void>, tell?: string) {
 // ---------- navigation ----------
 
 function setView(v: View) {
+  if (S.view === "setup" && v !== "setup") leaveSetupView(ctx);
   S.view = v;
   S.listDelete = null;
   S.menuOpen = false;
@@ -3549,6 +3550,7 @@ function leaveShell() {
   S.qaOpen = false;
   S.syncOpen = false;
   leaveSettings();
+  leaveSetupView(ctx);
   S.loggingIn = false;
   $("#app").className = "app";
 }

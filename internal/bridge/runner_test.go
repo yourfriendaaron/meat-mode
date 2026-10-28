@@ -1047,3 +1047,24 @@ func TestFlushReportsOnlyListedBeads(t *testing.T) {
 		t.Errorf("reported %+v", got)
 	}
 }
+
+// An id that is not one path segment never names a worktree or a log folder,
+// whatever hands it to the runner.
+func TestAskRefusesAnIDThatIsNotOneSegment(t *testing.T) {
+	t.Parallel()
+	w, _, _ := agentWorld(t)
+	b := w.agentBridge(true)
+	w.tick(b)
+	repo := b.repos["garden"].Repo
+	for _, bad := range []string{"..", "../escape", "pending-1", ""} {
+		b.Runner.Ask(askRequest{ActionID: "ask-" + bad, Repo: repo, BeadID: bad, Text: "go", Author: author, Allowed: true})
+		if rec := runOf(b, bad); rec.Run != nil || len(rec.Asks) != 0 {
+			t.Errorf("Ask(%q) made a record: %+v", bad, rec)
+		}
+	}
+	for _, sub := range []string{"agents/escape", "escape"} {
+		if _, err := os.Stat(filepath.Join(w.state, sub)); !os.IsNotExist(err) {
+			t.Errorf("%s exists: %v", sub, err)
+		}
+	}
+}

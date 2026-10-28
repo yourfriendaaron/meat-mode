@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -68,7 +69,9 @@ var versionNumber = regexp.MustCompile(`\d+\.\d+\.\d+\S*`)
 
 // Check runs `agy --version`.
 func (a *Antigravity) Check(ctx context.Context) (string, error) {
-	out, err := exec.CommandContext(ctx, a.command[0], "--version").Output()
+	cmd := exec.CommandContext(ctx, a.command[0], "--version")
+	cmd.Env = harness.StripEnv(os.Environ())
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("agy --version: %w", err)
 	}

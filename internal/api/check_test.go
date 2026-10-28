@@ -43,12 +43,18 @@ func TestCheckRuns(t *testing.T) {
 }
 
 func TestCheckItems(t *testing.T) {
-	items := []Item{{ID: "gd-1", Key: "a/b/gd-1", Bridge: "a", Repo: "b", Pending: true, Title: strings.Repeat("t", ItemTitleLimit+1)}}
+	remind := 30
+	items := []Item{{
+		ID: "gd-1", Key: "a/b/gd-1", Bridge: "a", Repo: "b", Pending: true,
+		Repeat: &Repeat{Every: EveryDay}, RemindBefore: &remind,
+		Title: strings.Repeat("t", ItemTitleLimit+1),
+	}}
 	if err := CheckItems(items); err != nil {
 		t.Fatal(err)
 	}
 	it := items[0]
-	if it.Key != "" || it.Bridge != "" || it.Repo != "" || it.Pending || it.Comments == nil || !strings.HasSuffix(it.Title, "…") {
+	if it.Key != "" || it.Bridge != "" || it.Repo != "" || it.Pending || it.Repeat != nil || it.RemindBefore != nil ||
+		it.Comments == nil || !strings.HasSuffix(it.Title, "…") {
 		t.Fatalf("not cleaned: %+v", it)
 	}
 	for name, items := range map[string][]Item{

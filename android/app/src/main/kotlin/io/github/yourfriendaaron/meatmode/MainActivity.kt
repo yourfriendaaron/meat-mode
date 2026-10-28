@@ -268,14 +268,14 @@ class MainActivity : ComponentActivity() {
             return
         }
         val name = URLUtil.guessFileName(url, disposition, mimeType)
-        val request = DownloadManager.Request(url.toUri())
-            .setTitle(name)
-            .setMimeType(mimeType)
-            .addRequestHeader("User-Agent", userAgent)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
-        CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
         try {
+            val request = DownloadManager.Request(url.toUri())
+                .setTitle(name)
+                .setMimeType(mimeType)
+                .addRequestHeader("User-Agent", userAgent)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+            CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
             getSystemService(DownloadManager::class.java).enqueue(request)
             Toast.makeText(this, getString(R.string.download_started, name), Toast.LENGTH_SHORT).show()
         } catch (e: IllegalArgumentException) {

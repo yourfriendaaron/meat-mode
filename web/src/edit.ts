@@ -157,8 +157,9 @@ export function dueOutcome(item: Item, d: EditDraft): DueOutcome {
 export function editError(item: Item, d: EditDraft, now: Date): string {
   const title = d.title.trim();
   if (!title) return "Add a title.";
-  if (title.length > TITLE_MAX) return `Keep the title to ${TITLE_MAX} characters.`;
-  if (d.description.length > TEXT_MAX) return `Keep the details to ${TEXT_MAX} characters.`;
+  // Characters as the hub counts them: code points, not UTF-16 units.
+  if ([...title].length > TITLE_MAX) return `Keep the title to ${TITLE_MAX} characters.`;
+  if ([...d.description].length > TEXT_MAX) return `Keep the details to ${TEXT_MAX} characters.`;
   const due = dueOutcome(item, d);
   if (due.kind === "invalid") return "Pick a real date and time.";
   const rule = draftRule(d);
@@ -166,6 +167,7 @@ export function editError(item: Item, d: EditDraft, now: Date): string {
   if (rule && (due.kind === "clear" || (due.kind === "keep" && !due.at))) return "A repeat needs a date. Add one, or pick Never.";
   if (rule?.until && !fromYmd(rule.until)) return "End the repeat on a real date, or pick No end date.";
   if (rule?.until && (due.kind === "set" || due.kind === "keep") && due.at && rule.until < ymd(due.at)) return "End the repeat on or after its due date.";
+  if (!tagsTouched(item, d)) return "";
   const tags = cleanTags(typedTags(d.tags));
   if ("error" in tags) return tags.error;
   return "";
@@ -191,9 +193,20 @@ export function diffEdit(item: Item, d: EditDraft, now: Date): Edit | null {
     else set.remindBefore = d.remindBefore;
   }
   if (d.parent !== (item.parent ?? "")) set.parent = d.parent;
-  const tags = cleanTags(typedTags(d.tags));
-  if ("tags" in tags && !sameTags(tags.tags, shownTags(item))) set.labels = tags.tags;
+  if (tagsTouched(item, d)) {
+    const tags = cleanTags(typedTags(d.tags));
+    if ("tags" in tags && !sameTags(tags.tags, shownTags(item))) set.labels = tags.tags;
+  }
   return Object.keys(set).length ? set : null;
+}
+
+/**
+ * Whether the tags field holds other text than the form started with. Typed
+ * tags lose a leading "@", so reading back an untouched field would rename a
+ * stored tag such as "@home" on a save that never touched it.
+ */
+function tagsTouched(item: Item, d: EditDraft): boolean {
+  return d.tags !== shownTags(item).join(" ");
 }
 
 /** Applies an edit's `set` to a local copy, as the hub does. */

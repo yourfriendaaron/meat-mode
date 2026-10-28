@@ -80,16 +80,51 @@ expect clean "env example"      .env.example "HA_URL=http://ha.example.com:8123"
 expect clean "compose example" compose.example.yaml "services: {}"
 expect clean "gitignore names"  .gitignore "mise.local.toml"
 expect clean "plain code"       src/a.ts   "export const add = (a: number, b: number) => a + b"
+expect block "work email at a vendor domain" docs/x.md "Ask $u@anthro""pic.com"
+expect clean "vendor noreply"   docs/x.md  "Co-Authored-By: Claude <noreply@anthro""pic.com>"
+expect block "host in a file name"   "docs/nas.lo""cal/notes.md" "x"
+expect block "private pattern in a file name" "docs/zorblax-notes.md" "x" "zorblax"
+
+# Binary files: the scans cannot read them, so only images and the Gradle
+# wrapper may be one.
+binary() { # binary block|clean, name, file
+  local want=$1 name=$2 file=$3 d got
+  d=$(fresh)
+  mkdir -p "$d/$(dirname "$file")"
+  printf 'PK\0\0/%s/notes\n' "$h" > "$d/$file"
+  git -C "$d" add -f "$file"
+  if (cd "$d" && ./scripts/public-safety.sh >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $name (wanted $want, got $got)"; fi
+}
+binary block "archive"        backup/export.zip
+binary clean "image"          docs/images/a.png
+binary clean "gradle wrapper" android/gradle/wrapper/gradle-wrapper.jar
+
+# Commit and tag messages: --message scans a file of message text.
+message() { # message block|clean, name, text, [local patterns]
+  local want=$1 name=$2 d got
+  d=$(fresh)
+  printf '%s\n' "$3" > "$d/msg"
+  if [ -n "${4:-}" ]; then printf '%s\n' "$4" > "$d/.public-safety.local"; fi
+  if (cd "$d" && PUBLIC_SAFETY_LOCAL="$d/.public-safety.local" ./scripts/public-safety.sh --message msg >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: message $name (wanted $want, got $got)"; fi
+}
+message block "host"            "Deploy the fix on nas.lo""cal"
+message block "personal email"  "Thanks to $u.person@gm""ail.com"
+message block "private pattern" "Fix the bug Zorblax saw" "zorblax"
+message clean "plain"           "$(printf 'Water the plants on time\n\nCo-Authored-By: Claude <noreply@anthro""pic.com>')"
 
 # The pre-push hook: refs outside branches and tags, Dolt's branches, and
 # commits that track beads data or a Dolt remote.
 hook="$here/.githooks/pre-push"
-push() { # push block|clean, name, remote ref, [file, content]
+push() { # push block|clean, name, remote ref, [file, content, commit message]
   local want=$1 name=$2 ref=$3 d sha got
   d=$(mktemp -d)
   git -C "$d" init -q
   if [ -n "${4:-}" ]; then mkdir -p "$d/$(dirname "$4")"; printf '%s\n' "$5" > "$d/$4"; git -C "$d" add -f "$4"; fi
-  git -C "$d" -c user.name=Sam -c user.email=sam@example.com commit -q --allow-empty --no-verify -m x
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com commit -q --allow-empty --no-verify -m "${6:-x}"
   sha=$(git -C "$d" rev-parse HEAD)
   if (cd "$d" && printf 'refs/heads/main %s %s %s\n' "$sha" "$ref" 0000000000000000000000000000000000000000 | "$hook" origin https://example.com/x.git >/dev/null 2>&1); then got=clean; else got=block; fi
   rm -rf "$d"
@@ -101,6 +136,22 @@ push block "beads export"      refs/heads/main .beads/issues.jsonl '{"id":"x-1"}
 push block "Dolt remote"       refs/heads/main .beads/config.yaml "$(printf 'sync:\n    remote: "file:///srv/beads.git"')"
 push clean "branch"            refs/heads/main src/a.ts "export const x = 1"
 push clean "tag"               refs/tags/v1.0.0
+push block "host in a commit message" refs/heads/main src/a.ts "export const x = 1" "Deploy on nas.lo""cal"
+
+# An annotated tag's own message is published as the release notes.
+tagpush() { # tagpush block|clean, name, tag message
+  local want=$1 name=$2 d sha got
+  d=$(mktemp -d)
+  git -C "$d" init -q
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com commit -q --allow-empty --no-verify -m x
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com tag -a v1.0.0 -m "$3"
+  sha=$(git -C "$d" rev-parse v1.0.0)
+  if (cd "$d" && printf 'refs/tags/v1.0.0 %s refs/tags/v1.0.0 %s\n' "$sha" 0000000000000000000000000000000000000000 | "$hook" origin https://example.com/x.git >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: tag push $name (wanted $want, got $got)"; fi
+}
+tagpush block "host in a tag message" "Release for nas.lo""cal"
+tagpush clean "plain tag message"     "Snooze from the lock screen"
 
 # Two commits where the first adds a file the second removes: the tip is
 # clean, so only checking the commits being pushed, not just the tip,

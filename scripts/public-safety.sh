@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Refuse to publish personal data, secrets or machine state.
-# Scans the Git index (what the next commit will contain; in CI, the checkout).
+# Scans the Git index (what the next commit will contain; in CI, the checkout):
+# file contents and file names. A binary file is searched by nobody, so only
+# images and the Gradle wrapper may be one.
+# --message FILE scans a commit or tag message instead, which is published
+# with the commit; the commit-msg and pre-push hooks pass it.
 # The beads issues are private and never published (see AGENTS.md), so they
 # are not scanned; the index is checked for anything that would publish them.
 # Exit 0 when clean, 1 with a report when something is found.
@@ -9,6 +13,11 @@
 # per line; lines starting with # are comments. PUBLIC_SAFETY_LOCAL overrides
 # the path.
 set -euo pipefail
+
+message=""
+if [ "${1:-}" = "--message" ]; then
+  message=$(realpath "$2")
+fi
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
@@ -23,10 +32,18 @@ report() { # label, grep output
   printf '\n%s\n%s\n' "$1" "$2"
 }
 
-search() { # [-i] regex: matches in the index
+# Each match is a "where:line:content" line: a file's path, "file names"
+# for a match in a tracked path, or "message".
+search() { # [-i] regex: matches in the index, or in the message
   local flags=(-n -E)
   if [ "$1" = "-i" ]; then flags+=(-i); shift; fi
+  if [ -n "$message" ]; then
+    grep -a "${flags[@]}" -e "$1" -- "$message" | sed 's/^/message:/' || true
+    return
+  fi
   git grep --cached -I "${flags[@]}" -e "$1" -- . "${exclude[@]}" || true
+  git -c core.quotepath=off ls-files --cached -- . "${exclude[@]}" |
+    grep "${flags[@]}" -e "$1" | sed 's/^/file names:/' || true
 }
 
 # A "path:line:content" line from search stays only when its content
@@ -66,11 +83,18 @@ scan "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([^A-Za-z0-9._-]|$)' '^(env|m
 scan "MAC addresses:" '(^|[^0-9A-Fa-f:])([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}([^0-9A-Fa-f:]|$)'
 scan "Email addresses outside example and noreply domains:" \
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
-  '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com|anthropic\.com)'
+  '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com)|^noreply@anthropic\.com$'
 
 # Files that must never be tracked, whatever they contain.
+[ -n "$message" ] || {
 bad_files=$(git ls-files --cached | grep -E '(^|/)(\.env(\..+)?|\.envrc|mise\.local\.toml|compose[^/]*\.ya?ml|docker-compose[^/]*\.ya?ml|\.public-safety\.local|id_rsa|id_ecdsa|id_ed25519|\.netrc|\.npmrc|\.htpasswd|credentials\.json|\.beads-credential-key)$|(^|/)\.dolt/|(^|/)(keystore\.properties|local\.properties)$|\.(db|sqlite3?|pem|key|p12|pfx|jks|keystore)$|\.(db|sqlite3?)-(wal|shm|journal)$' | grep -v -E '(^|/)(\.env\.example|compose\.example\.yaml)$' || true)
 report "Files that must never be tracked:" "$bad_files"
+
+# The scans above skip binary files, and an archive or a document can hold
+# text. Images are pixels (check them by eye); anything else goes in as text.
+binary=$(git -c core.quotepath=off ls-files --cached --eol | awk -F '\t' '$1 ~ /^i\/-text/ { print $2 }' |
+  grep -v -i -E '\.(png|jpe?g|gif|webp|ico|woff2?)$' | grep -v -x -F 'android/gradle/wrapper/gradle-wrapper.jar' || true)
+report "Binary files the scans cannot read (track text instead):" "$binary"
 
 # The beads issues stay private: only bd's four setup files are tracked, and
 # the config never names a Dolt remote, which bd writes there and commits on
@@ -81,6 +105,7 @@ if git cat-file -e :.beads/config.yaml 2>/dev/null; then
   remote=$(git show :.beads/config.yaml | grep -n -E '^[[:space:]]*(sync\.)?remote:' | sed 's/^/.beads\/config.yaml:/' || true)
   report "A Dolt remote in .beads/config.yaml (keep it in the Dolt database only):" "$remote"
 fi
+}
 
 # The operator's own names, hosts and identifiers.
 local_file=${PUBLIC_SAFETY_LOCAL:-$root/.public-safety.local}

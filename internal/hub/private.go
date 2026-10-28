@@ -133,7 +133,16 @@ func (n *netGuard) logRefusal(kind, why string, r *http.Request) {
 	n.logged[kind] = now
 	n.mu.Unlock()
 	n.log.Warn("refused a request from outside the private network: "+why,
-		"kind", kind, "method", r.Method, "path", r.URL.Path, "peer", r.RemoteAddr)
+		"kind", kind, "method", r.Method, "path", logPath(r.URL.Path), "peer", r.RemoteAddr)
+}
+
+// logPath is a request path for the log. A calendar feed's file name is its
+// only credential, so the secret part of that path is replaced.
+func logPath(path string) string {
+	if rest, ok := strings.CutPrefix(path, "/calendar/"); ok && rest != "" {
+		return "/calendar/…"
+	}
+	return path
 }
 
 // quoteShort quotes s for a message, cut to 64 bytes, since it comes from
