@@ -230,6 +230,10 @@ test("repo labels are folder names, with the path where they repeat", () => {
   assert.equal(repoDetail(repos[1], repos), "work/garden");
   assert.equal(repoDetail(repos[0], repos), "projects/garden on laptop");
   assert.equal(repoDetail(repos[2], repos), "projects/garden on desk");
+  // A project named like a machine's repo is called a project, not "on hub".
+  const withProject: Repo[] = [...repos, { bridge: "hub", name: "projects/kitchen", personal: false, optedIn: true }];
+  assert.equal(repoDetail(withProject[6], withProject), "projects/kitchen project");
+  assert.equal(repoDetail(withProject[3], withProject), "projects/kitchen on laptop");
   assert.deepEqual(
     visibleRepos(repos).map((r) => `${r.bridge}:${r.name}`),
     ["hub:personal", "hub:projects/attic", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],

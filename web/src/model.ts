@@ -69,7 +69,8 @@ export function repoDetail(r: Repo, all: Repo[]): string {
   if (same.length < 2) return "";
   const parts: string[] = [];
   if (r.name !== label) parts.push(r.name);
-  if (same.some((x) => x.name === r.name && x.bridge !== r.bridge)) parts.push(`on ${r.bridge}`);
+  // A project is the hub's own list, not a machine's repo, so it says so instead of "on hub".
+  if (same.some((x) => x.name === r.name && x.bridge !== r.bridge)) parts.push(isPersonal(r) && !r.personal ? "project" : `on ${r.bridge}`);
   return parts.join(" ");
 }
 
