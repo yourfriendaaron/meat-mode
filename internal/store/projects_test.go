@@ -159,6 +159,43 @@ func TestNoProjectBesideATrackerRepo(t *testing.T) {
 	}
 }
 
+// A repo whose syncing is off still has its tracker, so it still blocks a
+// project of its name, and the refusal says syncing is off.
+func TestNoProjectBesideASwitchedOffRepo(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	_, err = s.CreateBridge("desk")
+	must(t, err)
+	must(t, s.ReplaceRepos("desk", []api.Repo{{Name: garden, Tracker: "beads"}}))
+	_, _, err = s.AddPersonal(api.PersonalTodo{Title: "Pick a colour"}, "laptop", garden)
+	if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "on desk") || !strings.Contains(err.Error(), "syncing is off") {
+		t.Errorf("add beside a switched-off repo: %v", err)
+	}
+	must(t, s.ReplaceRepos("desk", []api.Repo{{Name: garden, OptedIn: true, Tracker: "beads"}}))
+	_, _, err = s.AddPersonal(api.PersonalTodo{Title: "Pick a colour"}, "laptop", garden)
+	if !errors.Is(err, ErrInvalid) || strings.Contains(err.Error(), "syncing is off") || !strings.Contains(err.Error(), "own tracker") {
+		t.Errorf("add beside a synced repo: %v", err)
+	}
+}
+
+// A revoked machine's repos no longer block a project of the same name.
+func TestRevokedMachineDoesNotBlockAProject(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	_, err = s.CreateBridge("desk")
+	must(t, err)
+	must(t, s.ReplaceRepos("desk", []api.Repo{{Name: garden, OptedIn: true, Tracker: "beads"}}))
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Pick a colour"}, "laptop", garden); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("add beside a paired machine's repo: %v", err)
+	}
+	must(t, s.RevokeBridge("desk"))
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Pick a colour"}, "laptop", garden); err != nil {
+		t.Errorf("add once the machine is revoked: %v", err)
+	}
+}
+
 func TestEmptyProjectLeavesState(t *testing.T) {
 	s, c := open(t)
 	_, err := s.CreateBridge("laptop")

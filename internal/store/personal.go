@@ -462,14 +462,21 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 		return "", false, invalidf("note is longer than %d characters", MaxNoteLen)
 	}
 	if repo != PersonalRepo {
-		// A repo a machine reports has its own tracker, where its tasks
-		// belong; a project of the same name would be a second list beside
-		// it. A retry of an add already made still answers.
+		// A repo a paired machine reports has its own tracker, where its
+		// tasks belong, synced or not; a project of the same name would be
+		// a second list beside it. A retry of an add already made still
+		// answers.
 		var machine string
-		err := s.db.QueryRow(`SELECT bridge FROM repos WHERE name = ? AND bridge != ? ORDER BY bridge LIMIT 1`, repo, HubBridge).Scan(&machine)
+		var optedIn bool
+		err := s.db.QueryRow(`SELECT r.bridge, r.opted_in FROM repos r
+			JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
+			WHERE r.name = ? AND r.bridge != ? ORDER BY r.opted_in DESC, r.bridge LIMIT 1`, repo, HubBridge).Scan(&machine, &optedIn)
 		switch {
 		case err == nil:
 			if _, err := s.Action(t.ID); errors.Is(err, ErrNotFound) {
+				if !optedIn {
+					return "", false, invalidf("%s on %s has its own tracker, and syncing is off for it in Meat Mode; raise the task there and ask the user to switch syncing on", repo, machine)
+				}
 				return "", false, invalidf("%s on %s has its own tracker; raise the task there instead of in a project", repo, machine)
 			} else if err != nil {
 				return "", false, err
