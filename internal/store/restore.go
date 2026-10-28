@@ -38,6 +38,20 @@ var exportUpgrades = []func(json.RawMessage) (json.RawMessage, error){
 	upgradeExportV1,
 	upgradeExportV2,
 	upgradeExportV3,
+	upgradeExportV4,
+}
+
+// upgradeExportV4 turns version 4 into version 5, which added deleted
+// projects: hiddenProjects, and the project-delete and project-restore
+// actions with their items. A version 4 file has none, so only its version
+// changes.
+func upgradeExportV4(raw json.RawMessage) (json.RawMessage, error) {
+	var file map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return nil, err
+	}
+	file["version"] = json.RawMessage("5")
+	return json.Marshal(file)
 }
 
 // upgradeExportV3 turns version 3 into version 4, which added the machine
@@ -415,6 +429,13 @@ func (s *Store) load(ex api.Export) (api.RestoreResult, error) {
 		}
 	}
 
+	for _, name := range ex.HiddenProjects {
+		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, hidden) VALUES (?, ?, 0, 1, 1)
+			ON CONFLICT (bridge, name) DO UPDATE SET hidden = 1`, HubBridge, name); err != nil {
+			return res, err
+		}
+	}
+
 	for _, o := range ex.Origins {
 		if _, err := tx.Exec(`INSERT INTO personal_origins (bridge, bead_id, item_id) VALUES (?, ?, ?)`,
 			o.Machine, o.BeadID, o.ItemID); err != nil {
@@ -606,6 +627,17 @@ func checkExport(ex *api.Export) error {
 		if !ValidBridgeName(m) || onHub(m) {
 			return invalidf("machine %q is not a valid machine name", m)
 		}
+	}
+
+	hidden := map[string]bool{}
+	for _, name := range ex.HiddenProjects {
+		if repo, err := ProjectRepo(name); err != nil || repo == PersonalRepo {
+			return invalidf("hidden project %q is not a valid project name", name)
+		}
+		if hidden[name] {
+			return invalidf("hidden project %s is listed twice", name)
+		}
+		hidden[name] = true
 	}
 	return nil
 }

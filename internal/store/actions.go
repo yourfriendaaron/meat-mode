@@ -206,6 +206,14 @@ func (s *Store) appendAction(na api.NewAction, author, machine string, after fun
 			return a, false, err
 		}
 		p = api.Payload{Comment: &c}
+	case api.KindProjectDelete:
+		p = api.Payload{}
+	case api.KindProjectRestore:
+		ids, err := cleanProjectItems(p.Items)
+		if err != nil {
+			return a, false, err
+		}
+		p = api.Payload{Items: ids}
 	case "":
 		return a, false, invalidf("action needs a kind")
 	default:
@@ -218,6 +226,11 @@ func (s *Store) appendAction(na api.NewAction, author, machine string, after fun
 			return a, false, err
 		}
 		a.Bridge = na.Bridge
+	} else if isProjectKind(na.Kind) {
+		if err := checkProjectTarget(tx, na.Kind, na.Bridge, na.Repo); err != nil {
+			return a, false, err
+		}
+		a.Bridge, a.Repo = na.Bridge, na.Repo
 	} else if na.Kind == api.KindAdd || na.Kind == api.KindSync || na.Kind == api.KindAgents {
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
 			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
@@ -424,7 +437,8 @@ func (s *Store) RecentActions(limit int) ([]api.Action, error) {
 }
 
 // ItemHistory returns up to limit actions on one item, newest first: every
-// action on it, whatever its status, and the adds of its sub-tasks. The hub
+// action on it, whatever its status, the adds of its sub-tasks, and the
+// deletes and restores of its project that closed or reopened it. The hub
 // keeps the whole action log, so it reaches back to the item's add. An item
 // the hub does not hold is notFound.
 func (s *Store) ItemHistory(key string, limit int) ([]api.Action, error) {
@@ -443,7 +457,11 @@ func (s *Store) ItemHistory(key string, limit int) ([]api.Action, error) {
 		UNION ALL
 		SELECT `+actionCols+` FROM actions WHERE bridge = ? AND repo = ? AND kind = ? AND bead_id <> ?
 			AND json_extract(payload, '$.parent') = ?
-		ORDER BY seq DESC LIMIT ?`, b, r, id, b, r, api.KindAdd, id, id, limit)
+		UNION ALL
+		SELECT `+actionCols+` FROM actions WHERE bridge = ? AND repo = ? AND kind IN (?, ?)
+			AND EXISTS (SELECT 1 FROM json_each(payload, '$.items') WHERE value = ?)
+		ORDER BY seq DESC LIMIT ?`, b, r, id, b, r, api.KindAdd, id, id,
+		b, r, api.KindProjectDelete, api.KindProjectRestore, id, limit)
 }
 
 // ReportResult records a bridge's result for one of its actions. A result

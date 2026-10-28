@@ -160,7 +160,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 15
+const schemaVersion = 16
 
 var migrations = []string{
 	// 1: initial schema.
@@ -352,6 +352,8 @@ CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id
 	``,
 	// 15: actions.machine, by goMigrations.
 	``,
+	// 16: repos.hidden, by goMigrations.
+	``,
 }
 
 // goMigrations are the schema steps written in Go, run in the same
@@ -361,6 +363,20 @@ CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id
 var goMigrations = map[int]func(*Store, *sql.Tx) error{
 	14: (*Store).migrateChecklists,
 	15: (*Store).migrateActionMachine,
+	16: (*Store).migrateProjectHidden,
+}
+
+// migrateProjectHidden adds repos.hidden: 1 for a project deleted in the
+// app, which State and the projects list leave out until an add or a
+// reopen in it, or the delete's Undo. It is Go so that the tests of older
+// migrations, which step user_version back, can run it again.
+func (s *Store) migrateProjectHidden(tx *sql.Tx) error {
+	var n int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('repos') WHERE name = 'hidden'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := tx.Exec(`ALTER TABLE repos ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`)
+	return err
 }
 
 // migrateActionMachine adds actions.machine: the machine whose token posted

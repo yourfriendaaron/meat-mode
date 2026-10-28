@@ -16,7 +16,7 @@ const (
 // newer one. docs/api.md, Export and restore, describes the format.
 const (
 	ExportFormat  = "meat-mode-export"
-	ExportVersion = 4
+	ExportVersion = 5
 )
 
 // Export is the whole of what a hub keeps that no other copy holds: the
@@ -36,6 +36,9 @@ type Export struct {
 	// Machines names the machines paired when the export was made, revoked
 	// ones left out, so a restore can say which to pair again.
 	Machines []string `json:"machines"`
+	// HiddenProjects names the projects deleted in the app, by name, so a
+	// restored hub keeps them out of the app as this one did.
+	HiddenProjects []string `json:"hiddenProjects"`
 }
 
 // ExportSettings are the settings the app keeps, as GET /api/settings

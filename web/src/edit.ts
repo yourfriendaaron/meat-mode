@@ -226,7 +226,7 @@ export function restoreComment(comments: Comment[] | null, c: Comment): Comment[
 }
 
 /**
- * The action that undoes an applied edit, note-edit or note-delete, or a done
+ * The action that undoes an applied edit, note-edit, note-delete or project-delete, or a done
  * that moved a repeating item on, from what the hub filled in: null when the
  * reply lacks it. `key` is the item's key.
  */
@@ -240,6 +240,8 @@ export function undoOf(applied: Action, key: string, id: string): NewAction | nu
       return p.comment ? { id, kind: "note-edit", key, payload: { commentId: p.comment.id, text: p.comment.text } } : null;
     case "note-delete":
       return p.comment ? { id, kind: "note-restore", key, payload: { comment: p.comment } } : null;
+    case "project-delete":
+      return { id, kind: "project-restore", bridge: applied.bridge, repo: applied.repo, payload: { items: p.items ?? [] } };
     default:
       return null;
   }

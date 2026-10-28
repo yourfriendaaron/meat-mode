@@ -130,7 +130,17 @@ func apply(it *api.Item, a api.Action, commentID string) {
 // items it created.
 func (s *Store) applyHub(tx *sql.Tx, a *api.Action) ([]string, error) {
 	var created []string
-	if a.Kind == api.KindAdd {
+	if a.Kind == api.KindAdd || a.Kind == api.KindReopen {
+		// An add or a reopen in a deleted project shows it again.
+		if err := showProject(tx, a.Repo); err != nil {
+			return nil, err
+		}
+	}
+	if isProjectKind(a.Kind) {
+		if err := applyProject(tx, a); err != nil {
+			return nil, err
+		}
+	} else if a.Kind == api.KindAdd {
 		id, err := freeHubID(tx, a.Repo, fmt.Sprintf("mm-%d", a.Seq))
 		if err != nil {
 			return nil, err

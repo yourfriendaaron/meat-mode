@@ -74,12 +74,14 @@ func (s *Store) ListPersonal(project string, f api.PersonalFilter) ([]api.Item, 
 	return out, joinAttachments(s.db, out)
 }
 
-// Projects returns the projects the app shows, those with an item open or
-// closed in the last 7 days, by name.
+// Projects returns the projects the app shows, those not deleted with an
+// item open or closed in the last 7 days, by name.
 func (s *Store) Projects() ([]api.Project, error) {
 	now := s.now()
 	open := map[string]int{}
-	if err := s.eachRow(`SELECT repo, data, first_seen, seen_at FROM items WHERE bridge = ? AND repo != ?`,
+	if err := s.eachRow(`SELECT i.repo, i.data, i.first_seen, i.seen_at FROM items i
+		JOIN repos r ON r.bridge = i.bridge AND r.name = i.repo AND r.hidden = 0
+		WHERE i.bridge = ? AND i.repo != ?`,
 		[]any{HubBridge, PersonalRepo}, func(rows *sql.Rows) error {
 			var repo, data, first string
 			var seen sql.NullString

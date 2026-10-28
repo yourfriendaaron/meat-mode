@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
@@ -27,6 +29,12 @@ func TestExportRestoresIntoAFreshHub(t *testing.T) {
 	_, _, err = s.AddPersonal(api.PersonalTodo{Title: "Approve the footer text", Note: "The short one."}, "laptop", garden)
 	must(t, err)
 	c.tick()
+	// A deleted project stays deleted.
+	_, _, err = s.AddPersonal(api.PersonalTodo{Title: "Paint the shed"}, "laptop", "projects/shed")
+	must(t, err)
+	_, _, err = s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindProjectDelete, Bridge: HubBridge, Repo: "projects/shed"}, "alex-app")
+	must(t, err)
+	c.tick()
 	must(t, s.MarkSeen(key))
 	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindNote, Key: key, Payload: api.Payload{Text: "Use the rain water"}}, "alex-app")
 	must(t, err)
@@ -41,6 +49,9 @@ func TestExportRestoresIntoAFreshHub(t *testing.T) {
 
 	first, err := s.Export()
 	must(t, err)
+	if !slices.Equal(first.HiddenProjects, []string{"projects/shed"}) {
+		t.Fatalf("hidden projects %v", first.HiddenProjects)
+	}
 	file, err := json.Marshal(first)
 	must(t, err)
 

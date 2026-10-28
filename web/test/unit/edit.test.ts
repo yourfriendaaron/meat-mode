@@ -145,6 +145,17 @@ test("undo of each edit kind comes from what the hub filled in", () => {
   assert.equal(undoOf(action("done", {}), key, "u5"), null);
 });
 
+test("undo of a project's delete brings back the items it closed", () => {
+  const del = { ...action("project-delete", { items: ["pe-1", "pe-2"] }), repo: "projects/garden", beadId: "" };
+  assert.deepEqual(undoOf(del, "", "u7"), {
+    id: "u7",
+    kind: "project-restore",
+    bridge: "hub",
+    repo: "projects/garden",
+    payload: { items: ["pe-1", "pe-2"] },
+  });
+});
+
 test("undo of a done that moved a repeating item on is an edit back", () => {
   const key = "hub/personal/pe-1";
   const was = { due: due, subtasksDone: ["pe-1.1"] };

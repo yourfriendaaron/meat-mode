@@ -320,6 +320,9 @@ const (
 	KindNoteEdit    = "note-edit"
 	KindNoteDelete  = "note-delete"
 	KindNoteRestore = "note-restore" // Undo of note-delete
+	// Projects only.
+	KindProjectDelete  = "project-delete"  // delete a project and its open items
+	KindProjectRestore = "project-restore" // Undo of project-delete
 )
 
 // Action statuses.
@@ -353,6 +356,10 @@ type Payload struct {
 	// it was; note-restore takes a removed Comment back.
 	CommentID string   `json:"commentId,omitempty"`
 	Comment   *Comment `json:"comment,omitempty"`
+	// Items are item ids of one project: on project-delete the hub fills
+	// in those it deleted; project-restore takes those to bring back, and
+	// the hub keeps those it did.
+	Items []string `json:"items,omitempty"`
 }
 
 // NewAction is what the app posts.
@@ -360,8 +367,8 @@ type NewAction struct {
 	ID      string  `json:"id"`
 	Kind    string  `json:"kind"`
 	Key     string  `json:"key,omitempty"`
-	Bridge  string  `json:"bridge,omitempty"` // add, sync, agents and limits only
-	Repo    string  `json:"repo,omitempty"`   // add, sync and agents only
+	Bridge  string  `json:"bridge,omitempty"` // add, sync, agents, limits, project-delete and project-restore only
+	Repo    string  `json:"repo,omitempty"`   // add, sync, agents, project-delete and project-restore only
 	Payload Payload `json:"payload"`
 }
 

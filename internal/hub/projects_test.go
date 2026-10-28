@@ -113,3 +113,33 @@ func TestAgentAddsSubtaskOverHTTP(t *testing.T) {
 	add(h.token, "", api.PersonalTodo{Title: "Find the passports", Parent: trip}, http.StatusBadRequest)
 	add(h.token, "projects/garden", api.PersonalTodo{Title: "Water the beans", Parent: garden}, http.StatusCreated)
 }
+
+// The app deletes a project and its open to-dos in one action, which
+// leaves the projects list at once; an agent cannot post one, and the Undo
+// brings it back.
+func TestDeleteProjectOverHTTP(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	const q = "?project=projects/garden"
+	w := h.do("POST", "/bridge/v1/personal"+q, api.PersonalTodo{Title: "Approve the footer text"}, h.token)
+	h.expect(w, http.StatusCreated)
+	reply := decode[api.PersonalTodoReply](t, w)
+
+	h.expect(h.do("POST", "/bridge/v1/personal/"+reply.ID+"/actions"+q, api.PersonalChange{Kind: api.KindProjectDelete}, h.token), http.StatusBadRequest)
+	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: aid1, Kind: api.KindProjectDelete, Bridge: store.HubBridge, Repo: store.PersonalRepo}, ""), http.StatusBadRequest)
+	w = h.do("POST", "/api/actions", api.NewAction{ID: aid2, Kind: api.KindProjectDelete, Bridge: store.HubBridge, Repo: "projects/garden"}, "")
+	h.expect(w, http.StatusCreated)
+	del := decode[api.Action](t, w)
+	if !slices.Equal(del.Payload.Items, []string{reply.ID}) {
+		t.Fatalf("delete %+v", del)
+	}
+	if ps := decode[[]api.Project](t, h.do("GET", "/bridge/v1/projects", nil, h.token)); len(ps) != 0 {
+		t.Errorf("projects after the delete %+v", ps)
+	}
+
+	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: "6f1e2d3c-4b5a-4c6d-8e7f-90a1b2c3d4e3", Kind: api.KindProjectRestore,
+		Bridge: store.HubBridge, Repo: "projects/garden", Payload: api.Payload{Items: del.Payload.Items}}, ""), http.StatusCreated)
+	if ps := decode[[]api.Project](t, h.do("GET", "/bridge/v1/projects", nil, h.token)); len(ps) != 1 || ps[0].Open != 1 {
+		t.Errorf("projects after the Undo %+v", ps)
+	}
+}

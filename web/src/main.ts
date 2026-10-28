@@ -35,6 +35,8 @@ import {
   tomorrowMorning,
   visibleRepos,
   appAuthor,
+  canDeleteList,
+  deleteListQuestion,
   repoCan,
   type Group,
   type ViewId,
@@ -149,6 +151,8 @@ const S = {
    * from every list in place of the view, and picking a view ends it.
    */
   tag: null as string | null,
+  /** The project whose Delete list asks its question, by repo key. */
+  listDelete: null as string | null,
   /** Select mode: rows pick instead of open, and the bulk bar acts on the picks. */
   selecting: false,
   picked: new Set<string>(),
@@ -427,7 +431,7 @@ function renderSync() {
       list
         .map((a) => {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
-          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : a.kind === "limits" ? a.bridge : (item?.title ?? a.beadId ?? "");
+          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : a.kind === "project-delete" || a.kind === "project-restore" ? a.repo : a.kind === "limits" ? a.bridge : (item?.title ?? a.beadId ?? "");
           const state =
             a.status === "applied" ? (isPersonal(a) ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           // An agent's change names the agent and its machine.
@@ -474,6 +478,10 @@ function actionLabel(a: Action): string {
       return "Delete note on";
     case "note-restore":
       return "Restore note on";
+    case "project-delete":
+      return "Delete list";
+    case "project-restore":
+      return "Restore list";
   }
 }
 
@@ -660,6 +668,7 @@ function renderMain() {
   settings.hidden = S.view !== "settings";
   wizard.hidden = S.view !== "setup";
   renderTagBar();
+  renderListBar();
   if (S.view === "settings") {
     renderSettings();
     return;
@@ -1030,6 +1039,68 @@ function renderTagBar() {
       ? `<span class="tagbar-chip">${ICON.tag}<span>Tag: <b>${esc(S.tag!)}</b></span><button type="button" class="tagbar-clear" data-act="tag-clear" aria-label="${esc(`Clear the tag filter ${S.tag!}`)}" title="Clear">${ICON.close}</button></span>`
       : "",
   );
+}
+
+/** The project on screen, which the app can delete; undefined on any other view, search or tag filter. */
+function shownProject(): Repo | undefined {
+  if (!S.view.startsWith("list:") || searching() || filtering()) return undefined;
+  const r = repos().find((x) => `list:${repoKey(x)}` === S.view);
+  return canDeleteList(r) ? r : undefined;
+}
+
+/** A project's Delete list, and the question it asks first; hidden on any other view and in select mode. */
+function renderListBar() {
+  const bar = $("#listbar");
+  const r = S.selecting ? undefined : shownProject();
+  bar.hidden = !r;
+  if (!r) {
+    S.listDelete = null;
+    setHTML(bar, "");
+    return;
+  }
+  const key = repoKey(r);
+  const open = items().filter((i) => repoKey(i) === key && isOpen(i)).length;
+  setHTML(
+    bar,
+    S.listDelete === key
+      ? `<p class="confirm small" id="listbar-q">${esc(deleteListQuestion(listLabel(r), open))}</p><div class="btn-row"><button class="btn btn-small btn-danger" data-act="list-delete-confirm" aria-describedby="listbar-q">${ICON.trash}Delete list</button><button class="btn btn-small" data-act="list-delete-cancel">Cancel</button></div>`
+      : `<button class="btn btn-small btn-ghost" data-act="list-delete">${ICON.trash}Delete list</button>`,
+  );
+}
+
+/** Asks before deleting the project on screen, or stops asking. */
+function askListDelete(on: boolean) {
+  const r = shownProject();
+  S.listDelete = on && r ? repoKey(r) : null;
+  render();
+  $<HTMLElement>(`#listbar [data-act="${on ? "list-delete-confirm" : "list-delete"}"]`)?.focus({ preventScroll: true });
+}
+
+/**
+ * Deletes the project on screen in one action: its open to-dos go to
+ * Deleted and the list leaves the app. Undo brings back the to-dos it
+ * deleted and the list, and returns to it.
+ */
+async function doDeleteList() {
+  const r = shownProject();
+  S.listDelete = null;
+  if (!r) return;
+  const view = S.view;
+  const label = listLabel(r);
+  const h = await actions.perform([{ id: newId(), kind: "project-delete", bridge: r.bridge, repo: r.name, payload: {} }], {
+    onPatched: () => setView("today"),
+  });
+  const undo = undoing(h);
+  if (h.posted.length)
+    showToast(
+      `Deleted list: ${label}`,
+      undo &&
+        (async () => {
+          await undo();
+          if (S.view === "today") setView(view);
+        }),
+    );
+  await refresh();
 }
 
 /** Filters the list to the items with `tag`, from every list; null ends the filter. */
@@ -2627,6 +2698,7 @@ function showToast(text: string, undo?: () => Promise<void>, tell?: string) {
 
 function setView(v: View) {
   S.view = v;
+  S.listDelete = null;
   S.menuOpen = false;
   S.selected = null;
   S.selecting = false;
@@ -2918,6 +2990,15 @@ function onClick(e: MouseEvent) {
     }
     case "tag-clear":
       filterTag(null);
+      break;
+    case "list-delete":
+      askListDelete(true);
+      break;
+    case "list-delete-cancel":
+      askListDelete(false);
+      break;
+    case "list-delete-confirm":
+      void doDeleteList();
       break;
     case "open":
       // In select mode a tap on a row picks it.
@@ -3417,6 +3498,7 @@ function shell(): string {
   <div id="dayload" class="dayload" hidden></div>
   <div id="setup-banner" class="setup-banner" role="region" aria-label="Setup" hidden></div>
   <div id="tagbar" class="tagbar" role="status" hidden></div>
+  <div id="listbar" class="listbar" hidden></div>
   <div id="viewswitch" class="viewswitch" hidden></div>
   <div id="list" class="list"></div>
   <div id="bulkbar" class="bulkbar" role="toolbar" aria-label="Selected tasks" hidden></div>

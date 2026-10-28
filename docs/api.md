@@ -6,7 +6,7 @@ The hub serves two HTTP APIs: one for the app (`/api/…`) and one for bridges a
 
 - A **bridge** has a unique name chosen when it is added (`[a-z0-9-]{1,32}`). The name `hub` is reserved.
 - The **personal list** belongs to the hub itself: it is repo `personal` of the reserved bridge `hub`, with `personal: true`. The hub stores its items and applies every action on them at once, so it works with no bridge running. Its items are keyed `hub/personal/<id>`; the hub gives a new item the id `mm-<n>`, and keeps the bead id of an item moved from a bridge (see below).
-- A **project** is another list the hub keeps, for a repo with no tracker: repo `<name>` of the bridge `hub`, with `personal: false`, so its items are keyed `hub/<name>/<id>`. Its name is a repo name, such as `projects/garden`; `personal` is kept for the personal list. An agent's first add to it makes it (see Agents: projects). Its items behave like personal ones in every way below: every action is applied at once, `ask` is refused, and they can be edited, repeat and reach the calendar feed. A project with no open item and none closed in the last 7 days is left out of `State`.
+- A **project** is another list the hub keeps, for a repo with no tracker: repo `<name>` of the bridge `hub`, with `personal: false`, so its items are keyed `hub/<name>/<id>`. Its name is a repo name, such as `projects/garden`; `personal` is kept for the personal list. An agent's first add to it makes it (see Agents: projects). Its items behave like personal ones in every way below: every action is applied at once, `ask` is refused, and they can be edited, repeat and reach the calendar feed. A project with no open item and none closed in the last 7 days is left out of `State`, and so is a project deleted in the app (see Deleting a project).
 - A **repo** is named by the bridge with its folder's path relative to the home folder, such as `projects/garden` (for a `--root` outside the home folder, relative to that root's parent). Repo names are unique per bridge, so two folders called `garden` stay apart. A name is up to 512 bytes of `/`-separated segments; each segment is 1 to 128 bytes with no control character, is not `.` or `..`, and does not start with `-`. The app shows the last segment, and the path where two repos share it.
 - An **item key** is `<bridge>/<repo>/<bead id>`, for example `laptop/projects/garden/gd-1`. Bridge names and bead ids hold no `/`, so the repo is everything between the first and the last `/`. In URL paths the key is percent-encoded as one segment. Bead ids may not start with `-`; the bridge passes bead ids to `bd` only when they match `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`.
 - A hub that stored repos under an older bridge's folder names (`garden`) moves each one, with its items, actions and reminders, to the one new name that ends in it (`projects/garden`) when the bridge first sends its new list. A folder name that two new names end in is dropped instead.
@@ -192,10 +192,20 @@ Releases: one signed universal APK per tag `vX.Y.Z`, named `meat-mode-android-vX
 | `note-edit` | `key` | `{"commentId": "…", "text": "…"}` | replaces that comment's text, up to 10000 characters; the hub records the comment as it was in `comment` |
 | `note-delete` | `key` | `{"commentId": "…"}` | removes that comment; the hub records it as `comment` |
 | `note-restore` | `key` | `{"comment": Comment}` | puts a removed comment back in its place by `createdAt`, with its id, author and time |
+| `project-delete` | `bridge` (`hub`) + `repo` | `{}` | closes every open item of the project as `Dismissed` and hides the project; the hub records the ids it closed as `items` (see Deleting a project) |
+| `project-restore` | `bridge` (`hub`) + `repo` | `{"items": ["<item id>", …]}` | reopens those of `items` that are still deleted and shows the project again; the hub records the ids it reopened as `items` |
 
 A note, or the note of an ask, keeps showing on the hub's copy after it is applied, until the bridge sends that repo's set again with the bead's own comment.
 
-The last four change personal items only. The hub refuses them on an agent's item with `400`: an agent item's title, dates and priority belong to its agent, so ask for a change in a note.
+The `edit` and three note kinds change personal items only. The hub refuses them on an agent's item with `400`: an agent item's title, dates and priority belong to its agent, so ask for a change in a note.
+
+### Deleting a project
+
+`project-delete` deletes a project from the app in one action; it is refused with `400` on the personal list and on a machine's repo, and answers `404` for a project the hub does not hold. Its open items close as `Dismissed`, as a Delete does, and the applied action lists their ids in `items`. The project leaves `State` and `GET /bridge/v1/projects` at once, and `State` keeps only its deleted items, so the Deleted view shows them for the usual 7 days; its done items come back with it. Nothing is dropped: the items and every action on them stay in the log and in the export.
+
+Its Undo is `project-restore` with the delete's `items`, which reopens those still deleted. A project also shows again with the next `add` to it, an agent's included, and with a `reopen` of any of its items, such as a Restore in the Deleted view, which brings back that item alone. Each item's History lists the delete and restore that closed and reopened it.
+
+In the app, a project's list has Delete list under its title. It asks first, naming the list and how many open to-dos it holds, and its toast offers Undo.
 
 ### Trackers
 
@@ -276,11 +286,11 @@ A change offers Undo when it is the latest change to every field it touched and 
 - `edit`: an `edit` with `set` = `was`. An edit without `was`, or one that names `subtasksDone`, offers none.
 - `done` that moved a repeating item on: an `edit` with `set` = `was`, while the item is open.
 - `done` and `dismiss` that closed the item: `reopen`, when the item was open before them.
-- `reopen`: `dismiss` after a delete, or `done` after a done on an item that does not repeat.
+- `reopen`: `dismiss` after a delete, its project's delete included, or `done` after a done on an item that does not repeat.
 - `snooze`: `snooze` back to `previous`, while the snooze still holds.
 - `note-edit`, `note-delete` and `note-restore`: the note back as it was.
 
-An `add`, a `note`, a sub-task's `add`, an `ask` and a `stop` offer none: the sheet's own buttons remove an item, a note or a sub-task. Undoing is itself a change, so it shows in History with its own Undo. Undoing an agent's change sends no notification, as the change did not.
+An `add`, a `note`, a sub-task's `add`, an `ask`, a `stop` and a project's `project-delete` or `project-restore` offer none (the delete's own Undo is in its toast): the sheet's own buttons remove an item, a note or a sub-task. Undoing is itself a change, so it shows in History with its own Undo. Undoing an agent's change sends no notification, as the change did not.
 
 ### Tags
 
@@ -455,7 +465,7 @@ The hub holds the only copy of the personal list, the projects, their attachment
 
 Files are not put in the JSON as base64: that grows them by a third, makes the hub hold the whole file in memory to write and read it, and would need the restore cap raised by the same third. Every app of this kind that restores its own attachments (Memos, Vikunja, Joplin, Trilium) exports a zip or tar of metadata plus raw files ([research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)).
 
-**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 4, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines"}`:
+**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 5, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines", "hiddenProjects"}`:
 
 - `settings` is `{"name", "timeZone", "reminderLead", "calendarFeed"}`: the first three as `GET /api/settings` shows them, except that `name` is `""` while none was chosen, and `calendarFeed` whether the calendar feed was on.
 - `items` holds every item of the lists the hub keeps, the personal list and every project, closed ones included however old: the `Item` fields as `GET /api/state` shows them, with `key`, `bridge` (`hub`), `repo` (the list), `firstSeen`, `seenAt`, `labels` (those that pass the rules in Tags: an item moved off a machine's personal repo may hold bead labels that do not, and they are left out so the export always restores) and `attachments` (those not removed, each with `size` and `sha256`), and no `run`, `pending` or `error`. `owner` names the machine whose agents added the item, `""` (left out) for one added in the app.
@@ -463,6 +473,7 @@ Files are not put in the JSON as base64: that grows them by a third, makes the h
 - `reminders` lists the reminders already sent for those items: `{"key", "kind", "at"}`, where `kind` is `due` (at the due time or a snooze end, `at` being that moment) or `early` (`at` being the due time it came before).
 - `origins` lists the items moved from a machine's personal repo: `{"machine", "beadId", "itemId"}`.
 - `machines` names the machines paired when the export was made, revoked ones left out.
+- `hiddenProjects` names the projects deleted in the app (see Deleting a project), so a restored hub keeps them out of the app too. A restore refuses a name that is not a project name, or one listed twice.
 
 **What it leaves out.** Removed attachments not yet purged stay out. No secret is exported: no machine token, password hash, login session, setup code, calendar feed address, Web Push subscription or VAPID key. Items from a machine's repos stay out too, whatever its tracker (beads, ticket, Backlog.md): each is a copy of a file on that machine, which stays its source of truth and sends it again once paired. So do the hub's copies of agent runs and its record of the run ends it pushed.
 
@@ -471,6 +482,7 @@ Files are not put in the JSON as base64: that grows them by a third, makes the h
 - Version 1 was a bare JSON file with no attachments and no tags on hub list items. Version 2 made the export a zip and added `labels` and `attachments` to its items. Its upgrade step sets `version` and drops any label of a version 1 item that breaks the rules in Tags: such labels came from beads moved off a machine's personal repo, version 1 never showed them, and a file that restored before must still restore.
 - Version 3 dropped checklists. Its upgrade step turns each item's `checklist` into sub-tasks by the schema 14 rule in Sub-tasks, made at the file's `exportedAt`, and drops `checklist` from the `set` and `was` of the edits in `actions`.
 - Version 4 added `machine` to `actions`: the machine whose token posted an agent's action on the lists the hub keeps. Its upgrade step only sets `version`; an older action names no machine. A restore refuses a `machine` that is not a valid machine name.
+- Version 5 added deleted projects: `hiddenProjects`, and the `project-delete` and `project-restore` actions with their `items`. Its upgrade step only sets `version`; an older file deleted no project.
 - A restore reads a zip by its first bytes (`PK\x03\x04`) and anything else as bare JSON. A bare JSON of version 2 or later restores only when it lists no attachment; one that lists any is refused, naming how many files it lists, so the user restores the zip it came in.
 
 **Restore.** Restore is offered by the hub part of the setup wizard on a hub whose setup status is `new`, after the password step:
@@ -566,7 +578,7 @@ curl -fsS 'https://meat-mode.example.com/bridge/v1/personal?project=projects/gar
   -d '{"title": "Approve the footer text", "note": "What is needed, why, and where to find it.", "author": "planner"}'
 ```
 
-The reply's `key` is `hub/projects/garden/<id>`. There is no call to rename or delete a project; one leaves the app once nothing in it is left to show.
+The reply's `key` is `hub/projects/garden/<id>`. There is no call to rename a project, and agents cannot delete one; it leaves the app once nothing in it is left to show, or when the user deletes it in the app (see Deleting a project), and an add to its name brings it back.
 
 ### Moving a bridge's personal repo to the hub
 

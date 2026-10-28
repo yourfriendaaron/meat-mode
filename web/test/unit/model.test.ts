@@ -19,6 +19,8 @@ import {
   subtasksFirst,
   syncStatus,
   visibleRepos,
+  canDeleteList,
+  deleteListQuestion,
 } from "../../src/model.ts";
 import { fmtSnoozeTime, snoozeOptions, typedSnooze } from "../../src/snooze.ts";
 
@@ -238,6 +240,16 @@ test("repo labels are folder names, with the path where they repeat", () => {
     visibleRepos(repos).map((r) => `${r.bridge}:${r.name}`),
     ["hub:personal", "hub:projects/attic", "desk:projects/garden", "laptop:projects/garden", "laptop:work/garden", "laptop:projects/kitchen"],
   );
+});
+
+test("only a project can be deleted, and the question names what goes with it", () => {
+  assert.equal(canDeleteList({ bridge: "hub", personal: false }), true);
+  assert.equal(canDeleteList({ bridge: "hub", personal: true }), false);
+  assert.equal(canDeleteList({ bridge: "laptop", personal: false }), false);
+  assert.equal(canDeleteList(undefined), false);
+  assert.equal(deleteListQuestion("garden", 0), "Delete garden? It has no open to-dos.");
+  assert.equal(deleteListQuestion("garden", 1), "Delete garden and its open to-do? It goes to Deleted for 7 days.");
+  assert.equal(deleteListQuestion("garden", 3), "Delete garden and its 3 open to-dos? They go to Deleted for 7 days.");
 });
 
 test("a typed snooze time reads like quick add and refuses the past", () => {

@@ -43,6 +43,15 @@ func (s *Store) State() (api.State, error) {
 		return st, err
 	}
 
+	hidden := map[string]bool{}
+	names, err := hiddenProjects(s.db)
+	if err != nil {
+		return st, err
+	}
+	for _, n := range names {
+		hidden[n] = true
+	}
+
 	st.Items = []api.Item{}
 	index := map[string]int{}
 	if err := s.eachRow(`SELECT i.bridge, i.repo, i.data, i.first_seen, i.seen_at FROM items i
@@ -58,6 +67,10 @@ func (s *Store) State() (api.State, error) {
 			return err
 		}
 		if b == HubBridge && hiddenClosed(it, st.ServerTime) {
+			return nil
+		}
+		// A deleted project keeps only its deleted items, for the Deleted view.
+		if b == HubBridge && hidden[r] && (it.Status != "closed" || it.CloseReason != ReasonDismissed) {
 			return nil
 		}
 		index[it.Key] = len(st.Items)
@@ -185,20 +198,21 @@ func (s *Store) State() (api.State, error) {
 		}
 		fold(&st.Items[i], a, s.isApplying(a))
 	}
-	st.Repos = withoutEmptyProjects(st.Repos, st.Items)
+	st.Repos = withoutEmptyProjects(st.Repos, st.Items, hidden)
 	return st, nil
 }
 
-// withoutEmptyProjects leaves out the projects with no item to show: none
-// open and none closed recently enough to stay in the app.
-func withoutEmptyProjects(repos []api.Repo, items []api.Item) []api.Repo {
+// withoutEmptyProjects leaves out the deleted projects and those with no
+// item to show: none open and none closed recently enough to stay in the
+// app.
+func withoutEmptyProjects(repos []api.Repo, items []api.Item, hidden map[string]bool) []api.Repo {
 	used := map[string]bool{}
 	for _, it := range items {
 		used[it.Bridge+"/"+it.Repo] = true
 	}
 	out := repos[:0]
 	for _, r := range repos {
-		if onHub(r.Bridge) && r.Name != PersonalRepo && !used[r.Bridge+"/"+r.Name] {
+		if onHub(r.Bridge) && r.Name != PersonalRepo && (hidden[r.Name] || !used[r.Bridge+"/"+r.Name]) {
 			continue
 		}
 		out = append(out, r)

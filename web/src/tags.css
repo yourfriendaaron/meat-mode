@@ -1,4 +1,4 @@
-/* Tags: chips on rows and in the detail, and the tag filter's bar. */
+/* Tags: chips on rows and in the detail, and the tag filter's bar; and the project list's Delete list bar beside it. */
 
 .chip-tag {
   border-color: var(--role-line);
@@ -83,4 +83,28 @@ button.chip-tag:hover {
 /* The edit form's hint under the Tags field sits close to it, as the due line does. */
 .tags-hint {
   margin: 0;
+}
+
+/* A project's Delete list, under the title, and the question it asks first. */
+.listbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+.listbar[hidden] {
+  display: none;
+}
+.listbar .confirm {
+  margin: 0;
+}
+.listbar .btn-row {
+  display: flex;
+  gap: 8px;
+}
+@container app (min-width: 880px) {
+  .listbar {
+    padding: 0 24px 8px;
+  }
 }

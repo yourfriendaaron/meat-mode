@@ -54,6 +54,12 @@ func (s *Store) Export() (api.Export, error) {
 	if e.Machines == nil {
 		e.Machines = []string{}
 	}
+	if e.HiddenProjects, err = hiddenProjects(tx); err != nil {
+		return e, err
+	}
+	if e.HiddenProjects == nil {
+		e.HiddenProjects = []string{}
+	}
 	return e, nil
 }
 

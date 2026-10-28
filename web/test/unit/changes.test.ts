@@ -149,3 +149,22 @@ test("holds compares what an edit set with the item now", () => {
   assert.ok(!holds(it, { clearDue: true }));
   assert.ok(holds(item({ dueAt: null }), { clearDue: true }));
 });
+
+test("a project's delete and restore show on each item they closed or reopened", () => {
+  const it = item({ key: "hub/projects/garden/mm-1", repo: "projects/garden" });
+  const list = { repo: "projects/garden", beadId: "" };
+  const del = act("project-delete", { items: ["mm-1"] }, list);
+  const back = act("project-restore", { items: ["mm-1"] }, list);
+  assert.equal(changeText(del, it, ctx), "Deleted with its list");
+  assert.equal(changeText(back, it, ctx), "Restored with its list");
+  const deleted: Item = { ...it, status: "closed", closeReason: "Dismissed", closedAt: now.toISOString() };
+  // The list's own changes undo from their toast, not from History.
+  assert.equal(undoFor([del], 0, deleted, "u1"), null);
+  // A Restore after the list's delete undoes by deleting the item again.
+  const reopen = act("reopen", {}, { repo: "projects/garden" });
+  assert.deepEqual(undoFor([reopen, del], 0, it, "u1"), { id: "u1", kind: "dismiss", key: it.key, payload: {} });
+  // A later delete of the list takes over the Undo of a status change, not of a snooze.
+  assert.equal(undoFor([del, reopen], 1, deleted, "u1"), null);
+  const snooze = act("snooze", { until: at(10, 15, 9) }, { repo: "projects/garden" });
+  assert.ok(undoFor([del, snooze], 1, { ...deleted, deferUntil: at(10, 15, 9) }, "u1"));
+});

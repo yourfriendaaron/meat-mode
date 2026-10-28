@@ -435,6 +435,19 @@ export function isPersonalList(r: Pick<Repo, "bridge" | "personal">): boolean {
   return isPersonal(r) && r.personal;
 }
 
+/** Whether the app offers to delete a list: a project, never the personal list or a machine's repo. */
+export function canDeleteList(r: Pick<Repo, "bridge" | "personal"> | undefined): boolean {
+  return !!r && isPersonal(r) && !r.personal;
+}
+
+/** The question a list's delete asks first: the list, and how many open to-dos go with it. */
+export function deleteListQuestion(label: string, open: number): string {
+  if (!open) return `Delete ${label}? It has no open to-dos.`;
+  return open === 1
+    ? `Delete ${label} and its open to-do? It goes to Deleted for 7 days.`
+    : `Delete ${label} and its ${open} open to-dos? They go to Deleted for 7 days.`;
+}
+
 /**
  * Repos shown as lists: the hub's own (the personal list and the projects)
  * and opted-in ones, the personal list first, then by name.

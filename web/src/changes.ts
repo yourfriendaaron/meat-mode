@@ -93,6 +93,10 @@ export function changeText(a: Action, item: Pick<Item, "id">, ctx: HistoryContex
       return p.comment ? `Deleted the note ${quoted(p.comment.text)}` : "Deleted a note";
     case "note-restore":
       return p.comment ? `Restored the note ${quoted(p.comment.text)}` : "Restored a note";
+    case "project-delete":
+      return "Deleted with its list";
+    case "project-restore":
+      return "Restored with its list";
     default:
       return a.kind;
   }
@@ -120,6 +124,8 @@ export function touched(a: Action): string[] {
       return p.was ? ["due", "status"] : ["status"];
     case "dismiss":
     case "reopen":
+    case "project-delete":
+    case "project-restore":
       return ["status"];
     case "snooze":
       return ["snooze"];
@@ -171,9 +177,19 @@ export function holds(item: Item, set: Edit): boolean {
   return true;
 }
 
-/** Whether a change closed the item outright: a done that did not move it on, or a delete. */
+/** Whether a change closed the item outright: a done that did not move it on, or a delete, its list's included. */
 function closes(a: Action): boolean {
-  return (a.kind === "done" && !a.payload.was) || a.kind === "dismiss";
+  return (a.kind === "done" && !a.payload.was) || a.kind === "dismiss" || a.kind === "project-delete";
+}
+
+/** Whether a change reopened the item, alone or with its list. */
+function reopens(a: Action): boolean {
+  return a.kind === "reopen" || a.kind === "project-restore";
+}
+
+/** Whether a change is a delete or restore of the item's whole list, which the hub lists in its history only when it closed or reopened the item. */
+function ofList(a: Action): boolean {
+  return a.kind === "project-delete" || a.kind === "project-restore";
 }
 
 /**
@@ -181,7 +197,7 @@ function closes(a: Action): boolean {
  * or undefined when the history holds none: the item was open then.
  */
 function statusBefore(history: Action[], index: number): Action | undefined {
-  return history.slice(index + 1).find((x) => x.status === "applied" && touched(x).includes("status") && (closes(x) || x.kind === "reopen"));
+  return history.slice(index + 1).find((x) => x.status === "applied" && touched(x).includes("status") && (closes(x) || reopens(x)));
 }
 
 /**
@@ -199,7 +215,7 @@ export function undoFor(history: Action[], index: number, item: Item, id: string
   if (!a || a.status !== "applied" || a.beadId !== item.id) return null;
   const fields = touched(a);
   if (!fields.length) return null;
-  const later = history.slice(0, index).filter((x) => x.status === "applied" && x.beadId === item.id);
+  const later = history.slice(0, index).filter((x) => x.status === "applied" && (x.beadId === item.id || ofList(x)));
   if (later.some((x) => touched(x).some((f) => fields.includes(f)))) return null;
   const key = item.key;
   const p = a.payload;
@@ -220,7 +236,7 @@ export function undoFor(history: Action[], index: number, item: Item, id: string
     case "reopen": {
       if (!isOpen(item)) return null;
       const before = statusBefore(history, index);
-      if (before?.kind === "dismiss") return { id, kind: "dismiss", key, payload: {} };
+      if (before?.kind === "dismiss" || before?.kind === "project-delete") return { id, kind: "dismiss", key, payload: {} };
       // A done on a repeating item would move it on instead of closing it.
       if (before?.kind === "done" && !item.repeat) return { id, kind: "done", key, payload: {} };
       return null;

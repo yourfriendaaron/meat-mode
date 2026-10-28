@@ -284,6 +284,8 @@ export interface Payload {
   commentId?: string;
   /** note-edit and note-delete: the comment as it was, filled in by the hub. note-restore: the comment to put back. */
   comment?: Comment;
+  /** project-delete: the ids it closed, filled in by the hub. project-restore: the ids to bring back. */
+  items?: string[];
 }
 
 export type ActionKind =
@@ -302,7 +304,10 @@ export type ActionKind =
   | "edit"
   | "note-edit"
   | "note-delete"
-  | "note-restore";
+  | "note-restore"
+  // Projects only.
+  | "project-delete"
+  | "project-restore";
 
 export interface NewAction {
   id: string;
