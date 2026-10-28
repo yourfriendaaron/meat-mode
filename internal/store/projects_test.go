@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,6 +134,28 @@ func TestProjectNames(t *testing.T) {
 	}
 	if len(mustState(t, s).Repos) != 1 {
 		t.Errorf("a refused name made a list")
+	}
+}
+
+// A repo a machine reports raises its tasks in its own tracker, so no
+// project of its name is made beside it; a retry of an earlier add answers.
+func TestNoProjectBesideATrackerRepo(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	_, _, err = s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Approve the footer text"}, "laptop", garden)
+	must(t, err)
+	_, err = s.CreateBridge("desk")
+	must(t, err)
+	must(t, s.ReplaceRepos("desk", []api.Repo{{Name: garden, OptedIn: true, Tracker: "beads"}}))
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Pick a colour"}, "laptop", garden); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "desk") {
+		t.Errorf("add beside a tracker repo: %v", err)
+	}
+	if _, created, err := s.AddPersonal(api.PersonalTodo{ID: id1, Title: "Approve the footer text"}, "laptop", garden); err != nil || created {
+		t.Errorf("retry = %v, %v", created, err)
+	}
+	if _, _, err := s.AddPersonal(api.PersonalTodo{Title: "Buy soil"}, "laptop", "projects/shed"); err != nil {
+		t.Errorf("add to another project: %v", err)
 	}
 }
 

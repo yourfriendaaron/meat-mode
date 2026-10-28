@@ -462,6 +462,21 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 		return "", false, invalidf("note is longer than %d characters", MaxNoteLen)
 	}
 	if repo != PersonalRepo {
+		// A repo a machine reports has its own tracker, where its tasks
+		// belong; a project of the same name would be a second list beside
+		// it. A retry of an add already made still answers.
+		var machine string
+		err := s.db.QueryRow(`SELECT bridge FROM repos WHERE name = ? AND bridge != ? ORDER BY bridge LIMIT 1`, repo, HubBridge).Scan(&machine)
+		switch {
+		case err == nil:
+			if _, err := s.Action(t.ID); errors.Is(err, ErrNotFound) {
+				return "", false, invalidf("%s on %s has its own tracker; raise the task there instead of in a project", repo, machine)
+			} else if err != nil {
+				return "", false, err
+			}
+		case !errors.Is(err, sql.ErrNoRows):
+			return "", false, err
+		}
 		// A project with nothing in it is left out of State, so one made
 		// by an add that then fails shows nowhere.
 		if _, err := s.db.Exec(`INSERT OR IGNORE INTO repos (bridge, name, personal, opted_in) VALUES (?, ?, 0, 1)`,
