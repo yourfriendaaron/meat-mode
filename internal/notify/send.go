@@ -169,6 +169,13 @@ func (r *Registry) deliver(ctx context.Context, t target, payload []byte, ttl, a
 	case code == http.StatusTooManyRequests:
 		wait := retryAfter(resp.Header.Get("Retry-After"), now)
 		r.mu.Lock()
+		// Holds that have run out go here too, so an endpoint deleted on any
+		// path leaves nothing behind for long.
+		for ep, until := range r.holds {
+			if !now.Before(until) {
+				delete(r.holds, ep)
+			}
+		}
 		r.holds[t.endpoint] = now.Add(wait)
 		r.mu.Unlock()
 		if retry && attempt < len(retryDelays) {

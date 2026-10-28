@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	stdpath "path"
 	"strings"
 	"sync"
 	"time"
@@ -139,7 +140,7 @@ func (n *netGuard) logRefusal(kind, why string, r *http.Request) {
 // logPath is a request path for the log. A calendar feed's file name is its
 // only credential, so the secret part of that path is replaced.
 func logPath(path string) string {
-	if rest, ok := strings.CutPrefix(path, "/calendar/"); ok && rest != "" {
+	if rest, ok := strings.CutPrefix(stdpath.Clean("/"+path), "/calendar/"); ok && rest != "" {
 		return "/calendar/…"
 	}
 	return path

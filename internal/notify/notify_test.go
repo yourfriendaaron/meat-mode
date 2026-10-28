@@ -261,6 +261,19 @@ type roundTrip func(*http.Request) (*http.Response, error)
 
 func (f roundTrip) RoundTrip(q *http.Request) (*http.Response, error) { return f(q) }
 
+// The topic works like a password and callers log the error, so a failed
+// send does not quote the URL.
+func TestNtfyErrorHidesTheTopic(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	base := srv.URL
+	srv.Close()
+	n := &Ntfy{URL: base + "/", Topic: "secret-topic-plants"}
+	err := n.Notify(context.Background(), Message{Title: "Water the plants"})
+	if err == nil || strings.Contains(err.Error(), "secret-topic-plants") {
+		t.Fatalf("Notify to a closed server = %v", err)
+	}
+}
+
 func TestNtfyRequest(t *testing.T) {
 	var got *http.Request
 	var body []byte

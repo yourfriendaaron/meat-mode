@@ -383,6 +383,14 @@ func TestPairClearsAnEarlierInsecureOptIn(t *testing.T) {
 	if cfg := pair(); cfg.AllowInsecureHTTP {
 		t.Error("an earlier --allow-insecure-http survived a pairing without it")
 	}
+	// Nor does a saved one let a pairing without the flag use plain HTTP.
+	if err := (Config{HubURL: hub.URL, Token: token, AllowInsecureHTTP: true}).Save(env.Paths.Config); err != nil {
+		t.Fatal(err)
+	}
+	err := Main(context.Background(), []string{"pair", "http://192.0.2.10:8080", token, "--no-service"}, env)
+	if err == nil || !strings.Contains(err.Error(), "refusing plain HTTP") {
+		t.Errorf("pair over plain HTTP with only a saved opt-in = %v", err)
+	}
 }
 
 // The service does not inherit the shell, so pair refuses to install one

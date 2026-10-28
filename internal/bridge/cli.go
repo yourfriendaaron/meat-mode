@@ -189,9 +189,11 @@ func pair(ctx context.Context, args []string, env Env) error {
 	// The trusted networks the hub is checked against are saved, so the
 	// service, which does not get this shell's environment, checks the same.
 	cfg.TrustedNetworks = effective.TrustedNetworks
-	allowInsecure := effective.AllowInsecureHTTP || *insecure
 	// The flag is what is saved, so a pairing without it clears an earlier
-	// one. The environment override still applies to this command's checks.
+	// one, and an earlier one does not let this pairing through either. The
+	// environment override still applies to this command's checks.
+	fromEnv, _ := applyOverrides(Config{}, env.getenv()) // LoadSettings has checked it
+	allowInsecure := fromEnv.AllowInsecureHTTP || *insecure
 	cfg.AllowInsecureHTTP = *insecure
 	if len(roots) > 0 {
 		abs := make([]string, 0, len(roots))

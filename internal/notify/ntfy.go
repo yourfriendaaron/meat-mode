@@ -2,9 +2,11 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -76,6 +78,11 @@ func (n *Ntfy) Notify(ctx context.Context, m Message) error {
 	}
 	resp, err := c.Do(req)
 	if err != nil {
+		// A *url.Error quotes the URL, whose topic works like a password.
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			err = uerr.Err
+		}
 		return fmt.Errorf("ntfy: %w", err)
 	}
 	defer resp.Body.Close()

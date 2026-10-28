@@ -116,6 +116,16 @@ func TestParseAuthorWithASpace(t *testing.T) {
 	}
 }
 
+// A note of an agent's own that opens like an author line keeps its text:
+// Meat Mode's author line always has a blank line after it.
+func TestParseNoteThatOpensWithBy(t *testing.T) {
+	data := "---\nid: a-1\nstatus: open\n---\n# Renew the card\n\n## Notes\n\n**2026-01-20T08:00:00Z**\n\nby Friday we need these:\n- the card\n"
+	is := parseTicket([]byte(data)).issue("a-1", "v", time.Now())
+	if len(is.Comments) != 1 || is.Comments[0].Author != defaultAuthor || is.Comments[0].Text != "by Friday we need these:\n- the card" {
+		t.Fatalf("comments %+v", is.Comments)
+	}
+}
+
 // The note's author line survives a round trip through tk.
 func TestCommentKeepsAnAuthorWithASpace(t *testing.T) {
 	if _, err := exec.LookPath("tk"); err != nil {

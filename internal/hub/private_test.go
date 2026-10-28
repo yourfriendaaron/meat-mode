@@ -217,6 +217,9 @@ func TestRefusalLogHidesTheCalendarSecret(t *testing.T) {
 	if got := buf.String(); strings.Contains(got, "feed-secret") || !strings.Contains(got, "/calendar/…") {
 		t.Fatalf("refusal log names the feed secret:\n%s", got)
 	}
+	if got := logPath("//calendar/feed-secret.ics"); strings.Contains(got, "feed-secret") {
+		t.Errorf("logPath of a doubled slash = %q", got)
+	}
 	if got := logPath("/api/state"); got != "/api/state" {
 		t.Errorf("logPath of an ordinary path = %q", got)
 	}

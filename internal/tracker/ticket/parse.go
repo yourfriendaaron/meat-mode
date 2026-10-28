@@ -22,8 +22,8 @@ type ticketFile struct {
 // noteStamp is the line ticket's add-note writes above each note.
 var noteStamp = regexp.MustCompile(`^\*\*(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)\*\*$`)
 
-// authorLine is the first line of a note Meat Mode wrote. ticket keeps no
-// author, so the note carries its own.
+// authorLine is the first line of a note Meat Mode wrote, which a blank line
+// follows. ticket keeps no author, so the note carries its own.
 var authorLine = regexp.MustCompile(`^by (.+):$`)
 
 // defaultAuthor is who a note without an author line gets: it came from ticket
@@ -88,7 +88,7 @@ func parseNotes(lines []string) []tracker.Comment {
 		}
 		c := tracker.Comment{Author: defaultAuthor, CreatedAt: at}
 		body := strings.TrimSpace(strings.Join(text, "\n"))
-		if first, rest, _ := strings.Cut(body, "\n"); authorLine.MatchString(first) {
+		if first, rest, _ := strings.Cut(body, "\n"); authorLine.MatchString(first) && (rest == "" || strings.HasPrefix(rest, "\n")) {
 			c.Author = authorLine.FindStringSubmatch(first)[1]
 			body = strings.TrimSpace(rest)
 		}
