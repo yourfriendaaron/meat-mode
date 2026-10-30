@@ -63,13 +63,18 @@ const AT_WORD = /(^|\s)@([\p{L}\p{N}_.:/-]+)/gu;
 const TAG_WORD = /^\p{L}/u;
 /** The words that end a repeat ("every sunday until nov 26"), before its date. */
 const UNTIL = /\b(?:until|ending)\s+/gi;
-/** Words that lead into a date and go with it: "by friday", "on the 26th", "sometime tomorrow". */
-const LEAD = /(?:\b(?:in the|at|on(?: the)?|from|starting(?: on| from)?|by|before|due(?: on| by)?|sometime|later|(?:this )?coming|no later than)\s+)+$/i;
+/**
+ * Words that lead into a date and go with it: "by friday", "on the 26th",
+ * "sometime tomorrow". At most three, the most a real lead-in has: its
+ * words can be split more than one way ("due on" is one lead or two), so an
+ * open-ended repeat would try every split of a long run of them.
+ */
+const LEAD = /(?:\b(?:in the|at|on(?: the)?|from|starting(?: on| from)?|by|before|due(?: on| by)?|sometime|later|(?:this )?coming|no later than)\s+){1,3}$/i;
 /** A time takes "around" and "about" too: "around 4pm", where "about friday" is a topic. */
 const TIME_LEAD = new RegExp(LEAD.source.replace("|by|", "|by|around|about|"), "i");
 /** A month said alone, led in by "in march", "during june", "by may". */
 const MONTH_ONLY = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?$/i;
-const MONTH_LEAD = /(?:\b(?:in|during|by|before|early|mid|late|sometime in)\s+)+$/i;
+const MONTH_LEAD = /(?:\b(?:in|during|by|before|early|mid|late|sometime in)\s+){1,3}$/i;
 /** Words that end a date chrono stops short of. */
 const TAIL = /^\s+(?:from (?:now|today)|in the (?:morning|afternoon|evening)|at night)\b/i;
 

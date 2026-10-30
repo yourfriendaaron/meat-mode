@@ -236,12 +236,22 @@ function weekOrder(days: number[]): number[] {
   return [...days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
 }
 
+/**
+ * Whether r names one weekday of one week of the month ("2nd tuesday"), a
+ * shape the labels have words for; anything else, whatever wrote the rule,
+ * falls back to the plain monthly label.
+ */
+function nthWeekdayOfMonth(r: RepeatRule): boolean {
+  return ((r.weekOfMonth === -1 || (r.weekOfMonth! >= 1 && r.weekOfMonth! <= 4)) &&
+    r.weekdays?.length === 1 && r.weekdays[0] >= 0 && r.weekdays[0] <= 6);
+}
+
 /** "Every day", "Every 2 weeks on Mon, Thu", "Every weekday", "Every month after done", "Every week on Sun until Nov 26". */
 export function repeatLabel(r: RepeatRule, now: Date): string {
   const n = r.interval && r.interval > 1 ? r.interval : 1;
   const days = r.every === "week" && !r.fromDone ? weekOrder(r.weekdays ?? []) : [];
   let out: string;
-  if (r.weekOfMonth && r.weekdays?.length === 1) out = `${n === 1 ? "Every month" : `Every ${n} months`} on the ${WEEK_OF_WORDS[r.weekOfMonth]} ${DAY_NAMES[r.weekdays[0]]}`;
+  if (nthWeekdayOfMonth(r)) out = `${n === 1 ? "Every month" : `Every ${n} months`} on the ${WEEK_OF_WORDS[r.weekOfMonth!]} ${DAY_NAMES[r.weekdays![0]]}`;
   else if (n === 1 && days.join() === "1,2,3,4,5") out = "Every weekday";
   else {
     out = n === 1 ? `Every ${r.every}` : `Every ${n} ${r.every}s`;
@@ -270,8 +280,8 @@ export function repeatWords(r: RepeatRule, now: Date): string {
   const unit = `${n} ${r.every}${n === 1 ? "" : "s"}`;
   let out: string;
   if (r.fromDone) out = `Then ${unit} after you finish it`;
-  else if (r.weekOfMonth && r.weekdays?.length === 1) {
-    const day = `${WEEK_OF_WORDS[r.weekOfMonth]} ${FULL_DAY_NAMES[r.weekdays[0]]}`;
+  else if (nthWeekdayOfMonth(r)) {
+    const day = `${WEEK_OF_WORDS[r.weekOfMonth!]} ${FULL_DAY_NAMES[r.weekdays![0]]}`;
     out = n === 1 ? `Every ${day} of the month` : `Every ${unit} on the ${day}`;
   } else {
     const days = r.every === "week" ? weekOrder(r.weekdays ?? []) : [];

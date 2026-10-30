@@ -116,6 +116,21 @@ func TestParseAuthorWithASpace(t *testing.T) {
 	}
 }
 
+// An author that is only blanks is no author, so a note never opens with an
+// empty "by  :" line.
+func TestNoteAuthorBlankIsNoAuthor(t *testing.T) {
+	for _, a := range []string{"", " ", "\t\n", " \x00 "} {
+		if got := noteAuthor(a); got != "" {
+			t.Errorf("noteAuthor(%q) = %q, want no author", a, got)
+		}
+	}
+	for _, a := range []string{"Alex", "Alex Smith", "  padded  "} {
+		if got := noteAuthor(a); got == "" {
+			t.Errorf("noteAuthor(%q) is no author", a)
+		}
+	}
+}
+
 // A note of an agent's own that opens like an author line keeps its text:
 // Meat Mode's author line always has a blank line after it.
 func TestParseNoteThatOpensWithBy(t *testing.T) {

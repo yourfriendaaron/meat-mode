@@ -23,6 +23,41 @@ jobs:
         run: bash tests/public-safety.test.sh
       - name: Scan tracked files
         run: bash scripts/public-safety.sh
+      - name: Scan commit messages
+        # The pre-push hook sees only pushes made from a clone with hooks
+        # installed; merge and squash commits are made on GitHub's side and
+        # reach main unscanned, so CI reads the pushed commits' messages.
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          DELETED: ${{ github.event.deleted }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          msgs=$(mktemp)
+          case "$EVENT" in
+            push)
+              if [ "$DELETED" = true ]; then
+                echo "A deleted ref publishes no message."
+                exit 0
+              fi
+              # A new branch, or a force push whose old tip is gone: scan the tip alone.
+              if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+                git log --format=%B "$BEFORE..$SHA" > "$msgs"
+              else
+                git log -1 --format=%B "$SHA" > "$msgs"
+              fi
+              ;;
+            pull_request)
+              git fetch --no-tags origin "$BASE"
+              git log --format=%B FETCH_HEAD..HEAD > "$msgs"
+              ;;
+            *)
+              echo "No pushed commits in this run to scan."
+              exit 0
+              ;;
+          esac
+          bash scripts/public-safety.sh --message "$msgs"
       - name: Scan history for secrets
         uses: gitleaks/gitleaks-action@v2
         env:

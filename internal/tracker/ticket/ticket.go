@@ -231,14 +231,20 @@ func (t *Ticket) Dismiss(ctx context.Context, dir, id, actor string) error {
 
 // noteAuthor is author as a note's first line can carry it: a line break or
 // other control character becomes a space, and every other character stays,
-// so a name with spaces comes back from parse as written.
+// so a name with spaces comes back from parse as written. An author that is
+// nothing but blanks is no author: the note takes the default one instead
+// of an empty "by  :" line.
 func noteAuthor(author string) string {
-	return strings.Map(func(r rune) rune {
+	mapped := strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '
 		}
 		return r
 	}, author)
+	if strings.TrimSpace(mapped) == "" {
+		return ""
+	}
+	return mapped
 }
 
 // AddComment writes the note with its author on a first line, which Show

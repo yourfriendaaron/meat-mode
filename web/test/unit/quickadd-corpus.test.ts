@@ -70,3 +70,16 @@ test("the task sheet's typed field reads each phrase's date the same way", () =>
   }
   assert.equal(wrong.length, 0, `${wrong.length} read wrong:\n  ${wrong.join("\n  ")}`);
 });
+
+test("a long run of date words reads in good time", () => {
+  // Each run repeats words a pattern could split more than one way, then ends in a way that fails it.
+  const runs = ["due on ", "starting on ", "by ", "on the ", "every mon ", "every thurs ", "mondays and ", "in the morning ", "at 5 ", "the 3rd "];
+  for (const run of runs) {
+    const text = `Call Sam ${run.repeat(60)}zzz tomorrow`;
+    const t = performance.now();
+    parseQuickAdd(text, WED, lists);
+    readTyped(`${run.repeat(60)}zzz tomorrow`, WED, blank);
+    const ms = performance.now() - t;
+    assert.ok(ms < 500, `${JSON.stringify(run)} x60 took ${Math.round(ms)} ms`);
+  }
+});

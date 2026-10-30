@@ -426,6 +426,13 @@ func (r *AgentRunner) Ask(req askRequest) {
 
 // start starts a run on rec, or records why it cannot. Callers hold mu.
 func (r *AgentRunner) start(req askRequest, rec *beadRecord) {
+	// The id names the run's worktree, log folder and branch, so it must be
+	// one path segment; Ask checks it, but replay and a waiting ask reach
+	// here on their own, so the check stands here too.
+	if !api.ValidBeadID(req.BeadID) {
+		r.log().Warn("agent run refused: the task id cannot be a folder name", "repo", req.Repo.Name, "bead", req.BeadID)
+		return
+	}
 	run := &api.Run{ID: newRunID(), Agent: r.agentName(), StartedAt: r.now().UTC(), Count: rec.Count}
 	rec.Run = run
 	refuse := func(reason, detail string) {

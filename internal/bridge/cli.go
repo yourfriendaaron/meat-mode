@@ -207,7 +207,9 @@ func pair(ctx context.Context, args []string, env Env) error {
 		cfg.Roots = abs
 	}
 	if err := CheckURL(cfg.HubURL, allowInsecure); err != nil {
-		return err
+		// CheckURL names the config's switch, which pair does not read:
+		// only the flag, or this shell's environment, lets a pairing through.
+		return fmt.Errorf("%w; pass --allow-insecure-http to pair over plain HTTP", err)
 	}
 	if !*noService && CheckURL(cfg.HubURL, cfg.AllowInsecureHTTP) != nil {
 		return errors.New("the service does not get MEAT_MODE_ALLOW_INSECURE_HTTP from this shell; " +

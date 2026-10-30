@@ -32,6 +32,10 @@ type Fake struct {
 	Ver      string // what Check returns
 	CheckErr error  // when set, Check fails with it
 	Now      func() time.Time
+	// CreateID, when set, is the id Create hands back instead of the next
+	// fake-N, so a tracker that makes an id its side cannot take can be
+	// tested.
+	CreateID string
 
 	mu      sync.Mutex
 	repos   map[string]map[string]*task
@@ -368,6 +372,9 @@ func (f *Fake) Create(_ context.Context, dir string, in tracker.NewIssue) (strin
 	}
 	f.next++
 	id := fmt.Sprintf("fake-%d", f.next)
+	if f.CreateID != "" {
+		id = f.CreateID
+	}
 	f.Calls = append(f.Calls, "create "+dir+" "+id)
 	var due *time.Time
 	if in.Due != nil {

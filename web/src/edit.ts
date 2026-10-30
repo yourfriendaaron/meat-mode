@@ -6,7 +6,7 @@ import { MAX_REPEAT_INTERVAL, type Action, type Comment, type Edit, type Item, t
 import { isOpen, isPersonal, repoKey } from "./model.ts";
 import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
 import { DEFAULT_HOUR } from "./quickadd.ts";
-import { sameRule, weekOfDate, type RepeatRule } from "./repeat.ts";
+import { isLastOfMonth, sameRule, weekOfDate, type RepeatRule } from "./repeat.ts";
 import { cleanTags, sameTags, shownTags, typedTags } from "./tags.ts";
 
 export const TITLE_MAX = 1000;
@@ -118,6 +118,17 @@ export function moveTargets(item: Item, items: Item[]): Item[] {
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
+/**
+ * A monthly choice as the date allows it: "the last Friday" on a Friday
+ * that is not the last is that Friday's week, and a 5th weekday, which has
+ * no week of its own, is the last.
+ */
+export function fitMonthBy(by: EditDraft["monthBy"], due: Date): EditDraft["monthBy"] {
+  if (by === "last" && !isLastOfMonth(due)) return "weekday";
+  if (by === "weekday" && weekOfDate(due) > 4) return "last";
+  return by;
+}
+
 /** The repeat the form sets, or null for none. Undefined when its interval is not one the hub takes. */
 export function draftRule(d: EditDraft): RepeatRule | null | undefined {
   if (!d.repeat) return null;
@@ -131,7 +142,7 @@ export function draftRule(d: EditDraft): RepeatRule | null | undefined {
   const due = d.repeat === "month" && !d.fromDone && d.monthBy !== "date" ? draftDue(d) : null;
   if (due) {
     r.weekdays = [due.getDay()];
-    r.weekOfMonth = d.monthBy === "last" || weekOfDate(due) > 4 ? -1 : weekOfDate(due);
+    r.weekOfMonth = fitMonthBy(d.monthBy, due) === "last" ? -1 : weekOfDate(due);
   }
   if (d.fromDone) r.fromDone = true;
   if (d.until) r.until = d.until;

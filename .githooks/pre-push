@@ -5,7 +5,9 @@
 # remote. bd can commit its config on its own, past the pre-commit hook,
 # and a later commit may remove what it added again, so the commits being
 # pushed are checked too, not only the tip. The messages of those commits,
-# and an annotated tag's own, go through the public-safety guard.
+# their author and committer lines, the ref names, and an annotated tag's
+# own message and tagger (a tag may point at another tag) go through the
+# public-safety guard.
 set -euo pipefail
 guard="$(cd "$(dirname "$0")/.." && pwd)/scripts/public-safety.sh"
 msgs=$(mktemp)
@@ -13,7 +15,7 @@ trap 'rm -f "$msgs"' EXIT
 zero=0000000000000000000000000000000000000000
 beads_ok='\.beads/(\.gitignore|README\.md|config\.yaml|metadata\.json)'
 status=0
-while read -r _ local_sha remote_ref remote_sha; do
+while read -r local_ref local_sha remote_ref remote_sha; do
   case "$remote_ref" in
     refs/heads/__dolt*) echo "pre-push: refusing $remote_ref; beads data stays private (see AGENTS.md)." >&2; status=1; continue ;;
     refs/heads/*|refs/tags/*) ;;
@@ -54,10 +56,21 @@ while read -r _ local_sha remote_ref remote_sha; do
     status=1
   fi
 
+  # The messages of the commits pushed, and their author and committer
+  # lines: a name or address is published with a commit as surely as its
+  # message.
   git log --format=%B "${revs[@]}" > "$msgs"
-  if [ "$(git cat-file -t "$local_sha")" = tag ]; then
-    git cat-file tag "$local_sha" | sed '1,/^$/d' >> "$msgs"
-  fi
+  git log --format='%an <%ae>%n%cn <%ce>' "${revs[@]}" >> "$msgs"
+  # The ref names themselves, local and remote, which are published too.
+  printf '%s\n' "$local_ref" "$remote_ref" >> "$msgs"
+  # An annotated tag's own message and its tagger line. A tag may point at
+  # another tag, so the chain is followed to the object at its end and
+  # every tag on the way is scanned.
+  obj=$local_sha
+  while [ "$(git cat-file -t "$obj" 2>/dev/null)" = tag ]; do
+    git cat-file tag "$obj" >> "$msgs"
+    obj=$(git cat-file tag "$obj" | sed -n 's/^object //p')
+  done
   if ! "$guard" --message "$msgs" >&2; then
     echo "pre-push: $remote_ref would publish the message text above; reword it (git commit --amend, or git rebase)." >&2
     status=1

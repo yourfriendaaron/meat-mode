@@ -389,6 +389,32 @@ func TestRefusesUnknownBeads(t *testing.T) {
 	})
 }
 
+// The id checks at the replay edges: a tracker that hands back an id the
+// hub cannot take fails the add, and a listed id the hub cannot take, such
+// as one under the provisional prefix, cannot be named by an action.
+func TestRefusesIDsTheHubCannotTake(t *testing.T) {
+	w := newWorld(t, false)
+	dir := w.repo("garden", true)
+	w.seed(dir, "Water the plants")
+	w.fake.CreateID = ".."
+	w.fake.Put(dir, tracker.Issue{ID: "pending-9", Title: "From an older list", Status: "open",
+		Labels: []string{tracker.HumanLabel}})
+	w.hub.Enqueue(us, action("e-add", api.KindAdd, "garden", "", api.Payload{Title: "Repot the fern"}))
+	w.hub.Enqueue(us, action("e-pend", api.KindDone, "garden", "pending-9", api.Payload{}))
+	w.tick(w.start())
+	rs := w.hub.Results(aid("e-add"))
+	if len(rs) != 1 || rs[0].OK || !strings.Contains(rs[0].Error, "the tracker made a task with an id the hub cannot take") {
+		t.Errorf("add = %+v", rs)
+	}
+	rs = w.hub.Results(aid("e-pend"))
+	if len(rs) != 1 || rs[0].OK || rs[0].Error != ErrUnknownBead {
+		t.Errorf("done on a provisional id = %+v", rs)
+	}
+	if i := w.show(dir, "pending-9"); i.Status == "closed" {
+		t.Error("closed a task the hub cannot name")
+	}
+}
+
 func TestIgnoresActionsForAnotherBridge(t *testing.T) {
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)

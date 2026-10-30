@@ -27,6 +27,7 @@ How to work within that:
 - The guard also refuses tracked beads data: anything in `.beads/` beyond `.gitignore`, `README.md`, `config.yaml` and `metadata.json`, and a Dolt remote in `config.yaml`.
 - The pre-push hook refuses any ref other than a branch or tag (Dolt keeps its data in `refs/dolt/`), Dolt's `__dolt` branches, pushed commits that track beads data or a Dolt remote, and commit or annotated tag messages the guard blocks.
 - `tests/public-safety.test.sh` proves the guard and the pre-push hook catch each class and pass clean code. CI runs the test, the guard and gitleaks on every push and pull request, and daily checks that the public remote holds no `refs/dolt/` or `__dolt` refs.
+- CI also scans the messages of pushed commits, so merge and squash commits made on GitHub's side, which no hook sees, are caught too. Make tags and releases from the command line: a tag or release written on github.com passes no guard.
 - Never commit with `--no-verify`. When a guard fires, remove the data. Widen a pattern's allowlist only when the operator agrees in that conversation.
 
 ## Checks

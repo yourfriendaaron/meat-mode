@@ -1062,6 +1062,17 @@ func TestAskRefusesAnIDThatIsNotOneSegment(t *testing.T) {
 			t.Errorf("Ask(%q) made a record: %+v", bad, rec)
 		}
 	}
+	// start, which every path that launches a run goes through, refuses the
+	// same ids even when a caller hands one over without Ask's check.
+	for _, bad := range []string{"..", "../escape"} {
+		b.Runner.mu.Lock()
+		b.Runner.start(askRequest{ActionID: "start-" + bad, Repo: repo, BeadID: bad, Text: "go", Author: author, Allowed: true},
+			b.Runner.record(repo.Name, bad))
+		b.Runner.mu.Unlock()
+		if rec := runOf(b, bad); rec.Run != nil || len(rec.Asks) != 0 {
+			t.Errorf("start(%q) made a record: %+v", bad, rec)
+		}
+	}
 	for _, sub := range []string{"agents/escape", "escape"} {
 		if _, err := os.Stat(filepath.Join(w.state, sub)); !os.IsNotExist(err) {
 			t.Errorf("%s exists: %v", sub, err)

@@ -75,6 +75,10 @@ test("a monthly repeat on a weekday of the month", () => {
   const fifth = { ...monthly, date: "2026-10-30", monthBy: "weekday" as const };
   assert.deepEqual(draftRule(fifth), { every: "month", weekdays: [5], weekOfMonth: -1 });
   assert.equal(monthByShown(fifth, at(10, 30, 9)), "last");
+  // "The last" on a date moved mid-month follows the date: that Friday's week, shown and saved.
+  const moved = { ...monthly, date: "2026-11-13", monthBy: "last" as const };
+  assert.deepEqual(draftRule(moved), { every: "month", weekdays: [5], weekOfMonth: 2 });
+  assert.equal(monthByShown(moved, new Date(2026, 10, 13, 9)), "weekday");
   // Counted from the done day, it follows the date.
   assert.deepEqual(draftRule({ ...monthly, monthBy: "weekday", fromDone: true }), { every: "month", fromDone: true });
   // An item with the rule opens with it, and typing one sets it.

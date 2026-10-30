@@ -17,6 +17,11 @@ set -euo pipefail
 message=""
 if [ "${1:-}" = "--message" ]; then
   message=$(realpath "$2")
+  # A file the guard cannot read would scan as clean; that is a failure.
+  if [ ! -r "$message" ]; then
+    printf 'public-safety: cannot read the message file %s\n' "$message" >&2
+    exit 1
+  fi
 fi
 
 root=$(git rev-parse --show-toplevel)
@@ -49,22 +54,25 @@ search() { # [-i] regex: matches in the index, or in the message
 # A "path:line:content" line from search stays only when its content
 # holds a match the allow regex does not take: an allowed token on a line
 # must not hide a real match sitting next to it.
-drop_allowed() { # scan regex, allow regex: reads search lines
-  local re=$1 allow=$2 line content
+drop_allowed() { # [-i] scan regex, allow regex: reads search lines
+  local icase=() re allow line content
+  if [ "$1" = "-i" ]; then icase=(-i); shift; fi
+  re=$1 allow=$2
   while IFS= read -r line; do
     content=${line#*:} # path, then line number
     content=${content#*:}
-    if [ -n "$(printf '%s\n' "$content" | grep -oE "$re" | grep -vE "$allow" || true)" ]; then
+    if [ -n "$(printf '%s\n' "$content" | grep ${icase[@]+"${icase[@]}"} -oE "$re" | grep ${icase[@]+"${icase[@]}"} -vE "$allow" || true)" ]; then
       printf '%s\n' "$line"
     fi
   done
 }
 
-scan() { # label, extended regex, [filter regex to drop allowed matches]
-  local out
-  out=$(search "$2")
+scan() { # [-i] label, extended regex, [filter regex to drop allowed matches]
+  local icase=() out
+  if [ "$1" = "-i" ]; then icase=(-i); shift; fi
+  out=$(search ${icase[@]+"${icase[@]}"} "$2")
   if [ -n "${3:-}" ] && [ -n "$out" ]; then
-    out=$(printf '%s\n' "$out" | drop_allowed "$2" "$3" || true)
+    out=$(printf '%s\n' "$out" | drop_allowed ${icase[@]+"${icase[@]}"} "$2" "$3" || true)
   fi
   report "$1" "$out"
 }
@@ -72,18 +80,24 @@ scan() { # label, extended regex, [filter regex to drop allowed matches]
 scan "Absolute home paths:" '(/home/|/var/home/|/Users/|/root/|[Cc]:\\Users\\)[A-Za-z0-9._-]+'
 scan "Private, Tailscale or link-local IPv4 addresses:" \
   '(^|[^0-9.])(10\.[0-9]{1,3}|192\.168|172\.(1[6-9]|2[0-9]|3[01])|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])|169\.254)\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
-scan "Tailnet hostnames:" '[A-Za-z0-9-]+\.ts\.net'
+# Host names carry no case: a host written in capitals is the same host.
+scan -i "Tailnet hostnames:" '[A-Za-z0-9-]+\.ts\.net'
 # Unique-local (fd00::/8, which includes Tailscale's fd7a:) and link-local
 # (fe80:) IPv6 addresses. The anchor keeps the two hex digits from matching
 # inside a longer hex word, as in 2001:db8::fd12:.
 scan "Private IPv6 addresses (unique-local fd00::/8 and link-local fe80::):" \
   '(^|[^0-9a-fA-F:])([fF][dD][0-9a-fA-F]{2}|[fF][eE]80):'
-scan "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([^A-Za-z0-9._-]|$)' '^(env|mise|public-safety)\.local'
+# In any case, as the tailnet scan; Go's time.Local is code, not a host.
+scan -i "mDNS .local hostnames:" '[A-Za-z0-9-]+\.local([^A-Za-z0-9._-]|$)' '^(env|mise|public-safety|time)\.local'
 # Exactly six pairs: a certificate fingerprint (32 pairs) is public, not a MAC.
-scan "MAC addresses:" '(^|[^0-9A-Fa-f:])([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}([^0-9A-Fa-f:]|$)'
+# A dash separates them as a colon does. Each form has its own boundaries,
+# which exclude only its own separator: a longer run of pairs is not a MAC,
+# and a colon MAC beside a dash still is.
+scan "MAC addresses:" \
+  '(^|[^0-9A-Fa-f:])([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}([^0-9A-Fa-f:]|$)|(^|[^0-9A-Fa-f-])([0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}([^0-9A-Fa-f-]|$)'
 scan "Email addresses outside example and noreply domains:" \
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
-  '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com)|^noreply@anthropic\.com$'
+  '@(example\.(com|org|net)|users\.noreply\.github\.com|noreply\.github\.com)$|^noreply@anthropic\.com$'
 
 # Files that must never be tracked, whatever they contain.
 [ -n "$message" ] || {

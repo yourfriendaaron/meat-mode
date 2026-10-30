@@ -1492,7 +1492,7 @@ function schedulePageHTML(item: Item, p: SchedulePage): string {
 <p class="muted small page-sub">${esc(item.title)}</p>
 ${ask}
 <form id="sched-form" class="sched-form" data-form="schedule" novalidate>
-<label class="sched-typed-label" for="sched-typed">Type when</label><input id="sched-typed" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" placeholder="every sunday 12pm" aria-describedby="sched-readout"${p.typedError ? ' aria-invalid="true"' : ""}>
+<label class="sched-typed-label" for="sched-typed">Type when</label><input id="sched-typed" type="text" maxlength="${TITLE_MAX}" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done" placeholder="every sunday 12pm" aria-describedby="sched-readout"${p.typedError ? ' aria-invalid="true"' : ""}>
 <p id="sched-readout" class="readout${bad}" aria-live="polite">${esc(readout)}</p>
 <h3 class="sched-or">Or set it here</h3>
 <div class="props">
@@ -3279,6 +3279,7 @@ function onKey(e: KeyboardEvent) {
       render();
     } else if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
     else if (S.selecting) endSelect();
+    else if (S.listDelete) askListDelete(false);
     else if (S.open) closeDetail();
     else if (filtering()) filterTag(null);
     else return;
@@ -3495,7 +3496,7 @@ function shell(): string {
   <form id="qa-form" class="qa" autocomplete="off">
     <div class="qa-head"><h2>New task</h2><button type="button" class="icon-btn" data-act="qa-close" aria-label="Close">${ICON.close}</button></div>
     <div class="qa-bar">
-      <div class="qa-field"><div id="qa-backdrop" class="qa-backdrop" aria-hidden="true"></div><input id="qa-input" type="text" enterkeyhint="done" aria-label="New task" aria-describedby="qa-chips" placeholder="Add a task: Water the plants tomorrow 9am #garden"></div>
+      <div class="qa-field"><div id="qa-backdrop" class="qa-backdrop" aria-hidden="true"></div><input id="qa-input" type="text" maxlength="${TITLE_MAX}" enterkeyhint="done" aria-label="New task" aria-describedby="qa-chips" placeholder="Add a task: Water the plants tomorrow 9am #garden"></div>
       <div class="qa-meta"><label class="sr" for="qa-list">List</label><select id="qa-list" class="qa-pill"></select><span id="qa-agent" class="qa-agent" hidden></span><button id="qa-add" class="btn btn-primary" type="submit">${ICON.plus}Add</button></div>
     </div>
     <div class="qa-sub"><span id="qa-chips" class="chips" aria-live="polite"></span><span id="qa-agent-why" class="muted small" hidden></span></div>

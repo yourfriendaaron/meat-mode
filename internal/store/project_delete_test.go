@@ -148,6 +148,33 @@ func TestDeleteProjectRefusesOtherLists(t *testing.T) {
 	}
 }
 
+// A project whose items were all done deletes with no items in its payload
+// (applyProject records only the ids it closed), and the history of one of
+// those items still reads through it.
+func TestItemHistoryOfAProjectDeleteWithNoOpenItems(t *testing.T) {
+	s, c := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	done, _, err := s.AddPersonal(api.PersonalTodo{Title: "Order seeds"}, "laptop", garden)
+	must(t, err)
+	_, _, doneID, _ := SplitKey(done)
+	_, _, err = s.ChangePersonal("laptop", garden, doneID, api.PersonalChange{Kind: api.KindDone})
+	must(t, err)
+	c.tick()
+
+	del := deleteProject(t, s, garden)
+	if slices.Contains(del.Payload.Items, doneID) {
+		t.Fatalf("the done item was recorded as deleted: %+v", del.Payload.Items)
+	}
+	h, err := s.ItemHistory(done, 10)
+	if err != nil {
+		t.Fatalf("ItemHistory of a done item of a deleted project: %v", err)
+	}
+	if len(h) == 0 {
+		t.Fatal("the item's history is empty")
+	}
+}
+
 // A restored hub keeps a deleted project deleted.
 func TestRestoreKeepsAProjectDeleted(t *testing.T) {
 	s, _ := open(t)

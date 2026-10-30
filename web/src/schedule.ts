@@ -4,7 +4,7 @@
 
 import type { Edit, Item } from "./types.ts";
 import { addDays, fmtDay, fmtTime, sameDay, ymd } from "./dates.ts";
-import { diffEdit, draftDue, draftRule, editError, hhmm, type EditDraft } from "./edit.ts";
+import { diffEdit, draftDue, draftRule, editError, fitMonthBy, hhmm, type EditDraft } from "./edit.ts";
 import { parseQuickAdd } from "./quickadd.ts";
 import { firstOccurrence, isLastOfMonth, repeatWords, sameRule, weekOfDate } from "./repeat.ts";
 
@@ -100,9 +100,9 @@ export function monthByChoices(due: Date): [EditDraft["monthBy"], string][] {
   return out;
 }
 
-/** The choice monthByChoices shows as picked: a 5th weekday is the last one. */
+/** The choice monthByChoices shows as picked, which is the one draftRule saves. */
 export function monthByShown(d: EditDraft, due: Date): EditDraft["monthBy"] {
-  return d.monthBy === "weekday" && weekOfDate(due) > 4 ? "last" : d.monthBy;
+  return fitMonthBy(d.monthBy, due);
 }
 
 /** The line under "Count the next one from" that says what the choice does. */

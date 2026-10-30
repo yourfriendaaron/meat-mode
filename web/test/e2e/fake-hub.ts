@@ -108,7 +108,8 @@ function cleanFileName(raw: string): string {
 
 /**
  * Why the hub refuses a repeat (docs/api.md, Repeating to-dos), or "". The
- * real hub's wording differs; the tests look at the status.
+ * real hub's wording differs; the tests look at the status. It mirrors
+ * checkRepeat in internal/store/repeat.go and must change with it.
  */
 function repeatError(r: Repeat): string {
   if (!["day", "week", "month", "year"].includes(r.every)) return "repeat every must be day, week, month or year";
@@ -148,7 +149,7 @@ function keptRepeat(r: Repeat, due: string): Repeat {
   return out;
 }
 
-/** The date after `d` in a rule's series, counted in UTC as nextDue does. */
+/** The date after `d` in a rule's series, counted in UTC as nextDue does; it mirrors nextAfter in internal/store/repeat.go. */
 function stepRepeat(r: Repeat, d: Date): Date {
   const n = r.interval || 1;
   const x = new Date(d);

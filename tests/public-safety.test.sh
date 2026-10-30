@@ -37,13 +37,21 @@ expect block "private IPv4"     src/a.ts   "fetch('http://10.$((1+1)).3.4:8123')
 expect block "192.168 IPv4"     src/a.ts   "host = '192.""168.1.20'"
 expect block "Tailscale IPv4"   src/a.ts   "peer = '100.""101.2.3'"
 expect block "tailnet hostname" README.md  "Open https://svc.tail""abc12.ts.""net"
+expect block "upper-case tailnet hostname" README.md "Open https://SVC.Tail""abc12.TS.""NET"
 expect block "mDNS hostname"    src/a.ts   "url = 'http://homeassistant.lo""cal:8123'"
+expect block "upper-case mDNS hostname" src/a.ts "url = 'http://homeassistant.LOC""AL:8123'"
+expect clean "Go's time.Local"  src/a.go   "loc := time.Lo""cal"
+expect block "mixed-case mDNS hostname" src/a.ts "url = 'http://nas.Lo""cal:8123'"
 expect block "mDNS punctuation" src/a.ts   "see nas.lo""cal) and nas.lo""cal, today"
 expect block "ULA IPv6"         src/a.ts   "addr = 'fd""42:dead:beef::1'"
 expect block "link-local IPv6"  src/a.ts   "addr = 'FE""80::1'"
 expect block "MAC address"      src/a.ts   "mac = 'a4:""83:e7:12:34:56'"
+expect block "MAC with dashes"  src/a.ts   "mac = 'a4-""83-e7-12-34-56'"
+expect clean "a UUID is no MAC" docs/x.md  "id = '550e8400-e29b-41d4-a716-446655440000'"
+expect block "colon MAC beside a dash" docs/x.md "port br-lan-a4:""83:e7:12:34:56"
 expect block "MAC at line end"  docs/x.md  "Router: A4:""83:E7:12:34:56"
 expect block "personal email"   docs/x.md  "Contact $u.person@gm""ail.com"
+expect block "email at a lookalike domain" docs/x.md "Mail $u@example.com.mail""host.net"
 expect block "tracked .env"     .env       "TOKEN=abc"
 expect block "tracked compose"  compose.yaml "services: {}"
 expect block "tracked compose variant" compose.prod.yaml "services: {}"
@@ -116,17 +124,43 @@ message block "personal email"  "Thanks to $u.person@gm""ail.com"
 message block "private pattern" "Fix the bug Zorblax saw" "zorblax"
 message clean "plain"           "$(printf 'Water the plants on time\n\nCo-Authored-By: Claude <noreply@anthro""pic.com>')"
 
+# A message file that cannot be read fails the guard instead of scanning as
+# clean. Root reads everything, so there is nothing to prove as root.
+d=$(fresh)
+printf 'x\n' > "$d/msg"
+chmod 000 "$d/msg"
+if [ -r "$d/msg" ]; then
+  rm -rf "$d"
+else
+  if (cd "$d" && ./scripts/public-safety.sh --message msg >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = block ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: unreadable message file (wanted block, got $got)"; fi
+fi
+
+# The commit-msg hook, which Git runs on the file holding the message.
+commitmsg() { # commitmsg block|clean, name, message
+  local want=$1 name=$2 d got
+  d=$(mktemp -d)
+  git -C "$d" init -q
+  printf '%s\n' "$3" > "$d/msg"
+  if (cd "$d" && "$here/.githooks/commit-msg" msg >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: commit-msg $name (wanted $want, got $got)"; fi
+}
+commitmsg block "host"  "Deploy the fix on nas.lo""cal"
+commitmsg clean "plain" "Water the plants on time"
+
 # The pre-push hook: refs outside branches and tags, Dolt's branches, and
 # commits that track beads data or a Dolt remote.
 hook="$here/.githooks/pre-push"
-push() { # push block|clean, name, remote ref, [file, content, commit message]
+push() { # push block|clean, name, remote ref, [file, content, commit message, local ref]
   local want=$1 name=$2 ref=$3 d sha got
   d=$(mktemp -d)
   git -C "$d" init -q
   if [ -n "${4:-}" ]; then mkdir -p "$d/$(dirname "$4")"; printf '%s\n' "$5" > "$d/$4"; git -C "$d" add -f "$4"; fi
   git -C "$d" -c user.name=Sam -c user.email=sam@example.com commit -q --allow-empty --no-verify -m "${6:-x}"
   sha=$(git -C "$d" rev-parse HEAD)
-  if (cd "$d" && printf 'refs/heads/main %s %s %s\n' "$sha" "$ref" 0000000000000000000000000000000000000000 | "$hook" origin https://example.com/x.git >/dev/null 2>&1); then got=clean; else got=block; fi
+  if (cd "$d" && printf '%s %s %s %s\n' "${7:-refs/heads/main}" "$sha" "$ref" 0000000000000000000000000000000000000000 | "$hook" origin https://example.com/x.git >/dev/null 2>&1); then got=clean; else got=block; fi
   rm -rf "$d"
   if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: push $name (wanted $want, got $got)"; fi
 }
@@ -137,6 +171,24 @@ push block "Dolt remote"       refs/heads/main .beads/config.yaml "$(printf 'syn
 push clean "branch"            refs/heads/main src/a.ts "export const x = 1"
 push clean "tag"               refs/tags/v1.0.0
 push block "host in a commit message" refs/heads/main src/a.ts "export const x = 1" "Deploy on nas.lo""cal"
+push block "host in the remote ref name" "refs/heads/nas.lo""cal"
+push block "host in the local ref name" refs/heads/main src/a.ts "export const x = 1" "ok" "refs/heads/nas.lo""cal"
+
+# The author and committer of every pushed commit are published with it.
+pushid() { # pushid block|clean, name, author email, committer email
+  local want=$1 name=$2 d sha got
+  d=$(mktemp -d)
+  git -C "$d" init -q
+  git -C "$d" -c user.name=Sam -c user.email="$3" -c committer.name=Sam -c committer.email="$4" \
+    commit -q --allow-empty --no-verify -m x
+  sha=$(git -C "$d" rev-parse HEAD)
+  if (cd "$d" && printf 'refs/heads/main %s refs/heads/main %s\n' "$sha" 0000000000000000000000000000000000000000 | "$hook" origin https://example.com/x.git >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: push identity $name (wanted $want, got $got)"; fi
+}
+pushid block "personal author email"    "sam.person@gm""ail.com" "sam@example.com"
+pushid block "personal committer email" "sam@example.com" "sam.person@gm""ail.com"
+pushid clean "a noreply author"         "bot@users.noreply.github.com" "sam@example.com"
 
 # An annotated tag's own message is published as the release notes.
 tagpush() { # tagpush block|clean, name, tag message
@@ -152,6 +204,23 @@ tagpush() { # tagpush block|clean, name, tag message
 }
 tagpush block "host in a tag message" "Release for nas.lo""cal"
 tagpush clean "plain tag message"     "Snooze from the lock screen"
+
+# A tag of a tag publishes the inner tag's message with it, so both are
+# scanned.
+tagchain() { # tagchain block|clean, name, outer message, inner message
+  local want=$1 name=$2 d sha got
+  d=$(mktemp -d)
+  git -C "$d" init -q
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com commit -q --allow-empty --no-verify -m x
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com tag -a v1.0.0 -m "$4"
+  git -C "$d" -c user.name=Sam -c user.email=sam@example.com tag -a v1.0.1 -m "$3" v1.0.0
+  sha=$(git -C "$d" rev-parse v1.0.1)
+  if (cd "$d" && printf 'refs/tags/v1.0.1 %s refs/tags/v1.0.1 %s\n' "$sha" 0000000000000000000000000000000000000000 | "$hook" origin https://example.com/x.git >/dev/null 2>&1); then got=clean; else got=block; fi
+  rm -rf "$d"
+  if [ "$got" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: tag chain $name (wanted $want, got $got)"; fi
+}
+tagchain block "host in the inner tag's message" "Second release" "Release for nas.lo""cal"
+tagchain clean "plain inner tag message"          "Second release" "Snooze from the lock screen"
 
 # Two commits where the first adds a file the second removes: the tip is
 # clean, so only checking the commits being pushed, not just the tip,

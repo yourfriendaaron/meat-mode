@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { firstOccurrence, repeatLabel, sameRule } from "../../src/repeat.ts";
+import { firstOccurrence, repeatLabel, repeatWords, sameRule, type RepeatRule } from "../../src/repeat.ts";
 import { LEAD_CHOICES, leadLabel, leadOptions } from "../../src/lead.ts";
 
 // Wednesday 14 October 2026, 10:00 local time.
@@ -18,6 +18,8 @@ test("a repeat in plain words", () => {
     [{ every: "week", interval: 2, weekdays: [1, 2, 3, 4, 5] }, "Every 2 weeks on Mon, Tue, Wed, Thu, Fri"],
     [{ every: "month" }, "Every month"],
     [{ every: "month", interval: 6 }, "Every 6 months"],
+    [{ every: "month", weekOfMonth: 2, weekdays: [2] }, "Every month on the 2nd Tue"],
+    [{ every: "month", weekOfMonth: -1, weekdays: [5] }, "Every month on the last Fri"],
     [{ every: "year" }, "Every year"],
     [{ every: "day", interval: 3, fromDone: true }, "Every 3 days after done"],
     [{ every: "week", interval: 1 }, "Every week"],
@@ -29,6 +31,21 @@ test("a repeat in plain words", () => {
     [{ every: "day", until: "2026-02-30" }, "Every day"],
   ];
   for (const [r, want] of cases) assert.equal(repeatLabel(r, now), want);
+});
+
+test("a week of the month the labels cannot name falls back to the plain monthly label", () => {
+  // Whatever wrote the rule, a week number outside 1 to 4 and last, or a
+  // weekday outside the week, has no words for it.
+  const rules: RepeatRule[] = [
+    { every: "month", weekOfMonth: 5, weekdays: [2] },
+    { every: "month", weekOfMonth: 0, weekdays: [2] },
+    { every: "month", weekOfMonth: 2, weekdays: [7] },
+    { every: "month", weekOfMonth: 2, weekdays: [1, 3] },
+  ];
+  for (const r of rules) {
+    assert.equal(repeatLabel(r, now), "Every month");
+    assert.equal(repeatWords(r, now), "Every month");
+  }
 });
 
 test("the first occurrence is the first allowed day past now", () => {

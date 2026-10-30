@@ -388,8 +388,8 @@ func TestPairClearsAnEarlierInsecureOptIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := Main(context.Background(), []string{"pair", "http://192.0.2.10:8080", token, "--no-service"}, env)
-	if err == nil || !strings.Contains(err.Error(), "refusing plain HTTP") {
-		t.Errorf("pair over plain HTTP with only a saved opt-in = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "refusing plain HTTP") || !strings.Contains(err.Error(), "--allow-insecure-http") {
+		t.Errorf("pair over plain HTTP with only a saved opt-in = %v, want the refusal to name the flag", err)
 	}
 }
 
