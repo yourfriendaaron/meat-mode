@@ -18,44 +18,91 @@ export interface RepeatMatch {
 }
 
 const UNITS: Record<string, RepeatUnit> = { day: "day", week: "week", month: "month", year: "year" };
-const ADVERBS: Record<string, RepeatUnit> = { daily: "day", weekly: "week", monthly: "month", yearly: "year", annually: "year" };
+const ADVERBS: Record<string, [RepeatUnit, number]> = {
+  daily: ["day", 1],
+  weekly: ["week", 1],
+  fortnightly: ["week", 2],
+  monthly: ["month", 1],
+  quarterly: ["month", 3],
+  yearly: ["year", 1],
+  annually: ["year", 1],
+};
+
+/** "the daily log", "a weekly planner": an adverb between an article and a noun names a thing, not a repeat. */
+const ARTICLE_BEFORE = /(?:^|\s)(?:the|a|an|my|your|our|his|her|their)\s+$/i;
+const NOUN_AFTER = /^\s+(?!(?:at|by|on|in|to|for|from|until|till|starting|and|then|before|after)\b)\p{L}/iu;
 
 /** Day names quick add reads, as a pattern, and the weekday each one means. */
 const DAY = "sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?";
+/** Between two day names: a comma, "and", "&", or only a space after "every" ("every mon wed fri"). */
 const AND = "\\s*(?:,\\s*(?:and\\s+)?|and\\s+|&\\s*)";
+const AND_OR_SPACE = `(?:${AND}|\\s+)`;
 const DAY_LIST = `(?:${DAY})s?(?:${AND}(?:${DAY})s?)*`;
 /** "tuesdays", "mondays and thursdays": a plural day is a weekly repeat on its own. */
 const PLURAL = "(?:sun|mon|tues|wednes|thurs|fri|satur)days";
 const PLURAL_LIST = `${PLURAL}(?:${AND}${PLURAL})*`;
 const EVERY = "(?:every|each)";
 const NUMBER = "\\d{1,3}|other";
+/** "every second day", "every 3rd week": a count said as an ordinal, for units only, since "every 2nd tuesday" names a week of the month. */
+const ORDINAL = "second|third|fourth|2nd|3rd|4th";
 /** A time of day or a part of the day, which chrono reads after "every". */
 const TIME = "\\d{1,2}(?::?\\d{2})?\\s*(?:am|pm)|\\d{1,2}p|\\d{1,2}:?\\d{2}[ap]|\\d{1,2}:\\d{2}|noon|midnight|morning|afternoon|evening|night|lunchtime|after work";
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
 
 /** Each phrase and the rule it means. Where two match at the same place, the first one listed wins. */
-const PATTERNS: { re: RegExp; rule: (m: RegExpExecArray) => RepeatRule; monthDay?: (m: RegExpExecArray) => number }[] = [
+const PATTERNS: {
+  re: RegExp;
+  rule: (m: RegExpExecArray) => RepeatRule;
+  monthDay?: (m: RegExpExecArray) => number;
+  /** Whether this match, in its text, is no repeat after all. */
+  skip?: (m: RegExpExecArray, text: string) => boolean;
+}[] = [
   // every month on the 1st, every 3 months on the 15th, monthly on the 31st
   {
     re: new RegExp(`\\b(?:${EVERY}\\s+(?:(${NUMBER})\\s+)?months?|monthly)\\s+on\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\b`, "i"),
     rule: (m) => rule("month", intervalOf(m[1])),
     monthDay: (m) => Number(m[2]),
   },
-  // every 2 weeks on mon and thu, every week on friday
-  { re: new RegExp(`\\b${EVERY}\\s+(?:(${NUMBER})\\s+)?weeks?\\s+on\\s+(${DAY_LIST})\\b`, "i"), rule: (m) => rule("week", intervalOf(m[1]), daysIn(m[2])) },
-  // every weekday, every weekend, on weekdays
-  { re: new RegExp(`\\b(?:${EVERY}\\s+(weekday|weekend)s?|on\\s+(weekday|weekend)s)\\b`, "i"), rule: (m) => rule("week", 1, /^weekday$/i.test(m[1] ?? m[2]) ? WEEKDAYS : [0, 6]) },
-  // every monday, every mon and thu
-  { re: new RegExp(`\\b${EVERY}\\s+(${DAY_LIST})\\b`, "i"), rule: (m) => rule("week", 1, daysIn(m[1])) },
+  // on the 1st of every month, every 15th of the month
+  {
+    re: /\b(?:(?:every|each)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(?:the|every|each)\s+month|(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(?:every|each)\s+month)\b/i,
+    rule: () => rule("month", 1),
+    monthDay: (m) => Number(m[1] ?? m[2]),
+  },
+  // every 2 weeks on mon and thu, every week on friday, weekly on wednesday
+  {
+    re: new RegExp(`\\b(?:${EVERY}\\s+(?:(${NUMBER})\\s+)?weeks?|weekly)\\s+on\\s+(${DAY_LIST})\\b`, "i"),
+    rule: (m) => rule("week", intervalOf(m[1]), daysIn(m[2])),
+  },
+  // every weekday, every weekend, on weekdays, weekdays
+  { re: new RegExp(`\\b(?:${EVERY}\\s+(weekday|weekend)s?|(?:on\\s+)?(weekday|weekend)s)\\b`, "i"), rule: (m) => rule("week", 1, /^weekday$/i.test(m[1] ?? m[2]) ? WEEKDAYS : [0, 6]) },
+  // every monday, every mon and thu, every mon wed fri, every other friday
+  {
+    re: new RegExp(`\\b${EVERY}\\s+(?:(other)\\s+)?((?:${DAY})s?(?:${AND_OR_SPACE}(?:${DAY})s?)*)\\b`, "i"),
+    rule: (m) => rule("week", intervalOf(m[1]), daysIn(m[2])),
+  },
   // tuesdays, on mondays and thursdays
   { re: new RegExp(`\\b(?:on\\s+)?(${PLURAL_LIST})\\b`, "i"), rule: (m) => rule("week", 1, daysIn(m[1])) },
-  // every day, every 3 days, every other week
-  { re: new RegExp(`\\b${EVERY}\\s+(?:(${NUMBER})\\s+)?(day|week|month|year)s?\\b`, "i"), rule: (m) => rule(UNITS[m[2].toLowerCase()], intervalOf(m[1])) },
+  // every day, every 3 days, every other week, every second day, every quarter, every fortnight
+  {
+    re: new RegExp(`\\b${EVERY}\\s+(?:(${NUMBER}|${ORDINAL})\\s+)?(day|week|month|year|quarter|fortnight)s?\\b`, "i"),
+    rule: (m) => {
+      const unit = m[2].toLowerCase();
+      const n = intervalOf(m[1]);
+      if (unit === "quarter") return rule("month", 3 * n);
+      if (unit === "fortnight") return rule("week", 2 * n);
+      return rule(UNITS[unit], n);
+    },
+  },
   // every 8am, every morning: every day, at a time chrono reads from the words left
   { re: new RegExp(`\\b${EVERY}(?=\\s+(?:${TIME})\\b)`, "i"), rule: () => rule("day", 1) },
-  // daily, weekly
-  { re: /\b(daily|weekly|monthly|yearly|annually)\b/i, rule: (m) => rule(ADVERBS[m[1].toLowerCase()], 1) },
+  // daily, weekly, quarterly
+  {
+    re: /\b(daily|weekly|fortnightly|monthly|quarterly|yearly|annually)\b/i,
+    rule: (m) => rule(...ADVERBS[m[1].toLowerCase()]),
+    skip: (m, text) => ARTICLE_BEFORE.test(text.slice(0, m.index)) && NOUN_AFTER.test(text.slice(m.index + m[0].length)),
+  },
 ];
 
 /** 0 (Sunday) to 6 for a day name or its abbreviation. */
@@ -70,7 +117,10 @@ function daysIn(list: string): number[] {
 
 function intervalOf(n: string | undefined): number {
   if (!n) return 1;
-  if (n.toLowerCase() === "other") return 2;
+  const w = n.toLowerCase();
+  if (w === "other" || w === "second" || w === "2nd") return 2;
+  if (w === "third" || w === "3rd") return 3;
+  if (w === "fourth" || w === "4th") return 4;
   return Number(n);
 }
 
@@ -87,7 +137,7 @@ export function findRepeat(text: string): RepeatMatch | null {
   let best: RepeatMatch | null = null;
   for (const p of PATTERNS) {
     const m = p.re.exec(text);
-    if (!m || (best && m.index >= best.start)) continue;
+    if (!m || (best && m.index >= best.start) || p.skip?.(m, text)) continue;
     const r = p.rule(m);
     const n = r.interval ?? 1;
     if (!Number.isInteger(n) || n < 1 || n > MAX_REPEAT_INTERVAL) continue;

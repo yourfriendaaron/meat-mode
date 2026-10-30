@@ -4,7 +4,7 @@
 
 import * as chrono from "chrono-node/en";
 import { findRepeat, firstOccurrence, type RepeatRule } from "./repeat.ts";
-import { addDays, sameDay, startOfDay, ymd } from "./dates.ts";
+import { addDays, nextMonday, sameDay, startOfDay, ymd } from "./dates.ts";
 import { isPersonal, repoKey, repoLabel, visibleRepos } from "./model.ts";
 import { noAgentReason } from "./runs.ts";
 import { cleanTags } from "./tags.ts";
@@ -63,6 +63,15 @@ const AT_WORD = /(^|\s)@([\p{L}\p{N}_.:/-]+)/gu;
 const TAG_WORD = /^\p{L}/u;
 /** The words that end a repeat ("every sunday until nov 26"), before its date. */
 const UNTIL = /\b(?:until|ending)\s+/gi;
+/** Words that lead into a date and go with it: "by friday", "on the 26th", "sometime tomorrow". */
+const LEAD = /(?:\b(?:in the|at|on(?: the)?|from|starting(?: on| from)?|by|before|due(?: on| by)?|sometime|later|(?:this )?coming|no later than)\s+)+$/i;
+/** A time takes "around" and "about" too: "around 4pm", where "about friday" is a topic. */
+const TIME_LEAD = new RegExp(LEAD.source.replace("|by|", "|by|around|about|"), "i");
+/** A month said alone, led in by "in march", "during june", "by may". */
+const MONTH_ONLY = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?$/i;
+const MONTH_LEAD = /(?:\b(?:in|during|by|before|early|mid|late|sometime in)\s+)+$/i;
+/** Words that end a date chrono stops short of. */
+const TAIL = /^\s+(?:from (?:now|today)|in the (?:morning|afternoon|evening)|at night)\b/i;
 
 /** A word's edges, for patterns chrono runs without its own boundary check. */
 const B = "(?<![\\p{L}\\p{N}_])";
@@ -165,9 +174,168 @@ const pastWeekday: chrono.Refiner = {
   },
 };
 
+/** "half past 4", "quarter to 5": the hour left to the guess below for am or pm. */
+const CLOCK_WORDS = new RegExp(`${B}(half|quarter)\\s+(past|to)\\s+(\\d{1,2})${E}`, "iu");
+const clockWords: chrono.Parser = {
+  pattern: () => CLOCK_WORDS,
+  extract(_ctx, m) {
+    const h = Number(m[3]);
+    if (h < 1 || h > 12) return null;
+    const half = m[1].toLowerCase() === "half";
+    if (m[2].toLowerCase() === "past") return { hour: h, minute: half ? 30 : 15 };
+    if (half) return null;
+    return { hour: h === 1 ? 12 : h - 1, minute: 45 };
+  },
+};
+
+const MONTH_WORD = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+const WEEKDAY_WORD = "mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?";
+
+/**
+ * "the 20th", "monday the 19th": the next day of the month with that number,
+ * today included. Chrono reads an ordinal only with a month beside it.
+ */
+const ORDINAL_DAY = new RegExp(
+  `${B}(?:(?:${WEEKDAY_WORD}),?\\s+(?:the\\s+)?|the\\s+)(\\d{1,2})(?:st|nd|rd|th)${E}(?!\\s+(?:of${E}|(?:${MONTH_WORD})${E}))`,
+  "iu",
+);
+const ordinalDay: chrono.Parser = {
+  pattern: () => ORDINAL_DAY,
+  extract(ctx, m) {
+    const day = Number(m[1]);
+    if (day < 1 || day > 31) return null;
+    const now = ctx.reference.instant;
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, day);
+      if (d.getDate() !== day || d < startOfDay(now)) continue;
+      return { year: d.getFullYear(), month: d.getMonth() + 1, day };
+    }
+    return null;
+  },
+};
+
+/** "in a fortnight", "2 fortnights": fourteen days each. */
+const FORTNIGHT = new RegExp(`${B}(?:in\\s+)?(a|one|two|\\d{1,2})\\s+fortnights?${E}`, "iu");
+const fortnight: chrono.Parser = {
+  pattern: () => FORTNIGHT,
+  extract(ctx, m) {
+    const w = m[1].toLowerCase();
+    const n = w === "a" || w === "one" ? 1 : w === "two" ? 2 : Number(w);
+    const d = addDays(startOfDay(ctx.reference.instant), 14 * n);
+    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  },
+};
+
+/** "feb 29": the next leap day, which chrono drops in a year that has none. */
+const LEAP_DAY = new RegExp(`${B}(?:feb(?:ruary)?\\.?\\s+29(?:th)?|29(?:th)?\\s+(?:of\\s+)?feb(?:ruary)?)${E}`, "iu");
+const leapDay: chrono.Parser = {
+  pattern: () => LEAP_DAY,
+  extract(ctx) {
+    const today = startOfDay(ctx.reference.instant);
+    for (let y = today.getFullYear(); ; y++) {
+      const d = new Date(y, 1, 29);
+      if (d.getMonth() === 1 && d >= today) return { year: y, month: 2, day: 29 };
+    }
+  },
+};
+
+/** Words that may follow a date or time without making it part of a name: "the morning before work". */
+const FUNCTION_WORD = /^\s+(?:at|by|on|in|to|for|about|with|and|or|then|before|after|until|till|please|so|if|when|while|from|of|around|ish)(?![\p{L}\p{N}_])/iu;
+const ARTICLE_BEFORE = /(?:^|\s)(?:the|a|an|my|your|our|his|her|their)\s+$/i;
+
+/**
+ * Drops readings that are words of the title: "March in the parade", "Sun the
+ * mattress", "the weekend trip", "the morning news", "the 24 hour pharmacy".
+ */
+const notDates: chrono.Refiner = {
+  refine(ctx, results) {
+    return results.filter((r) => {
+      const before = ctx.text.slice(0, r.index);
+      const after = ctx.text.slice(r.index + r.text.length);
+      const word = r.text.trim();
+      // A month on its own, said first or as a name: only "in march", "by march" and such mean a date.
+      if (new RegExp(`^(?:${MONTH_WORD})\\.?$`, "i").test(word) && !/\b(?:in|by|until|till|before|during|of|early|mid|late|next|this|end)\s+$/i.test(before)) return false;
+      const noun = /^\s+\p{L}/u.test(after) && !FUNCTION_WORD.test(after);
+      // "Call Sam about tomorrow": a day after "about" is what the task is about.
+      if (/\babout\s+$/i.test(before) && !r.start.isCertain("hour")) return false;
+      // "sun", "sat" and "wed" are words too: "Sun the mattress", "Sat exam prep".
+      if (/^(?:sun|sat|wed)$/i.test(word) && noun) return false;
+      // "the 3rd chapter", "the 2nd floor": an ordinal before a noun counts things, not days.
+      if (/^(?:the\s+)?\d{1,2}(?:st|nd|rd|th)$/i.test(word) && noun) return false;
+      // "the weekend trip", "the friday party": a day or part of one used as an adjective.
+      if (/^(?:the\s+)?(?:weekend|morning|afternoon|evening|night|(?:mon|tues|wednes|thurs|fri|satur|sun)day)$/i.test(word) && ARTICLE_BEFORE.test(before) && noun) return false;
+      // "24 hour", "a day" with no "in" or "from now": a measure, not a date.
+      if (/^(?:\d+|an?|one)\s*(?:hours?|hrs?|minutes?|mins?|days?|weeks?|months?|years?)$/i.test(word) && !/\b(?:in|within|after)\s+$/i.test(before) && !/^\s+(?:from|later|ago|after|before)\b/i.test(after)) return false;
+      return true;
+    });
+  },
+};
+
+/** A part of the day said after a time: "at 6 in the evening". */
+const PART_AFTER = /^\s+(?:in the (?:morning|afternoon|evening)|at night)\b/i;
+
+/**
+ * A bare hour from 1 to 7 is the afternoon or evening one, as people rarely
+ * plan for 3 in the morning: "at 3", "friday at 5", "half past 4". One said
+ * "in the evening" is pm whatever the hour; "in the morning" keeps am. A time
+ * with minutes, "7:30", is read on the 24-hour clock the app shows.
+ */
+const pmGuess: chrono.Refiner = {
+  refine(ctx, results) {
+    for (const r of results) {
+      if (!r.start.isCertain("hour") || r.start.isCertain("meridiem")) continue;
+      const h = r.start.get("hour") ?? 0;
+      const part = PART_AFTER.exec(ctx.text.slice(r.index + r.text.length))?.[0].toLowerCase() ?? "";
+      if (part.includes("morning")) continue;
+      const pm = part ? h >= 1 && h < 12 : h >= 1 && h <= 7 && !/\d[:.]\d/.test(r.text);
+      // Before 7 in the morning, "at 7" with no day is the one still to come today.
+      if (!pm || (!part && !r.start.isCertain("day") && !r.start.isCertain("weekday") && h > ctx.reference.instant.getHours())) continue;
+      r.start.assign("hour", h + 12);
+      r.start.assign("meridiem", 1);
+    }
+    return results;
+  },
+};
+
+/** "next week" is next Monday, as other to-do apps read it, rather than a week from today. */
+const nextWeekMonday: chrono.Refiner = {
+  refine(ctx, results) {
+    for (const r of results) {
+      if (!/^next week$/i.test(r.text.trim())) continue;
+      const d = nextMonday(ctx.reference.instant);
+      r.start.assign("year", d.getFullYear());
+      r.start.assign("month", d.getMonth() + 1);
+      r.start.assign("day", d.getDate());
+      r.start.delete(["hour", "minute", "second"]);
+    }
+    return results;
+  },
+};
+
+/** "in a month" from January 31 is February 28, not March 3: a month on lands in that month. */
+const MONTHS_ON = /^(?:in\s+)?(a|an|one|two|three|\d{1,2})\s+months?(?:\s+from\s+(?:now|today))?$|^next month$/i;
+const monthEnd: chrono.Refiner = {
+  refine(ctx, results) {
+    for (const r of results) {
+      const m = MONTHS_ON.exec(r.text.trim());
+      if (!m) continue;
+      const w = (m[1] ?? "1").toLowerCase();
+      const n = ({ a: 1, an: 1, one: 1, two: 2, three: 3 } as Record<string, number>)[w] ?? Number(w);
+      const now = ctx.reference.instant;
+      const last = new Date(now.getFullYear(), now.getMonth() + n + 1, 0);
+      r.start.assign("year", last.getFullYear());
+      r.start.assign("month", last.getMonth() + 1);
+      r.start.assign("day", Math.min(now.getDate(), last.getDate()));
+    }
+    return results;
+  },
+};
+
 const parser = chrono.casual.clone();
-parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek, dayBeside);
-parser.refiners.unshift(morningAtNine, pastWeekday);
+// The leap day goes first, so chrono's own reading of "feb 29", which it drops in a year without one, does not hide it.
+parser.parsers.unshift(leapDay);
+parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek, dayBeside, clockWords, ordinalDay, fortnight);
+parser.refiners.unshift(notDates, morningAtNine, pastWeekday, pmGuess, nextWeekMonday, monthEnd);
 
 export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts: QuickOptions = {}): QuickAdd {
   const tokens: QuickToken[] = [];
@@ -282,10 +450,15 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
     // Chrono can take in spaces around a match, such as a blanked repeat's.
     const from = r.index + r.text.length - r.text.trimStart().length;
     // "in the morning", "at noon", "from friday": chrono leaves out the words that lead in.
-    const lead = /\b(?:in the|at|on|from|starting(?: on| from)?)\s+$/i.exec(dateText.slice(0, from));
+    const lead = (MONTH_ONLY.test(r.text.trim()) ? MONTH_LEAD : r.start.isCertain("hour") ? TIME_LEAD : LEAD).exec(dateText.slice(0, from));
     const start = lead ? lead.index : from;
-    const end = r.index + r.text.trimEnd().length;
+    let end = r.index + r.text.trimEnd().length;
+    // "a week from today", "at 6 in the evening": words chrono leaves after the date.
+    const tail = TAIL.exec(dateText.slice(end));
+    if (tail && (!/^\s+(?:in the|at night)/i.test(tail[0]) || r.start.isCertain("hour"))) end += tail[0].length;
     if (!free(start, end)) continue;
+    // "every week on the 1st": a day of the month counts only with a monthly repeat, which has read it already.
+    if (repeat && /^(?:the\s+)?\d{1,2}(?:st|nd|rd|th)$/i.test(r.text.trim())) continue;
     due = repeat && !hasDay(r) ? firstOccurrence(repeat, now, ...timeOf(r), monthDay) : resolve(r, now);
     take("date", start, end);
     break;
@@ -305,8 +478,18 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
     title += text.slice(pos, t.start);
     pos = t.end;
   }
-  title += text.slice(pos);
+  // A full stop or "!" after the last date ends the sentence, and goes with it.
+  if (!(tokens.length && /^[\s.!]+$/.test(text.slice(pos)))) title += text.slice(pos);
   title = title.replace(/\s+/g, " ").trim();
+  // The marks that set a date apart go with it: "Friday: buy flour", "Buy flour, friday", "Buy flour (friday)".
+  if (tokens.length) {
+    title = title
+      .replace(/\(\s*\)|\[\s*\]/g, "")
+      .replace(/\s+([,.!?;:])/g, "$1")
+      .replace(/^[\s,:;\u2013\u2014-]+|[\s,:;\u2013\u2014-]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
   const out: QuickAdd = { title, due, repeat, list, tags, tokens };
   if (early) out.early = early;
   return out;
@@ -453,7 +636,9 @@ function timeOf(r: ReturnType<typeof chrono.parse>[number]): [number, number] {
 function resolve(r: ReturnType<typeof chrono.parse>[number], now: Date): Date {
   const d = r.start.date();
   if (TONIGHT.test(r.text) && !r.start.isCertain("hour")) {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), TONIGHT_HOUR, 0);
+    const tonight = new Date(d.getFullYear(), d.getMonth(), d.getDate(), TONIGHT_HOUR, 0);
+    // Said after 20:00, tonight is the next full hour.
+    return tonight > now ? tonight : new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0);
   }
   // Chrono reads "last night" as midnight; it is yesterday at tonight's hour.
   if (LAST_NIGHT.test(r.text) && !r.start.isCertain("hour")) {
