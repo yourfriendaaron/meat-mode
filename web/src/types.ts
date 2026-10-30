@@ -117,6 +117,8 @@ export interface Repeat {
   interval?: number;
   /** A weekly rule's days, 0 (Sunday) to 6. Left out, the due date's weekday. */
   weekdays?: number[];
+  /** A monthly rule on a weekday of the month: 1 to 4, or -1 for the last, with one weekday. */
+  weekOfMonth?: number;
   /** Counts the next date from the day the item is done. */
   fromDone?: boolean;
   /** IANA zone whose wall-clock time the rule keeps. */

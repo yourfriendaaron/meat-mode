@@ -21,6 +21,7 @@ const blank: EditDraft = {
   repeat: "",
   interval: "1",
   weekdays: [],
+  monthBy: "date",
   fromDone: false,
   until: "",
   timeZone: "",

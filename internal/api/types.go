@@ -145,8 +145,13 @@ type Repeat struct {
 	Every    string `json:"every"`              // EveryDay, EveryWeek, EveryMonth or EveryYear
 	Interval int    `json:"interval,omitempty"` // every n units, 1 to MaxRepeatInterval; 0 means 1
 	// Weekdays picks the days of a weekly rule, 0 (Sunday) to 6. Empty
-	// means the due date's weekday.
+	// means the due date's weekday. A monthly rule with WeekOfMonth takes
+	// exactly one.
 	Weekdays []int `json:"weekdays,omitempty"`
+	// WeekOfMonth makes a monthly rule land on a weekday of the month
+	// rather than a date: 1 to 4 for the first to the fourth, -1 for the
+	// last ("every 2nd Tuesday", "every last Friday"). 0 means a date.
+	WeekOfMonth int `json:"weekOfMonth,omitempty"`
 	// FromDone counts the next date from the day the item is done instead
 	// of from the schedule.
 	FromDone bool `json:"fromDone,omitempty"`

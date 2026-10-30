@@ -69,6 +69,8 @@ export const PHRASES: Phrase[] = [
   { say: "Water the plants by friday", title: "Water the plants", due: "2026-10-16 09:00" },
   { say: "Water the plants next friday", title: "Water the plants", due: "2026-10-23 09:00" },
   { say: "Water the plants this weekend", title: "Water the plants", due: "2026-10-17 09:00" },
+  { say: "Water the plants next weekend", title: "Water the plants", due: "2026-10-24 09:00" },
+  { say: "Water the plants next weekend at 10am", title: "Water the plants", due: "2026-10-24 10:00" },
   { say: "Water the plants on the weekend", title: "Water the plants", due: "2026-10-17 09:00" },
   { say: "Water the plants by end of week", title: "Water the plants", due: "2026-10-16 09:00" },
   { say: "Water the plants the day after tomorrow", title: "Water the plants", due: "2026-10-16 09:00" },
@@ -205,6 +207,16 @@ export const PHRASES: Phrase[] = [
   { say: "Water the plants weekly on wednesday", title: "Water the plants", due: "2026-10-21 09:00", repeat: "Every week on Wed" },
   { say: "Water the plants every day at noon", title: "Water the plants", due: "2026-10-14 12:00", repeat: "Every day" },
   { say: "Water the plants every afternoon", title: "Water the plants", due: "2026-10-14 15:00", repeat: "Every day" },
+  { say: "Water the plants every 2nd day", title: "Water the plants", due: "2026-10-15 09:00", repeat: "Every 2 days" },
+  { say: "Stretch twice a week", title: "Stretch", due: "2026-10-15 09:00", repeat: "Every week on Mon, Thu" },
+  { say: "Stretch three times a week at 7am", title: "Stretch", due: "2026-10-16 07:00", repeat: "Every week on Mon, Wed, Fri" },
+  { say: "Book club every 2nd tuesday", title: "Book club", due: "2026-11-10 09:00", repeat: "Every month on the 2nd Tue" },
+  { say: "Book club every second thursday at 7pm", title: "Book club", due: "2026-11-12 19:00", repeat: "Every month on the 2nd Thu" },
+  { say: "Book club every last friday", title: "Book club", due: "2026-10-30 09:00", repeat: "Every month on the last Fri" },
+  { say: "Book club the first monday of every month", title: "Book club", due: "2026-11-02 09:00", repeat: "Every month on the 1st Mon" },
+  { say: "Book club monthly on the 3rd wednesday at 6pm", title: "Book club", due: "2026-10-21 18:00", repeat: "Every month on the 3rd Wed" },
+  { say: "Book club every 3 months on the last sunday", title: "Book club", due: "2026-10-25 09:00", repeat: "Every 3 months on the last Sun" },
+  { say: "Book club every last friday of the month until dec 31", title: "Book club", due: "2026-10-30 09:00", repeat: "Every month on the last Fri until Dec 31" },
 
   // Lists and tags.
   { say: "Prune the roses #garden", title: "Prune the roses", due: null, list: "home/garden" },
@@ -266,6 +278,7 @@ export const PHRASES: Phrase[] = [
   { say: "Water the plants monday", title: "Water the plants", due: "2026-10-19 09:00", now: SAT },
   { say: "Water the plants next week", title: "Water the plants", due: "2026-10-19 09:00", now: SAT },
   { say: "Water the plants this weekend", title: "Water the plants", due: "2026-10-17 12:00", now: SAT },
+  { say: "Water the plants next weekend", title: "Water the plants", due: "2026-10-24 09:00", now: SAT },
   { say: "Water the plants every weekday", title: "Water the plants", due: "2026-10-19 09:00", repeat: "Every weekday", now: SAT },
 
   // Around the turn of the year.

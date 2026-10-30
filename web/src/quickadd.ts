@@ -135,6 +135,19 @@ const endOfWeek: chrono.Parser = {
   },
 };
 
+/** "next weekend": the Saturday after this weekend's, or the coming one when said on a weekend. */
+const NEXT_WEEKEND = new RegExp(`${B}next\\s+weekend${E}`, "iu");
+const nextWeekend: chrono.Parser = {
+  pattern: () => NEXT_WEEKEND,
+  extract(ctx) {
+    const now = ctx.reference.instant;
+    const wd = now.getDay();
+    const ahead = ((6 - wd + 7) % 7 || 7) + (wd >= 1 && wd <= 5 ? 7 : 0);
+    const d = addDays(startOfDay(now), ahead);
+    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  },
+};
+
 /** "day before yesterday", "day after tomorrow": chrono reads them only after "the". */
 const DAY_BESIDE = new RegExp(`${B}(?:the\\s+)?day\\s+(before\\s+yesterday|after\\s+tomorrow)${E}`, "iu");
 const dayBeside: chrono.Parser = {
@@ -334,7 +347,7 @@ const monthEnd: chrono.Refiner = {
 const parser = chrono.casual.clone();
 // The leap day goes first, so chrono's own reading of "feb 29", which it drops in a year without one, does not hide it.
 parser.parsers.unshift(leapDay);
-parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek, dayBeside, clockWords, ordinalDay, fortnight);
+parser.parsers.push(shortMeridiem, namedTime, firstThing, endOfWeek, dayBeside, clockWords, ordinalDay, fortnight, nextWeekend);
 parser.refiners.unshift(notDates, morningAtNine, pastWeekday, pmGuess, nextWeekMonday, monthEnd);
 
 export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts: QuickOptions = {}): QuickAdd {

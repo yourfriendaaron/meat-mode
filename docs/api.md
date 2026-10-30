@@ -355,10 +355,11 @@ The user can attach files to an item of the personal list or a project, and open
 
 ### Repeating to-dos
 
-A personal item can repeat: "Water the plants every day at 8:30pm". `Repeat` is `{"every", "interval"?, "weekdays"?, "fromDone"?, "timeZone", "until"?, "start"}`:
+A personal item can repeat: "Water the plants every day at 8:30pm". `Repeat` is `{"every", "interval"?, "weekdays"?, "weekOfMonth"?, "fromDone"?, "timeZone", "until"?, "start"}`:
 
 - `every` is `day`, `week`, `month` or `year`; `interval` repeats every n of them, `1` (the default) to `100`.
-- `weekdays` picks the days of a weekly rule, `0` (Sunday) to `6`, each once. Left out, a weekly rule keeps the due date's weekday. Only a weekly rule takes it, and not with `fromDone`.
+- `weekdays` picks the days of a weekly rule, `0` (Sunday) to `6`, each once. Left out, a weekly rule keeps the due date's weekday. Only a weekly rule takes it, or a monthly one with `weekOfMonth`, and not with `fromDone`.
+- `weekOfMonth` makes a monthly rule land on a weekday of the month instead of a date: `1` to `4` for the first to the fourth, `-1` for the last. It takes exactly one `weekdays` entry, the day, and not `fromDone`. "Every 2nd Tuesday" is `{"every": "month", "weekdays": [2], "weekOfMonth": 2}`; with `interval` 3 it is every third month's. Left out, a monthly rule keeps the due date's day of the month.
 - `timeZone` is an IANA zone. The rule keeps the due time's wall-clock time and date in it, so 8:30pm stays 8:30pm across daylight saving changes. The app sends the device's zone; `meat-mode add` sends the hub's, or the machine's while the hub has none.
 - `until` ends the series: "Water the plants every Sunday until 26 November". It is a date, `YYYY-MM-DD`, in `timeZone`, and the series' last occurrence is the last one on or before it. Left out, the item repeats for good. The hub refuses an `until` before the date of the item's due time, both when the rule is set and when the due time is moved. To change or remove it, send the whole `repeat` again with the new `until` or none.
 - `start` is the occurrence the schedule counts from. The hub sets it to the due time whenever the rule is set, and when the due time is set to a time that is not one of the series' own dates; moving the due time onto one of them, as the Undo of a `done` does, keeps it. Sending a rule that differs from the item's own only in `until`, while the due time is one of the series' dates, also keeps it, so changing the end date never moves the series. The hub ignores a `start` a client sends. A monthly rule from the 31st lands on the last day of shorter months and returns to the 31st after them; a yearly rule from 29 February lands on 28 February.
@@ -465,7 +466,7 @@ The hub holds the only copy of the personal list, the projects, their attachment
 
 Files are not put in the JSON as base64: that grows them by a third, makes the hub hold the whole file in memory to write and read it, and would need the restore cap raised by the same third. Every app of this kind that restores its own attachments (Memos, Vikunja, Joplin, Trilium) exports a zip or tar of metadata plus raw files ([research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)).
 
-**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 5, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines", "hiddenProjects"}`:
+**What an export holds.** `export.json` is `{"format": "meat-mode-export", "version": 6, "exportedAt", "settings", "items", "actions", "reminders", "origins", "machines", "hiddenProjects"}`:
 
 - `settings` is `{"name", "timeZone", "reminderLead", "calendarFeed"}`: the first three as `GET /api/settings` shows them, except that `name` is `""` while none was chosen, and `calendarFeed` whether the calendar feed was on.
 - `items` holds every item of the lists the hub keeps, the personal list and every project, closed ones included however old: the `Item` fields as `GET /api/state` shows them, with `key`, `bridge` (`hub`), `repo` (the list), `firstSeen`, `seenAt`, `labels` (those that pass the rules in Tags: an item moved off a machine's personal repo may hold bead labels that do not, and they are left out so the export always restores) and `attachments` (those not removed, each with `size` and `sha256`), and no `run`, `pending` or `error`. `owner` names the machine whose agents added the item, `""` (left out) for one added in the app.

@@ -14,24 +14,27 @@ import (
 
 func TestParseEvery(t *testing.T) {
 	for in, want := range map[string]api.Repeat{
-		"day":                {Every: api.EveryDay},
-		"Week":               {Every: api.EveryWeek},
-		"month":              {Every: api.EveryMonth},
-		"year":               {Every: api.EveryYear},
-		"1 day":              {Every: api.EveryDay},
-		"3 days":             {Every: api.EveryDay, Interval: 3},
-		"2 weeks":            {Every: api.EveryWeek, Interval: 2},
-		"6 months":           {Every: api.EveryMonth, Interval: 6},
-		"100 years":          {Every: api.EveryYear, Interval: 100},
-		"weekday":            {Every: api.EveryWeek, Weekdays: []int{1, 2, 3, 4, 5}},
-		"mon,thu":            {Every: api.EveryWeek, Weekdays: []int{1, 4}},
-		"Sunday":             {Every: api.EveryWeek, Weekdays: []int{0}},
-		"sat, sun, sat":      {Every: api.EveryWeek, Weekdays: []int{6, 0}},
-		"2 weeks on mon,thu": {Every: api.EveryWeek, Interval: 2, Weekdays: []int{1, 4}},
-		" week on tuesday ":  {Every: api.EveryWeek, Weekdays: []int{2}},
+		"day":                      {Every: api.EveryDay},
+		"Week":                     {Every: api.EveryWeek},
+		"month":                    {Every: api.EveryMonth},
+		"year":                     {Every: api.EveryYear},
+		"1 day":                    {Every: api.EveryDay},
+		"3 days":                   {Every: api.EveryDay, Interval: 3},
+		"2 weeks":                  {Every: api.EveryWeek, Interval: 2},
+		"6 months":                 {Every: api.EveryMonth, Interval: 6},
+		"100 years":                {Every: api.EveryYear, Interval: 100},
+		"weekday":                  {Every: api.EveryWeek, Weekdays: []int{1, 2, 3, 4, 5}},
+		"mon,thu":                  {Every: api.EveryWeek, Weekdays: []int{1, 4}},
+		"Sunday":                   {Every: api.EveryWeek, Weekdays: []int{0}},
+		"sat, sun, sat":            {Every: api.EveryWeek, Weekdays: []int{6, 0}},
+		"2 weeks on mon,thu":       {Every: api.EveryWeek, Interval: 2, Weekdays: []int{1, 4}},
+		" week on tuesday ":        {Every: api.EveryWeek, Weekdays: []int{2}},
+		"month on 2nd tue":         {Every: api.EveryMonth, Weekdays: []int{2}, WeekOfMonth: 2},
+		"month on last fri":        {Every: api.EveryMonth, Weekdays: []int{5}, WeekOfMonth: -1},
+		"3 months on first monday": {Every: api.EveryMonth, Interval: 3, Weekdays: []int{1}, WeekOfMonth: 1},
 	} {
 		got, err := ParseEvery(in, false)
-		if err != nil || got.Every != want.Every || got.Interval != want.Interval || !slices.Equal(got.Weekdays, want.Weekdays) || got.FromDone {
+		if err != nil || got.Every != want.Every || got.Interval != want.Interval || !slices.Equal(got.Weekdays, want.Weekdays) || got.WeekOfMonth != want.WeekOfMonth || got.FromDone {
 			t.Errorf("ParseEvery(%q) = %+v, %v; want %+v", in, got, err, want)
 		}
 	}
@@ -39,12 +42,12 @@ func TestParseEvery(t *testing.T) {
 		t.Errorf("from done: %+v, %v", got, err)
 	}
 	for _, in := range []string{"", "daily", "fortnight", "0 days", "101 days", "-2 weeks", "two weeks", "3 days on mon",
-		"2 months on mon", "week on someday", "mon,someday", "2 mon", "3 days please"} {
+		"2 months on mon", "month on 5th tue", "month on 2nd someday", "year on 2nd tue", "week on 2nd tue", "week on someday", "mon,someday", "2 mon", "3 days please"} {
 		if _, err := ParseEvery(in, false); err == nil {
 			t.Errorf("ParseEvery(%q) took it", in)
 		}
 	}
-	for _, in := range []string{"mon,thu", "weekday", "week on fri"} {
+	for _, in := range []string{"mon,thu", "weekday", "week on fri", "month on 2nd tue"} {
 		if _, err := ParseEvery(in, true); err == nil || !strings.Contains(err.Error(), "--from-done") {
 			t.Errorf("ParseEvery(%q) from done: %v", in, err)
 		}

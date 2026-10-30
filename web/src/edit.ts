@@ -6,7 +6,7 @@ import { MAX_REPEAT_INTERVAL, type Action, type Comment, type Edit, type Item, t
 import { isOpen, isPersonal, repoKey } from "./model.ts";
 import { fmtWhenAt, fromYmd, ymd } from "./dates.ts";
 import { DEFAULT_HOUR } from "./quickadd.ts";
-import { sameRule, type RepeatRule } from "./repeat.ts";
+import { sameRule, weekOfDate, type RepeatRule } from "./repeat.ts";
 import { cleanTags, sameTags, shownTags, typedTags } from "./tags.ts";
 
 export const TITLE_MAX = 1000;
@@ -66,6 +66,8 @@ export interface EditDraft {
   interval: string;
   /** A weekly repeat's days; none means the due date's day. */
   weekdays: number[];
+  /** A monthly repeat's day: the date's day of the month, its weekday of the month ("2nd Tue"), or its last one. */
+  monthBy: "date" | "weekday" | "last";
   fromDone: boolean;
   /** The repeat's last date, "YYYY-MM-DD"; "" repeats for good. */
   until: string;
@@ -90,7 +92,8 @@ export function draftOf(item: Item, timeZone = ""): EditDraft {
     priority: item.priority,
     repeat: r?.every ?? "",
     interval: String(r?.interval || 1),
-    weekdays: [...(r?.weekdays ?? [])],
+    weekdays: r?.weekOfMonth ? [] : [...(r?.weekdays ?? [])],
+    monthBy: !r?.weekOfMonth ? "date" : r.weekOfMonth < 0 ? "last" : "weekday",
     fromDone: !!r?.fromDone,
     until: r?.until ?? "",
     timeZone,
@@ -124,6 +127,12 @@ export function draftRule(d: EditDraft): RepeatRule | null | undefined {
   if (n !== 1) r.interval = n;
   // The hub takes weekdays on a weekly rule only, and not with fromDone.
   if (d.repeat === "week" && !d.fromDone && d.weekdays.length) r.weekdays = [...d.weekdays].sort((a, b) => a - b);
+  // A monthly repeat by weekday takes the day and its week from the date.
+  const due = d.repeat === "month" && !d.fromDone && d.monthBy !== "date" ? draftDue(d) : null;
+  if (due) {
+    r.weekdays = [due.getDay()];
+    r.weekOfMonth = d.monthBy === "last" || weekOfDate(due) > 4 ? -1 : weekOfDate(due);
+  }
   if (d.fromDone) r.fromDone = true;
   if (d.until) r.until = d.until;
   return r;

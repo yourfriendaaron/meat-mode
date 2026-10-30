@@ -29,6 +29,7 @@ func TestNextDue(t *testing.T) {
 		every    string
 		interval int
 		weekdays []int
+		week     int
 		fromDone bool
 		loc      *time.Location
 		start    string
@@ -80,6 +81,16 @@ func TestNextDue(t *testing.T) {
 		{"weekdays across fall back", rule{every: "week", weekdays: []int{0}, loc: ny, start: "2026-10-25 01:30"}, "", "2026-10-25 02:00", "", "2026-11-01T05:30:00Z"},
 		{"every 3 weeks", rule{every: "week", interval: 3, loc: paris, start: "2026-03-05 09:00"}, "", "2026-03-05 10:00", "2026-03-26 09:00", ""},
 
+		// A weekday of the month. 1 March 2026 is a Sunday.
+		{"2nd Tuesday", rule{every: "month", weekdays: []int{2}, week: 2, loc: paris, start: "2026-03-10 09:00"}, "", "2026-03-10 10:00", "2026-04-14 09:00", ""},
+		{"2nd Tuesday, then May", rule{every: "month", weekdays: []int{2}, week: 2, loc: paris, start: "2026-03-10 09:00"}, "2026-04-14 09:00", "2026-04-14 10:00", "2026-05-12 09:00", ""},
+		{"last Friday", rule{every: "month", weekdays: []int{5}, week: -1, loc: paris, start: "2026-02-27 09:00"}, "", "2026-02-27 10:00", "2026-03-27 09:00", ""},
+		{"last Friday of April", rule{every: "month", weekdays: []int{5}, week: -1, loc: paris, start: "2026-02-27 09:00"}, "2026-03-27 09:00", "2026-03-27 10:00", "2026-04-24 09:00", ""},
+		{"4th Sunday, every 3 months", rule{every: "month", interval: 3, weekdays: []int{0}, week: 4, loc: paris, start: "2026-03-22 09:00"}, "", "2026-03-22 10:00", "2026-06-28 09:00", ""},
+		{"1st Monday, start before it", rule{every: "month", weekdays: []int{1}, week: 1, loc: paris, start: "2026-03-01 09:00"}, "", "2026-03-01 10:00", "2026-03-02 09:00", ""},
+		{"2nd Tuesday, done months late", rule{every: "month", weekdays: []int{2}, week: 2, loc: paris, start: "2026-03-10 09:00"}, "", "2026-07-20 10:00", "2026-08-11 09:00", ""},
+		{"last Friday from long ago", rule{every: "month", weekdays: []int{5}, week: -1, loc: paris, start: "1900-01-26 09:00"}, "", "2026-03-01 10:00", "2026-03-27 09:00", ""},
+
 		// Next after both the due time and now: early, late, skipped.
 		{"done early", rule{every: "day", loc: paris, start: "2026-03-01 09:00"}, "2026-03-06 09:00", "2026-03-05 10:00", "2026-03-07 09:00", ""},
 		{"done a little early", rule{every: "day", loc: paris, start: "2026-03-01 09:00"}, "2026-03-05 09:00", "2026-03-05 08:00", "2026-03-06 09:00", ""},
@@ -101,7 +112,7 @@ func TestNextDue(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			start := at(t, tc.r.loc, tc.r.start)
-			r := api.Repeat{Every: tc.r.every, Interval: tc.r.interval, Weekdays: tc.r.weekdays, FromDone: tc.r.fromDone,
+			r := api.Repeat{Every: tc.r.every, Interval: tc.r.interval, Weekdays: tc.r.weekdays, WeekOfMonth: tc.r.week, FromDone: tc.r.fromDone,
 				TimeZone: tc.r.loc.String(), Start: &start}
 			due := start
 			if tc.due != "" {
@@ -172,23 +183,30 @@ func TestCheckRepeat(t *testing.T) {
 		t.Errorf("cleaned %+v", r)
 	}
 	for name, r := range map[string]api.Repeat{
-		"no every":           {TimeZone: "UTC"},
-		"unknown every":      {Every: "fortnight", TimeZone: "UTC"},
-		"negative interval":  {Every: api.EveryDay, Interval: -1, TimeZone: "UTC"},
-		"interval too large": {Every: api.EveryDay, Interval: api.MaxRepeatInterval + 1, TimeZone: "UTC"},
-		"weekdays, daily":    {Every: api.EveryDay, Weekdays: []int{1}, TimeZone: "UTC"},
-		"weekdays, fromDone": {Every: api.EveryWeek, Weekdays: []int{1}, FromDone: true, TimeZone: "UTC"},
-		"weekday 7":          {Every: api.EveryWeek, Weekdays: []int{7}, TimeZone: "UTC"},
-		"weekday -1":         {Every: api.EveryWeek, Weekdays: []int{-1}, TimeZone: "UTC"},
-		"weekday twice":      {Every: api.EveryWeek, Weekdays: []int{2, 2}, TimeZone: "UTC"},
-		"no zone":            {Every: api.EveryDay},
-		"Local":              {Every: api.EveryDay, TimeZone: "Local"},
-		"unknown zone":       {Every: api.EveryDay, TimeZone: "Mars/Olympus"},
-		"until not a date":   {Every: api.EveryDay, TimeZone: "UTC", Until: "soon"},
-		"until 30 February":  {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-02-30"},
-		"until unpadded":     {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-3-1"},
-		"until with a time":  {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-03-01T00:00:00Z"},
-		"until with a space": {Every: api.EveryDay, TimeZone: "UTC", Until: " 2026-03-01"},
+		"no every":                  {TimeZone: "UTC"},
+		"unknown every":             {Every: "fortnight", TimeZone: "UTC"},
+		"negative interval":         {Every: api.EveryDay, Interval: -1, TimeZone: "UTC"},
+		"interval too large":        {Every: api.EveryDay, Interval: api.MaxRepeatInterval + 1, TimeZone: "UTC"},
+		"weekdays, daily":           {Every: api.EveryDay, Weekdays: []int{1}, TimeZone: "UTC"},
+		"weekdays, fromDone":        {Every: api.EveryWeek, Weekdays: []int{1}, FromDone: true, TimeZone: "UTC"},
+		"weekday 7":                 {Every: api.EveryWeek, Weekdays: []int{7}, TimeZone: "UTC"},
+		"weekday -1":                {Every: api.EveryWeek, Weekdays: []int{-1}, TimeZone: "UTC"},
+		"weekday twice":             {Every: api.EveryWeek, Weekdays: []int{2, 2}, TimeZone: "UTC"},
+		"no zone":                   {Every: api.EveryDay},
+		"Local":                     {Every: api.EveryDay, TimeZone: "Local"},
+		"unknown zone":              {Every: api.EveryDay, TimeZone: "Mars/Olympus"},
+		"until not a date":          {Every: api.EveryDay, TimeZone: "UTC", Until: "soon"},
+		"until 30 February":         {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-02-30"},
+		"until unpadded":            {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-3-1"},
+		"until with a time":         {Every: api.EveryDay, TimeZone: "UTC", Until: "2026-03-01T00:00:00Z"},
+		"until with a space":        {Every: api.EveryDay, TimeZone: "UTC", Until: " 2026-03-01"},
+		"week of month, weekly":     {Every: api.EveryWeek, WeekOfMonth: 2, Weekdays: []int{2}, TimeZone: "UTC"},
+		"week of month 5":           {Every: api.EveryMonth, WeekOfMonth: 5, Weekdays: []int{2}, TimeZone: "UTC"},
+		"week of month -2":          {Every: api.EveryMonth, WeekOfMonth: -2, Weekdays: []int{2}, TimeZone: "UTC"},
+		"week of month, no day":     {Every: api.EveryMonth, WeekOfMonth: 2, TimeZone: "UTC"},
+		"week of month, two days":   {Every: api.EveryMonth, WeekOfMonth: 2, Weekdays: []int{1, 2}, TimeZone: "UTC"},
+		"week of month, fromDone":   {Every: api.EveryMonth, WeekOfMonth: 2, Weekdays: []int{2}, FromDone: true, TimeZone: "UTC"},
+		"weekdays, monthly by date": {Every: api.EveryMonth, Weekdays: []int{2}, TimeZone: "UTC"},
 	} {
 		if _, err := checkRepeat(r); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: %v, want invalid", name, err)
@@ -199,6 +217,8 @@ func TestCheckRepeat(t *testing.T) {
 		{Every: api.EveryDay, Interval: api.MaxRepeatInterval, FromDone: true, TimeZone: "America/New_York"},
 		{Every: api.EveryWeek, Weekdays: []int{0, 1, 2, 3, 4, 5, 6}, TimeZone: "Europe/Paris"},
 		{Every: api.EveryMonth, TimeZone: "UTC", Until: "2026-02-28"},
+		{Every: api.EveryMonth, WeekOfMonth: 2, Weekdays: []int{2}, TimeZone: "UTC"},
+		{Every: api.EveryMonth, Interval: 3, WeekOfMonth: -1, Weekdays: []int{5}, TimeZone: "UTC"},
 	} {
 		if got, err := checkRepeat(r); err != nil || got.Until != r.Until {
 			t.Errorf("%+v: %+v, %v", r, got, err)

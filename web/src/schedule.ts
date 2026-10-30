@@ -6,7 +6,7 @@ import type { Edit, Item } from "./types.ts";
 import { addDays, fmtDay, fmtTime, sameDay, ymd } from "./dates.ts";
 import { diffEdit, draftDue, draftRule, editError, hhmm, type EditDraft } from "./edit.ts";
 import { parseQuickAdd } from "./quickadd.ts";
-import { firstOccurrence, repeatWords, sameRule } from "./repeat.ts";
+import { firstOccurrence, isLastOfMonth, repeatWords, sameRule, weekOfDate } from "./repeat.ts";
 
 /** "Today", "Tomorrow", "Sun, Nov 1", "Sun, Jan 3, 2027". */
 export function dayLine(due: Date, now: Date): string {
@@ -49,7 +49,8 @@ export function readTyped(text: string, now: Date, d: EditDraft): Typed | null {
   if (r) {
     out.repeat = r.every;
     out.interval = String(r.interval ?? 1);
-    out.weekdays = [...(r.weekdays ?? [])];
+    out.weekdays = r.weekOfMonth ? [] : [...(r.weekdays ?? [])];
+    out.monthBy = !r.weekOfMonth ? "date" : r.weekOfMonth < 0 ? "last" : "weekday";
     out.fromDone = false;
     out.until = r.until ?? "";
     const timed = qa.tokens.some((t) => t.kind === "date");
@@ -78,6 +79,30 @@ export function scheduleReadout(d: EditDraft, now: Date): string {
   const words = repeatWords(rule, now);
   if (rule.fromDone) return `${whenLine(due, now)}, ${words.charAt(0).toLowerCase()}${words.slice(1)}.${past}`;
   return `${words} at ${fmtTime(due)}. Next: ${dayLine(due, now)}.${past}`;
+}
+
+const ORDINALS = ["1st", "2nd", "3rd", "4th"];
+const LONG_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** "the 14th": a day of the month in words. */
+function nth(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+/** The ways a monthly repeat can follow a date: its day, its weekday of the month, and its last weekday when it is one. */
+export function monthByChoices(due: Date): [EditDraft["monthBy"], string][] {
+  const day = LONG_DAYS[due.getDay()];
+  const out: [EditDraft["monthBy"], string][] = [["date", `The ${nth(due.getDate())}`]];
+  if (weekOfDate(due) <= 4) out.push(["weekday", `The ${ORDINALS[weekOfDate(due) - 1]} ${day}`]);
+  if (isLastOfMonth(due)) out.push(["last", `The last ${day}`]);
+  return out;
+}
+
+/** The choice monthByChoices shows as picked: a 5th weekday is the last one. */
+export function monthByShown(d: EditDraft, due: Date): EditDraft["monthBy"] {
+  return d.monthBy === "weekday" && weekOfDate(due) > 4 ? "last" : d.monthBy;
 }
 
 /** The line under "Count the next one from" that says what the choice does. */

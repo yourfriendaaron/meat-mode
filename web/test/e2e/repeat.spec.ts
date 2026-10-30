@@ -153,6 +153,23 @@ test("the Schedule page sets, changes and ends a repeat", async ({ page, hub }) 
   await expect(detail.locator("#d-sched")).toContainText("Then 2 weeks after you finish it");
 });
 
+test("the Schedule page sets a monthly repeat on a weekday of the month", async ({ page, hub }) => {
+  await openApp(page);
+  await openDetail(page, "Call Sam about the weekend");
+  const detail = await openSchedule(page);
+  await detail.getByRole("radio", { name: "Month" }).check();
+  // Today, Wednesday 14 October, is the month's 2nd Wednesday and not its last.
+  await expect(detail.getByRole("radio", { name: "The 14th" })).toBeChecked();
+  await expect(detail.getByRole("radio", { name: "The last Wednesday" })).toHaveCount(0);
+  await detail.getByRole("radio", { name: "The 2nd Wednesday" }).check();
+  await expect(detail.locator("#sched-readout")).toHaveText("Every 2nd Wednesday of the month at 14:30. Next: Today.");
+  await axe(page);
+  await save(page);
+  await expect.poll(() => hub.posted.at(-1)?.payload.set).toEqual({ repeat: { every: "month", weekdays: [3], weekOfMonth: 2, timeZone: "UTC" } });
+  await expect(detail.locator("#d-sched")).toContainText("Every 2nd Wednesday of the month");
+  await expect(row(page, "Call Sam about the weekend").locator(".chip-repeat")).toHaveText("Every month on the 2nd Wed");
+});
+
 test("the Schedule page sets and clears a repeat's end date", async ({ page, hub }) => {
   hub.find(KEY)!.repeat = { every: "day", timeZone: "UTC", start: hub.find(KEY)!.dueAt! };
   await openApp(page);

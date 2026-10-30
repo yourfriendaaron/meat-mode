@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Item } from "../../src/types.ts";
-import { draftOf, type EditDraft } from "../../src/edit.ts";
+import { draftOf, draftRule, type EditDraft } from "../../src/edit.ts";
 import { repeatWords } from "../../src/repeat.ts";
-import { countFromHint, fitWeekdays, readTyped, scheduleCard, scheduleReadout, scheduleSave, whenLine } from "../../src/schedule.ts";
+import { countFromHint, fitWeekdays, monthByChoices, monthByShown, readTyped, scheduleCard, scheduleReadout, scheduleSave, whenLine } from "../../src/schedule.ts";
 
 // Wednesday 14 October 2026, 10:00 local time.
 const now = new Date(2026, 9, 14, 10, 0);
@@ -57,6 +57,35 @@ test("a repeat as a sentence", () => {
   assert.equal(repeatWords({ every: "day" }, now), "Every day");
   assert.equal(repeatWords({ every: "month", interval: 3 }, now), "Every 3 months");
   assert.equal(repeatWords({ every: "year" }, now), "Every year");
+});
+
+test("a monthly repeat on a weekday of the month", () => {
+  assert.equal(repeatWords({ every: "month", weekdays: [2], weekOfMonth: 2 }, now), "Every 2nd Tuesday of the month");
+  assert.equal(repeatWords({ every: "month", interval: 3, weekdays: [5], weekOfMonth: -1 }, now), "Every 3 months on the last Friday");
+  // Wed Oct 14 is the 2nd Wednesday; Wed Oct 28 is the 4th and the last.
+  assert.deepEqual(monthByChoices(at(10, 14, 9)), [["date", "The 14th"], ["weekday", "The 2nd Wednesday"]]);
+  assert.deepEqual(monthByChoices(at(10, 28, 9)), [["date", "The 28th"], ["weekday", "The 4th Wednesday"], ["last", "The last Wednesday"]]);
+  assert.deepEqual(monthByChoices(at(10, 30, 9)), [["date", "The 30th"], ["last", "The last Friday"]]);
+  const base = draftOf(item({ dueAt: at(10, 14, 18).toISOString() }));
+  const monthly = { ...base, repeat: "month" as const };
+  assert.deepEqual(draftRule(monthly), { every: "month" });
+  assert.deepEqual(draftRule({ ...monthly, monthBy: "weekday" }), { every: "month", weekdays: [3], weekOfMonth: 2 });
+  assert.deepEqual(draftRule({ ...monthly, date: "2026-10-28", monthBy: "last" }), { every: "month", weekdays: [3], weekOfMonth: -1 });
+  // A 5th weekday has no "5th" rule: it is the last.
+  const fifth = { ...monthly, date: "2026-10-30", monthBy: "weekday" as const };
+  assert.deepEqual(draftRule(fifth), { every: "month", weekdays: [5], weekOfMonth: -1 });
+  assert.equal(monthByShown(fifth, at(10, 30, 9)), "last");
+  // Counted from the done day, it follows the date.
+  assert.deepEqual(draftRule({ ...monthly, monthBy: "weekday", fromDone: true }), { every: "month", fromDone: true });
+  // An item with the rule opens with it, and typing one sets it.
+  const it = item({ repeat: { every: "month", weekdays: [2], weekOfMonth: 2, timeZone: "UTC", start: at(11, 10, 9).toISOString() }, dueAt: at(11, 10, 9).toISOString() });
+  const d = draftOf(it);
+  assert.equal(d.monthBy, "weekday");
+  assert.deepEqual(d.weekdays, []);
+  assert.deepEqual(draftRule(d), { every: "month", weekdays: [2], weekOfMonth: 2 });
+  const t = typed("every last friday at 6pm", base);
+  assert.equal(t.monthBy, "last");
+  assert.equal(`${t.date} ${t.time}`, "2026-10-30 18:00");
 });
 
 test("the schedule card says when and how it repeats", () => {

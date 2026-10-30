@@ -115,7 +115,14 @@ function repeatError(r: Repeat): string {
   const n = r.interval ?? 0;
   if (!Number.isInteger(n) || n < 0 || n > 100) return "repeat interval must be 1 to 100";
   const days = r.weekdays ?? [];
-  if (days.length && r.every !== "week") return "only a weekly repeat takes weekdays";
+  const wom = r.weekOfMonth ?? 0;
+  if (wom) {
+    if (r.every !== "month") return "only a monthly repeat takes weekOfMonth";
+    if (!Number.isInteger(wom) || wom < -1 || wom > 4) return "repeat weekOfMonth must be 1 to 4, or -1";
+    if (r.fromDone) return "weekOfMonth and fromDone together";
+    if (days.length !== 1) return "a repeat with weekOfMonth takes exactly one weekday";
+  }
+  if (days.length && r.every !== "week" && !wom) return "only a weekly repeat takes weekdays";
   if (days.length && r.fromDone) return "weekdays and fromDone together";
   if (days.some((d) => !Number.isInteger(d) || d < 0 || d > 6) || new Set(days).size !== days.length) return "weekdays must be 0 to 6, each once";
   try {
@@ -150,7 +157,15 @@ function stepRepeat(r: Repeat, d: Date): Date {
     do x.setUTCDate(x.getUTCDate() + 1);
     while (!r.weekdays.includes(x.getUTCDay()));
   } else if (r.every === "week") x.setUTCDate(x.getUTCDate() + 7 * n);
-  else if (r.every === "month") x.setUTCMonth(x.getUTCMonth() + n);
+  else if (r.every === "month" && r.weekOfMonth && r.weekdays?.length === 1) {
+    // The month's nth weekday, or its last, n months on.
+    const y = x.getUTCFullYear();
+    const m = x.getUTCMonth() + n;
+    const first = 1 + ((r.weekdays[0] - new Date(Date.UTC(y, m, 1)).getUTCDay() + 7) % 7);
+    const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const day = r.weekOfMonth > 0 ? first + 7 * (r.weekOfMonth - 1) : first + 7 * Math.floor((days - first) / 7);
+    x.setUTCFullYear(y, m, day);
+  } else if (r.every === "month") x.setUTCMonth(x.getUTCMonth() + n);
   else x.setUTCFullYear(x.getUTCFullYear() + n);
   return x;
 }

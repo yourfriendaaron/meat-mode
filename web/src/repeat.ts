@@ -50,6 +50,38 @@ const TIME = "\\d{1,2}(?::?\\d{2})?\\s*(?:am|pm)|\\d{1,2}p|\\d{1,2}:?\\d{2}[ap]|
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
 
+/** Which of a month's weekdays: "2nd tuesday", "last friday". */
+const WEEK_OF = "1st|first|2nd|second|3rd|third|4th|fourth|last";
+
+function weekOf(w: string): number {
+  const k = w.toLowerCase();
+  if (k === "last") return -1;
+  return ["1st", "2nd", "3rd", "4th"].indexOf(k) + 1 || ["first", "second", "third", "fourth"].indexOf(k) + 1;
+}
+
+/** A monthly rule on a weekday of the month. */
+function monthly(interval: number, which: string, day: string): RepeatRule {
+  return { ...rule("month", interval, [weekdayOf(day)]), weekOfMonth: weekOf(which) };
+}
+
+/** The day of the month of month m's nth weekday wd (1 to 4), or its last for -1. */
+export function weekdayOfMonth(y: number, m: number, wd: number, n: number): number {
+  const first = 1 + ((wd - new Date(y, m, 1).getDay() + 7) % 7);
+  if (n > 0) return first + 7 * (n - 1);
+  const days = new Date(y, m + 1, 0).getDate();
+  return first + 7 * Math.floor((days - first) / 7);
+}
+
+/** Which of its month's weekdays a date is, 1 to 5. */
+export function weekOfDate(d: Date): number {
+  return Math.ceil(d.getDate() / 7);
+}
+
+/** Whether a date is its month's last of its weekday. */
+export function isLastOfMonth(d: Date): boolean {
+  return d.getDate() + 7 > new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+
 /** Each phrase and the rule it means. Where two match at the same place, the first one listed wins. */
 const PATTERNS: {
   re: RegExp;
@@ -60,7 +92,7 @@ const PATTERNS: {
 }[] = [
   // every month on the 1st, every 3 months on the 15th, monthly on the 31st
   {
-    re: new RegExp(`\\b(?:${EVERY}\\s+(?:(${NUMBER})\\s+)?months?|monthly)\\s+on\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\b`, "i"),
+    re: new RegExp(`\\b(?:${EVERY}\\s+(?:(${NUMBER})\\s+)?months?|monthly)\\s+on\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\b(?!\\s+(?:${DAY})\\b)`, "i"),
     rule: (m) => rule("month", intervalOf(m[1])),
     monthDay: (m) => Number(m[2]),
   },
@@ -69,6 +101,20 @@ const PATTERNS: {
     re: /\b(?:(?:every|each)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(?:the|every|each)\s+month|(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(?:every|each)\s+month)\b/i,
     rule: () => rule("month", 1),
     monthDay: (m) => Number(m[1] ?? m[2]),
+  },
+  // every 2nd tuesday, every last friday of the month, the 1st monday of every month, monthly on the last friday
+  {
+    re: new RegExp(`\\b(?:${EVERY}\\s+(${WEEK_OF})\\s+(${DAY})(?:\\s+of\\s+(?:the|every|each)\\s+month)?|(?:on\\s+)?(?:the\\s+)?(${WEEK_OF})\\s+(${DAY})\\s+of\\s+(?:every|each)\\s+month)\\b`, "i"),
+    rule: (m) => monthly(1, m[1] ?? m[3], m[2] ?? m[4]),
+  },
+  {
+    re: new RegExp(`\\b(?:${EVERY}\\s+(?:(${NUMBER})\\s+)?months?|monthly)\\s+on\\s+(?:the\\s+)?(${WEEK_OF})\\s+(${DAY})\\b`, "i"),
+    rule: (m) => monthly(intervalOf(m[1]), m[2], m[3]),
+  },
+  // twice a week, three times a week: days spread over the week
+  {
+    re: /\b(twice|two times|three times|3 times|2 times)\s+(?:a|per|each|every)\s+week\b/i,
+    rule: (m) => rule("week", 1, /^(?:twice|two|2)/i.test(m[1]) ? [1, 4] : [1, 3, 5]),
   },
   // every 2 weeks on mon and thu, every week on friday, weekly on wednesday
   {
@@ -157,6 +203,14 @@ export function findRepeat(text: string): RepeatMatch | null {
  * their last day.
  */
 export function firstOccurrence(r: RepeatRule, now: Date, hours: number, minutes: number, monthDay?: number): Date {
+  if (r.every === "month" && r.weekOfMonth && r.weekdays?.length === 1) {
+    for (let i = 0; ; i++) {
+      const y = now.getFullYear();
+      const m = now.getMonth() + i;
+      const d = new Date(y, m, weekdayOfMonth(y, m, r.weekdays[0], r.weekOfMonth), hours, minutes);
+      if (d > now) return d;
+    }
+  }
   if (r.every === "month" && monthDay) {
     for (let i = 0; ; i++) {
       const last = new Date(now.getFullYear(), now.getMonth() + i + 1, 0).getDate();
@@ -187,7 +241,8 @@ export function repeatLabel(r: RepeatRule, now: Date): string {
   const n = r.interval && r.interval > 1 ? r.interval : 1;
   const days = r.every === "week" && !r.fromDone ? weekOrder(r.weekdays ?? []) : [];
   let out: string;
-  if (n === 1 && days.join() === "1,2,3,4,5") out = "Every weekday";
+  if (r.weekOfMonth && r.weekdays?.length === 1) out = `${n === 1 ? "Every month" : `Every ${n} months`} on the ${WEEK_OF_WORDS[r.weekOfMonth]} ${DAY_NAMES[r.weekdays[0]]}`;
+  else if (n === 1 && days.join() === "1,2,3,4,5") out = "Every weekday";
   else {
     out = n === 1 ? `Every ${r.every}` : `Every ${n} ${r.every}s`;
     if (days.length) out += ` on ${days.map((d) => DAY_NAMES[d]).join(", ")}`;
@@ -198,6 +253,7 @@ export function repeatLabel(r: RepeatRule, now: Date): string {
 }
 
 const FULL_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEK_OF_WORDS: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", [-1]: "last" };
 
 /** "Mon and Thu", "Mon, Wed and Fri". */
 function dayList(days: number[]): string {
@@ -214,7 +270,10 @@ export function repeatWords(r: RepeatRule, now: Date): string {
   const unit = `${n} ${r.every}${n === 1 ? "" : "s"}`;
   let out: string;
   if (r.fromDone) out = `Then ${unit} after you finish it`;
-  else {
+  else if (r.weekOfMonth && r.weekdays?.length === 1) {
+    const day = `${WEEK_OF_WORDS[r.weekOfMonth]} ${FULL_DAY_NAMES[r.weekdays[0]]}`;
+    out = n === 1 ? `Every ${day} of the month` : `Every ${unit} on the ${day}`;
+  } else {
     const days = r.every === "week" ? weekOrder(r.weekdays ?? []) : [];
     if (!days.length) out = n === 1 ? `Every ${r.every}` : `Every ${unit}`;
     else if (n > 1) out = `Every ${unit} on ${dayList(days)}`;
@@ -229,6 +288,6 @@ export function repeatWords(r: RepeatRule, now: Date): string {
 /** Whether two rules repeat the same way and end on the same date, whatever their zone and start. */
 export function sameRule(a: RepeatRule | null | undefined, b: RepeatRule | null | undefined): boolean {
   if (!a || !b) return !a && !b;
-  const days = (r: RepeatRule) => (r.every === "week" && !r.fromDone ? [...(r.weekdays ?? [])].sort().join() : "");
-  return a.every === b.every && (a.interval || 1) === (b.interval || 1) && days(a) === days(b) && !!a.fromDone === !!b.fromDone && (a.until ?? "") === (b.until ?? "");
+  const days = (r: RepeatRule) => ((r.every === "week" || r.weekOfMonth) && !r.fromDone ? [...(r.weekdays ?? [])].sort().join() : "");
+  return (a.weekOfMonth ?? 0) === (b.weekOfMonth ?? 0) && a.every === b.every && (a.interval || 1) === (b.interval || 1) && days(a) === days(b) && !!a.fromDone === !!b.fromDone && (a.until ?? "") === (b.until ?? "");
 }

@@ -19,9 +19,23 @@ func checkRepeat(r api.Repeat) (api.Repeat, error) {
 	if err := api.CheckRepeatInterval(r.Interval); err != nil {
 		return r, err
 	}
+	if r.WeekOfMonth != 0 {
+		if r.Every != api.EveryMonth {
+			return r, invalidf("only a monthly repeat takes weekOfMonth")
+		}
+		if r.WeekOfMonth < -1 || r.WeekOfMonth > 4 {
+			return r, invalidf("repeat.weekOfMonth must be 1 to 4, or -1 for the last")
+		}
+		if r.FromDone {
+			return r, invalidf("a repeat counted from the done day takes no weekOfMonth")
+		}
+		if len(r.Weekdays) != 1 {
+			return r, invalidf("a repeat with weekOfMonth takes exactly one weekday")
+		}
+	}
 	if len(r.Weekdays) > 0 {
-		if r.Every != api.EveryWeek {
-			return r, invalidf("only a weekly repeat takes weekdays")
+		if r.Every != api.EveryWeek && r.WeekOfMonth == 0 {
+			return r, invalidf("only a weekly repeat, or a monthly one with weekOfMonth, takes weekdays")
 		}
 		if r.FromDone {
 			return r, invalidf("a repeat counted from the done day takes no weekdays")
@@ -81,7 +95,7 @@ func checkUntil(r api.Repeat, due time.Time) error {
 // the same schedule, whatever their until and start.
 func onlyUntilDiffers(a, b api.Repeat) bool {
 	return a.Every == b.Every && interval(a) == interval(b) && slices.Equal(a.Weekdays, b.Weekdays) &&
-		a.FromDone == b.FromDone && a.TimeZone == b.TimeZone
+		a.WeekOfMonth == b.WeekOfMonth && a.FromDone == b.FromDone && a.TimeZone == b.TimeZone
 }
 
 // nextDue is when a repeating item is due once it is done at now: the first
@@ -137,6 +151,17 @@ func nextAfter(r api.Repeat, t time.Time) time.Time {
 				if occ := wallTime(y, m, d, start, loc); !occ.Before(start) && occ.After(t) {
 					return occ
 				}
+			}
+		}
+	}
+	if r.Every == api.EveryMonth && r.WeekOfMonth != 0 && len(r.Weekdays) == 1 {
+		// Every nth month from the start's, on that month's weekday.
+		k := max(0, floorDiv((ty-sy)*12+int(tm-sm), n)-1)
+		for ; ; k++ {
+			y, m, _ := addUnits(api.EveryMonth, sy, sm, 1, k*n)
+			d := weekdayOfMonth(y, m, time.Weekday(r.Weekdays[0]), r.WeekOfMonth)
+			if occ := wallTime(y, m, d, start, loc); !occ.Before(start) && occ.After(t) {
+				return occ
 			}
 		}
 	}
@@ -240,6 +265,16 @@ func fromDayNumber(n int) (int, time.Month, int) {
 
 func daysIn(y int, m time.Month) int {
 	return time.Date(y, m+1, 0, 0, 0, 0, 0, time.UTC).Day()
+}
+
+// weekdayOfMonth is the day of the month of its nth wd, 1 to 4, or its
+// last for -1.
+func weekdayOfMonth(y int, m time.Month, wd time.Weekday, n int) int {
+	first := 1 + (int(wd)-int(time.Date(y, m, 1, 0, 0, 0, 0, time.UTC).Weekday())+7)%7
+	if n < 0 {
+		return first + 7*((daysIn(y, m)-first)/7)
+	}
+	return first + 7*(n-1)
 }
 
 // mondayOffset is how many days d is after Monday.

@@ -39,6 +39,19 @@ var exportUpgrades = []func(json.RawMessage) (json.RawMessage, error){
 	upgradeExportV2,
 	upgradeExportV3,
 	upgradeExportV4,
+	upgradeExportV5,
+}
+
+// upgradeExportV5 turns version 5 into version 6, which added a monthly
+// repeat's weekOfMonth. A version 5 file has none, so only its version
+// changes.
+func upgradeExportV5(raw json.RawMessage) (json.RawMessage, error) {
+	var file map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return nil, err
+	}
+	file["version"] = json.RawMessage("6")
+	return json.Marshal(file)
 }
 
 // upgradeExportV4 turns version 4 into version 5, which added deleted

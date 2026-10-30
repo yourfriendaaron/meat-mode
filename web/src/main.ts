@@ -51,7 +51,7 @@ import { bulkDismissDone, bulkDismissLabel, bulkToast, canSelect, keepPickable, 
 import { fmtSnoozeTime, snoozeOptions, typedSnooze } from "./snooze.ts";
 import { ADD_ERROR_TEXT, addAction, readQuickAdd, wakesAgent, type QuickAdd } from "./quickadd.ts";
 import { repeatLabel } from "./repeat.ts";
-import { countFromHint, fitWeekdays, readTyped, scheduleCard, scheduleReadout, scheduleSave } from "./schedule.ts";
+import { countFromHint, fitWeekdays, monthByChoices, monthByShown, readTyped, scheduleCard, scheduleReadout, scheduleSave } from "./schedule.ts";
 import { play } from "./sound.ts";
 import { leadSelect, loadLead } from "./lead.ts";
 import { browserZone } from "./profile.ts";
@@ -60,6 +60,7 @@ import {
   TITLE_MAX,
   canEdit,
   diffEdit,
+  draftDue,
   draftOf,
   dueLabel,
   editError,
@@ -1470,7 +1471,9 @@ function schedulePageHTML(item: Item, p: SchedulePage): string {
             d.fromDone ? "Days need The schedule: When I finish counts from the day you finish it." : "With none picked, it repeats on the date's day."
           }</p>`
         : "";
-    repeat = `<div class="props"><div class="prop"><label class="prop-label" for="sched-interval">Every</label><span class="prop-ctl"><input id="sched-interval" type="number" min="1" max="${MAX_REPEAT_INTERVAL}" step="1" inputmode="numeric"><span id="sched-unit">${unitText(d)}</span></span></div></div>${days}${segmentsHTML(
+    const monthDue = d.repeat === "month" && !d.fromDone ? draftDue(d) : null;
+    const byMonth = monthDue ? segmentsHTML("sched-month", "On", monthByChoices(monthDue), monthByShown(d, monthDue)) : "";
+    repeat = `<div class="props"><div class="prop"><label class="prop-label" for="sched-interval">Every</label><span class="prop-ctl"><input id="sched-interval" type="number" min="1" max="${MAX_REPEAT_INTERVAL}" step="1" inputmode="numeric"><span id="sched-unit">${unitText(d)}</span></span></div></div>${days}${byMonth}${segmentsHTML(
       "sched-from",
       "Count the next one from",
       [
@@ -3363,6 +3366,7 @@ function onChange(e: Event) {
 function scheduleChanged(t: HTMLInputElement) {
   const v = t.value;
   if (t.name === "sched-repeat") scheduleControl((d) => ({ ...d, repeat: v as EditDraft["repeat"] }));
+  else if (t.name === "sched-month") scheduleControl((d) => ({ ...d, monthBy: v as EditDraft["monthBy"] }));
   else if (t.name === "sched-from") scheduleControl((d) => fitWeekdays({ ...d, fromDone: v === "done" }, now()));
   else if (t.dataset.weekday !== undefined) {
     const n = Number(t.dataset.weekday);

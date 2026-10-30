@@ -59,11 +59,22 @@ func ParseEvery(s string, fromDone bool) (api.Repeat, error) {
 			return r, bad
 		}
 		if on {
-			if r.Every != api.EveryWeek || !isDayList(list) {
+			switch {
+			case r.Every == api.EveryWeek && isDayList(list):
+				r.Weekdays = dayList(list)
+			case r.Every == api.EveryMonth:
+				n, day, ok := weekOfMonth(list)
+				if !ok {
+					return r, bad
+				}
+				r.WeekOfMonth, r.Weekdays = n, []int{day}
+			default:
 				return r, bad
 			}
-			r.Weekdays = dayList(list)
 		}
+	}
+	if fromDone && r.WeekOfMonth != 0 {
+		return r, errors.New("--from-done counts from the day it is done, so it takes no weekday of the month")
 	}
 	if fromDone && len(r.Weekdays) > 0 {
 		return r, errors.New("--from-done counts from the day it is done, so it takes no days of the week")
@@ -82,7 +93,24 @@ func ParseUntil(s string) (string, error) {
 }
 
 // everyForms lists what --every takes.
-const everyForms = `day, week, month, year, "3 days", "2 weeks", weekday (Monday to Friday), mon,thu or "2 weeks on mon,thu"`
+const everyForms = `day, week, month, year, "3 days", "2 weeks", weekday (Monday to Friday), mon,thu, "2 weeks on mon,thu" or "month on 2nd tue"`
+
+var weekOfMonthNames = map[string]int{
+	"1st": 1, "first": 1,
+	"2nd": 2, "second": 2,
+	"3rd": 3, "third": 3,
+	"4th": 4, "fourth": 4,
+	"last": -1,
+}
+
+// weekOfMonth reads "2nd tue" or "last friday": which of the month's
+// weekdays, and the day.
+func weekOfMonth(s string) (int, int, bool) {
+	which, day, ok := strings.Cut(strings.TrimSpace(s), " ")
+	n, okN := weekOfMonthNames[which]
+	d, okD := weekdayNames[strings.TrimSpace(day)]
+	return n, d, ok && okN && okD
+}
 
 // isDayList reports whether s is a comma list of days of the week.
 func isDayList(s string) bool {

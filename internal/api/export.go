@@ -16,7 +16,7 @@ const (
 // newer one. docs/api.md, Export and restore, describes the format.
 const (
 	ExportFormat  = "meat-mode-export"
-	ExportVersion = 5
+	ExportVersion = 6
 )
 
 // Export is the whole of what a hub keeps that no other copy holds: the
