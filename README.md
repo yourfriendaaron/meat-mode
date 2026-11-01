@@ -78,6 +78,10 @@ Agents work only where you let them. They start off in every repo, and you switc
 
 > **This is not a sandbox.** The default agent runs commands as you, in your home folder, with your credentials, and asks no permission first. It is told never to send, post, spend, delete or push for you, but nothing enforces that. Switch agents on only in repos where you would let an agent work unattended. Setup, limits and where runs keep their files: [Wake an agent on a task](docs/deploy.md#wake-an-agent-on-a-task).
 
+### See where your agents' epics stand
+
+If you plan agent work as epics with tasks under them, the **Epics** view shows each repo's open epics as cards, with how many of their tasks are done ("85% 6/7 done"). Open a card to list its tasks, with each one's type, priority and assignee, or tap **Details** to read the epic. The repo's open tasks outside any epic sit under **Other tasks**. The view is read-only: it never adds to Today, your reminders or your notifications. A task in an epic that is also for you opens as that task, with all its buttons. You switch a repo's epics on at the agent machine, with `meat-mode bridge epics on <repo>`, since this copies the repo's plan to the hub; the app can switch them off again.
+
 ### Type a to-do the way you would say it
 
 Quick add reads dates, times and repeats as you type and shows you what it understood before you press Enter. "Water the plants every sunday at 8pm until nov 29" becomes a weekly to-do with an end date. Add `#garden` to put it on another list and `@weekend` to give it a tag. Tags show on the row as #garden, and you can filter the list by one or search for it. An agent's task shows the labels its tracker gives it, read-only.
