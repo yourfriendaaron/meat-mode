@@ -113,6 +113,7 @@ var appRoutes = []struct{ method, path, body string }{
 	{"GET", "/api/state", ""},
 	{"GET", "/api/events", ""},
 	{"GET", "/api/epics", ""},
+	{"GET", "/api/icons/0123456789abcdef0123456789abcdef", ""},
 	{"POST", "/api/actions", `{}`},
 	{"GET", "/api/actions", ""},
 	{"POST", "/api/actions/" + aid1 + "/cancel", ""},

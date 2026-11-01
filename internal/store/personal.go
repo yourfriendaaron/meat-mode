@@ -496,8 +496,7 @@ func (s *Store) AddPersonal(t api.PersonalTodo, bridge, project string) (key str
 		}
 		// A project with nothing in it is left out of State, so one made
 		// by an add that then fails shows nowhere.
-		if _, err := s.db.Exec(`INSERT OR IGNORE INTO repos (bridge, name, personal, opted_in) VALUES (?, ?, 0, 1)`,
-			HubBridge, repo); err != nil {
+		if err := s.addProject(repo); err != nil {
 			return "", false, err
 		}
 	}

@@ -37,8 +37,9 @@ func TestPersonalListWorksWithNoBridge(t *testing.T) {
 	s.now = c.now
 
 	st := mustState(t, s)
-	if len(st.Repos) != 1 || !reflect.DeepEqual(st.Repos[0], api.Repo{Bridge: HubBridge, Name: PersonalRepo, Personal: true, OptedIn: true}) {
-		t.Fatalf("a new hub's repos = %+v, want only the personal list", st.Repos)
+	zero := 0
+	if len(st.Repos) != 1 || !reflect.DeepEqual(st.Repos[0], api.Repo{Bridge: HubBridge, Name: PersonalRepo, Personal: true, OptedIn: true, Colour: &zero}) {
+		t.Fatalf("a new hub's repos = %+v, want only the personal list, in the first colour", st.Repos)
 	}
 
 	due := c.t.Add(3 * time.Hour)
