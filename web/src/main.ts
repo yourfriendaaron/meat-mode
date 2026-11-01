@@ -24,7 +24,6 @@ import {
   parentOf,
   parentTitle,
   pastDue,
-  repoColours,
   repoDetail,
   repoKey,
   repoLabel,
@@ -75,7 +74,8 @@ import { claimHTML, claimScreen } from "./password.ts";
 import { esc } from "./html.ts";
 import { agentsOnHTML } from "./agents.ts";
 import { copyText, copyValue } from "./clipboard.ts";
-import { epicDetailHTML, epicsHTML, epicsOn, findRow } from "./epics.ts";
+import { chipsHTML, clearFilters, collapseAll, epicDetailHTML, epicsHTML, epicsOn, expandAll, findRow, menusHTML, newEpicsUI, toggle, type EpicsMenu, type EpicsSort } from "./epics.ts";
+import { listBadge, onIconError } from "./identity.ts";
 import { ICON } from "./icons.ts";
 import { remote, type Remote } from "./remote.ts";
 import { HISTORY_SHOWN, byLine, changeText, shownChanges, undoFor, type HistoryContext } from "./changes.ts";
@@ -197,10 +197,10 @@ const S = {
   qaOpen: false,
   /** Whether Today shows the Later section's rows; folded, it shows one summary line. */
   laterOpen: false,
-  /** The epic card whose Details show in the sheet, by row key; never an item. */
+  /** The epic row whose Details show in the sheet, by row key; never an item. */
   epic: null as string | null,
-  /** The epic cards opened to their children, by row key. */
-  epicsOpen: new Set<string>(),
+  /** The Epics view's search, filters, sort and folds, for as long as the app is open. */
+  ep: newEpicsUI(),
   toast: null as Toast | null,
   auth: null as Session | null,
   loginError: "",
@@ -323,6 +323,11 @@ function listLabelHTML(r: Repo): string {
   return esc(repoLabel(r)) + (detail ? `<small class="nav-sub">${esc(detail)}</small>` : "");
 }
 
+/** A stand-in list for an item whose repo State no longer holds, so its mark still draws. */
+function itemList(item: Item): Repo {
+  return { bridge: item.bridge, name: item.repo, personal: false, optedIn: false };
+}
+
 /** Whether the list shows search results: a word in the search field, on a task view. */
 function searching(): boolean {
   return !noTasks(S.view) && S.query.trim() !== "";
@@ -378,14 +383,13 @@ function renderNav() {
       entry("deleted", "Deleted", ICON.trash, ""),
   );
 
-  const colours = repoColours(repos());
   setHTML(
     $("#lists"),
     visibleRepos(repos())
       .map((r) => {
         const key = repoKey(r);
         const count = all.filter((i) => isOpen(i) && repoKey(i) === key).length;
-        return entry(`list:${key}`, listLabelHTML(r), `<span class="dot c${colours.get(key) ?? 0}" aria-hidden="true"></span>`, plain(count));
+        return entry(`list:${key}`, listLabelHTML(r), listBadge(r, repos()), plain(count));
       })
       .join("") || '<p class="muted small">No lists yet.</p>',
   );
@@ -521,8 +525,7 @@ function chipsFor(item: Item, opts: { list: boolean; nested?: boolean; detail?: 
   // The list comes first, so it starts at the same x on every row.
   if (opts.list) {
     const r = repos().find((x) => repoKey(x) === repoKey(item));
-    const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
-    out.push(`<span class="chip chip-list"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? listLabel(r) : item.repo)}</span>`);
+    out.push(`<span class="chip chip-list">${listBadge(r ?? itemList(item), repos(), "s")}${esc(r ? listLabel(r) : item.repo)}</span>`);
   }
   if (opts.detail) {
     const att = attention(item, user());
@@ -641,6 +644,29 @@ function rowHTML(item: Item, showList: boolean, nested = false): string {
   }</div></li>`;
 }
 
+/** The policy refuses style attributes; a progress bar's width is set here instead. */
+function fillBars(root: Element) {
+  for (const f of root.querySelectorAll<HTMLElement>(".ep-fill")) f.style.width = `${f.dataset.pct}%`;
+}
+
+/**
+ * The Epics view's part of the header, its search box and its Repo, Filter
+ * and View menus on the title's line, and the active filters under it.
+ */
+function renderEpicsTools() {
+  const on = S.view === "epics";
+  const menus = $("#ep-menus");
+  const chips = $("#ep-chips");
+  $("#ep-search").hidden = !on;
+  menus.hidden = !on;
+  if (!on) S.ep.menu = null;
+  const v = { data: epicsData.peek(), ui: S.ep, find: byKey, repos: repos() };
+  setHTML(menus, on ? menusHTML(v) : "");
+  const c = on ? chipsHTML(v) : "";
+  setHTML(chips, c);
+  chips.hidden = !c;
+}
+
 function renderMain() {
   const title = searching() ? "Search" : filtering() ? "Tagged" : viewTitle(S.view);
   setHTML($("#view-title"), esc(title));
@@ -688,6 +714,7 @@ function renderMain() {
   $("#app").classList.toggle("page-view", isPage(S.view));
   list.hidden = noTasks(S.view);
   epics.hidden = S.view !== "epics";
+  renderEpicsTools();
   settings.hidden = S.view !== "settings";
   wizard.hidden = S.view !== "setup";
   renderTagBar();
@@ -702,9 +729,8 @@ function renderMain() {
     return;
   }
   if (S.view === "epics") {
-    setHTML(epics, epicsHTML({ data: epicsData.peek(), error: epicsData.error(), expanded: S.epicsOpen, find: byKey, now: now() }));
-    // The policy refuses style attributes; a bar's width is set here instead.
-    for (const f of epics.querySelectorAll<HTMLElement>(".ep-fill")) f.style.width = `${f.dataset.pct}%`;
+    setHTML(epics, epicsHTML({ data: epicsData.peek(), error: epicsData.error(), ui: S.ep, find: byKey, repos: repos(), open: S.epic, now: now() }));
+    fillBars(epics);
     return;
   }
 
@@ -1296,8 +1322,7 @@ function scheduleCardHTML(item: Item): string {
  */
 function propsHTML(item: Item): string {
   const r = repos().find((x) => repoKey(x) === repoKey(item));
-  const colour = repoColours(repos()).get(repoKey(item)) ?? 0;
-  const list = `<div class="prop"><span class="prop-label">List</span><span class="prop-val"><span class="dot c${colour}" aria-hidden="true"></span>${esc(r ? repoLabel(r) : item.repo)}</span></div>`;
+  const list = `<div class="prop"><span class="prop-label">List</span><span class="prop-val">${listBadge(r ?? itemList(item), repos())}${esc(r ? repoLabel(r) : item.repo)}</span></div>`;
   const lead = `<div class="prop"><label class="prop-label" for="p-lead">Remind early</label>${leadSelect("p-lead", item.remindBefore ?? null, true, ' class="prop-select"')}</div>`;
   const prio = `<div class="prop"><label class="prop-label" for="p-prio">Priority</label><select id="p-prio" class="prop-select">${priorityOptions(item.priority)
     .map((o) => `<option value="${o.value}"${o.value === item.priority ? " selected" : ""}>${esc(o.label)}</option>`)
@@ -1645,7 +1670,7 @@ function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): st
 }
 
 const DETAIL_EMPTY = '<div class="detail-empty"><p>Select a task to see its details.</p></div>';
-const EPIC_EMPTY = '<div class="detail-empty"><p>Open an epic\'s Details to see them here.</p></div>';
+const EPIC_EMPTY = '<div class="detail-empty"><p>Pick an epic or a task to see its details.</p></div>';
 
 /** The card whose Details show, from the epics last loaded; undefined once it is gone. */
 function shownEpic(key: string) {
@@ -1673,7 +1698,9 @@ function renderDetail() {
     shownDetail = { key: epic.key, page: "epic" };
     const fresh = before?.key !== epic.key || before.page !== "epic";
     // As a task's sheet: on the phone it slides up; another one fades in.
-    if (setHTML(el, epicDetailHTML(epic)) && fresh && (before || !isPhone())) enter(el.querySelector(".detail-inner"), "fade");
+    const changed = setHTML(el, epicDetailHTML(epic, { data: epicsData.peek(), find: byKey, repos: repos(), now: now() }));
+    if (changed) fillBars(el);
+    if (changed && fresh && (before || !isPhone())) enter(el.querySelector(".detail-inner"), "fade");
     return;
   }
   if (!item) {
@@ -1963,7 +1990,7 @@ function render() {
   applySelection();
   renderBulk();
   renderMenu();
-  $("#scrim").hidden = !(S.snoozeKeys || S.move || (isPhone() && (S.open || S.epic || S.qaOpen || S.menuOpen)));
+  $("#scrim").hidden = !(S.snoozeKeys || S.move || (isPhone() && (S.open || S.epic || S.qaOpen || S.menuOpen || (S.view === "epics" && S.ep.menu))));
   $("#app").classList.toggle("qa-open", S.qaOpen);
 }
 
@@ -2821,14 +2848,16 @@ function openItem(key: string) {
   if (isPhone()) $<HTMLElement>("#detail [data-act=close-detail]")?.focus();
 }
 
-/** Opens a card's Details: read-only, in the sheet a task opens in. */
-function openEpic(key: string) {
+/**
+ * Opens a row's Details: read-only, in the sheet a task opens in. `reveal`
+ * brings the row into view in the list as well, as a link in Details does.
+ */
+function openEpic(key: string, reveal = false) {
   const row = shownEpic(key);
   if (!row) return;
-  // A card that is also the person's task opens that task.
-  if (row.item) {
-    openItem(row.key);
-    return;
+  if (reveal) {
+    S.ep.folded.delete(row.repoKey);
+    if (S.ep.repos.size && !S.ep.repos.has(row.repoKey)) S.ep.repos.add(row.repoKey);
   }
   if (S.open) {
     S.open = null;
@@ -2840,7 +2869,128 @@ function openEpic(key: string) {
   }
   S.epic = key;
   render();
+  if (reveal) document.querySelector(`#epics [data-ep="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "nearest" });
   $<HTMLElement>("#detail [data-act=close-detail]")?.focus({ preventScroll: !isPhone() });
+}
+
+/** Opens or closes one of the Epics toolbar's menus; a closed one gives focus back to its button. */
+function epicsMenu(menu: EpicsMenu | null) {
+  const was = S.ep.menu;
+  S.ep.menu = menu;
+  render();
+  if (menu) document.querySelector<HTMLElement>(`#ep-mm-${menu} [role=menu] .more-item`)?.focus({ preventScroll: true });
+  else if (was) $<HTMLElement>(`#ep-mb-${was}`)?.focus({ preventScroll: true });
+}
+
+/** Arrow keys, Home and End move through the open Epics menu; Tab leaves it. */
+function epicsMenuKey(e: KeyboardEvent): boolean {
+  const m = S.ep.menu;
+  if (S.view !== "epics" || !m) return false;
+  const list = [...document.querySelectorAll<HTMLElement>(`#ep-mm-${m} [role=menu] .more-item`)];
+  const i = list.indexOf(document.activeElement as HTMLElement);
+  const go = (n: number) => list[(n + list.length) % list.length]?.focus();
+  switch (e.key) {
+    case "ArrowDown":
+      go(i + 1);
+      break;
+    case "ArrowUp":
+      go(i < 0 ? -1 : i - 1);
+      break;
+    case "Home":
+      go(0);
+      break;
+    case "End":
+      go(-1);
+      break;
+    case "Tab":
+      S.ep.menu = null;
+      render();
+      return false;
+    default:
+      return false;
+  }
+  e.preventDefault();
+  return true;
+}
+
+/** Applies a click on the Epics view's toolbar, rows and Details; false when the action is not one of them. */
+function epicsAct(btn: HTMLElement): boolean {
+  const v = btn.dataset.v ?? "";
+  const ui = S.ep;
+  switch (btn.dataset.act) {
+    case "ep-menu":
+      epicsMenu(ui.menu === v ? null : (v as EpicsMenu));
+      return true;
+    case "ep-menu-close":
+      epicsMenu(null);
+      return true;
+    // A pick in a multi-select menu keeps it open; the rest close it.
+    case "ep-f-repo":
+      toggle(ui.repos, v);
+      break;
+    case "ep-f-repo-all":
+      ui.repos.clear();
+      epicsMenu(null);
+      return true;
+    case "ep-f-status":
+      toggle(ui.statuses, v);
+      ui.shut.clear();
+      break;
+    case "ep-f-pri":
+      toggle(ui.priorities, Number(v));
+      ui.shut.clear();
+      break;
+    case "ep-sort":
+      ui.sort = v as EpicsSort;
+      epicsMenu(null);
+      return true;
+    case "ep-expand-all":
+      expandAll(ui, epicsData.peek());
+      epicsMenu(null);
+      return true;
+    case "ep-collapse-all":
+      collapseAll(ui, epicsData.peek());
+      epicsMenu(null);
+      return true;
+    case "ep-clear":
+      clearFilters(ui);
+      $<HTMLInputElement>("#ep-q").value = "";
+      render();
+      $<HTMLElement>("#ep-q").focus();
+      return true;
+    case "ep-fold":
+      toggle(ui.folded, v);
+      break;
+    case "ep-toggle": {
+      const key = btn.dataset.key ?? "";
+      // A card a search or filter opened shuts apart from the cards opened by hand.
+      if (btn.getAttribute("aria-expanded") === "true") {
+        ui.expanded.delete(key);
+        ui.shut.add(key);
+      } else {
+        ui.expanded.add(key);
+        ui.shut.delete(key);
+      }
+      render();
+      $<HTMLElement>(`#epics [data-act=ep-toggle][data-key="${CSS.escape(key)}"]`)?.focus();
+      return true;
+    }
+    case "ep-attn-fold":
+      ui.attnOpen = !ui.attnOpen;
+      break;
+    case "ep-attn-all":
+      ui.attnAll = !ui.attnAll;
+      break;
+    case "ep-open":
+      openEpic(btn.dataset.key ?? "", !!btn.closest("#detail"));
+      return true;
+    default:
+      return false;
+  }
+  render();
+  // A chip removed takes its button away: focus goes to the search box.
+  if (!document.activeElement || document.activeElement === document.body) $<HTMLElement>("#ep-q").focus({ preventScroll: true });
+  return true;
 }
 
 function closeDetail() {
@@ -2848,7 +2998,7 @@ function closeDetail() {
     const key = S.epic;
     S.epic = null;
     render();
-    document.querySelector<HTMLElement>(`#epics [data-act=epic-details][data-ep="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+    document.querySelector<HTMLElement>(`#epics [data-act=ep-open][data-key="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
     return;
   }
   if (!S.open) return;
@@ -2860,7 +3010,7 @@ function closeDetail() {
   S.noteEdit = null;
   setURL(null);
   render();
-  const row = document.querySelector<HTMLElement>(`#list .row[data-key="${CSS.escape(key)}"] .row-body, #epics [data-act=open][data-key="${CSS.escape(key)}"]`);
+  const row = document.querySelector<HTMLElement>(`#list .row[data-key="${CSS.escape(key)}"] .row-body, #epics [data-act=ep-open][data-key="${CSS.escape(key)}"]`);
   row?.focus({ preventScroll: true });
 }
 
@@ -3066,7 +3216,8 @@ function onClick(e: MouseEvent) {
   }
   const target = e.target as HTMLElement;
   if (target.id === "scrim") {
-    if (S.snoozeKeys) closeSnooze();
+    if (S.ep.menu && S.view === "epics") epicsMenu(null);
+    else if (S.snoozeKeys) closeSnooze();
     else if (S.move) closeMove();
     else if (S.qaOpen) closeQuickAdd();
     else if (S.menuOpen) closeMenu();
@@ -3082,8 +3233,14 @@ function onClick(e: MouseEvent) {
     S.moreOpen = false;
     render();
   }
+  // A tap outside the open Epics menu closes it.
+  if (S.ep.menu && !target.closest(".ep-menu-wrap")) {
+    S.ep.menu = null;
+    render();
+  }
   const btn = target.closest<HTMLElement>("[data-act]");
   if (!btn) return;
+  if (btn.dataset.act?.startsWith("ep-") && epicsAct(btn)) return;
   const key = btn.dataset.key ?? "";
   switch (btn.dataset.act) {
     case "view":
@@ -3177,17 +3334,6 @@ function onClick(e: MouseEvent) {
       break;
     case "epics-switch":
       void switchEpics(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
-      break;
-    case "epic-toggle": {
-      const ep = btn.dataset.ep ?? "";
-      if (S.epicsOpen.has(ep)) S.epicsOpen.delete(ep);
-      else S.epicsOpen.add(ep);
-      render();
-      document.querySelector<HTMLElement>(`#epics [data-act=epic-toggle][data-ep="${CSS.escape(ep)}"]`)?.focus();
-      break;
-    }
-    case "epic-details":
-      openEpic(btn.dataset.ep ?? "");
       break;
     case "epic-copy": {
       const id = btn.dataset.id ?? "";
@@ -3375,8 +3521,10 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault();
     return;
   }
+  if (epicsMenuKey(e)) return;
   if (e.key === "Escape") {
-    if (S.snoozeKeys) closeSnooze();
+    if (S.ep.menu && S.view === "epics") epicsMenu(null);
+    else if (S.snoozeKeys) closeSnooze();
     else if (S.move) closeMove();
     else if (S.syncOpen) {
       S.syncOpen = false;
@@ -3395,7 +3543,11 @@ function onKey(e: KeyboardEvent) {
       render();
       $<HTMLInputElement>("#sched-typed").focus();
     } else if (S.page) closePage();
-    else if (document.activeElement?.id === "search-input") {
+    else if (document.activeElement?.id === "ep-q" && S.ep.q) {
+      S.ep.q = "";
+      (document.activeElement as HTMLInputElement).value = "";
+      render();
+    } else if (document.activeElement?.id === "search-input") {
       S.query = "";
       (document.activeElement as HTMLInputElement).value = "";
       (document.activeElement as HTMLElement).blur();
@@ -3452,6 +3604,10 @@ function onInput(e: Event) {
   const t = e.target as HTMLElement;
   if (t.id === "search-input") {
     S.query = (t as HTMLInputElement).value;
+    render();
+  } else if (t.id === "ep-q") {
+    S.ep.q = (t as HTMLInputElement).value;
+    S.ep.shut.clear();
     render();
   } else if (t.id === "qa-input") updateQuickAdd();
   else if (t.dataset.typeTime !== undefined) updateSnoozeType(t as HTMLInputElement);
@@ -3698,7 +3854,7 @@ function shell(): string {
   </div>
 </aside>
 <main id="main" class="main">
-  <header class="mhead"><button class="icon-btn menu-btn" data-act="menu" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">${ICON.menu}</button><h1 id="view-title">Today</h1><form id="search-form" class="search" role="search" autocomplete="off"><label class="sr" for="search-input">Search</label><input id="search-input" type="search" enterkeyhint="search" placeholder="Search"></form><button id="select-btn" class="btn btn-small btn-ghost" data-act="select-mode" hidden>${ICON.select}Select</button><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
+  <header class="mhead"><button class="icon-btn menu-btn" data-act="menu" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">${ICON.menu}</button><h1 id="view-title">Today</h1><form id="search-form" class="search" role="search" autocomplete="off"><label class="sr" for="search-input">Search</label><input id="search-input" type="search" enterkeyhint="search" placeholder="Search"></form><div id="ep-search" class="search ep-search" role="search" hidden><label class="sr" for="ep-q">Search epics and tasks</label><input id="ep-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search by title or id"></div><div id="ep-menus" class="ep-menus" role="group" aria-label="Epics view" hidden></div><button id="select-btn" class="btn btn-small btn-ghost" data-act="select-mode" hidden>${ICON.select}Select</button><button class="sync-pill" data-act="sync" aria-controls="syncpop" aria-haspopup="dialog"></button></header>
   <form id="qa-form" class="qa" autocomplete="off">
     <div class="qa-head"><h2>New task</h2><button type="button" class="icon-btn" data-act="qa-close" aria-label="Close">${ICON.close}</button></div>
     <div class="qa-bar">
@@ -3713,6 +3869,7 @@ function shell(): string {
   <div id="listbar" class="listbar" hidden></div>
   <div id="viewswitch" class="viewswitch" hidden></div>
   <div id="list" class="list"></div>
+  <div id="ep-chips" class="ep-chips" hidden></div>
   <div id="epics" class="list epics" hidden></div>
   <div id="bulkbar" class="bulkbar" role="toolbar" aria-label="Selected tasks" hidden></div>
   <div id="settings" class="settings" hidden></div>
@@ -3756,6 +3913,8 @@ function leaveShell() {
   S.state = null;
   S.open = null;
   S.epic = null;
+  // The shell, and the search box with it, goes; a new one starts empty.
+  S.ep = newEpicsUI();
   epicsData.forget();
   S.selected = null;
   S.snoozeKeys = null;
@@ -3915,6 +4074,8 @@ function boot() {
   const app = $("#app");
   applyTheme(getTheme());
   document.addEventListener("click", onClick);
+  // An image's error does not bubble: a repo icon that fails to load turns into its letter.
+  document.addEventListener("error", onIconError, true);
   document.addEventListener("keydown", onKey);
   document.addEventListener("input", onInput);
   document.addEventListener("change", onChange);
