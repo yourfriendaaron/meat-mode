@@ -1,0 +1,270 @@
+/* The Epics view: per repo a heading, then epic cards with their progress
+   and children, then the repo's other open tasks. Read-only, so rows carry
+   no check box and no swipe. Rules that meet a plain one (.chip, .icon-btn)
+   take two classes, since this file loads before them. */
+
+.ep-repo + .ep-repo {
+  margin-top: 16px;
+}
+.ep-repo-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 2px 10px;
+}
+.ep-none {
+  margin: 0;
+  padding: 4px 16px 10px;
+}
+.ep-error {
+  margin: 8px 16px 0;
+  font-size: 13px;
+  color: var(--role-error);
+}
+
+/* ---------- cards ---------- */
+
+.ep-cards {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0 12px;
+}
+.ep-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--role-line);
+  border-radius: var(--radius);
+  background: var(--role-pane);
+}
+.ep-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.ep-mark {
+  display: inline-grid;
+  place-items: center;
+  color: var(--role-soft);
+}
+.ep-mark svg {
+  width: 18px;
+  height: 18px;
+}
+.d-head .ep-mark {
+  margin-top: 4px;
+}
+.ep-id {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--role-soft);
+}
+.ep-acts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.icon-btn.ep-copy {
+  width: 32px;
+  height: 32px;
+}
+.ep-copy svg {
+  width: 16px;
+  height: 16px;
+}
+.ep-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.ep-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.ep-toggle span {
+  flex: 1;
+}
+.ep-toggle svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--role-soft);
+  transition: transform var(--motion-in) var(--ease-move);
+}
+.ep-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.ep-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--role-soft);
+}
+.ep-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--role-sunk);
+}
+.ep-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--role-done);
+}
+.ep-ptext {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.ep-kids {
+  margin: 4px -12px -12px;
+  border-top: 1px solid var(--role-line);
+}
+.ep-kids .ep-none {
+  padding: 10px 12px;
+}
+
+/* ---------- pills: status and priority ---------- */
+
+.chip.ep-status,
+.chip.ep-pri {
+  border-color: var(--role-line);
+}
+.chip.ep-s-in_progress {
+  color: var(--role-fg);
+  font-weight: 600;
+}
+.chip.ep-s-blocked {
+  color: var(--role-due);
+}
+.chip.ep-s-deferred {
+  color: var(--role-dim);
+}
+.chip.ep-s-closed {
+  color: var(--role-done);
+}
+.chip.ep-p0 {
+  color: var(--role-urgent);
+  font-weight: 700;
+}
+.chip.ep-p1 {
+  color: var(--role-priority);
+  font-weight: 600;
+}
+
+/* ---------- rows: a card's children and the other tasks ---------- */
+
+.ep-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* On the phone a row's pills go under its title; the desktop keeps them on one line. */
+.ep-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 10px;
+  padding: 6px 4px 6px 12px;
+  border-bottom: 1px solid var(--role-line);
+}
+.ep-row:last-child {
+  border-bottom: 0;
+}
+.ep-row .ep-copy {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+.ep-row-meta:empty {
+  display: none;
+}
+.ep-tasks .ep-row {
+  padding-left: 16px;
+}
+@container app (min-width: 880px) {
+  .ep-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .ep-row .ep-copy {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}
+.ep-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ep-open {
+  border-radius: 6px;
+}
+.ep-open:hover .ep-row-title {
+  text-decoration: underline;
+}
+.ep-type {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--role-soft);
+}
+.ep-type svg {
+  width: 16px;
+  height: 16px;
+}
+.ep-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ep-row.is-done .ep-row-title {
+  text-decoration: line-through;
+  color: var(--role-soft);
+}
+.ep-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ep-who {
+  font-size: 12.5px;
+  color: var(--role-soft);
+}
+.ep-tasks {
+  margin-top: 12px;
+}
+.ep-tasks-h {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--role-soft);
+}
+.ep-tasks .ep-rows {
+  border-top: 1px solid var(--role-line);
+}

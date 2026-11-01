@@ -75,6 +75,7 @@ import { claimHTML, claimScreen } from "./password.ts";
 import { esc } from "./html.ts";
 import { agentsOnHTML } from "./agents.ts";
 import { copyText, copyValue } from "./clipboard.ts";
+import { epicDetailHTML, epicsHTML, epicsOn, findRow } from "./epics.ts";
 import { ICON } from "./icons.ts";
 import { remote, type Remote } from "./remote.ts";
 import { HISTORY_SHOWN, byLine, changeText, shownChanges, undoFor, type HistoryContext } from "./changes.ts";
@@ -91,11 +92,20 @@ import { duration, enter } from "./motion.ts";
 import { bannerHTML, initSetup, leaveSetupView, reloadSetup, setupInfo, wizardHTML, wizardShown } from "./wizard/wizard.ts";
 
 /** Completed and Deleted show the closed items the hub keeps for 7 days. Month is Calendar's grid, upcoming its list. */
-type View = ViewId | "month" | "completed" | "deleted" | "settings" | "setup";
+type View = ViewId | "month" | "completed" | "deleted" | "epics" | "settings" | "setup";
 
 /** Views that show a page in place of the task list. */
 function isPage(v: View): v is "settings" | "setup" {
   return v === "settings" || v === "setup";
+}
+
+/**
+ * Views with no to-dos in them: the pages, and Epics, which shows a repo's
+ * plan and none of the person's lists. Search, tags, quick add and select
+ * mode stay out of them.
+ */
+function noTasks(v: View): v is "settings" | "setup" | "epics" {
+  return isPage(v) || v === "epics";
 }
 
 interface Toast {
@@ -187,6 +197,10 @@ const S = {
   qaOpen: false,
   /** Whether Today shows the Later section's rows; folded, it shows one summary line. */
   laterOpen: false,
+  /** The epic card whose Details show in the sheet, by row key; never an item. */
+  epic: null as string | null,
+  /** The epic cards opened to their children, by row key. */
+  epicsOpen: new Set<string>(),
   toast: null as Toast | null,
   auth: null as Session | null,
   loginError: "",
@@ -284,6 +298,8 @@ function viewTitle(v: View): string {
       return "Completed";
     case "deleted":
       return "Deleted";
+    case "epics":
+      return "Epics";
     case "settings":
       return "Settings";
     case "setup":
@@ -309,16 +325,16 @@ function listLabelHTML(r: Repo): string {
 
 /** Whether the list shows search results: a word in the search field, on a task view. */
 function searching(): boolean {
-  return !isPage(S.view) && S.query.trim() !== "";
+  return !noTasks(S.view) && S.query.trim() !== "";
 }
 
 /** Whether the list shows the items with one tag, from every list. */
 function filtering(): boolean {
-  return !isPage(S.view) && S.tag !== null;
+  return !noTasks(S.view) && S.tag !== null;
 }
 
 function currentGroups(): Group[] {
-  if (isPage(S.view)) return [];
+  if (noTasks(S.view)) return [];
   const tag = S.tag;
   if (S.query.trim()) return searchGroups(items(), S.query, now(), tag === null ? undefined : (i) => hasTag(i, tag));
   if (tag !== null) return buildView("all", items().filter((i) => hasTag(i, tag)), now());
@@ -357,6 +373,7 @@ function renderNav() {
       entry("month", "Calendar", ICON.upcoming, plain(upcoming)) +
       entry("agents", "From agents", agentsIcon, agentsWorking + (agentNew ? `<span class="badge-new">${agentNew} new</span>` : "")) +
       entry("all", "Everything", ICON.all, plain(everything)) +
+      (epicsOn(repos()) ? entry("epics", "Epics", ICON.epic, "") : "") +
       entry("completed", "Completed", ICON.check, "") +
       entry("deleted", "Deleted", ICON.trash, ""),
   );
@@ -379,6 +396,7 @@ function renderNav() {
       ["today", "Today", ICON.today, ""],
       ["month", "Calendar", ICON.upcoming, ""],
       ["agents", "Agents", agentsIcon, agentsWorking + (agentNew ? `<span class="tab-badge" aria-label="${agentNew} new">${agentNew}</span>` : "")],
+      ...(epicsOn(repos()) ? [["epics", "Epics", ICON.epic, ""]] : []),
     ]
       .map(([v, label, icon, badge]) => {
         return `<button class="tab" data-act="view" data-view="${v}"${current === v ? ' aria-current="page"' : ""}>${icon}<span>${label}</span>${badge}</button>`;
@@ -432,7 +450,7 @@ function renderSync() {
       list
         .map((a) => {
           const item = byKey(`${a.bridge}/${a.repo}/${a.beadId ?? ""}`);
-          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" ? `${a.repo} on ${a.bridge}` : a.kind === "project-delete" || a.kind === "project-restore" ? a.repo : a.kind === "limits" ? a.bridge : (item?.title ?? a.beadId ?? "");
+          const title = a.kind === "add" ? a.payload.title : a.kind === "sync" || a.kind === "agents" || a.kind === "epics" ? `${a.repo} on ${a.bridge}` : a.kind === "project-delete" || a.kind === "project-restore" ? a.repo : a.kind === "limits" ? a.bridge : (item?.title ?? a.beadId ?? "");
           const state =
             a.status === "applied" ? (isPersonal(a) ? "Saved" : "Synced") : a.status === "pending" ? "Waiting" : a.status === "cancelled" ? "Cancelled" : `Failed: ${a.error ?? ""}`;
           // An agent's change names the agent and its machine.
@@ -467,6 +485,8 @@ function actionLabel(a: Action): string {
       return "Stop agent on";
     case "agents":
       return a.payload.on ? "Agents on:" : "Agents off:";
+    case "epics":
+      return a.payload.on ? "Epics on:" : "Epics off:";
     case "limits":
       return "Limits on";
     case "snooze":
@@ -625,8 +645,8 @@ function renderMain() {
   const title = searching() ? "Search" : filtering() ? "Tagged" : viewTitle(S.view);
   setHTML($("#view-title"), esc(title));
   document.title = `${title} · Meat Mode`;
-  // Search covers the task views, not Settings or setup.
-  $("#search-form").hidden = isPage(S.view);
+  // Search covers the task views, not Settings, setup or Epics.
+  $("#search-form").hidden = noTasks(S.view);
   const main = $("#main");
   main.dataset.view = S.view.startsWith("list:") ? "list" : S.view;
 
@@ -655,17 +675,19 @@ function renderMain() {
   setHTML(vs, upcoming ? viewSwitchHTML(S.view === "month") : "");
 
   const list = $("#list");
+  const epics = $("#epics");
   const settings = $("#settings");
   const wizard = $("#wizard");
   const banner = $("#setup-banner");
   const bannerBody = bannerHTML(ctx);
   setHTML(banner, bannerBody);
   banner.hidden = !bannerBody;
-  // Quick add belongs to the task views, not Settings or setup.
-  $("#qa-form").hidden = isPage(S.view);
+  // Quick add belongs to the task views, not Settings, setup or Epics.
+  $("#qa-form").hidden = noTasks(S.view);
   // Settings and setup have no task to show, so desktop drops the detail pane.
   $("#app").classList.toggle("page-view", isPage(S.view));
-  list.hidden = isPage(S.view);
+  list.hidden = noTasks(S.view);
+  epics.hidden = S.view !== "epics";
   settings.hidden = S.view !== "settings";
   wizard.hidden = S.view !== "setup";
   renderTagBar();
@@ -677,6 +699,12 @@ function renderMain() {
   if (S.view === "setup") {
     setHTML(wizard, wizardHTML(ctx));
     wizardShown();
+    return;
+  }
+  if (S.view === "epics") {
+    setHTML(epics, epicsHTML({ data: epicsData.peek(), error: epicsData.error(), expanded: S.epicsOpen, find: byKey, now: now() }));
+    // The policy refuses style attributes; a bar's width is set here instead.
+    for (const f of epics.querySelectorAll<HTMLElement>(".ep-fill")) f.style.width = `${f.dataset.pct}%`;
     return;
   }
 
@@ -753,7 +781,7 @@ function listMotion() {
   shownList = { scene, step, month, day, rows };
   if (!before) return;
   if (before.scene !== scene) {
-    enter(S.view === "settings" ? $("#settings") : S.view === "setup" ? $("#wizard") : $("#list"), "fade");
+    enter(S.view === "settings" ? $("#settings") : S.view === "setup" ? $("#wizard") : S.view === "epics" ? $("#epics") : $("#list"), "fade");
     return;
   }
   if (before.step !== step) {
@@ -1617,6 +1645,12 @@ function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): st
 }
 
 const DETAIL_EMPTY = '<div class="detail-empty"><p>Select a task to see its details.</p></div>';
+const EPIC_EMPTY = '<div class="detail-empty"><p>Open an epic\'s Details to see them here.</p></div>';
+
+/** The card whose Details show, from the epics last loaded; undefined once it is gone. */
+function shownEpic(key: string) {
+  return findRow(epicsData.peek(), key, byKey);
+}
 /** The item and page the sheet or pane showed last, which decide how the next one enters. */
 let shownDetail: { key: string; page: string } | null = null;
 let detailClear: ReturnType<typeof setTimeout> | undefined;
@@ -1630,18 +1664,29 @@ let detailClear: ReturnType<typeof setTimeout> | undefined;
 function renderDetail() {
   const el = $("#detail");
   const item = byKey(S.open);
-  $("#app").classList.toggle("detail-open", !!item);
+  const epic = !item && S.epic ? shownEpic(S.epic) : undefined;
+  $("#app").classList.toggle("detail-open", !!item || !!epic);
+  if (epic) {
+    clearTimeout(detailClear);
+    detailClear = undefined;
+    const before = shownDetail;
+    shownDetail = { key: epic.key, page: "epic" };
+    const fresh = before?.key !== epic.key || before.page !== "epic";
+    // As a task's sheet: on the phone it slides up; another one fades in.
+    if (setHTML(el, epicDetailHTML(epic)) && fresh && (before || !isPhone())) enter(el.querySelector(".detail-inner"), "fade");
+    return;
+  }
   if (!item) {
     shownDetail = null;
     const ms = isPhone() && el.querySelector(".detail-inner") ? duration("--motion-sheet-out") : 0;
     if (!ms) {
       clearTimeout(detailClear);
       detailClear = undefined;
-      setHTML(el, DETAIL_EMPTY);
+      setHTML(el, S.view === "epics" ? EPIC_EMPTY : DETAIL_EMPTY);
     } else if (detailClear === undefined) {
       detailClear = setTimeout(() => {
         detailClear = undefined;
-        if (!byKey(S.open)) setHTML(el, DETAIL_EMPTY);
+        if (!byKey(S.open) && !S.epic) setHTML(el, S.view === "epics" ? EPIC_EMPTY : DETAIL_EMPTY);
       }, ms);
     }
     return;
@@ -1918,7 +1963,7 @@ function render() {
   applySelection();
   renderBulk();
   renderMenu();
-  $("#scrim").hidden = !(S.snoozeKeys || S.move || (isPhone() && (S.open || S.qaOpen || S.menuOpen)));
+  $("#scrim").hidden = !(S.snoozeKeys || S.move || (isPhone() && (S.open || S.epic || S.qaOpen || S.menuOpen)));
   $("#app").classList.toggle("qa-open", S.qaOpen);
 }
 
@@ -1942,6 +1987,11 @@ async function refresh(): Promise<void> {
       const server = new Date(st.serverTime).getTime();
       if (!Number.isNaN(server)) S.offset = server - Date.now();
       if (S.selected && !byKey(S.selected)) S.selected = null;
+      // Epics switched off for every repo take the view with them.
+      if (S.view === "epics" && !epicsOn(st.repos ?? [])) {
+        S.view = "today";
+        S.epic = null;
+      }
       if (S.syncOpen) void syncActions.reload(renderSync);
       // The open item's History follows every change.
       if (S.open && S.open === historyKey) void itemHistory.reload(renderHistory);
@@ -1968,6 +2018,14 @@ async function refresh(): Promise<void> {
 /** The hub's recent actions, which the sync pill's popup lists while it is open. */
 const syncActions = remote(() => api.actions(30));
 
+/** The epics GET /api/epics last gave, loaded when the view opens and again on each epics event while it shows. */
+const epicsData = remote(() => api.epics());
+
+function loadEpics() {
+  if (S.view !== "epics" || !shellUp) return;
+  void epicsData.reload(render);
+}
+
 let es: EventSource | null = null;
 let esRetry = 0;
 let esTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1977,10 +2035,15 @@ function connectEvents() {
   es?.close();
   es = new EventSource("/api/events");
   es.addEventListener("open", () => {
-    if (esRetry > 0) void refresh();
+    if (esRetry > 0) {
+      void refresh();
+      loadEpics();
+    }
     esRetry = 0;
   });
   es.addEventListener("change", () => void refresh());
+  // Epic rows are not State: an epics event loads only them, and only while they show.
+  es.addEventListener("epics", () => loadEpics());
   es.addEventListener("error", () => {
     if (es && es.readyState === EventSource.CLOSED) {
       // A closed stream may mean the session ended: ask once before trying
@@ -2353,6 +2416,14 @@ async function doTell(key: string) {
   if (t && S.toast?.id === t.id) showToast(t.text, t.undo, t.tell);
 }
 
+async function switchEpics(bridge: string, repo: string) {
+  const r = repos().find((x) => x.bridge === bridge && x.name === repo);
+  // The app can only switch epics off; they switch on at the machine (docs/api.md, Epics).
+  if (!r?.epicsOn) return;
+  await post({ id: newId(), kind: "epics", bridge, repo, payload: { on: false } });
+  await refresh();
+}
+
 async function switchAgents(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
   // The app can only switch agents off; they switch on at the machine (docs/api.md, Agents).
@@ -2715,14 +2786,18 @@ function setView(v: View) {
   // So does a tag filter.
   if (!isPage(v)) S.tag = null;
   if (isPhone()) closeDetail();
+  // An epic's Details belong to the Epics view.
+  if (S.epic && v !== "epics") closeDetail();
   if (v !== "settings") leaveSettings();
   // A new view sets the New task list afresh: the list being viewed, else the default.
   qaListTouched = false;
   if (v === "month" && !S.month) S.month = { month: monthOf(now()), selected: startOfDay(now()) };
   render();
+  loadEpics();
   updateQuickAdd();
   loadOccurrences();
   $("#list").scrollTop = 0;
+  $("#epics").scrollTop = 0;
   $("#wizard").scrollTop = 0;
 }
 
@@ -2737,6 +2812,7 @@ function openItem(key: string) {
   }
   // The Remind early row names the hub's default.
   if (canEdit(it)) loadLead(ctx);
+  S.epic = null;
   S.open = key;
   S.selected = key;
   S.openSeenAt = it.seenAt;
@@ -2746,7 +2822,36 @@ function openItem(key: string) {
   if (isPhone()) $<HTMLElement>("#detail [data-act=close-detail]")?.focus();
 }
 
+/** Opens a card's Details: read-only, in the sheet a task opens in. */
+function openEpic(key: string) {
+  const row = shownEpic(key);
+  if (!row) return;
+  // A card that is also the person's task opens that task.
+  if (row.item) {
+    openItem(row.key);
+    return;
+  }
+  if (S.open) {
+    S.open = null;
+    S.page = null;
+    S.inline = null;
+    S.moreOpen = false;
+    S.noteEdit = null;
+    setURL(null);
+  }
+  S.epic = key;
+  render();
+  $<HTMLElement>("#detail [data-act=close-detail]")?.focus({ preventScroll: !isPhone() });
+}
+
 function closeDetail() {
+  if (S.epic && !S.open) {
+    const key = S.epic;
+    S.epic = null;
+    render();
+    document.querySelector<HTMLElement>(`#epics [data-act=epic-details][data-ep="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+    return;
+  }
   if (!S.open) return;
   const key = S.open;
   S.open = null;
@@ -2756,7 +2861,7 @@ function closeDetail() {
   S.noteEdit = null;
   setURL(null);
   render();
-  const row = document.querySelector<HTMLElement>(`#list .row[data-key="${CSS.escape(key)}"] .row-body`);
+  const row = document.querySelector<HTMLElement>(`#list .row[data-key="${CSS.escape(key)}"] .row-body, #epics [data-act=open][data-key="${CSS.escape(key)}"]`);
   row?.focus({ preventScroll: true });
 }
 
@@ -2923,7 +3028,7 @@ function openQuickAdd() {
     S.qaOpen = true;
     render();
   }
-  if (isPage(S.view)) setView("today");
+  if (noTasks(S.view)) setView("today");
   $<HTMLInputElement>("#qa-input").focus();
 }
 
@@ -3069,8 +3174,28 @@ function onClick(e: MouseEvent) {
       void switchAgents(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
       break;
     case "agents-on-copy":
+    case "epics-on-copy":
       void copyText(btn.dataset.copy ?? "").then(() => showToast("Copied"));
       break;
+    case "epics-switch":
+      void switchEpics(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
+      break;
+    case "epic-toggle": {
+      const ep = btn.dataset.ep ?? "";
+      if (S.epicsOpen.has(ep)) S.epicsOpen.delete(ep);
+      else S.epicsOpen.add(ep);
+      render();
+      document.querySelector<HTMLElement>(`#epics [data-act=epic-toggle][data-ep="${CSS.escape(ep)}"]`)?.focus();
+      break;
+    }
+    case "epic-details":
+      openEpic(btn.dataset.ep ?? "");
+      break;
+    case "epic-copy": {
+      const id = btn.dataset.id ?? "";
+      void copyValue(id).then(() => showToast(`Copied ${id}`));
+      break;
+    }
     case "inline":
       startInline(btn.dataset.field as Inline["field"]);
       break;
@@ -3280,7 +3405,7 @@ function onKey(e: KeyboardEvent) {
     } else if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
     else if (S.selecting) endSelect();
     else if (S.listDelete) askListDelete(false);
-    else if (S.open) closeDetail();
+    else if (S.open || S.epic) closeDetail();
     else if (filtering()) filterTag(null);
     else return;
     e.preventDefault();
@@ -3312,7 +3437,7 @@ function onKey(e: KeyboardEvent) {
       openQuickAdd();
       break;
     case "/":
-      if (isPage(S.view)) return;
+      if (noTasks(S.view)) return;
       $("#search-input").focus();
       break;
     case "Enter":
@@ -3499,7 +3624,7 @@ function setupSheetDrag(sheet: HTMLElement) {
   };
 
   sheet.addEventListener("pointerdown", (e) => {
-    if (!isPhone() || !S.open || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (!isPhone() || !(S.open || S.epic) || (e.pointerType === "mouse" && e.button !== 0)) return;
     const t = e.target as HTMLElement;
     if (!t.closest(".grip, .d-head, .page-head") || t.closest("input, textarea, select, [contenteditable]")) return;
     // Scrolled down, the head is pinned over content: a pull there is not a close.
@@ -3590,6 +3715,7 @@ function shell(): string {
   <div id="listbar" class="listbar" hidden></div>
   <div id="viewswitch" class="viewswitch" hidden></div>
   <div id="list" class="list"></div>
+  <div id="epics" class="list epics" hidden></div>
   <div id="bulkbar" class="bulkbar" role="toolbar" aria-label="Selected tasks" hidden></div>
   <div id="settings" class="settings" hidden></div>
   <div id="wizard" class="settings wizard-view" hidden></div>
@@ -3631,6 +3757,8 @@ function leaveShell() {
   S.toast = null;
   S.state = null;
   S.open = null;
+  S.epic = null;
+  epicsData.forget();
   S.selected = null;
   S.snoozeKeys = null;
   S.move = null;
