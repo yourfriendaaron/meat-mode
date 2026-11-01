@@ -347,6 +347,8 @@
   align-items: center;
   gap: 10px;
   padding: 0 0 10px;
+  cursor: pointer;
+  user-select: none;
 }
 .ep-repo-name {
   flex: 1;
