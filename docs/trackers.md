@@ -55,6 +55,10 @@ A tracker that lists `ask` implements `tracker.Agent`:
 - `Env(actor)` is the variables the agent gets so its writes carry its name, such as `BEADS_ACTOR=<actor>`. The bridge drops any inherited variable of the same name.
 - `Describe(words)` names one of the tracker's commands in plain words for the run's activity line, such as "Closing the task", or returns `""` when the command is not the tracker's.
 
+### Epics
+
+A tracker that can show a repo's epics also implements `tracker.Epics` (`internal/tracker/epics.go`). `EpicRows(ctx, dir)` returns every task in the repo, closed ones included however old, as `api.EpicRow`: id, title, the tracker's own type, status, priority, assignee, parent, `human` for a task marked for the person, description, updated and closed times. Like `List`, it returns the whole set or an error. The bridge passes the rows through `tracker.Outline`, which picks the cards, their direct children and the top-level tasks by one rule for every tracker (see docs/api.md, Epics), and reports the repo with `epics: true`. A tracker without it is never asked for epics.
+
 ## On the wire
 
 The bridge reports each repo with its tracker (`docs/api.md`, Bridge API):
