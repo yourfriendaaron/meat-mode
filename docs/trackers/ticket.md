@@ -60,3 +60,7 @@ The bridge parses the files itself, since `tk` prints no JSON for a title or not
 - ticket does not check that a new id is unused, and two writers at the same moment can lose one change; both are ticket's own limits.
 - Closing a task with open sub-tasks is allowed, as in `tk`.
 - Only the last note decides whether a closed task reads as dismissed: closing again after a dismiss and a reopen still shows "dismissed".
+
+## Epics
+
+An epic is a ticket of type `epic` (`tk create -t epic`), or any ticket that has a child (`--parent`). The bridge reads the repo's epics straight from the `.tickets` folder, as it reads the list: type, parent, assignee and description come from each file's front matter and text, and a ticket tagged `human` is marked as one.

@@ -61,6 +61,7 @@ type Ticket struct {
 
 var _ tracker.Tracker = (*Ticket)(nil)
 var _ tracker.Agent = (*Ticket)(nil)
+var _ tracker.Epics = (*Ticket)(nil)
 
 func (*Ticket) Info() tracker.Info {
 	return tracker.Info{
@@ -151,6 +152,53 @@ func (t *Ticket) List(_ context.Context, dir string) ([]tracker.Issue, error) {
 		}
 		is.Comments = nil
 		out = append(out, is)
+	}
+	return out, nil
+}
+
+// EpicRows implements tracker.Epics: every ticket in the store, closed ones
+// included. The type and parent come from the front matter.
+func (t *Ticket) EpicRows(_ context.Context, dir string) ([]api.EpicRow, error) {
+	files, err := os.ReadDir(filepath.Join(dir, storeDir))
+	if err != nil {
+		return nil, err
+	}
+	var out []api.EpicRow
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".md") {
+			continue
+		}
+		id := strings.TrimSuffix(f.Name(), ".md")
+		if !validID(id) {
+			continue // not a ticket name, even with an .md suffix
+		}
+		path := filepath.Join(dir, storeDir, f.Name())
+		data, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // removed between the listing and the read
+		}
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		file := parseTicket(data)
+		is := file.issue(id, "", info.ModTime())
+		out = append(out, api.EpicRow{
+			ID:          is.ID,
+			Title:       is.Title,
+			Type:        file.fields["type"],
+			Status:      is.Status,
+			Priority:    is.Priority,
+			Assignee:    file.fields["assignee"],
+			Parent:      is.Parent,
+			Human:       forPerson(is),
+			Description: is.Description,
+			UpdatedAt:   is.UpdatedAt,
+			ClosedAt:    is.ClosedAt,
+		})
 	}
 	return out, nil
 }

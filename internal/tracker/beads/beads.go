@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
@@ -24,6 +25,8 @@ type Bead struct {
 	Description  string          `json:"description,omitempty"`
 	Status       string          `json:"status"`
 	Priority     int             `json:"priority"`
+	IssueType    string          `json:"issue_type,omitempty"`
+	Assignee     string          `json:"assignee,omitempty"`
 	Labels       []string        `json:"labels,omitempty"`
 	CreatedBy    string          `json:"created_by,omitempty"`
 	CreatedAt    time.Time       `json:"created_at"`
@@ -124,6 +127,29 @@ func (b Bead) Issue() tracker.Issue {
 		i.Comments = append(i.Comments, tracker.Comment{ID: c.ID, Author: c.Author, Text: c.Text, CreatedAt: c.CreatedAt})
 	}
 	return i
+}
+
+// EpicRow converts a bead to a row of the repo's epics projection. The
+// status passes through as Issue does; a status bd does not know is read as
+// open by the hub.
+func (b Bead) EpicRow() api.EpicRow {
+	r := api.EpicRow{
+		ID:          b.ID,
+		Title:       b.Title,
+		Type:        b.IssueType,
+		Status:      b.Status,
+		Priority:    b.Priority,
+		Assignee:    b.Assignee,
+		Parent:      b.Parent,
+		Human:       slices.Contains(b.Labels, tracker.HumanLabel),
+		Description: b.Description,
+		UpdatedAt:   b.UpdatedAt,
+		ClosedAt:    b.ClosedAt,
+	}
+	if r.UpdatedAt.IsZero() {
+		r.UpdatedAt = b.CreatedAt
+	}
+	return r
 }
 
 // ActionID returns the Meat Mode action id stored in the bead's metadata.

@@ -36,12 +36,18 @@ type Fake struct {
 	// fake-N, so a tracker that makes an id its side cannot take can be
 	// tested.
 	CreateID string
+	// Epics makes Tracker return a tracker that also implements
+	// tracker.Epics, whose EpicRows are the rows SetRows set, for every
+	// repo directory. Leave it false for a tracker that cannot show epics.
+	Epics bool
 
 	mu      sync.Mutex
 	repos   map[string]map[string]*task
 	next    int
 	Calls   []string         // one line per write, e.g. "close dir id"
 	FailDir map[string]error // calls against these dirs fail with the error
+	rows    []api.EpicRow
+	rowsErr error
 }
 
 type task struct {
@@ -59,12 +65,30 @@ func New() *Fake {
 }
 
 // Tracker returns f as the tracker to test: one that also implements
-// tracker.Agent exactly when Inf lists ask, as tracker.Validate wants.
+// tracker.Agent exactly when Inf lists ask, as tracker.Validate wants, and
+// tracker.Epics exactly when Epics is set.
 func (f *Fake) Tracker() tracker.Tracker {
-	if f.Inf.Can(api.KindAsk) {
+	agent := f.Inf.Can(api.KindAsk)
+	switch {
+	case agent && f.Epics:
+		return &agentEpics{Agent{f}}
+	case agent:
 		return &Agent{f}
+	case f.Epics:
+		return &epics{f}
 	}
 	return f
+}
+
+// epics is a Fake that shows epics.
+type epics struct{ *Fake }
+
+// agentEpics is a Fake that runs agents and shows epics.
+type agentEpics struct{ Agent }
+
+// EpicRows implements tracker.Epics.
+func (a *agentEpics) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, error) {
+	return (&epics{a.Fake}).EpicRows(ctx, dir)
 }
 
 // Agent is a Fake that runs agents. Its words name the fake's own command,
@@ -221,6 +245,28 @@ func (f *Fake) refuse(capability string) error {
 		return tracker.ErrUnsupported
 	}
 	return nil
+}
+
+// SetRows sets the rows EpicRows returns, and the error it returns instead
+// when err is not nil.
+func (f *Fake) SetRows(rows []api.EpicRow, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rows, f.rowsErr = slices.Clone(rows), err
+}
+
+// EpicRows implements tracker.Epics on the value Tracker returns when Epics
+// is set: the rows SetRows set, or the error, after FailDir.
+func (e *epics) EpicRows(_ context.Context, dir string) ([]api.EpicRow, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.FailDir[dir]; err != nil {
+		return nil, err
+	}
+	if e.rowsErr != nil {
+		return nil, e.rowsErr
+	}
+	return slices.Clone(e.rows), nil
 }
 
 // List implements tracker.Tracker: tasks labelled human, open or closed

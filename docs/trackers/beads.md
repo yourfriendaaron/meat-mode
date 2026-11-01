@@ -49,3 +49,5 @@ The bridge runs `bd` in the repo, with your name from the app as the actor (such
 | Ask an agent | The note as above, then the agent starts with `BEADS_ACTOR` set to its name. Its first message tells it to read the task with `bd show <id>`, close it with `bd close <id>`, or reply with `bd comment <id> "..."`. |
 
 To read the list, the bridge runs `bd list --all -n 0 --json -l human`, and `bd show --include-comments --json -- <id>` for each task that changed.
+
+**Epics.** An epic is a bead of type `epic`, or any bead that has a child (bd's parent-child link). To read the repo's epics the bridge runs `bd list --all -n 0 --json`, once, without the `human` filter. Parent, type, assignee and description come from that output, and a bead labelled `human` is marked as one.
