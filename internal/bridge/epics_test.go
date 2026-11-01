@@ -224,7 +224,10 @@ func TestEpicsConflictReportsRepos(t *testing.T) {
 // once it changes.
 func TestEpicsRefusedSet(t *testing.T) {
 	ew := newEpicsWorld(t)
-	ew.et.set(gardenEpic, gardenHose, gardenHose) // an id twice
+	ew.hub.RefuseEpics(func(rows []api.EpicRow) bool { return len(rows) == 3 })
+	extra := gardenHose
+	extra.ID = "gd-3"
+	ew.et.set(gardenEpic, gardenHose, extra)
 	ew.tick(ew.b)
 	ew.after(time.Minute)
 	ew.after(RefreshEvery)

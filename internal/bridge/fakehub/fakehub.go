@@ -30,6 +30,8 @@ type Hub struct {
 	// noEpics answers PUT /bridge/v1/epics with 404, as a hub from before
 	// the route did.
 	noEpics bool
+	// refuseEpics, when set, answers 400 for the sets it reports true for.
+	refuseEpics func([]api.EpicRow) bool
 	runs    map[string][]api.RunReport // bridge -> its last run list
 	runPuts map[string]int
 	queue   map[string][]api.Action // bridge -> actions it was sent
@@ -406,6 +408,13 @@ func (h *Hub) putEpics(w http.ResponseWriter, r *http.Request, bridge string) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	h.mu.Lock()
+	refuse := h.refuseEpics
+	h.mu.Unlock()
+	if refuse != nil && refuse(rows) {
+		writeErr(w, http.StatusBadRequest, "this epic set is refused")
+		return
+	}
 	k := bridge + "/" + repo
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -524,6 +533,14 @@ func (h *Hub) SetTimeZone(tz string) {
 func (h *Hub) SetNoSettings(gone bool) {
 	h.mu.Lock()
 	h.noSettings = gone
+	h.mu.Unlock()
+}
+
+// RefuseEpics makes the hub answer PUT /bridge/v1/epics with 400 for every
+// set refuse reports true for; nil takes every set the checks pass.
+func (h *Hub) RefuseEpics(refuse func([]api.EpicRow) bool) {
+	h.mu.Lock()
+	h.refuseEpics = refuse
 	h.mu.Unlock()
 }
 
