@@ -30,7 +30,7 @@ func gardenEpics() []api.EpicRow {
 		{ID: "gd-9", Title: "Plan the beds", Type: "epic", Status: "open", Priority: 1, Epic: true, Description: "Spring beds.", UpdatedAt: at},
 		{ID: "gd-9.1", Title: "Dig the beds", Type: "task", Status: "closed", Priority: 2, Parent: "gd-9", UpdatedAt: at, ClosedAt: &at},
 		{ID: "gd-1", Title: "Water the plants", Status: "open", Priority: 2, Parent: "gd-9", Human: true, UpdatedAt: at},
-		{ID: "gd-8", Title: "Fix the fence", Status: "in_progress", Priority: 3, Parent: "gd-7", Description: "dropped", UpdatedAt: at},
+		{ID: "gd-8", Title: "Fix the fence", Status: "in_progress", Priority: 3, Parent: "gd-7", Description: "Mend the gate first.", UpdatedAt: at},
 	}
 }
 
@@ -96,9 +96,9 @@ func TestReplaceEpics(t *testing.T) {
 	if r.Bridge != "laptop" || r.Repo != "garden" || !r.SyncedAt.Equal(c.t) || strings.Join(ids, ",") != "gd-1,gd-8,gd-9,gd-9.1" {
 		t.Fatalf("repo epics %+v", r)
 	}
-	// Cleaned as api.CheckEpicRows does: a parent that is no card and a
-	// description off a card are gone.
-	if r.Rows[1].Parent != "" || r.Rows[1].Description != "" || r.Rows[2].Description != "Spring beds." || !r.Rows[0].Human {
+	// Cleaned as api.CheckEpicRows does: a parent that is no card is gone,
+	// and a row that is not a card keeps its description.
+	if r.Rows[1].Parent != "" || r.Rows[1].Description != "Mend the gate first." || r.Rows[2].Description != "Spring beds." || !r.Rows[0].Human {
 		t.Errorf("rows %+v", r.Rows)
 	}
 	// The items' sync time is the items route's own.
