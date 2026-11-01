@@ -3238,7 +3238,10 @@ function onClick(e: MouseEvent) {
     S.ep.menu = null;
     render();
   }
-  const btn = target.closest<HTMLElement>("[data-act]");
+  // A click anywhere on an Epics repo heading folds it, as its arrow does;
+  // the arrow stays the one control for the keyboard and screen readers.
+  const btn =
+    target.closest<HTMLElement>("[data-act]") ?? target.closest(".ep-repo-head")?.querySelector<HTMLElement>(".ep-fold") ?? null;
   if (!btn) return;
   if (btn.dataset.act?.startsWith("ep-") && epicsAct(btn)) return;
   const key = btn.dataset.key ?? "";

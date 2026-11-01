@@ -292,6 +292,12 @@ test.describe("desktop", () => {
     await page.locator("#epics .ep-fold").click();
     await expect(page.locator("#epics .ep-list > .ep-item")).toHaveCount(5);
     await expect(page.locator("#epics .ep-kids")).toHaveCount(0);
+    // Anywhere on the heading folds it too, not only the arrow.
+    await page.locator("#epics .ep-repo-name h2").click();
+    await expect(page.locator("#epics .ep-fold")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#epics .ep-list")).toHaveCount(0);
+    await page.locator("#epics .ep-sum").click();
+    await expect(page.locator("#epics .ep-fold")).toHaveAttribute("aria-expanded", "true");
   });
 
   test("Needs attention shows five Critical or Blocked rows, then more, folds, and opens Details", async ({ page, hub }) => {
