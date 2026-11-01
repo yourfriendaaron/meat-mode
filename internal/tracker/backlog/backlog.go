@@ -60,6 +60,7 @@ type Tracker struct {
 var (
 	_ tracker.Tracker = (*Tracker)(nil)
 	_ tracker.Agent   = (*Tracker)(nil)
+	_ tracker.Epics   = (*Tracker)(nil)
 )
 
 // Info implements tracker.Tracker. Backlog.md has no defer field, so snooze

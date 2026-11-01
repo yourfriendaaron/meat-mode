@@ -56,6 +56,8 @@ type taskJSON struct {
 	Status      string        `json:"status"`
 	Archived    bool          `json:"archived"`
 	Priority    *string       `json:"priority"`
+	Type        *string       `json:"type"`
+	Assignees   []string      `json:"assignees"`
 	Reporter    *string       `json:"reporter"`
 	Labels      []string      `json:"labels"`
 	ParentID    *string       `json:"parentTaskId"`

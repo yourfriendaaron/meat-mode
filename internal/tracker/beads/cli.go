@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
@@ -30,6 +31,7 @@ type CLI struct {
 var (
 	_ tracker.Tracker = (*CLI)(nil)
 	_ tracker.Agent   = (*CLI)(nil)
+	_ tracker.Epics   = (*CLI)(nil)
 )
 
 // Error is a failed bd call.
@@ -211,6 +213,27 @@ func (c *CLI) listHuman(ctx context.Context, dir string) ([]Bead, error) {
 		}
 	}
 	return keep, nil
+}
+
+// EpicRows implements tracker.Epics: every bead, closed ones included, from
+// one bd list. A bd tombstone (a deleted bead) is not a task and is left out.
+func (c *CLI) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, error) {
+	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--json")
+	if err != nil {
+		return nil, err
+	}
+	var all []Bead
+	if err := decode(out, &all); err != nil {
+		return nil, err
+	}
+	rows := make([]api.EpicRow, 0, len(all))
+	for _, b := range all {
+		if b.Status == "tombstone" {
+			continue
+		}
+		rows = append(rows, b.EpicRow())
+	}
+	return rows, nil
 }
 
 // Show implements tracker.Tracker.
