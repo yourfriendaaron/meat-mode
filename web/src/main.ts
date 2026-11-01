@@ -74,7 +74,7 @@ import { gate, loginErrorText } from "./login.ts";
 import { claimHTML, claimScreen } from "./password.ts";
 import { esc } from "./html.ts";
 import { agentsOnHTML } from "./agents.ts";
-import { copyText } from "./clipboard.ts";
+import { copyText, copyValue } from "./clipboard.ts";
 import { ICON } from "./icons.ts";
 import { remote, type Remote } from "./remote.ts";
 import { HISTORY_SHOWN, byLine, changeText, shownChanges, undoFor, type HistoryContext } from "./changes.ts";
@@ -3091,7 +3091,7 @@ function onClick(e: MouseEvent) {
       S.moreOpen = false;
       render();
       $<HTMLElement>("#d-more").focus();
-      if (it) void copyText(it.id).then(() => showToast(`Copied ${it.id}`));
+      if (it) void copyValue(it.id).then(() => showToast(`Copied ${it.id}`));
       break;
     }
     case "sched-clear-date":
