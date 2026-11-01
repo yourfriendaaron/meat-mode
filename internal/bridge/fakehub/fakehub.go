@@ -32,10 +32,10 @@ type Hub struct {
 	noEpics bool
 	// refuseEpics, when set, answers 400 for the sets it reports true for.
 	refuseEpics func([]api.EpicRow) bool
-	runs    map[string][]api.RunReport // bridge -> its last run list
-	runPuts map[string]int
-	queue   map[string][]api.Action // bridge -> actions it was sent
-	results map[string][]api.ActionResult
+	runs        map[string][]api.RunReport // bridge -> its last run list
+	runPuts     map[string]int
+	queue       map[string][]api.Action // bridge -> actions it was sent
+	results     map[string][]api.ActionResult
 	// atResult is the bridge's run list as it stood when each action's
 	// latest result arrived.
 	atResult map[string][]api.RunReport
