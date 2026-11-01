@@ -5,6 +5,7 @@
 
 import { ApiError, errorText } from "./api.ts";
 import { esc } from "./html.ts";
+import { listBadge } from "./identity.ts";
 import { HUB_BRIDGE, repoCan, repoLabel } from "./model.ts";
 import type { AgentLimits, Bridge, LimitName, LimitsChange, Repo, RunLimits } from "./types.ts";
 
@@ -90,7 +91,7 @@ export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync
         const how = r.optedIn && !r.agentsPending ? agentsOnHTML(bridge, r.name, `${idPrefix}agents-cmd-${bridge}/${r.name}`) : "";
         agents = `<div class="m-repo-agents m-repo-agents-off"><div class="m-repo-name"><div class="small">Agents are off here</div>${agentsNote}${how}</div></div>`;
       }
-      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div>${esc(repoLabel(r))}</div><div class="muted small">${esc(r.tracker ? `${r.name} · ${r.tracker}` : r.name)}</div>${note}</div>${control}</div>${agents}${epicsSwitchHTML(r, bridge, idPrefix)}</li>`;
+      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div class="m-repo-title">${listBadge(r, repos)}<span>${esc(repoLabel(r))}</span></div><div class="muted small">${esc(r.tracker ? `${r.name} · ${r.tracker}` : r.name)}</div>${note}</div>${control}</div>${agents}${epicsSwitchHTML(r, bridge, idPrefix)}</li>`;
     })
     .join("")}</ul>`;
 }
