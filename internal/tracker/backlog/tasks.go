@@ -135,7 +135,7 @@ func (b *Tracker) Show(ctx context.Context, dir, id string) (tracker.Issue, erro
 		return tracker.Issue{}, err
 	}
 	is := toIssue(t, statuses)
-	if is.Parent != "" {
+	if is.Parent != "" && checkID(is.Parent) == nil {
 		// The parent's title is a nicety; a parent that cannot be read
 		// leaves it empty rather than failing the task.
 		if p, err := b.view(ctx, dir, is.Parent); err == nil {

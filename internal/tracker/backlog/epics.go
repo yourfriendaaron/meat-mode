@@ -96,7 +96,8 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 // cardDesc is a card's own description. It is cached per repo and task
 // while the task's updated value stands, so reading unchanged epics costs
 // no `backlog task view`. A card the CLI cannot find keeps an empty
-// description; any other failure of the view fails the set.
+// description, cached like any other; any other failure of the view
+// fails the set. A card whose id the tracker would refuse gets none.
 func (b *Tracker) cardDesc(ctx context.Context, dir string, t taskJSON) (string, error) {
 	updated := deref(t.UpdatedAt)
 	key := dir + "\x00" + idKey(t.ID)
@@ -106,14 +107,17 @@ func (b *Tracker) cardDesc(ctx context.Context, dir string, t taskJSON) (string,
 		return e.desc, nil
 	}
 	b.mu.Unlock()
+	if checkID(t.ID) != nil {
+		return "", nil // never pass an id the tracker would refuse to the CLI
+	}
+	desc := ""
 	v, err := b.view(ctx, dir, t.ID)
-	if err != nil {
-		if errors.Is(err, tracker.ErrNotFound) {
-			return "", nil
-		}
+	switch {
+	case err == nil:
+		desc = deref(v.Description)
+	case !errors.Is(err, tracker.ErrNotFound):
 		return "", err
 	}
-	desc := deref(v.Description)
 	b.mu.Lock()
 	if b.descs == nil {
 		b.descs = make(map[string]descCache)
