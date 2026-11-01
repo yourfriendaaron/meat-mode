@@ -102,6 +102,41 @@ test("detail opens in a bottom sheet with a scrim", async ({ page, hub }) => {
   await expect(sheet).toBeHidden();
 });
 
+test("pulling the sheet down by its grip closes it; a short pull springs back", async ({ page, hub }) => {
+  void hub;
+  await openApp(page);
+  await row(page, "Water the plants").locator(".row-body").click();
+  const sheet = page.locator("#detail");
+  await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  const pull = async (target: Locator, dy: number) => {
+    const box = (await target.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y0 = box.y + box.height / 2;
+    const fire = (type: string, y: number) =>
+      target.dispatchEvent(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, bubbles: true });
+    await fire("pointerdown", y0);
+    for (let i = 1; i <= 6; i++) {
+      await page.waitForTimeout(30);
+      await fire("pointermove", y0 + (dy * i) / 6);
+    }
+    await fire("pointerup", y0 + dy);
+  };
+
+  await pull(sheet.locator(".grip"), 40);
+  await expect(page.locator("#scrim")).toBeVisible();
+  await expect(sheet.getByRole("heading", { name: "Water the plants" })).toBeInViewport();
+
+  await pull(sheet.locator(".grip"), 400);
+  await expect(sheet).toBeHidden();
+
+  // The head pulls too, and the drag is not a tap on the title.
+  await row(page, "Water the plants").locator(".row-body").click();
+  await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  await pull(sheet.locator(".d-title"), 400);
+  await expect(sheet).toBeHidden();
+  await expect(page.locator("#d-title-input")).toHaveCount(0);
+});
+
 test("the detail head stays in view when the sheet scrolls to the note", async ({ page, hub }) => {
   // Enough notes that the sheet scrolls.
   hub.find("home/garden/ga-1")!.comments = Array.from({ length: 8 }, (_, i) => ({

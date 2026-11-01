@@ -3477,6 +3477,89 @@ function setupSwipe(list: HTMLElement) {
   });
 }
 
+/** How far, as a share of the sheet's height, a pull must go to close it. */
+const SHEET_CLOSE_SHARE = 0.25;
+/** A flick this fast (px per ms) closes the sheet however short it was. */
+const SHEET_FLICK = 0.5;
+
+// Pull the phone sheet down by its grip or head to close it.
+function setupSheetDrag(sheet: HTMLElement) {
+  let start: { y: number; id: number } | null = null;
+  let dy = 0;
+  let last = { y: 0, t: 0, v: 0 };
+  let dragging = false;
+  let dragEnded = 0;
+
+  const release = () => {
+    sheet.style.transform = "";
+    sheet.style.transition = "";
+    start = null;
+    dragging = false;
+    dy = 0;
+  };
+
+  sheet.addEventListener("pointerdown", (e) => {
+    if (!isPhone() || !S.open || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const t = e.target as HTMLElement;
+    if (!t.closest(".grip, .d-head, .page-head") || t.closest("input, textarea, select, [contenteditable]")) return;
+    // Scrolled down, the head is pinned over content: a pull there is not a close.
+    if (sheet.scrollTop > 0) return;
+    start = { y: e.clientY, id: e.pointerId };
+    last = { y: e.clientY, t: e.timeStamp, v: 0 };
+    dy = 0;
+    dragging = false;
+  });
+  sheet.addEventListener("pointermove", (e) => {
+    if (!start || e.pointerId !== start.id) return;
+    const my = e.clientY - start.y;
+    if (!dragging) {
+      if (my < -10) {
+        start = null;
+        return;
+      }
+      if (my < 8) return;
+      dragging = true;
+      sheet.style.transition = "none";
+      try {
+        sheet.setPointerCapture(e.pointerId);
+      } catch {
+        // pointer already gone
+      }
+    }
+    dy = Math.max(0, my);
+    const dt = e.timeStamp - last.t;
+    if (dt > 0) last = { y: e.clientY, t: e.timeStamp, v: (e.clientY - last.y) / dt };
+    sheet.style.transform = `translateY(${dy}px)`;
+  });
+  const finish = (e: PointerEvent) => {
+    if (!start || e.pointerId !== start.id) return;
+    const wasDragging = dragging;
+    const close = wasDragging && (dy >= sheet.offsetHeight * SHEET_CLOSE_SHARE || last.v >= SHEET_FLICK);
+    // Clearing the inline styles lets the sheet's own transition carry it on
+    // from where the finger let go: shut, or back up.
+    release();
+    if (!wasDragging) return;
+    dragEnded = Date.now();
+    if (close) closeDetail();
+  };
+  sheet.addEventListener("pointerup", finish);
+  sheet.addEventListener("pointercancel", (e) => {
+    if (start && e.pointerId === start.id) release();
+  });
+  // The click a drag that began on the title or a button fires is not a tap.
+  sheet.addEventListener(
+    "click",
+    (e) => {
+      if (Date.now() - dragEnded < 400) {
+        dragEnded = 0;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+    true,
+  );
+}
+
 // ---------- boot ----------
 
 function shell(): string {
@@ -3676,6 +3759,7 @@ function startApp() {
   esRetry = 0;
   $("#qa-input").addEventListener("scroll", () => ($("#qa-backdrop").scrollLeft = $<HTMLInputElement>("#qa-input").scrollLeft));
   setupSwipe($("#list"));
+  setupSheetDrag($("#detail"));
   setupMonthDrag($("#list"));
   setupLongPress($("#list"));
 

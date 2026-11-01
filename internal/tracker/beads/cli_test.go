@@ -164,7 +164,8 @@ func TestCLI(t *testing.T) {
 	if err := c.AddComment(ctx, dir, id, "alex-app", "--Bought soil"); err != nil {
 		t.Fatal(err)
 	}
-	until := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	// Far enough ahead that bd still reports the issue deferred when the test runs.
+	until := time.Date(2099, 11, 1, 9, 0, 0, 0, time.UTC)
 	if err := c.Defer(ctx, dir, id, &until, "alex-app"); err != nil {
 		t.Fatal(err)
 	}

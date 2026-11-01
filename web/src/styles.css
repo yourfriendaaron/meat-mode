@@ -1179,11 +1179,25 @@ select.qa-pill {
   padding: 10px calc(18px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(18px + var(--safe-left));
 }
 .grip {
+  position: relative;
   width: 40px;
   height: 4px;
   border-radius: 2px;
   background: var(--role-line);
   align-self: center;
+  touch-action: none;
+}
+/* The bar is thin; the finger's target is wider and taller. */
+.grip::before {
+  content: "";
+  position: absolute;
+  inset: -12px -60px;
+}
+/* A pull on the grip or the head drags the sheet down (setupSheetDrag), so the
+   browser must not take it as a scroll. */
+.detail .d-head,
+.detail .page-head {
+  touch-action: none;
 }
 /* The head stays at the top of the scrolling sheet or pane, so Close stays in
    reach when the sheet scrolls to the note field. It spans the padding so
@@ -2811,6 +2825,10 @@ select.qa-pill {
   }
   .grip {
     display: none;
+  }
+  .detail .d-head,
+  .detail .page-head {
+    touch-action: auto;
   }
   .detail-inner {
     padding: 20px;
