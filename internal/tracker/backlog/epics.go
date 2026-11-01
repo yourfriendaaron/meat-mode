@@ -19,10 +19,13 @@ import (
 //     print and which are done tasks, so a card's progress counts them;
 //   - the files in archive/tasks/ whose status is the closed one. An
 //     archived task in any other status was put away unfinished, not done,
-//     and is left out.
+//     and is left out. A file in either folder whose id is not a task id,
+//     or that is not a task file at all, is left out with it.
 //
 // The list leaves out descriptions; the view of each card, a task that is
-// not closed and is of type epic or has a child, supplies its own.
+// not closed and is of type epic or has a child, supplies its own, cached
+// while the card stands unedited. A card the view cannot find keeps an
+// empty description; any other view failure fails the set.
 func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, error) {
 	statuses, err := b.statuses(ctx, dir)
 	if err != nil {
@@ -46,7 +49,9 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 			return nil, err
 		}
 		for _, t := range files {
-			if seen[idKey(t.ID)] || (sub.closedOnly && mapStatus(t.Status, statuses, true) != tracker.StatusClosed) {
+			// An id from a file's front matter never reaches the CLI
+			// unchecked: Show would refuse it as not found.
+			if seen[idKey(t.ID)] || checkID(t.ID) != nil || (sub.closedOnly && mapStatus(t.Status, statuses, true) != tracker.StatusClosed) {
 				continue
 			}
 			seen[idKey(t.ID)] = true
@@ -60,14 +65,15 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 		}
 	}
 	rows := make([]api.EpicRow, 0, len(tasks))
+	cards := map[string]bool{}
 	for _, t := range tasks {
 		is := toIssue(t, statuses)
 		if is.Status != tracker.StatusClosed && (strings.EqualFold(deref(t.Type), "epic") || hasChild[idKey(t.ID)]) {
-			v, err := b.view(ctx, dir, t.ID)
+			cards[descKey(dir, t.ID)] = true
+			is.Description, err = b.cardDesc(ctx, dir, t)
 			if err != nil {
 				return nil, err
 			}
-			is.Description = deref(v.Description)
 		}
 		r := api.EpicRow{
 			ID:          is.ID,
@@ -86,12 +92,63 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 		}
 		rows = append(rows, r)
 	}
+	b.sweepDescs(dir, cards)
 	return rows, nil
+}
+
+// descKey is a card's key in the description cache.
+func descKey(dir, id string) string { return dir + "\x00" + idKey(id) }
+
+// sweepDescs drops the cached descriptions of dir's tasks that are no
+// longer cards, so the cache holds only what the last read used.
+func (b *Tracker) sweepDescs(dir string, cards map[string]bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for k := range b.descs {
+		if strings.HasPrefix(k, dir+"\x00") && !cards[k] {
+			delete(b.descs, k)
+		}
+	}
+}
+
+// cardDesc is a card's own description. It is cached per repo and task
+// while the task's updated value stands, so reading unchanged epics costs
+// no `backlog task view`. A card the CLI cannot find keeps an empty
+// description, cached like any other; any other failure of the view
+// fails the set. A card whose id the tracker would refuse gets none.
+func (b *Tracker) cardDesc(ctx context.Context, dir string, t taskJSON) (string, error) {
+	updated := deref(t.UpdatedAt)
+	key := descKey(dir, t.ID)
+	b.mu.Lock()
+	if e, ok := b.descs[key]; ok && e.updated == updated {
+		b.mu.Unlock()
+		return e.desc, nil
+	}
+	b.mu.Unlock()
+	if checkID(t.ID) != nil {
+		return "", nil // never pass an id the tracker would refuse to the CLI
+	}
+	desc := ""
+	v, err := b.view(ctx, dir, t.ID)
+	switch {
+	case err == nil:
+		desc = deref(v.Description)
+	case !errors.Is(err, tracker.ErrNotFound):
+		return "", err
+	}
+	b.mu.Lock()
+	if b.descs == nil {
+		b.descs = make(map[string]descCache)
+	}
+	b.descs[key] = descCache{updated: updated, desc: desc}
+	b.mu.Unlock()
+	return desc, nil
 }
 
 // readTaskFiles reads the tasks in a folder of task files, as much of each
 // as EpicRows needs. A missing folder holds none. A file that does not read
-// is an error, so the set is never partial.
+// is an error, so the set is never read part way; one that is not a task
+// file is skipped, since a folder can hold a stray file.
 func readTaskFiles(folder string) ([]taskJSON, error) {
 	entries, err := os.ReadDir(folder)
 	if errors.Is(err, os.ErrNotExist) {

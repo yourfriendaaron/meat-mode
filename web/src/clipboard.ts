@@ -29,6 +29,9 @@ export async function copyValue(text: string): Promise<void> {
     field.className = "sr";
     document.body.append(field);
     field.select();
+    // iOS Safari ignores the selection a readonly field's select() makes;
+    // naming the range keeps the copy below working there.
+    field.setSelectionRange(0, text.length);
     document.execCommand("copy");
     field.remove();
   }

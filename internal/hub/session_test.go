@@ -112,6 +112,7 @@ func sessionReply(t *testing.T, w *httptest.ResponseRecorder) (login, authed boo
 var appRoutes = []struct{ method, path, body string }{
 	{"GET", "/api/state", ""},
 	{"GET", "/api/events", ""},
+	{"GET", "/api/epics", ""},
 	{"POST", "/api/actions", `{}`},
 	{"GET", "/api/actions", ""},
 	{"POST", "/api/actions/" + aid1 + "/cancel", ""},

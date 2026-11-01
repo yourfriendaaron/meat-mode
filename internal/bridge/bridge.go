@@ -278,9 +278,10 @@ func (b *Bridge) stopRuns() {
 
 // Tick runs one round: hello if needed, report repos, replay actions, then
 // sync the repos that had actions, or all of them when full is set or
-// SyncEvery has passed since the last full round, then run the epics pass. full also rescans the
-// roots, which otherwise happens every ScanEvery. It returns hub errors;
-// tracker errors are logged per repo. Each hello checks the trackers again.
+// SyncEvery has passed since the last full round, then run the epics pass.
+// full also rescans the roots, which otherwise happens every ScanEvery. It
+// returns hub errors; tracker errors are logged per repo. Each hello
+// checks the trackers again.
 func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if b.name == "" {
 		if !b.checked {

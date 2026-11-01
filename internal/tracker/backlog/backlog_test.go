@@ -2,6 +2,7 @@ package backlog_test
 
 import (
 	"context"
+	"errors"
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"os"
 	"os/exec"
@@ -259,23 +260,31 @@ func TestEpicRowsOffBoard(t *testing.T) {
 	tr, dir, run := newEpicRepo(t)
 	parent := add(t, run, "Plan the garden", "--type", "epic", "-d", "Beds and paths.")
 	completed := add(t, run, "Dig the beds", "--parent", parent)
+	humanDone := add(t, run, "Water the beds", "--parent", parent, "--labels", "human")
 	archivedDone := add(t, run, "Rake the leaves", "--parent", parent)
 	archivedOpen := add(t, run, "Paint the fence", "--parent", parent)
 	listed := add(t, run, "Buy the seeds", "--parent", parent)
 	run("edit", completed, "-s", "Done")
+	run("edit", humanDone, "-s", "Done")
 	run("edit", archivedDone, "-s", "Done")
 	run("archive", archivedDone)
 	run("archive", archivedOpen)
-	files, err := filepath.Glob(filepath.Join(dir, "backlog", "tasks", strings.ToLower(completed)+" - *"))
-	if err != nil || len(files) != 1 {
-		t.Fatalf("task file of %s: %v, %v", completed, files, err)
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "backlog", "completed"), 0o755); err != nil {
+	done := filepath.Join(dir, "backlog", "completed")
+	if err := os.MkdirAll(done, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(files[0], filepath.Join(dir, "backlog", "completed", filepath.Base(files[0]))); err != nil {
-		t.Fatal(err)
+	toCompleted := func(id string) {
+		t.Helper()
+		files, err := filepath.Glob(filepath.Join(dir, "backlog", "tasks", strings.ToLower(id)+" - *"))
+		if err != nil || len(files) != 1 {
+			t.Fatalf("task file of %s: %v, %v", id, files, err)
+		}
+		if err := os.Rename(files[0], filepath.Join(done, filepath.Base(files[0]))); err != nil {
+			t.Fatal(err)
+		}
 	}
+	toCompleted(completed)
+	toCompleted(humanDone)
 
 	rows, err := tr.EpicRows(context.Background(), dir)
 	if err != nil {
@@ -285,10 +294,10 @@ func TestEpicRowsOffBoard(t *testing.T) {
 	for _, r := range rows {
 		got[r.ID] = r
 	}
-	if len(got) != len(rows) || len(rows) != 4 {
-		t.Fatalf("EpicRows = %+v; want the parent, %s, %s and %s", rows, completed, archivedDone, listed)
+	if len(got) != len(rows) || len(rows) != 5 {
+		t.Fatalf("EpicRows = %+v; want the parent, %s, %s, %s and %s", rows, completed, humanDone, archivedDone, listed)
 	}
-	for id, status := range map[string]string{parent: "open", completed: "closed", archivedDone: "closed", listed: "open"} {
+	for id, status := range map[string]string{parent: "open", completed: "closed", humanDone: "closed", archivedDone: "closed", listed: "open"} {
 		r := got[id]
 		if r.Status != status || (id != parent && r.Parent != parent) {
 			t.Errorf("row %s = %+v; want status %s under %s", id, r, status, parent)
@@ -297,7 +306,136 @@ func TestEpicRowsOffBoard(t *testing.T) {
 	if _, ok := got[archivedOpen]; ok {
 		t.Errorf("EpicRows holds %s, archived before it was done", archivedOpen)
 	}
+	if !got[humanDone].Human {
+		t.Errorf("row %s, labelled human, is not marked human", humanDone)
+	}
+	if got[completed].Human {
+		t.Errorf("row %s, without the label, is marked human", completed)
+	}
 	if got[parent].Description != "Beds and paths." {
 		t.Errorf("description %q; want the card's own", got[parent].Description)
+	}
+}
+
+// wrapBacklog writes a backlog stand-in that notes each call in a log and
+// forwards to the real one, except that `task view` answers msg on stderr
+// and exits 1 when msg is not empty. It returns the wrapper's path and a
+// reader of the calls so far, one line of arguments per call.
+func wrapBacklog(t *testing.T, bin, msg string) (string, func() []string) {
+	t.Helper()
+	dir := t.TempDir()
+	log := filepath.Join(dir, "calls")
+	wrap := filepath.Join(dir, "backlog")
+	script := "#!/bin/sh\necho \"$*\" >> '" + log + "'\n"
+	if msg != "" {
+		script += "if [ \"$1\" = task ] && [ \"$2\" = view ]; then echo '" + msg + "' >&2; exit 1; fi\n"
+	}
+	script += "exec '" + bin + "' \"$@\"\n"
+	if err := os.WriteFile(wrap, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return wrap, func() []string {
+		data, err := os.ReadFile(log)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			t.Fatal(err)
+		}
+		return strings.Split(strings.TrimSpace(string(data)), "\n")
+	}
+}
+
+// TestEpicRowsSkipsStrayFiles checks what EpicRows does with files in
+// completed/ it cannot use: one whose id is not a task id is left out,
+// even when its type would make it a card, and so is one that is not a
+// task file at all; neither reaches the CLI nor fails the set.
+func TestEpicRowsSkipsStrayFiles(t *testing.T) {
+	tr, dir, run := newEpicRepo(t)
+	parent := add(t, run, "Plan the roof", "--type", "epic", "-d", "Tiles first.")
+	add(t, run, "Check the flashing", "--parent", parent)
+	stray := filepath.Join(dir, "backlog", "completed")
+	if err := os.MkdirAll(stray, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	badID := "---\nid: roof 9\ntitle: Strange card\nstatus: To Do\ntype: epic\n---\n\nA card no id names.\n"
+	if err := os.WriteFile(filepath.Join(stray, "roof 9 - Strange.md"), []byte(badID), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	notATask := "A note about the roof, with no front matter at all.\n"
+	if err := os.WriteFile(filepath.Join(stray, "notes.md"), []byte(notATask), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tr.EpicRows(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ID == "roof 9" {
+			t.Errorf("EpicRows holds %q, which is not a task id", r.ID)
+		}
+	}
+}
+
+// TestEpicRowsViewFailure checks what a failing `task view` does to the
+// set: a card the CLI cannot find keeps an empty description, and any
+// other failure fails the whole set.
+func TestEpicRowsViewFailure(t *testing.T) {
+	_, dir, run := newEpicRepo(t)
+	parent := add(t, run, "Plan the balcony", "--type", "epic", "-d", "Boxes first.")
+	add(t, run, "Line the boxes", "--parent", parent)
+	bin, _ := exec.LookPath("backlog")
+	notFound, _ := wrapBacklog(t, bin, "Task not found")
+	rows, err := (&backlog.Tracker{Bin: notFound}).EpicRows(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ID == parent && r.Description != "" {
+			t.Errorf("card %s kept the description %q", parent, r.Description)
+		}
+	}
+	locked, _ := wrapBacklog(t, bin, "Error: the store is locked")
+	if _, err := (&backlog.Tracker{Bin: locked}).EpicRows(context.Background(), dir); err == nil {
+		t.Error("a view failure other than not found did not fail the set")
+	}
+}
+
+// TestEpicRowsCachesDescriptions checks that a second read of an unchanged
+// repo runs no `backlog task view`.
+func TestEpicRowsCachesDescriptions(t *testing.T) {
+	_, dir, run := newEpicRepo(t)
+	parent := add(t, run, "Plan the terrace", "--type", "epic", "-d", "Pots first.")
+	add(t, run, "Scrub the pots", "--parent", parent)
+	bin, _ := exec.LookPath("backlog")
+	counting, calls := wrapBacklog(t, bin, "")
+	tr := &backlog.Tracker{Bin: counting}
+	views := func() int {
+		n := 0
+		for _, l := range calls() {
+			if strings.HasPrefix(l, "task view") {
+				n++
+			}
+		}
+		return n
+	}
+	rows, err := tr.EpicRows(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ID == parent && r.Description != "Pots first." {
+			t.Errorf("card %s read the description %q", parent, r.Description)
+		}
+	}
+	first := views()
+	if first == 0 {
+		t.Fatal("the first read viewed no card")
+	}
+	if _, err := tr.EpicRows(context.Background(), dir); err != nil {
+		t.Fatal(err)
+	}
+	if got := views(); got != first {
+		t.Errorf("a second read of an unchanged repo ran %d views; want %d", got, first)
 	}
 }
