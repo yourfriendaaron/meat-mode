@@ -10,11 +10,12 @@ import (
 )
 
 // EpicSeed makes the tasks of the epics fixture with the tracker's own tool.
-// Add creates a task and returns its id: typ is "epic" or "task", parent
-// the id of its parent or empty, human whether it carries HumanLabel,
-// assignee its assignee or empty (a tool may give an empty one a default). Close closes a task.
+// Add creates a task and returns its id: desc is its description, typ
+// "epic" or "task", parent the id of its parent or empty, human whether it
+// carries HumanLabel, assignee its assignee or empty (a tool may give an
+// empty one a default). Close closes a task.
 type EpicSeed struct {
-	Add   func(title, typ, parent string, human bool, assignee string) string
+	Add   func(title, desc, typ, parent string, human bool, assignee string) string
 	Close func(id string)
 }
 
@@ -38,23 +39,25 @@ type EpicSetup func(t *testing.T) (tracker.Epics, string, EpicSeed)
 //	Retired   a closed epic, with a closed child
 //	  RetiredKid
 //
-// EpicRows must return all eleven with their type, status, parent and
-// human mark, and tracker.Outline of them must pick what docs/api.md
-// (Epics) describes.
+// Every task has its own description. EpicRows must return all eleven
+// with their type, status, parent and human mark, and tracker.Outline of
+// them must pick what docs/api.md (Epics) describes, every row it keeps
+// with its description.
 func RunEpics(t *testing.T, setup EpicSetup) {
 	tr, dir, seed := setup(t)
-	epic := seed.Add("Plan the garden", "epic", "", false, "")
-	done := seed.Add("Dig the beds", "task", epic, false, "")
+	desc := func(title string) string { return "Notes on: " + title + "." }
+	epic := seed.Add("Plan the garden", desc("Plan the garden"), "epic", "", false, "")
+	done := seed.Add("Dig the beds", desc("Dig the beds"), "task", epic, false, "")
 	seed.Close(done)
-	open := seed.Add("Buy the seeds", "task", epic, false, "")
-	human := seed.Add("Approve the layout", "task", epic, true, "sam")
-	nested := seed.Add("Build the shed", "epic", epic, false, "")
-	nestedKid := seed.Add("Order the timber", "task", nested, false, "")
-	plan := seed.Add("Water the plants", "task", "", false, "")
-	planKid := seed.Add("Fill the can", "task", plan, false, "")
-	solo := seed.Add("Sweep the path", "task", "", false, "")
-	retired := seed.Add("Plan the greenhouse", "epic", "", false, "")
-	retiredKid := seed.Add("Measure the roof", "task", retired, false, "")
+	open := seed.Add("Buy the seeds", desc("Buy the seeds"), "task", epic, false, "")
+	human := seed.Add("Approve the layout", desc("Approve the layout"), "task", epic, true, "sam")
+	nested := seed.Add("Build the shed", desc("Build the shed"), "epic", epic, false, "")
+	nestedKid := seed.Add("Order the timber", desc("Order the timber"), "task", nested, false, "")
+	plan := seed.Add("Water the plants", desc("Water the plants"), "task", "", false, "")
+	planKid := seed.Add("Fill the can", desc("Fill the can"), "task", plan, false, "")
+	solo := seed.Add("Sweep the path", desc("Sweep the path"), "task", "", false, "")
+	retired := seed.Add("Plan the greenhouse", desc("Plan the greenhouse"), "epic", "", false, "")
+	retiredKid := seed.Add("Measure the roof", desc("Measure the roof"), "task", retired, false, "")
 	seed.Close(retiredKid)
 	seed.Close(retired)
 
@@ -111,6 +114,9 @@ func RunEpics(t *testing.T, setup EpicSetup) {
 	cards := map[string]bool{}
 	parents := map[string]string{}
 	for _, r := range out {
+		if want := desc(byID[r.ID].Title); r.Description != want {
+			t.Errorf("Outline: %s description = %q; want %q", r.ID, r.Description, want)
+		}
 		ids = append(ids, r.ID)
 		if r.Epic {
 			cards[r.ID] = true

@@ -122,21 +122,30 @@ func (h *Hub) dial(ctx context.Context, network, addr string) (net.Conn, error) 
 }
 
 func (h *Hub) do(ctx context.Context, method, path string, in, out any) error {
-	var body io.Reader
-	if in != nil {
-		b, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		body = bytes.NewReader(b)
+	if in == nil {
+		return h.send(ctx, method, path, "", nil, out)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(h.URL, "/")+path, body)
+	b, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	return h.send(ctx, method, path, "application/json", b, out)
+}
+
+// send makes one request with body as it is, of type contentType when that
+// is not empty, and decodes a JSON reply into out when out is not nil.
+func (h *Hub) send(ctx context.Context, method, path, contentType string, body []byte, out any) error {
+	var r io.Reader
+	if body != nil {
+		r = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(h.URL, "/")+path, r)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+h.Token)
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := h.client().Do(req)
 	if err != nil {
@@ -195,6 +204,15 @@ func (h *Hub) PutItems(ctx context.Context, repo string, items []api.Item) error
 // PutEpics replaces the epic rows of one repo.
 func (h *Hub) PutEpics(ctx context.Context, repo string, rows []api.EpicRow) error {
 	return h.do(ctx, http.MethodPut, "/bridge/v1/epics?repo="+url.QueryEscape(repo), rows, nil)
+}
+
+// PutIcon sets a repo's icon to its bytes, or clears it when icon is
+// empty.
+func (h *Hub) PutIcon(ctx context.Context, repo string, icon []byte) error {
+	if icon == nil {
+		icon = []byte{}
+	}
+	return h.send(ctx, http.MethodPut, "/bridge/v1/icons?repo="+url.QueryEscape(repo), "application/octet-stream", icon, nil)
 }
 
 // Actions returns this bridge's pending actions, oldest first.

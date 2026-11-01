@@ -22,10 +22,12 @@ import (
 //     and is left out. A file in either folder whose id is not a task id,
 //     or that is not a task file at all, is left out with it.
 //
-// The list leaves out descriptions; the view of each card, a task that is
-// not closed and is of type epic or has a child, supplies its own, cached
-// while the card stands unedited. A card the view cannot find keeps an
-// empty description; any other view failure fails the set.
+// The list leaves out descriptions; the view of each task tracker.Outline
+// would keep (a card, a task that is not closed and is of type epic or has
+// a child; a direct child of a card; a task that is not closed) supplies
+// its own, cached while the task stands unedited. A task the view cannot
+// find keeps an empty description; any other view failure fails the set.
+// The rows Outline leaves out carry none, so they cost no view.
 func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, error) {
 	statuses, err := b.statuses(ctx, dir)
 	if err != nil {
@@ -64,13 +66,21 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 			hasChild[idKey(p)] = true
 		}
 	}
+	issues := make([]tracker.Issue, len(tasks))
+	card := map[string]bool{}
+	for i, t := range tasks {
+		issues[i] = toIssue(t, statuses)
+		if issues[i].Status != tracker.StatusClosed && (strings.EqualFold(deref(t.Type), "epic") || hasChild[idKey(t.ID)]) {
+			card[idKey(t.ID)] = true
+		}
+	}
 	rows := make([]api.EpicRow, 0, len(tasks))
-	cards := map[string]bool{}
-	for _, t := range tasks {
-		is := toIssue(t, statuses)
-		if is.Status != tracker.StatusClosed && (strings.EqualFold(deref(t.Type), "epic") || hasChild[idKey(t.ID)]) {
-			cards[descKey(dir, t.ID)] = true
-			is.Description, err = b.cardDesc(ctx, dir, t)
+	described := map[string]bool{}
+	for i, t := range tasks {
+		is := issues[i]
+		if card[idKey(t.ID)] || card[idKey(deref(t.ParentID))] || is.Status != tracker.StatusClosed {
+			described[descKey(dir, t.ID)] = true
+			is.Description, err = b.taskDesc(ctx, dir, t)
 			if err != nil {
 				return nil, err
 			}
@@ -92,31 +102,31 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 		}
 		rows = append(rows, r)
 	}
-	b.sweepDescs(dir, cards)
+	b.sweepDescs(dir, described)
 	return rows, nil
 }
 
-// descKey is a card's key in the description cache.
+// descKey is a task's key in the description cache.
 func descKey(dir, id string) string { return dir + "\x00" + idKey(id) }
 
-// sweepDescs drops the cached descriptions of dir's tasks that are no
-// longer cards, so the cache holds only what the last read used.
-func (b *Tracker) sweepDescs(dir string, cards map[string]bool) {
+// sweepDescs drops the cached descriptions of dir's tasks the last read
+// did not describe, so the cache holds only what that read used.
+func (b *Tracker) sweepDescs(dir string, described map[string]bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for k := range b.descs {
-		if strings.HasPrefix(k, dir+"\x00") && !cards[k] {
+		if strings.HasPrefix(k, dir+"\x00") && !described[k] {
 			delete(b.descs, k)
 		}
 	}
 }
 
-// cardDesc is a card's own description. It is cached per repo and task
+// taskDesc is a task's own description. It is cached per repo and task
 // while the task's updated value stands, so reading unchanged epics costs
-// no `backlog task view`. A card the CLI cannot find keeps an empty
+// no `backlog task view`. A task the CLI cannot find keeps an empty
 // description, cached like any other; any other failure of the view
-// fails the set. A card whose id the tracker would refuse gets none.
-func (b *Tracker) cardDesc(ctx context.Context, dir string, t taskJSON) (string, error) {
+// fails the set. A task whose id the tracker would refuse gets none.
+func (b *Tracker) taskDesc(ctx context.Context, dir string, t taskJSON) (string, error) {
 	updated := deref(t.UpdatedAt)
 	key := descKey(dir, t.ID)
 	b.mu.Lock()

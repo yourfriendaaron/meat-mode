@@ -358,8 +358,8 @@ func TestEpicsConformance(t *testing.T) {
 			return strings.TrimSpace(string(out))
 		}
 		return &Ticket{bin: bin, look: exec.LookPath}, dir, trackertest.EpicSeed{
-			Add: func(title, typ, parent string, human bool, assignee string) string {
-				args := []string{"create", title, "-t", typ}
+			Add: func(title, desc, typ, parent string, human bool, assignee string) string {
+				args := []string{"create", title, "-d", desc, "-t", typ}
 				if parent != "" {
 					args = append(args, "--parent", parent)
 				}

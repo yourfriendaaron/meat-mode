@@ -4,6 +4,7 @@ package fakehub
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -32,10 +33,19 @@ type Hub struct {
 	noEpics bool
 	// refuseEpics, when set, answers 400 for the sets it reports true for.
 	refuseEpics func([]api.EpicRow) bool
-	runs        map[string][]api.RunReport // bridge -> its last run list
-	runPuts     map[string]int
-	queue       map[string][]api.Action // bridge -> actions it was sent
-	results     map[string][]api.ActionResult
+	icons       map[string][]byte // "<bridge>/<repo>" -> its icon
+	iconPuts    map[string]int
+	// noIcons answers PUT /bridge/v1/icons with 404, as a hub from before
+	// the route did.
+	noIcons bool
+	// refuseIcons, when set, answers 400 for the icons it reports true for.
+	refuseIcons func([]byte) bool
+	// failIcons, when not 0, answers PUT /bridge/v1/icons with that status.
+	failIcons int
+	runs      map[string][]api.RunReport // bridge -> its last run list
+	runPuts   map[string]int
+	queue     map[string][]api.Action // bridge -> actions it was sent
+	results   map[string][]api.ActionResult
 	// atResult is the bridge's run list as it stood when each action's
 	// latest result arrived.
 	atResult map[string][]api.RunReport
@@ -74,8 +84,8 @@ func New(tokens map[string]string) *Hub {
 	h := &Hub{
 		tokens: tokens, repos: map[string][]api.Repo{}, items: map[string][]api.Item{},
 		itemPuts: map[string]int{}, epics: map[string][]api.EpicRow{}, epicPuts: map[string]int{}, queue: map[string][]api.Action{}, results: map[string][]api.ActionResult{},
-		atResult: map[string][]api.RunReport{},
-		runs:     map[string][]api.RunReport{}, runPuts: map[string]int{},
+		atResult: map[string][]api.RunReport{}, icons: map[string][]byte{}, iconPuts: map[string]int{},
+		runs: map[string][]api.RunReport{}, runPuts: map[string]int{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bridge/v1/hello", h.auth(h.hello))
@@ -83,6 +93,7 @@ func New(tokens map[string]string) *Hub {
 	mux.HandleFunc("PUT /bridge/v1/repos", h.auth(h.putRepos))
 	mux.HandleFunc("PUT /bridge/v1/items", h.auth(h.putItems))
 	mux.HandleFunc("PUT /bridge/v1/epics", h.auth(h.putEpics))
+	mux.HandleFunc("PUT /bridge/v1/icons", h.auth(h.putIcon))
 	mux.HandleFunc("PUT /bridge/v1/runs", h.auth(h.putRuns))
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
 	mux.HandleFunc("POST /bridge/v1/actions/{id}/result", h.auth(h.result))
@@ -350,6 +361,13 @@ func (h *Hub) putRepos(w http.ResponseWriter, r *http.Request, bridge string) {
 			delete(h.epics, k)
 		}
 	}
+	// An icon goes with its repo row.
+	for k := range h.icons {
+		name, ok := strings.CutPrefix(k, bridge+"/")
+		if ok && !slices.ContainsFunc(repos, func(rp api.Repo) bool { return rp.Name == name }) {
+			delete(h.icons, k)
+		}
+	}
 	h.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -426,6 +444,56 @@ func (h *Hub) putEpics(w http.ResponseWriter, r *http.Request, bridge string) {
 		rows = []api.EpicRow{}
 	}
 	h.epics[k] = rows
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// putIcon checks the icon as the real hub does: past api.MaxIconBytes 413,
+// bytes api.SniffIcon refuses 400, a repo the bridge's last repo list does
+// not hold 409. An empty body clears the repo's icon.
+func (h *Hub) putIcon(w http.ResponseWriter, r *http.Request, bridge string) {
+	repo := r.URL.Query().Get("repo")
+	h.mu.Lock()
+	gone, fail := h.noIcons, h.failIcons
+	h.iconPuts[bridge+"/"+repo]++
+	refuse := h.refuseIcons
+	h.mu.Unlock()
+	if gone {
+		writeErr(w, http.StatusNotFound, "404 page not found")
+		return
+	}
+	if fail != 0 {
+		writeErr(w, fail, "icons are failing")
+		return
+	}
+	if !api.ValidRepoName(repo) {
+		writeErr(w, http.StatusBadRequest, "repo name is not valid")
+		return
+	}
+	icon, err := io.ReadAll(io.LimitReader(r.Body, api.MaxIconBytes+1))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if len(icon) > api.MaxIconBytes {
+		writeErr(w, http.StatusRequestEntityTooLarge, "an icon is at most 64 KiB")
+		return
+	}
+	if _, ok := api.SniffIcon(icon); len(icon) > 0 && (!ok || refuse != nil && refuse(icon)) {
+		writeErr(w, http.StatusBadRequest, "an icon is an SVG, PNG or ICO")
+		return
+	}
+	k := bridge + "/" + repo
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !slices.ContainsFunc(h.repos[bridge], func(rp api.Repo) bool { return rp.Name == repo }) {
+		writeErr(w, http.StatusConflict, "repo "+strconv.Quote(repo)+" is not in this bridge's repo list; send PUT /bridge/v1/repos first")
+		return
+	}
+	if len(icon) == 0 {
+		delete(h.icons, k)
+	} else {
+		h.icons[k] = icon
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -550,6 +618,54 @@ func (h *Hub) SetNoEpics(gone bool) {
 	h.mu.Lock()
 	h.noEpics = gone
 	h.mu.Unlock()
+}
+
+// RefuseIcons makes the hub answer PUT /bridge/v1/icons with 400 for every
+// icon refuse reports true for; nil takes every icon the checks pass.
+func (h *Hub) RefuseIcons(refuse func([]byte) bool) {
+	h.mu.Lock()
+	h.refuseIcons = refuse
+	h.mu.Unlock()
+}
+
+// SetNoIcons makes the hub answer PUT /bridge/v1/icons with 404, as a hub
+// older than icons does.
+func (h *Hub) SetNoIcons(gone bool) {
+	h.mu.Lock()
+	h.noIcons = gone
+	h.mu.Unlock()
+}
+
+// FailIcons makes the hub answer PUT /bridge/v1/icons with status, such as
+// 503 or 401; 0 serves the route again.
+func (h *Hub) FailIcons(status int) {
+	h.mu.Lock()
+	h.failIcons = status
+	h.mu.Unlock()
+}
+
+// ForgetRepos drops a bridge's repo list, as a hub that lost it would, so
+// the next icon or epic set for any of its repos is refused with 409.
+func (h *Hub) ForgetRepos(bridge string) {
+	h.mu.Lock()
+	delete(h.repos, bridge)
+	h.mu.Unlock()
+}
+
+// Icon returns the icon the hub holds for a repo, and whether it holds one.
+func (h *Hub) Icon(bridge, repo string) ([]byte, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	icon, ok := h.icons[bridge+"/"+repo]
+	return slices.Clone(icon), ok
+}
+
+// IconPuts counts the icons sent for a repo, taken or not, empty ones
+// included.
+func (h *Hub) IconPuts(bridge, repo string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.iconPuts[bridge+"/"+repo]
 }
 
 // Epics returns the last epic rows taken for a repo, and whether it holds
