@@ -134,8 +134,8 @@ func TestEpicsConformance(t *testing.T) {
 			t.Fatal(err)
 		}
 		return tr.(tracker.Epics), dir, trackertest.EpicSeed{
-			Add: func(title, typ, parent string, human bool, assignee string) string {
-				args := []string{"create", "--title=" + title, "-t", typ, "--json"}
+			Add: func(title, desc, typ, parent string, human bool, assignee string) string {
+				args := []string{"create", "--title=" + title, "--description=" + desc, "-t", typ, "--json"}
 				if parent != "" {
 					args = append(args, "--parent="+parent)
 				}

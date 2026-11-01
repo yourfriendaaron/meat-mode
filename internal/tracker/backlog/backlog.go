@@ -57,13 +57,13 @@ type Tracker struct {
 	Timeout time.Duration // per call; one minute when zero
 	Now     func() time.Time
 
-	// descs caches card descriptions between EpicRows reads, so an
+	// descs caches task descriptions between EpicRows reads, so an
 	// unchanged repo costs no `backlog task view`. Guarded by mu.
 	mu    sync.Mutex
 	descs map[string]descCache
 }
 
-// descCache is one card's cached description, with the task's updated
+// descCache is one task's cached description, with the task's updated
 // value it was read at: a change to that leaves the cache behind.
 type descCache struct {
 	updated string

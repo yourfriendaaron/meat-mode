@@ -235,8 +235,8 @@ func TestEpicsConformance(t *testing.T) {
 	trackertest.RunEpics(t, func(t *testing.T) (tracker.Epics, string, trackertest.EpicSeed) {
 		tr, dir, run := newEpicRepo(t)
 		return tr, dir, trackertest.EpicSeed{
-			Add: func(title, typ, parent string, human bool, assignee string) string {
-				args := []string{"--type", typ}
+			Add: func(title, desc, typ, parent string, human bool, assignee string) string {
+				args := []string{"--type", typ, "-d", desc}
 				if parent != "" {
 					args = append(args, "--parent", parent)
 				}
