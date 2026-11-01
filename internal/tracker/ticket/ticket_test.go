@@ -337,3 +337,41 @@ func TestCheckHidesBridgeEnvironment(t *testing.T) {
 		t.Errorf("tk --version saw the bridge environment:\n%s", got)
 	}
 }
+
+func TestEpicsConformance(t *testing.T) {
+	trackertest.RunEpics(t, func(t *testing.T) (tracker.Epics, string, trackertest.EpicSeed) {
+		bin, err := exec.LookPath("tk")
+		if err != nil {
+			t.Skip("tk is not installed")
+		}
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, storeDir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		tk := func(args ...string) string {
+			cmd := exec.Command(bin, args...)
+			cmd.Dir = dir
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("tk %s: %v\n%s", strings.Join(args, " "), err, out)
+			}
+			return strings.TrimSpace(string(out))
+		}
+		return &Ticket{bin: bin, look: exec.LookPath}, dir, trackertest.EpicSeed{
+			Add: func(title, typ, parent string, human bool, assignee string) string {
+				args := []string{"create", title, "-t", typ}
+				if parent != "" {
+					args = append(args, "--parent", parent)
+				}
+				if human {
+					args = append(args, "--tags", tracker.HumanLabel)
+				}
+				if assignee != "" {
+					args = append(args, "-a", assignee)
+				}
+				return tk(args...)
+			},
+			Close: func(id string) { tk("close", id) },
+		}
+	})
+}

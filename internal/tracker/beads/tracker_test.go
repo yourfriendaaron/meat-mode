@@ -1,6 +1,7 @@
 package beads_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -123,4 +124,35 @@ func TestOptInLines(t *testing.T) {
 			t.Errorf("OptedIn with %q = %v, want %v", config, got, want)
 		}
 	}
+}
+
+func TestEpicsConformance(t *testing.T) {
+	trackertest.RunEpics(t, func(t *testing.T) (tracker.Epics, string, trackertest.EpicSeed) {
+		dir := beadstest.NewRepo(t, "", "garden")
+		tr, err := beads.New(tracker.Env{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tr.(tracker.Epics), dir, trackertest.EpicSeed{
+			Add: func(title, typ, parent string, human bool, assignee string) string {
+				args := []string{"create", "--title=" + title, "-t", typ, "--json"}
+				if parent != "" {
+					args = append(args, "--parent="+parent)
+				}
+				if human {
+					args = append(args, "-l", tracker.HumanLabel)
+				}
+				if assignee != "" {
+					args = append(args, "-a", assignee)
+				}
+				var b beads.Bead
+				out := beadstest.Run(t, dir, "bd", args...)
+				if err := json.Unmarshal([]byte(out[strings.Index(out, "{"):]), &b); err != nil || b.ID == "" {
+					t.Fatalf("bd create printed %q: %v", out, err)
+				}
+				return b.ID
+			},
+			Close: func(id string) { beadstest.Run(t, dir, "bd", "close", "--reason=done", "--json", "--", id) },
+		}
+	})
 }

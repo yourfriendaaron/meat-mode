@@ -60,3 +60,7 @@ A few details:
 - Meat Mode never changes a task's title, because Backlog.md renames the task's file when the title changes.
 - Archived tasks (`backlog task archive`) leave Meat Mode, as if deleted. Restore one to bring it back.
 - In a repo with a Git remote, `backlog task create` runs `git fetch` first so the new id is not taken on another branch. Backlog.md stops the fetch after ten seconds and creates the task anyway, so an add made while the remote is out of reach takes up to ten seconds. Backlog.md has no flag or variable to skip the fetch for one call; `remote_operations: false` in the repo's `backlog/config.yml` (`backlog config set remoteOperations false`) turns it off for every command in that repo.
+
+## Epics
+
+An epic is a task of the type `epic` (add it to `types` in `backlog/config.yml`; Backlog.md has none by default), or any task that has a sub-task. The bridge reads the repo's epics with `backlog task list --json` and `backlog task view --json -- <id>` for each epic's description. The list leaves out done tasks that sit in `backlog/completed/` and archived ones, so the bridge also reads those files, so that a sub-task done long ago still counts toward its epic's progress. An archived task counts only if it was in the closed status when archived. The first assignee is the row's assignee, and a task labelled `human` is marked as one.
