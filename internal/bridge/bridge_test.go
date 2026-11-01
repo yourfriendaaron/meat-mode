@@ -148,6 +148,7 @@ func (w *world) wire(repos ...api.Repo) []api.Repo {
 	info := w.tr.Info()
 	for i := range repos {
 		repos[i].Tracker, repos[i].Actions = info.Title, info.Actions
+		repos[i].Epics = epicsOf(w.tr) != nil
 	}
 	return repos
 }

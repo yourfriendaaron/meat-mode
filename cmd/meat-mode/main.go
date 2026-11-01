@@ -83,6 +83,11 @@ func usage() {
   meat-mode bridge pair <url> <token> pair this machine with a hub and install the user service
   meat-mode bridge run                run the bridge in the foreground
   meat-mode bridge status             show config, repos and hub reachability
+  meat-mode bridge agents [on|off <repo>]
+                                      list the repos with their agents switch, or switch agents on or off in one
+  meat-mode bridge epics [on|off <repo>]
+                                      list the repos whose tracker can show epics with their epics switch,
+                                      or switch a repo's epics on or off in the app
   meat-mode bridge uninstall          remove the user service and config
   meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME [--every RULE [--from-done] [--until DATE]]]
                 [--tag TAG]... [--note TEXT] [--author NAME] [--id UUID]

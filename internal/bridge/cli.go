@@ -97,7 +97,7 @@ func (e Env) hub(c Config, allowed netguard.Set) *Hub {
 // Main runs `meat-mode bridge <command>`.
 func Main(ctx context.Context, args []string, env Env) error {
 	if len(args) == 0 {
-		return errors.New("usage: meat-mode bridge pair|run|status|agents|uninstall")
+		return errors.New("usage: meat-mode bridge pair|run|status|agents|epics|uninstall")
 	}
 	switch args[0] {
 	case "pair":
@@ -108,10 +108,12 @@ func Main(ctx context.Context, args []string, env Env) error {
 		return status(ctx, env)
 	case "agents":
 		return agentsCommand(args[1:], env)
+	case "epics":
+		return epicsCommand(args[1:], env)
 	case "uninstall":
 		return uninstall(env)
 	}
-	return fmt.Errorf("unknown bridge command %q; use pair, run, status, agents or uninstall", args[0])
+	return fmt.Errorf("unknown bridge command %q; use pair, run, status, agents, epics or uninstall", args[0])
 }
 
 type multiFlag []string
@@ -256,13 +258,14 @@ func pair(ctx context.Context, args []string, env Env) error {
 		return fmt.Errorf("cannot reach the hub with that token: %w", err)
 	}
 	// The switches may have changed since the file was read, from
-	// `meat-mode bridge agents` or a running bridge; keep theirs.
+	// `meat-mode bridge agents`, `meat-mode bridge epics` or a running
+	// bridge; keep theirs.
 	err = WithConfigLock(env.Paths.Config, func() error {
 		cur, err := readConfigFile(env.Paths.Config)
 		if err != nil {
 			return err
 		}
-		cfg.Agents, cfg.Sync = cur.Agents, cur.Sync
+		cfg.Agents, cfg.Epics, cfg.Sync = cur.Agents, cur.Epics, cur.Sync
 		return cfg.Save(env.Paths.Config)
 	})
 	if err != nil {
@@ -364,6 +367,11 @@ func New(s Settings, log *slog.Logger) (*Bridge, error) {
 		LoadAgents: func() (map[string]bool, error) { return LoadAgents(env.Paths.Config) },
 		SaveAgents: func(repo string, on bool) error {
 			return SaveAgents(env.Paths.Config, repo, on)
+		},
+		Epics:     cfg.Epics,
+		LoadEpics: func() (map[string]bool, error) { return LoadEpics(env.Paths.Config) },
+		SaveEpics: func(repo string, on bool) error {
+			return SaveEpics(env.Paths.Config, repo, on)
 		},
 		SaveLimits: func(c api.LimitsChange) (SavedLimits, error) {
 			return SaveLimits(env.Paths.Config, c)

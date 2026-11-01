@@ -25,10 +25,15 @@ type Hub struct {
 	repos    map[string][]api.Repo
 	items    map[string][]api.Item // "<bridge>/<repo>" -> items
 	itemPuts map[string]int
-	runs     map[string][]api.RunReport // bridge -> its last run list
-	runPuts  map[string]int
-	queue    map[string][]api.Action // bridge -> actions it was sent
-	results  map[string][]api.ActionResult
+	epics    map[string][]api.EpicRow // "<bridge>/<repo>" -> rows
+	epicPuts map[string]int
+	// noEpics answers PUT /bridge/v1/epics with 404, as a hub from before
+	// the route did.
+	noEpics bool
+	runs    map[string][]api.RunReport // bridge -> its last run list
+	runPuts map[string]int
+	queue   map[string][]api.Action // bridge -> actions it was sent
+	results map[string][]api.ActionResult
 	// atResult is the bridge's run list as it stood when each action's
 	// latest result arrived.
 	atResult map[string][]api.RunReport
@@ -66,7 +71,7 @@ type Change struct {
 func New(tokens map[string]string) *Hub {
 	h := &Hub{
 		tokens: tokens, repos: map[string][]api.Repo{}, items: map[string][]api.Item{},
-		itemPuts: map[string]int{}, queue: map[string][]api.Action{}, results: map[string][]api.ActionResult{},
+		itemPuts: map[string]int{}, epics: map[string][]api.EpicRow{}, epicPuts: map[string]int{}, queue: map[string][]api.Action{}, results: map[string][]api.ActionResult{},
 		atResult: map[string][]api.RunReport{},
 		runs:     map[string][]api.RunReport{}, runPuts: map[string]int{},
 	}
@@ -75,6 +80,7 @@ func New(tokens map[string]string) *Hub {
 	mux.HandleFunc("GET /bridge/v1/settings", h.auth(h.settings))
 	mux.HandleFunc("PUT /bridge/v1/repos", h.auth(h.putRepos))
 	mux.HandleFunc("PUT /bridge/v1/items", h.auth(h.putItems))
+	mux.HandleFunc("PUT /bridge/v1/epics", h.auth(h.putEpics))
 	mux.HandleFunc("PUT /bridge/v1/runs", h.auth(h.putRuns))
 	mux.HandleFunc("GET /bridge/v1/actions", h.auth(h.actions))
 	mux.HandleFunc("POST /bridge/v1/actions/{id}/result", h.auth(h.result))
@@ -335,6 +341,13 @@ func (h *Hub) putRepos(w http.ResponseWriter, r *http.Request, bridge string) {
 	}
 	h.mu.Lock()
 	h.repos[bridge] = repos
+	// A repo no longer reported with epics on loses its rows.
+	for k := range h.epics {
+		name, ok := strings.CutPrefix(k, bridge+"/")
+		if ok && !slices.ContainsFunc(repos, func(rp api.Repo) bool { return rp.Name == name && rp.EpicsOn }) {
+			delete(h.epics, k)
+		}
+	}
 	h.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -365,6 +378,45 @@ func (h *Hub) putItems(w http.ResponseWriter, r *http.Request, bridge string) {
 	}
 	h.items[k] = items
 	h.itemPuts[k]++
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// putEpics checks the set as the real hub does, which answers 409 for a
+// repo the bridge's last repo list does not hold with epicsOn, and keeps it.
+func (h *Hub) putEpics(w http.ResponseWriter, r *http.Request, bridge string) {
+	repo := r.URL.Query().Get("repo")
+	h.mu.Lock()
+	gone := h.noEpics
+	h.epicPuts[bridge+"/"+repo]++
+	h.mu.Unlock()
+	if gone {
+		writeErr(w, http.StatusNotFound, "404 page not found")
+		return
+	}
+	if !api.ValidRepoName(repo) {
+		writeErr(w, http.StatusBadRequest, "repo name is not valid")
+		return
+	}
+	var rows []api.EpicRow
+	if err := json.NewDecoder(r.Body).Decode(&rows); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := api.CheckEpicRows(rows); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	k := bridge + "/" + repo
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !slices.ContainsFunc(h.repos[bridge], func(rp api.Repo) bool { return rp.Name == repo && rp.EpicsOn }) {
+		writeErr(w, http.StatusConflict, "repo "+strconv.Quote(repo)+" is not in this bridge's repo list with epics on; send PUT /bridge/v1/repos first")
+		return
+	}
+	if rows == nil {
+		rows = []api.EpicRow{}
+	}
+	h.epics[k] = rows
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -473,6 +525,30 @@ func (h *Hub) SetNoSettings(gone bool) {
 	h.mu.Lock()
 	h.noSettings = gone
 	h.mu.Unlock()
+}
+
+// SetNoEpics makes the hub answer PUT /bridge/v1/epics with 404, as a hub
+// older than Epics does.
+func (h *Hub) SetNoEpics(gone bool) {
+	h.mu.Lock()
+	h.noEpics = gone
+	h.mu.Unlock()
+}
+
+// Epics returns the last epic rows taken for a repo, and whether it holds
+// any.
+func (h *Hub) Epics(bridge, repo string) ([]api.EpicRow, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	rows, ok := h.epics[bridge+"/"+repo]
+	return slices.Clone(rows), ok
+}
+
+// EpicPuts counts the epic sets sent for a repo, taken or not.
+func (h *Hub) EpicPuts(bridge, repo string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.epicPuts[bridge+"/"+repo]
 }
 
 // Hellos returns the greetings received.
