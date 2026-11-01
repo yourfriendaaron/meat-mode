@@ -92,6 +92,10 @@ type Bridge struct {
 	epicStates      map[string]*epicState
 	epicsOffUntil   time.Time
 	epicsGoneLogged bool
+	// The icon pass, likewise.
+	iconStates      map[string]*iconState
+	iconsOffUntil   time.Time
+	iconsGoneLogged bool
 }
 
 type repoState struct {
@@ -278,7 +282,8 @@ func (b *Bridge) stopRuns() {
 
 // Tick runs one round: hello if needed, report repos, replay actions, then
 // sync the repos that had actions, or all of them when full is set or
-// SyncEvery has passed since the last full round, then run the epics pass.
+// SyncEvery has passed since the last full round, then run the epics and
+// icon passes.
 // full also rescans the roots, which otherwise happens every ScanEvery. It
 // returns hub errors; tracker errors are logged per repo. Each hello
 // checks the trackers again.
@@ -326,6 +331,9 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 		b.lastFullAt = b.now()
 	}
 	if err := b.syncEpics(ctx); err != nil {
+		return b.hubErr(err)
+	}
+	if err := b.syncIcons(ctx); err != nil {
 		return b.hubErr(err)
 	}
 	if b.Runner == nil {
