@@ -230,10 +230,9 @@ func TestEpicsSwitch(t *testing.T) {
 		na   api.NewAction
 		want error
 	}{
-		"on":                {api.NewAction{ID: id1, Kind: api.KindEpics, Bridge: "laptop", Repo: "garden", Payload: api.Payload{On: &on}}, ErrInvalid},
 		"without on":        {api.NewAction{ID: id1, Kind: api.KindEpics, Bridge: "laptop", Repo: "garden"}, ErrInvalid},
 		"an unknown repo":   {api.NewAction{ID: id1, Kind: api.KindEpics, Bridge: "laptop", Repo: "barn", Payload: api.Payload{On: &off}}, ErrNotFound},
-		"no epics":          {api.NewAction{ID: id1, Kind: api.KindEpics, Bridge: "laptop", Repo: "shed", Payload: api.Payload{On: &off}}, ErrInvalid},
+		"no epics":          {api.NewAction{ID: id1, Kind: api.KindEpics, Bridge: "laptop", Repo: "shed", Payload: api.Payload{On: &on}}, ErrInvalid},
 		"the personal list": {api.NewAction{ID: id1, Kind: api.KindEpics, Bridge: HubBridge, Repo: PersonalRepo, Payload: api.Payload{On: &off}}, ErrInvalid},
 		"a project":         {api.NewAction{ID: id1, Kind: api.KindEpics, Bridge: HubBridge, Repo: projectRepo, Payload: api.Payload{On: &off}}, ErrInvalid},
 		"an item key":       {api.NewAction{ID: id1, Kind: api.KindEpics, Key: ItemKey("laptop", "garden", "gd-1"), Payload: api.Payload{On: &off}}, ErrInvalid},
@@ -246,9 +245,14 @@ func TestEpicsSwitch(t *testing.T) {
 		if name == "no epics" && (err == nil || !strings.HasSuffix(err.Error(), "cannot show epics")) {
 			t.Errorf("no epics: %v, want the tracker refusal", err)
 		}
-		if name == "on" && (err == nil || !strings.Contains(err.Error(), "`meat-mode bridge epics on garden`")) {
-			t.Errorf("on: %v, want it to name the command", err)
-		}
+	}
+
+	// The app switches epics on as it does sync: shown pending until the
+	// bridge reports the repo again.
+	_, _, err = s.AppendAction(api.NewAction{ID: id3, Kind: api.KindEpics, Bridge: "laptop", Repo: "chores", Payload: api.Payload{On: &on}}, "alex-app")
+	must(t, err)
+	if r := repoOf(t, mustState(t, s), "chores"); !r.EpicsOn || !r.EpicsPending {
+		t.Errorf("chores while switching on: %+v", r)
 	}
 
 	must(t, s.ReplaceEpics("laptop", "garden", gardenEpics()))

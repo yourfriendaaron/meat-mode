@@ -25,12 +25,6 @@ const (
 
 const epicsUsage = "usage: meat-mode bridge epics [on|off <repo>]"
 
-// EpicsOnError is the result for an epics action with on: true. Epics are
-// switched on at this machine only.
-func EpicsOnError(repo string) string {
-	return "switch epics on at this machine: meat-mode bridge epics on " + repo
-}
-
 // epicsOf is the tracker's epics reader, or nil for a tracker that cannot
 // show epics.
 func epicsOf(t tracker.Tracker) tracker.Epics {
@@ -46,8 +40,7 @@ func cannotShowEpics(t tracker.Tracker) error {
 
 // epicsCommand runs `meat-mode bridge epics`: it lists the repos this bridge
 // finds whose tracker can show epics, with their epics switch, or switches
-// one on or off. Epics are switched on here only; the app can only switch
-// them off.
+// one on or off. The app's switch in Settings sets the same map.
 func epicsCommand(args []string, env Env) error {
 	s, err := LoadSettings(env)
 	if err != nil {

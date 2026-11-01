@@ -2418,9 +2418,8 @@ async function doTell(key: string) {
 
 async function switchEpics(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
-  // The app can only switch epics off; they switch on at the machine (docs/api.md, Epics).
-  if (!r?.epicsOn) return;
-  await post({ id: newId(), kind: "epics", bridge, repo, payload: { on: false } });
+  if (!r?.epics) return;
+  await post({ id: newId(), kind: "epics", bridge, repo, payload: { on: !r.epicsOn } });
   await refresh();
 }
 
@@ -3174,7 +3173,6 @@ function onClick(e: MouseEvent) {
       void switchAgents(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
       break;
     case "agents-on-copy":
-    case "epics-on-copy":
       void copyText(btn.dataset.copy ?? "").then(() => showToast("Copied"));
       break;
     case "epics-switch":

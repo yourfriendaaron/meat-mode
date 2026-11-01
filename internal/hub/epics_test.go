@@ -72,13 +72,9 @@ func TestEpicsRoutes(t *testing.T) {
 	big := `[{"id": "gd-1", "title": "` + strings.Repeat("a", maxItemsBody) + `"}]`
 	h.expect(h.do("PUT", "/bridge/v1/epics?repo=garden", big, h.token), http.StatusRequestEntityTooLarge)
 
-	// The switch: off only, and shown pending until the next report.
-	w := h.do("POST", "/api/actions", api.NewAction{ID: uuid.NewString(), Kind: api.KindEpics, Bridge: "laptop", Repo: "garden",
-		Payload: api.Payload{On: ptrTo(true)}}, "")
-	h.expect(w, http.StatusBadRequest)
-	if !strings.Contains(w.Body.String(), "meat-mode bridge epics on garden") {
-		t.Errorf("on: %s", w.Body)
-	}
+	// The switch, either way, shown pending until the next report.
+	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: uuid.NewString(), Kind: api.KindEpics, Bridge: "laptop", Repo: "chores",
+		Payload: api.Payload{On: ptrTo(true)}}, ""), http.StatusCreated)
 	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: uuid.NewString(), Kind: api.KindEpics, Bridge: "laptop", Repo: "barn",
 		Payload: api.Payload{On: ptrTo(false)}}, ""), http.StatusNotFound)
 	h.expect(h.do("POST", "/api/actions", api.NewAction{ID: uuid.NewString(), Kind: api.KindEpics, Bridge: "laptop", Repo: "garden",
@@ -87,6 +83,9 @@ func TestEpicsRoutes(t *testing.T) {
 	for _, r := range st.Repos {
 		if r.Name == "garden" && (r.EpicsOn || !r.EpicsPending) {
 			t.Errorf("garden while switching off: %+v", r)
+		}
+		if r.Name == "chores" && (!r.EpicsOn || !r.EpicsPending) {
+			t.Errorf("chores while switching on: %+v", r)
 		}
 	}
 	h.expect(h.do("PUT", "/bridge/v1/epics?repo=garden", epicSet(), h.token), http.StatusNoContent)

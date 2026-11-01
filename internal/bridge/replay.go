@@ -142,7 +142,7 @@ func AgentsOnError(repo string) string {
 const ErrUnknownRepo = "unknown repo"
 
 // applySwitch saves a sync, agents or epics switch from the app and reports
-// the new repo list at once. Agents and epics switch only off from the app.
+// the new repo list at once. Agents switch only off from the app.
 // It takes switches only for repos this bridge found itself, looked up by
 // name, so the app cannot point it anywhere else.
 func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (api.ActionResult, error) {
@@ -160,8 +160,6 @@ func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (
 		return api.ActionResult{Error: kind + " switch has no position"}, nil
 	case a.Kind == api.KindAgents && *a.Payload.On:
 		return api.ActionResult{Error: AgentsOnError(a.Repo)}, nil
-	case a.Kind == api.KindEpics && *a.Payload.On:
-		return api.ActionResult{Error: EpicsOnError(a.Repo)}, nil
 	case save == nil:
 		return api.ActionResult{Error: "this bridge cannot save " + kind + " switches"}, nil
 	}
