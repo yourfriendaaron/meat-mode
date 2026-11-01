@@ -33,10 +33,11 @@ type Epics interface {
 //     repo's top-level tasks.
 //
 // Parent is kept only when it names a card, so a row with a Parent is
-// always a direct child of a card in the set. Only cards keep their
-// Description, cut to api.ItemDescriptionLimit runes; past
-// api.MaxEpicDescriptions bytes over the set, later cards (by ID) lose
-// theirs. Rows come back sorted by ID; past api.MaxEpicRows the set is cut
+// always a direct child of a card in the set. Every row keeps its
+// Description, cut to api.ItemDescriptionLimit runes. Past
+// api.MaxEpicDescriptions bytes over the set, descriptions are kept in this
+// order until the budget runs out, and the rest are dropped: cards, then
+// rows that are not closed, then closed rows, each by ID. Rows come back sorted by ID; past api.MaxEpicRows the set is cut
 // at that many, dropping closed rows first. Rows whose id is not a bead id
 // are left out, and so is any row after the first with the same id.
 func Outline(rows []api.EpicRow) []api.EpicRow {
@@ -74,11 +75,7 @@ func Outline(rows []api.EpicRow) []api.EpicRow {
 		}
 		r.Parent = parent
 		r.Epic = card[r.ID]
-		if r.Epic {
-			r.Description = api.TruncRunes(r.Description, api.ItemDescriptionLimit)
-		} else {
-			r.Description = ""
-		}
+		r.Description = api.TruncRunes(r.Description, api.ItemDescriptionLimit)
 		out = append(out, r)
 	}
 	byIDOrder := func(a, b api.EpicRow) int { return strings.Compare(a.ID, b.ID) }
@@ -104,11 +101,20 @@ func Outline(rows []api.EpicRow) []api.EpicRow {
 		}
 	}
 	total := 0
-	for i := range out {
-		total += len(out[i].Description)
-		if total > api.MaxEpicDescriptions {
-			total -= len(out[i].Description)
-			out[i].Description = ""
+	for _, pass := range []func(api.EpicRow) bool{
+		func(r api.EpicRow) bool { return r.Epic },
+		func(r api.EpicRow) bool { return !r.Epic && r.Status != StatusClosed },
+		func(r api.EpicRow) bool { return !r.Epic && r.Status == StatusClosed },
+	} {
+		for i := range out {
+			if !pass(out[i]) {
+				continue
+			}
+			total += len(out[i].Description)
+			if total > api.MaxEpicDescriptions {
+				total -= len(out[i].Description)
+				out[i].Description = ""
+			}
 		}
 	}
 	return out

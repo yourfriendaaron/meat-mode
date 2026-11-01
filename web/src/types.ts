@@ -150,6 +150,10 @@ export interface Repo {
   epicsOn?: boolean;
   /** An epics switch the machine has not applied yet; epicsOn shows where it was switched to. */
   epicsPending?: boolean;
+  /** The list's colour slot, 0 to 5, kept by the hub (docs/api.md, List identity); absent from an older hub. */
+  colour?: number;
+  /** The hash of the repo's icon, loaded from GET /api/icons/{hash}; absent when it has none. */
+  icon?: string;
 }
 
 /** An agent run's state (docs/api.md, Agent runs). No run on an item means no agent was ever asked. */

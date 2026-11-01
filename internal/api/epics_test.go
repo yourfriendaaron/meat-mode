@@ -19,7 +19,7 @@ func TestCheckEpicRowsCleans(t *testing.T) {
 	if len([]rune(rows[0].Title)) != ItemTitleLimit+1 || rows[0].Priority != 4 || rows[0].Description == "" {
 		t.Errorf("card not cleaned as expected: %+v", rows[0])
 	}
-	if rows[1].Status != "open" || rows[1].Priority != 0 || rows[1].Description != "" || rows[1].Parent != "gd-1" {
+	if rows[1].Status != "open" || rows[1].Priority != 0 || rows[1].Description != "not a card" || rows[1].Parent != "gd-1" {
 		t.Errorf("child not cleaned as expected: %+v", rows[1])
 	}
 	if rows[2].Parent != "" || rows[3].Parent != "" {

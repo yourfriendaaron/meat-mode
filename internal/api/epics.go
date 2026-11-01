@@ -25,9 +25,10 @@ type EpicRow struct {
 	// The app draws such a row from the State item with the same key when
 	// it has one, and opens that item's sheet.
 	Human bool `json:"human,omitempty"`
-	// Description is sent for epic cards only, for Details, at most
+	// Description is the bead's own, for Details, on every row: at most
 	// ItemDescriptionLimit runes, and within MaxEpicDescriptions bytes over
-	// the whole set. Every other row has none.
+	// the whole set (tracker.Outline spends that on cards first, then open
+	// rows, then closed ones).
 	Description string     `json:"description,omitempty"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	ClosedAt    *time.Time `json:"closedAt,omitempty"`
@@ -63,7 +64,7 @@ const (
 // CheckEpicRows checks and cleans a repo's epic set in place, as the hub
 // and the fake hub take it. Like CheckItems it truncates rather than
 // refuses what one bead could get wrong: a title past ItemTitleLimit, a
-// description past ItemDescriptionLimit or on a row that is not a card, a
+// description past ItemDescriptionLimit, a
 // priority outside 0 to 4 (clamped), an unknown status (read as open), and
 // a parent that names no card in the set or leads back to the row
 // (cleared). It refuses, with an
@@ -101,9 +102,6 @@ func CheckEpicRows(rows []EpicRow) error {
 		}
 		if r.Parent == r.ID || !cards[r.Parent] {
 			r.Parent = ""
-		}
-		if !r.Epic {
-			r.Description = ""
 		}
 		r.Description = TruncRunes(r.Description, ItemDescriptionLimit)
 		total += len(r.Description)

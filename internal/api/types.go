@@ -201,6 +201,14 @@ type Repo struct {
 	// Hub-only: an epics switch the bridge has not applied yet. EpicsOn
 	// then shows the position it was switched to.
 	EpicsPending bool `json:"epicsPending,omitempty"`
+	// Hub-only: the list's colour, a slot from 0 to ListColours-1 that the
+	// hub gives a repo when it first holds it and keeps (docs/api.md, List
+	// identity). Nil from an older hub.
+	Colour *int `json:"colour,omitempty"`
+	// Hub-only: the IconHash of the repo's icon as its bridge last sent it
+	// (PUT /bridge/v1/icons); the app loads it from GET /api/icons/{hash}.
+	// Empty when the repo has none.
+	Icon string `json:"icon,omitempty"`
 }
 
 // TrackerVersion is one tracker a bridge runs and its tool's version.

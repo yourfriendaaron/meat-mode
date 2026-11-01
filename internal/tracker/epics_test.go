@@ -12,7 +12,7 @@ import (
 func TestOutline(t *testing.T) {
 	rows := []api.EpicRow{
 		{ID: "gd-1", Title: "Garden", Type: "epic", Status: StatusOpen, Description: "Plan the beds."},
-		{ID: "gd-1.1", Title: "Buy soil", Type: "task", Status: StatusClosed, Parent: "gd-1", Description: "dropped"},
+		{ID: "gd-1.1", Title: "Buy soil", Type: "task", Status: StatusClosed, Parent: "gd-1", Description: "Kept on a child."},
 		{ID: "gd-1.2", Title: "Water the plants", Type: "task", Status: StatusOpen, Parent: "gd-1", Human: true},
 		{ID: "gd-1.3", Title: "Shed", Type: "epic", Status: StatusDeferred, Parent: "gd-1"},
 		{ID: "gd-1.3.1", Title: "Paint the shed", Type: "task", Status: StatusOpen, Parent: "gd-1.3"},
@@ -35,7 +35,7 @@ func TestOutline(t *testing.T) {
 		desc   string
 	}{
 		"gd-1":     {true, "", "Plan the beds."},
-		"gd-1.1":   {false, "gd-1", ""},
+		"gd-1.1":   {false, "gd-1", "Kept on a child."},
 		"gd-1.2":   {false, "gd-1", ""},
 		"gd-1.3":   {true, "gd-1", ""},
 		"gd-1.3.1": {false, "gd-1.3", ""},
@@ -87,6 +87,33 @@ func TestOutlineCutsDescriptions(t *testing.T) {
 	}
 	if total > api.MaxEpicDescriptions || total < api.MaxEpicDescriptions-api.ItemDescriptionLimit {
 		t.Fatalf("descriptions total %d bytes", total)
+	}
+}
+
+// TestOutlineSpendsDescriptionsCardsFirst: past the budget, a card keeps
+// its description over an open task, and an open task over a closed one,
+// whatever their ids.
+func TestOutlineSpendsDescriptionsCardsFirst(t *testing.T) {
+	big := strings.Repeat("a", api.ItemDescriptionLimit)
+	n := api.MaxEpicDescriptions / api.ItemDescriptionLimit
+	var rows []api.EpicRow
+	// Closed children first by id, then open top-level tasks, then cards.
+	for i := range n {
+		rows = append(rows, api.EpicRow{ID: fmt.Sprintf("ga-%04d", i), Status: StatusClosed, Parent: "gz-0000", Description: big})
+	}
+	rows = append(rows, api.EpicRow{ID: "gm-0000", Status: StatusOpen, Description: big})
+	for i := range n - 1 {
+		rows = append(rows, api.EpicRow{ID: fmt.Sprintf("gz-%04d", i), Type: "epic", Status: StatusOpen, Description: big})
+	}
+	for _, r := range Outline(rows) {
+		switch {
+		case r.Epic && r.Description == "":
+			t.Errorf("card %s lost its description", r.ID)
+		case r.ID == "gm-0000" && r.Description == "":
+			t.Errorf("open task lost its description before a closed one")
+		case r.Status == StatusClosed && r.Description != "":
+			t.Errorf("closed %s kept its description past the budget", r.ID)
+		}
 	}
 }
 
