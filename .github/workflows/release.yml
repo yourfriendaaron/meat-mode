@@ -3,7 +3,8 @@ name: release
 # When a version tag is pushed, builds the meat-mode binary for each platform
 # and the signed Android APK, then attaches them all to one GitHub release. The
 # release is created last, so a failed build (a missing signing secret, say)
-# publishes nothing.
+# publishes nothing, and only once ci has passed on the tagged commit, since a
+# tag made by hand is pushed without waiting for it.
 on:
   push:
     tags: ["v*"]
@@ -13,6 +14,35 @@ permissions:
   contents: read
 
 jobs:
+  # Waits for ci on the tagged commit. The builds run meanwhile; only the
+  # release job waits for this one.
+  ci-green:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          for _ in $(seq 1 90); do
+            runs=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push" \
+              --jq '[.workflow_runs[] | {status, conclusion}]')
+            if jq -e 'any(.[]; .conclusion == "success")' <<<"$runs" >/dev/null; then
+              echo "ci passed on $SHA"
+              exit 0
+            fi
+            if jq -e 'length > 0 and all(.[]; .status == "completed")' <<<"$runs" >/dev/null; then
+              echo "::error::ci did not pass on $SHA"
+              exit 1
+            fi
+            sleep 20
+          done
+          echo "::error::ci on $SHA did not finish within 30 minutes"
+          exit 1
+
   binaries:
     runs-on: ubuntu-latest
     steps:
@@ -107,7 +137,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/release.keystore"
 
   release:
-    needs: [binaries, android]
+    needs: [ci-green, binaries, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write

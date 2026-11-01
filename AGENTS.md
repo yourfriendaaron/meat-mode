@@ -40,7 +40,7 @@ How to work within that:
 
 ## Releases
 
-A release is a `vX.Y.Z` tag; pushing it runs `release.yml`, which builds the binaries and the APK and publishes them. `tag.yml` gives every green push to main the next patch as a lightweight tag, with notes GitHub generates, and skips a commit the latest tag already holds.
+A release is a `vX.Y.Z` tag; pushing it runs `release.yml`, which builds the binaries and the APK and publishes them once `ci` has passed on the tagged commit. `tag.yml` gives every green push to main the next patch as a lightweight tag, with notes GitHub generates, and skips a commit the latest tag already holds.
 
 - A minor or major release is an annotated tag made by hand on local main, pushed with main. Its message is the release notes: the first line is the release title, the rest the body. Make it with `git tag -a --cleanup=whitespace -F <notes>`, so Markdown headings are not stripped as comments.
 - Floor paths: a change to `docs/api.md`, the export version in `internal/api`, or a migration in `internal/store/store.go` makes the release at least a minor.
