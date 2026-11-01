@@ -38,9 +38,14 @@ type Epics interface {
 // api.MaxEpicDescriptions bytes over the set, later cards (by ID) lose
 // theirs. Rows come back sorted by ID; past api.MaxEpicRows the set is cut
 // at that many, dropping closed rows first. Rows whose id is not a bead id
-// are left out.
+// are left out, and so is any row after the first with the same id.
 func Outline(rows []api.EpicRow) []api.EpicRow {
-	rows = slices.DeleteFunc(slices.Clone(rows), func(r api.EpicRow) bool { return !api.ValidBeadID(r.ID) })
+	seen := make(map[string]bool, len(rows))
+	rows = slices.DeleteFunc(slices.Clone(rows), func(r api.EpicRow) bool {
+		drop := !api.ValidBeadID(r.ID) || seen[r.ID]
+		seen[r.ID] = true
+		return drop
+	})
 	byID := make(map[string]bool, len(rows))
 	for _, r := range rows {
 		byID[r.ID] = true

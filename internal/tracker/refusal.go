@@ -12,6 +12,7 @@ var refusalWords = map[string]string{
 	api.KindAdd:     "add tasks",
 	CapSubtask:      "add sub-tasks",
 	api.KindAsk:     "start agents",
+	api.KindEpics:   "show epics",
 }
 
 // Refusal is the message for a capability a tracker lacks, such as "ticket

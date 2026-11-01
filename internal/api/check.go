@@ -115,7 +115,7 @@ func CheckRepos(repos []Repo) ([]Repo, error) {
 			return nil, Invalidf("repo %q is listed twice", r.Name)
 		}
 		seen[r.Name] = true
-		r.Bridge, r.Pending, r.AgentsPending = "", false, false
+		r.Bridge, r.Pending, r.AgentsPending, r.EpicsPending = "", false, false, false
 		out = append(out, r)
 	}
 	return out, nil

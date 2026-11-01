@@ -20,6 +20,7 @@ func TestOutline(t *testing.T) {
 		{ID: "gd-2.1", Title: "Old child", Status: StatusClosed, Parent: "gd-2"},
 		{ID: "gd-2.2", Title: "Left open", Status: StatusOpen, Parent: "gd-2"},
 		{ID: "pending-x", Title: "Bad id", Status: StatusOpen},
+		{ID: "gd-4", Title: "Duplicate", Type: "task", Status: StatusOpen},
 		{ID: "gd-3", Title: "Fence", Type: "feature", Status: StatusOpen},
 		{ID: "gd-3.1", Title: "Measure the fence", Status: StatusClosed, Parent: "gd-3"},
 		{ID: "gd-4", Title: "Mow the lawn", Type: "task", Status: StatusOpen},
@@ -59,6 +60,9 @@ func TestOutline(t *testing.T) {
 		}
 		if r.Epic != w.epic || r.Parent != w.parent || r.Description != w.desc {
 			t.Errorf("%s: epic=%v parent=%q desc=%q, want %v %q %q", r.ID, r.Epic, r.Parent, r.Description, w.epic, w.parent, w.desc)
+		}
+		if r.ID == "gd-4" && r.Title != "Duplicate" { // the first of the two in rows
+			t.Errorf("gd-4: kept %q, want the first row", r.Title)
 		}
 		if r.ID == "gd-1.2" && !r.Human {
 			t.Errorf("gd-1.2 lost Human")
