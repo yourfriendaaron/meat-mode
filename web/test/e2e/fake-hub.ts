@@ -3,7 +3,7 @@
 
 import { createHash } from "node:crypto";
 import type { Page, Route } from "@playwright/test";
-import type { Action, Attachment, Bridge, Device, Edit, HarnessInfo, Item, NewAction, Occurrence, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
+import type { Action, Attachment, Bridge, Device, Edit, EpicRow, Epics, HarnessInfo, Item, NewAction, Occurrence, Payload, Repeat, Repo, Run, SetupInfo, SetupStatus, State } from "../../src/types.ts";
 import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS_BYTES, MAX_ATTACHMENTS_PER_ITEM } from "../../src/types.ts";
 
 /** Wednesday 14 October 2026, 10:00 UTC. Tests run with timezoneId UTC. */
@@ -86,6 +86,37 @@ export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } 
       item("personal", "pe-7", "Fix the gate latch", { dueAt: at(16, 9), error: "bd: issue is locked" }),
     ],
   };
+}
+
+function epicRow(id: string, title: string, over: Partial<EpicRow> = {}): EpicRow {
+  return { id, title, status: "open", priority: 2, updatedAt: at(13, 9), ...over };
+}
+
+/**
+ * The garden repo's epics: a card in progress with six of its seven
+ * children closed, a card holding the human task ga-1 (whose State item
+ * gives its title) and a nested card, and two other tasks.
+ */
+export function gardenEpics(): EpicRow[] {
+  const planting = [1, 2, 3, 4, 5, 6].map((n) => epicRow(`ga-10.${n}`, ["Dig the beds", "Buy bulbs", "Sort the seed packets", "Clean the pots", "Mark the rows", "Plant the garlic"][n - 1], { parent: "ga-10", status: "closed", closedAt: at(12, 9) }));
+  return [
+    epicRow("ga-1", "Compost order", { parent: "ga-20", human: true, type: "task" }),
+    epicRow("ga-10", "Autumn planting", {
+      epic: true,
+      type: "epic",
+      status: "in_progress",
+      priority: 1,
+      description: "Get every bed planted before the first frost.\n\n- **Bulbs** first\n- then the garlic",
+    }),
+    ...planting,
+    epicRow("ga-10.7", "Plant the tulip bulbs", { parent: "ga-10", type: "task", assignee: "sam" }),
+    epicRow("ga-20", "Beds and paths", { epic: true, type: "epic", priority: 2 }),
+    epicRow("ga-20.1", "Paths", { epic: true, type: "epic", parent: "ga-20", priority: 3 }),
+    epicRow("ga-20.1.1", "Lay the gravel", { parent: "ga-20.1", type: "chore", status: "closed", closedAt: at(11, 9) }),
+    epicRow("ga-20.2", "Fence post leans", { parent: "ga-20", type: "bug", status: "blocked", priority: 0, assignee: "alex" }),
+    epicRow("ga-30", "Sharpen the shears", { type: "chore", priority: 3 }),
+    epicRow("ga-31", "Label the shed shelves", { type: "task", priority: 1 }),
+  ];
 }
 
 /** The media type the hub would sniff, for the few kinds the tests send. */
@@ -231,6 +262,14 @@ export class FakeHub {
   posted: NewAction[] = [];
   /** When set, every /api/events connection sends one change event and asks to reconnect after this many ms. */
   eventRetryMs = 0;
+  /** When set, every /api/events connection sends one epics event and asks to reconnect after this many ms. */
+  epicsEventMs = 0;
+  /**
+   * The epic rows the hub holds by repo key ("home/garden"), as the bridge
+   * sent them. GET /api/epics serves those of repos with epicsOn and no
+   * pending switch; a repo with none here has sent no set yet.
+   */
+  epicRows = new Map<string, EpicRow[]>();
   /**
    * Whether the hub has a password. Off, it serves only its claim step
    * (docs/api.md, Login): every /api/ route but the session ones and the
@@ -403,6 +442,36 @@ export class FakeHub {
     const b = this.bridges.find((x) => x.name === name);
     if (!b) throw new Error(`no machine ${name}`);
     b.limitsPending = false;
+  }
+
+  /**
+   * Switches a repo's epics on, as `meat-mode bridge epics on` at its
+   * machine does, and gives it rows as if the bridge had sent them (none
+   * given: no set sent yet).
+   */
+  showEpics(repo: string, rows?: EpicRow[]): void {
+    const r = this.repos.find((x) => x.name === repo && !x.personal);
+    if (!r) throw new Error(`no repo ${repo}`);
+    r.epics = true;
+    r.epicsOn = true;
+    r.epicsPending = false;
+    if (rows) this.epicRows.set(`${r.bridge}/${r.name}`, rows);
+  }
+
+  /** GET /api/epics: by machine then repo, leaving out a repo with no set or a pending switch-off. */
+  epics(): Epics {
+    const repos = this.repos
+      .filter((r) => r.epicsOn && !r.epicsPending && this.epicRows.has(`${r.bridge}/${r.name}`))
+      .sort((a, b) => a.bridge.localeCompare(b.bridge) || a.name.localeCompare(b.name));
+    return {
+      repos: repos.map((r) => ({
+        bridge: r.bridge,
+        repo: r.name,
+        tracker: r.tracker,
+        syncedAt: at(14, 9, 55),
+        rows: structuredClone(this.epicRows.get(`${r.bridge}/${r.name}`) ?? []).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      })),
+    };
   }
 
   /** Switches agents on for a repo, as if the bridge had applied the switch. */
@@ -686,10 +755,14 @@ export class FakeHub {
       const body = `retry: 3600000\n\nevent: change\ndata: {"rev": ${this.seq}}\n\nevent: change\ndata: {"rev": ${this.seq + 1}}\n\n`;
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
+    if (method === "GET" && path === "/api/events" && this.epicsEventMs) {
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body: `retry: ${this.epicsEventMs}\n\nevent: epics\ndata: {}\n\n` });
+    }
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
+    if (method === "GET" && path === "/api/epics") return this.json(route, 200, this.epics());
     if (method === "GET" && path === "/api/actions") {
       if (this.failActions) return this.json(route, 500, { error: "actions unavailable" });
       const limit = Number(url.searchParams.get("limit") || 50);
@@ -1006,6 +1079,14 @@ export class FakeHub {
       if (a.payload.on) return this.json(route, 400, { error: `switch agents on at this machine: meat-mode bridge agents on ${repo}` });
       r.agentsAllowed = false;
       r.agentsPending = true;
+    } else if (a.kind === "epics") {
+      const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
+      if (!r || r.bridge === HUB) return this.json(route, 404, { error: "no such repo" });
+      if (!r.epics) return this.json(route, 400, { error: `the tracker of repo "${repo}" cannot show epics` });
+      // Epics switch on only at the agent machine (docs/api.md, Epics).
+      if (a.payload.on) return this.json(route, 400, { error: `switch epics on at this machine: meat-mode bridge epics on ${repo}` });
+      r.epicsOn = false;
+      r.epicsPending = true;
     } else if (a.kind === "add") {
       if (a.payload.ask) {
         const why = this.askRefusal(bridge, repo);

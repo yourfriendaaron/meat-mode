@@ -10,6 +10,7 @@
 @import "./tags.css";
 @import "./month.css";
 @import "./changes.css";
+@import "./epics.css";
 
 /* ---------- tokens ----------
    The one token block: the three :root rules below. Palette tokens (--palette-*) hold
@@ -2109,7 +2110,9 @@ select.qa-pill {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Three tabs, and a fourth while Epics show. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
   background: var(--role-sunk);
   border-top: 1px solid var(--role-line);

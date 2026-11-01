@@ -1,4 +1,4 @@
-// Copying a command or a link the app shows, for its Copy buttons.
+// Copying a command, a link or an id the app shows, for its Copy buttons.
 
 /**
  * Copies the text of the element with that id. Where the clipboard is out of
@@ -11,11 +11,34 @@ export async function copyText(id: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(el.textContent ?? "");
   } catch {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const sel = getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    document.execCommand("copy");
+    selectAndCopy(el);
   }
+}
+
+/**
+ * Copies a string that is not on screen as it is, such as an id. Where the
+ * clipboard is out of reach it copies from a field it adds and removes again.
+ */
+export async function copyValue(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.setAttribute("readonly", "");
+    field.className = "sr";
+    document.body.append(field);
+    field.select();
+    document.execCommand("copy");
+    field.remove();
+  }
+}
+
+function selectAndCopy(el: Element) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  document.execCommand("copy");
 }

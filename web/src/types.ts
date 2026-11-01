@@ -144,6 +144,12 @@ export interface Repo {
   tracker?: string;
   /** Action kinds the tracker can apply, plus "subtask" for an add under a parent. Absent means every kind. */
   actions?: string[];
+  /** The repo's tracker can show epics; absent from an older bridge and on the hub's own lists. */
+  epics?: boolean;
+  /** The repo's epics are switched on at its machine (meat-mode bridge epics on); the app can only switch them off. */
+  epicsOn?: boolean;
+  /** An epics switch the machine has not applied yet; epicsOn shows where it was switched to. */
+  epicsPending?: boolean;
 }
 
 /** An agent run's state (docs/api.md, Agent runs). No run on an item means no agent was ever asked. */
@@ -301,6 +307,7 @@ export type ActionKind =
   | "ask"
   | "stop"
   | "agents"
+  | "epics"
   | "limits"
   // Personal list only.
   | "edit"
@@ -335,6 +342,45 @@ export interface Action {
   error?: string;
   createdAt: string;
   appliedAt?: string | null;
+}
+
+/**
+ * One bead of a repo's epics (docs/api.md, Epics): an epic card, a direct
+ * child of one, or an open top-level task. Read-only, and never an Item.
+ */
+export interface EpicRow {
+  id: string;
+  title: string;
+  /** The tracker's own type, such as "epic", "task" or "bug"; may be absent. */
+  type?: string;
+  status: string; // open, in_progress, blocked, deferred, closed
+  priority: number; // 0 (highest) to 4
+  assignee?: string;
+  /** The card this row is a direct child of; absent for a top-level bead. */
+  parent?: string;
+  /** A card: an epic by type, or a bead with a child. */
+  epic?: boolean;
+  /** Also a task for the person: the State item with the same key, when there is one, stands in for it. */
+  human?: boolean;
+  /** Cards only, for Details. */
+  description?: string;
+  updatedAt: string;
+  closedAt?: string | null;
+}
+
+/** One repo's rows in GET /api/epics. */
+export interface RepoEpics {
+  bridge: string;
+  repo: string;
+  tracker?: string;
+  /** When the hub last took a set for the repo. */
+  syncedAt: string;
+  rows: EpicRow[];
+}
+
+/** GET /api/epics: every repo whose epics are on and whose machine has sent them, by machine then repo. */
+export interface Epics {
+  repos: RepoEpics[];
 }
 
 export interface State {
