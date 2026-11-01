@@ -3925,7 +3925,12 @@ function boot() {
   new ResizeObserver(() => render()).observe(app);
   trackKeyboard();
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void refresh();
+    if (document.visibilityState === "visible") {
+      void refresh();
+      // Epic rows are not State; load them here too, so the Epics view is
+      // fresh after the background. loadEpics does nothing off that view.
+      loadEpics();
+    }
   });
   setInterval(render, 30000);
   setUnauthorizedHandler(sessionEnded);

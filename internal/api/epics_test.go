@@ -39,3 +39,18 @@ func TestCheckEpicRowsRefuses(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckEpicRowsBreaksParentLoops(t *testing.T) {
+	rows := []EpicRow{
+		{ID: "gd-1", Status: "open", Epic: true, Parent: "gd-3"},
+		{ID: "gd-2", Status: "open", Epic: true, Parent: "gd-1"},
+		{ID: "gd-3", Status: "open", Epic: true, Parent: "gd-2"},
+		{ID: "gd-4", Status: "open", Parent: "gd-3"},
+	}
+	if err := CheckEpicRows(rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].Parent != "" || rows[1].Parent != "gd-1" || rows[2].Parent != "gd-2" || rows[3].Parent != "gd-3" {
+		t.Errorf("parents %q %q %q %q, want the loop broken at gd-1 only", rows[0].Parent, rows[1].Parent, rows[2].Parent, rows[3].Parent)
+	}
+}

@@ -214,7 +214,7 @@ function cardHTML(c: Card, open: boolean, n: string): string {
   const kids = `ep-kids-${n}`;
   const pct = c.progress.percent;
   const children = c.children.length ? `<ul class="ep-rows" aria-label="Children of ${esc(r.id)}">${c.children.map(rowHTML).join("")}</ul>` : '<p class="muted small ep-none">No children.</p>';
-  return `<li class="ep-card${r.item ? " is-human" : ""}" data-ep="${esc(r.key)}">
+  return `<li class="ep-card" data-ep="${esc(r.key)}">
 <div class="ep-head"><span class="ep-mark">${ICON.epic}</span><code class="ep-id">${esc(r.id)}</code>${statusChip(r.status)}${priorityChip(r.priority)}<span class="ep-acts">${copyButton(r.id)}<button class="btn btn-small" data-act="epic-details" data-ep="${esc(r.key)}" aria-label="Details of ${esc(r.id)}">Details</button></span></div>
 <h3 class="ep-title"><button class="ep-toggle" data-act="epic-toggle" data-ep="${esc(r.key)}" aria-expanded="${open}"${open ? ` aria-controls="${kids}"` : ""}><span>${esc(r.title)}</span>${ICON.right}</button></h3>
 <div class="ep-progress"><span class="ep-bar" aria-hidden="true"><span class="ep-fill" data-pct="${pct}"></span></span><span class="ep-ptext">${esc(progressText(c.progress))}</span></div>

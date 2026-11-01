@@ -94,8 +94,10 @@ func decodeTrackers(s string) ([]api.TrackerVersion, error) {
 }
 
 // capabilityOf is the capability an action needs from its repo's tracker,
-// or "" when it needs none: sync, agents and stop work on every repo, and
-// the edits are refused on a tracker's items before this.
+// or "" when it needs none: sync, agents, epics and stop work on every
+// repo (an epics switch is refused elsewhere, in checkEpicsShown, on a
+// repo whose tracker cannot show epics), and the edits are refused on a
+// tracker's items before this.
 func capabilityOf(kind string, p api.Payload) string {
 	switch kind {
 	case api.KindDone, api.KindReopen, api.KindSnooze, api.KindDismiss, api.KindNote, api.KindAsk:

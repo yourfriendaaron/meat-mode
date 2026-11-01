@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -55,6 +56,18 @@ type Tracker struct {
 	Bin     string        // backlog executable; "backlog" on PATH when empty
 	Timeout time.Duration // per call; one minute when zero
 	Now     func() time.Time
+
+	// descs caches card descriptions between EpicRows reads, so an
+	// unchanged repo costs no `backlog task view`. Guarded by mu.
+	mu    sync.Mutex
+	descs map[string]descCache
+}
+
+// descCache is one card's cached description, with the task's updated
+// value it was read at: a change to that leaves the cache behind.
+type descCache struct {
+	updated string
+	desc    string
 }
 
 var (

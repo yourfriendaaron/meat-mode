@@ -152,6 +152,32 @@ test.describe("desktop", () => {
     await axe(page);
   });
 
+  test("a failed load says so, and the view recovers when the hub answers again", async ({ page, hub }) => {
+    withEpics(hub);
+    hub.failEpics = true;
+    await openApp(page);
+    await page.locator("#nav").getByRole("button", { name: "Epics" }).click();
+    await expect(page.locator("#epics")).toContainText("Could not load epics");
+    await expect(page.locator("#epics .ep-card")).toHaveCount(0);
+    hub.failEpics = false;
+    // Coming back to the view loads it again.
+    await page.locator("#nav").getByRole("button", { name: "Everything" }).click();
+    await page.locator("#nav").getByRole("button", { name: "Epics" }).click();
+    await expect(card(page, "ga-10").locator(".ep-ptext")).toHaveText("85% 6/7 done");
+  });
+
+  test("the last repo's epics switched off at its machine takes the view back to Today", async ({ page, hub }) => {
+    withEpics(hub);
+    hub.eventRetryMs = 200; // the hub's change events reach the app
+    await openApp(page);
+    await page.locator("#nav").getByRole("button", { name: "Epics" }).click();
+    await expect(page.locator("#view-title")).toHaveText("Epics");
+    // The machine reports the repo without epics on, and the hub tells the app.
+    hub.repos.find((r) => r.epicsOn)!.epicsOn = false;
+    await expect(page.locator("#view-title")).toHaveText("Today");
+    await expect(page.locator("#nav").getByRole("button", { name: "Epics" })).toHaveCount(0);
+  });
+
   test("Settings switches a repo's epics off, and shows the command that switches them on", async ({ page, hub }) => {
     withEpics(hub);
     await openApp(page);

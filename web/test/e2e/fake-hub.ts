@@ -259,6 +259,8 @@ export class FakeHub {
   failActions = false;
   /** When set, GET /api/occurrences answers 500. */
   failOccurrences = false;
+  /** When set, GET /api/epics answers 500. */
+  failEpics = false;
   posted: NewAction[] = [];
   /** When set, every /api/events connection sends one change event and asks to reconnect after this many ms. */
   eventRetryMs = 0;
@@ -762,7 +764,10 @@ export class FakeHub {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
     }
-    if (method === "GET" && path === "/api/epics") return this.json(route, 200, this.epics());
+    if (method === "GET" && path === "/api/epics") {
+      if (this.failEpics) return this.json(route, 500, { error: "epics unavailable" });
+      return this.json(route, 200, this.epics());
+    }
     if (method === "GET" && path === "/api/actions") {
       if (this.failActions) return this.json(route, 500, { error: "actions unavailable" });
       const limit = Number(url.searchParams.get("limit") || 50);

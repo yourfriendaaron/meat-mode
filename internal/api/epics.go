@@ -65,7 +65,8 @@ const (
 // refuses what one bead could get wrong: a title past ItemTitleLimit, a
 // description past ItemDescriptionLimit or on a row that is not a card, a
 // priority outside 0 to 4 (clamped), an unknown status (read as open), and
-// a parent that names no card in the set (cleared). It refuses, with an
+// a parent that names no card in the set or leads back to the row
+// (cleared). It refuses, with an
 // error matching ErrInvalid, only a set past MaxEpicRows, a row whose id is
 // not a bead id or appears twice, or descriptions past MaxEpicDescriptions.
 func CheckEpicRows(rows []EpicRow) error {
@@ -106,6 +107,25 @@ func CheckEpicRows(rows []EpicRow) error {
 		}
 		r.Description = TruncRunes(r.Description, ItemDescriptionLimit)
 		total += len(r.Description)
+	}
+	// A card may sit under another card, but a chain of parents must end:
+	// a row whose chain comes back to it loses its parent, which breaks the
+	// loop for every row on it.
+	parent := make(map[string]string, len(rows))
+	for _, r := range rows {
+		if r.Parent != "" {
+			parent[r.ID] = r.Parent
+		}
+	}
+	for i := range rows {
+		id := rows[i].ID
+		for p, n := parent[id], 0; p != "" && n <= len(rows); p, n = parent[p], n+1 {
+			if p == id {
+				rows[i].Parent = ""
+				delete(parent, id)
+				break
+			}
+		}
 	}
 	if total > MaxEpicDescriptions {
 		return Invalidf("an epic set holds at most %d bytes of description, not %d", MaxEpicDescriptions, total)
