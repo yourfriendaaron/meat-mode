@@ -427,7 +427,7 @@ kbd {
 .nav-item {
   min-width: 0;
 }
-.nav-item > span:not(.dot):not(.count):not(.badge-new):not(.tab-ic):not(.sr) {
+.nav-item > span:not(.dot):not(.rb):not(.count):not(.badge-new):not(.tab-ic):not(.sr) {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -435,6 +435,9 @@ kbd {
 }
 .nav-item .dot {
   margin: 0 5px;
+}
+.nav-item .rb {
+  margin: 0;
 }
 .nav-sub {
   display: block;
@@ -1133,6 +1136,78 @@ select.qa-pill {
 }
 .dot.c5 {
   background: var(--role-repo-5);
+}
+/* A list's mark (identity.ts): its colour, and a badge with its icon or letter. */
+.lc0 {
+  --repo: var(--role-repo-0);
+}
+.lc1 {
+  --repo: var(--role-repo-1);
+}
+.lc2 {
+  --repo: var(--role-repo-2);
+}
+.lc3 {
+  --repo: var(--role-repo-3);
+}
+.lc4 {
+  --repo: var(--role-repo-4);
+}
+.lc5 {
+  --repo: var(--role-repo-5);
+}
+.lc-own,
+.rb-own {
+  --repo: var(--role-action);
+}
+.rb {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--repo, var(--role-repo-0));
+  color: var(--role-on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.rb-s {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  font-size: 9px;
+}
+.rb-l {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.rb svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3;
+}
+.rb-s svg {
+  width: 10px;
+  height: 10px;
+}
+/* An icon sits on a neutral tile; its letter waits underneath in case the image fails. */
+.rb.rb-icon {
+  background: var(--role-raise);
+  box-shadow: inset 0 0 0 1px var(--role-line);
+}
+.rb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.rb-icon > span {
+  display: none;
 }
 .bead-id {
   font-family: var(--mono);
@@ -2245,6 +2320,11 @@ select.qa-pill {
 .m-repo-name {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.m-repo-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .switch {
   flex: none;

@@ -52,9 +52,9 @@ function cleanLabels(tags: string[]): string[] | string {
 export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } {
   return {
     repos: [
-      { bridge: HUB, name: "personal", personal: true, optedIn: true },
-      { bridge: "home", name: "garden", personal: false, optedIn: true },
-      { bridge: "home", name: "website", personal: false, optedIn: true },
+      { bridge: HUB, name: "personal", personal: true, optedIn: true, colour: 0 },
+      { bridge: "home", name: "garden", personal: false, optedIn: true, colour: 1 },
+      { bridge: "home", name: "website", personal: false, optedIn: true, colour: 2 },
     ],
     bridges: [{ name: "home", createdAt: at(1, 9), lastSeen: at(14, 9, 59), version: "0.1.0", bdVersion: "1.3.0" }],
     items: [
@@ -244,6 +244,10 @@ interface Stored {
   before: Item | null; // hub copy before the action, restored on cancel
 }
 
+/** An invented repo icon: a green tile with a leaf. */
+export const LEAF_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#1f6f43"/><path d="M6 26c0-10 6-15 16-15-1 10-6 16-16 15z" fill="#7fd36b"/></svg>';
+
 export class FakeHub {
   user = "alex";
   items: Item[];
@@ -272,6 +276,8 @@ export class FakeHub {
    * pending switch; a repo with none here has sent no set yet.
    */
   epicRows = new Map<string, EpicRow[]>();
+  /** Repo icons by hash, as GET /api/icons/{hash} serves them. */
+  icons = new Map<string, { type: string; body: string }>();
   /**
    * Whether the hub has a password. Off, it serves only its claim step
    * (docs/api.md, Login): every /api/ route but the session ones and the
@@ -458,6 +464,25 @@ export class FakeHub {
     r.epicsOn = true;
     r.epicsPending = false;
     if (rows) this.epicRows.set(`${r.bridge}/${r.name}`, rows);
+  }
+
+  /**
+   * Gives a repo an icon, as its bridge's PUT /bridge/v1/icons would. The
+   * hash only has to look like api.IconHash's; an empty body clears it.
+   */
+  setIcon(repo: string, body: string, type = "image/svg+xml"): string {
+    const r = this.repos.find((x) => x.name === repo && !x.personal);
+    if (!r) throw new Error(`no repo ${repo}`);
+    if (!body) {
+      delete r.icon;
+      return "";
+    }
+    let h = 0;
+    for (const c of body) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const hash = h.toString(16).padStart(8, "0").repeat(4);
+    this.icons.set(hash, { type, body });
+    r.icon = hash;
+    return hash;
   }
 
   /** GET /api/epics: by machine then repo, leaving out a repo with no set or a pending switch-off. */
@@ -763,6 +788,13 @@ export class FakeHub {
     if (method === "GET" && path === "/api/events") {
       const body = this.eventRetryMs ? `retry: ${this.eventRetryMs}\n\nevent: change\ndata: {"rev":${this.seq}}\n\n` : "retry: 3600000\n\n";
       return route.fulfill({ status: 200, contentType: "text/event-stream", body });
+    }
+    if (method === "GET" && path.startsWith("/api/icons/")) {
+      const hash = path.slice("/api/icons/".length);
+      if (!/^[0-9a-f]{32}$/.test(hash)) return this.json(route, 400, { error: "not an icon hash" });
+      const icon = this.icons.get(hash);
+      if (!icon || !this.repos.some((r) => r.icon === hash)) return this.json(route, 404, { error: "no such icon" });
+      return route.fulfill({ status: 200, contentType: icon.type, headers: { "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" }, body: icon.body });
     }
     if (method === "GET" && path === "/api/epics") {
       if (this.failEpics) return this.json(route, 500, { error: "epics unavailable" });
