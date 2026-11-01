@@ -243,6 +243,9 @@ func TestEpicsSwitch(t *testing.T) {
 		if !errors.Is(err, r.want) {
 			t.Errorf("%s: %v, want %v", name, err, r.want)
 		}
+		if name == "no epics" && (err == nil || !strings.HasSuffix(err.Error(), "cannot show epics")) {
+			t.Errorf("no epics: %v, want the tracker refusal", err)
+		}
 		if name == "on" && (err == nil || !strings.Contains(err.Error(), "`meat-mode bridge epics on garden`")) {
 			t.Errorf("on: %v, want it to name the command", err)
 		}

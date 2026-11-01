@@ -104,7 +104,14 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 		}
 		s.login = newLogin(h.PasswordHash, false)
 	}
-	st.Watch(func(store.Change) { s.events.publish() })
+	st.Watch(func(c store.Change) {
+		// Epic rows are not State: their change never re-fetches it.
+		if c.Kind == "epics" {
+			s.events.publishEpics()
+			return
+		}
+		s.events.publish()
+	})
 
 	m := s.mux
 	m.HandleFunc("GET /api/session", s.handleSession)
@@ -112,6 +119,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.HandleFunc("POST /api/logout", s.handleLogout)
 	m.HandleFunc("GET /api/state", s.handleState)
 	m.HandleFunc("GET /api/events", s.handleEvents)
+	m.HandleFunc("GET /api/epics", s.handleEpics)
 	m.HandleFunc("POST /api/actions", s.handleNewAction)
 	m.HandleFunc("GET /api/actions", s.handleListActions)
 	m.HandleFunc("POST /api/actions/{id}/cancel", s.handleCancel)
@@ -138,6 +146,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))
 	m.Handle("PUT /bridge/v1/items", s.bridgeAuth(s.handlePutItems))
+	m.Handle("PUT /bridge/v1/epics", s.bridgeAuth(s.handlePutEpics))
 	m.Handle("GET /bridge/v1/actions", s.bridgeAuth(s.handlePullActions))
 	m.Handle("POST /bridge/v1/actions/{id}/result", s.bridgeAuth(s.handleResult))
 	m.Handle("PUT /bridge/v1/runs", s.bridgeAuth(s.handlePutRuns))
@@ -281,6 +290,15 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleEpics(w http.ResponseWriter, r *http.Request) {
+	e, err := s.store.Epics()
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
 }
 
 func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
@@ -559,6 +577,23 @@ func (s *Server) handlePutItems(w http.ResponseWriter, r *http.Request, bridge s
 		return
 	}
 	if err := s.store.ReplaceItems(bridge, repo, items); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handlePutEpics(w http.ResponseWriter, r *http.Request, bridge string) {
+	repo := r.URL.Query().Get("repo")
+	if !store.ValidRepoName(repo) {
+		writeError(w, http.StatusBadRequest, "repo name is not valid")
+		return
+	}
+	var rows []api.EpicRow
+	if !readJSON(w, r, maxItemsBody, &rows) {
+		return
+	}
+	if err := s.store.ReplaceEpics(bridge, repo, rows); err != nil {
 		s.storeError(w, r, err)
 		return
 	}

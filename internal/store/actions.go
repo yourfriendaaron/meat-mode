@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // Limits on what the app may post.
@@ -425,11 +426,15 @@ func checkAgentsAllowed(tx *sql.Tx, bridge, repo string) error {
 // show epics.
 func checkEpicsShown(tx *sql.Tx, bridge, repo string) error {
 	var epics bool
-	if err := tx.QueryRow(`SELECT epics FROM repos WHERE bridge = ? AND name = ?`, bridge, repo).Scan(&epics); err != nil {
+	var name string
+	if err := tx.QueryRow(`SELECT epics, tracker FROM repos WHERE bridge = ? AND name = ?`, bridge, repo).Scan(&epics, &name); err != nil {
 		return err
 	}
 	if !epics {
-		return invalidf("repo %q has no epics: its tracker cannot show them", repo)
+		if name == "" {
+			name = "this list's tracker"
+		}
+		return invalidf("%s", tracker.Refusal(name, api.KindEpics))
 	}
 	return nil
 }

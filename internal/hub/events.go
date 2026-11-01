@@ -5,18 +5,29 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// broker fans a revision number out to every open event stream.
+// broker fans a revision number out to every open event stream, and apart
+// from it the epics signal, so an epics sync never re-fetches State.
 type broker struct {
 	mu     sync.Mutex
 	rev    int64
-	subs   map[chan int64]struct{}
+	subs   map[*stream]struct{}
 	closed chan struct{}
 }
 
+// stream is one subscriber's two slots: the latest revision, and whether
+// epic rows changed since it last sent `event: epics`. Each holds at most
+// one pending signal, so a burst of changes coalesces.
+type stream struct {
+	change chan int64
+	epics  chan struct{}
+}
+
 func newBroker() *broker {
-	return &broker{subs: map[chan int64]struct{}{}, closed: make(chan struct{})}
+	return &broker{subs: map[*stream]struct{}{}, closed: make(chan struct{})}
 }
 
 // publish bumps the revision and tells every subscriber. It never blocks:
@@ -25,12 +36,25 @@ func (b *broker) publish() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.rev++
-	for ch := range b.subs {
+	for sub := range b.subs {
 		select {
-		case <-ch:
+		case <-sub.change:
 		default:
 		}
-		ch <- b.rev
+		sub.change <- b.rev
+	}
+}
+
+// publishEpics tells every subscriber that epic rows changed. It never
+// blocks, and leaves the revision alone.
+func (b *broker) publishEpics() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for sub := range b.subs {
+		select {
+		case sub.epics <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -39,20 +63,20 @@ const maxEventStreams = 32
 
 // subscribe adds a subscriber, or reports false when maxEventStreams are
 // already open.
-func (b *broker) subscribe() (chan int64, int64, bool) {
+func (b *broker) subscribe() (*stream, int64, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if len(b.subs) >= maxEventStreams {
 		return nil, 0, false
 	}
-	ch := make(chan int64, 1)
-	b.subs[ch] = struct{}{}
-	return ch, b.rev, true
+	sub := &stream{change: make(chan int64, 1), epics: make(chan struct{}, 1)}
+	b.subs[sub] = struct{}{}
+	return sub, b.rev, true
 }
 
-func (b *broker) unsubscribe(ch chan int64) {
+func (b *broker) unsubscribe(sub *stream) {
 	b.mu.Lock()
-	delete(b.subs, ch)
+	delete(b.subs, sub)
 	b.mu.Unlock()
 }
 
@@ -85,16 +109,17 @@ func (s *Server) streamAllowed(r *http.Request) bool {
 }
 
 // handleEvents streams `event: change` with the current revision on connect
-// and on every change, plus a comment heartbeat. It ends at the first
+// and on every change, `event: epics` when epic rows change, plus a comment
+// heartbeat. It ends at the first
 // heartbeat after its session does. Past maxEventStreams it answers 503.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	ch, rev, ok := s.events.subscribe()
+	sub, rev, ok := s.events.subscribe()
 	if !ok {
 		w.Header().Set("Retry-After", "30")
 		writeError(w, http.StatusServiceUnavailable, "too many open event streams")
 		return
 	}
-	defer s.events.unsubscribe(ch)
+	defer s.events.unsubscribe(sub)
 	rc := http.NewResponseController(w)
 	// The stream has no body to read; the server's ReadTimeout is for
 	// requests that do, so lift it here.
@@ -122,8 +147,15 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-s.events.closed:
 			return
-		case rev := <-ch:
+		case rev := <-sub.change:
 			if !send(rev) {
+				return
+			}
+		case <-sub.epics:
+			if _, err := fmt.Fprintf(w, "event: %s\ndata: {}\n\n", api.EpicsEvent); err != nil {
+				return
+			}
+			if rc.Flush() != nil {
 				return
 			}
 		case <-tick.C:
