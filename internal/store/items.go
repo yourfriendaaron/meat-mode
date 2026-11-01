@@ -105,6 +105,10 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 	if _, err := tx.Exec(`UPDATE repos SET epics_synced_at = NULL WHERE bridge = ? AND epics_on = 0`, bridge); err != nil {
 		return err
 	}
+	// New repos get their colour slots once the dropped ones are gone.
+	if _, err := fillColours(tx, nameOrder); err != nil {
+		return err
+	}
 	epicsAfter, err := epicsHeld(tx, bridge)
 	if err != nil {
 		return err
@@ -149,7 +153,9 @@ func migrateFolderNames(tx *sql.Tx, bridge string, existing []string, repos []ap
 	return nil
 }
 
-// renameRepo moves a repo and everything keyed by it to a new name.
+// renameRepo moves a repo and everything keyed by it to a new name. The
+// repo keeps its colour; its icon goes with the old row, and the bridge
+// sends it again under the new name.
 func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 	oldPrefix, newPrefix := bridge+"/"+from+"/", bridge+"/"+to+"/"
 	tables, err := reminderTablesIn(tx)
@@ -160,8 +166,8 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 		q    string
 		args []any
 	}{
-		{`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, synced_at, tracker, actions)
-			SELECT bridge, ?, personal, opted_in, agents_allowed, synced_at, tracker, actions FROM repos WHERE bridge = ? AND name = ?`, []any{to, bridge, from}},
+		{`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, synced_at, tracker, actions, colour)
+			SELECT bridge, ?, personal, opted_in, agents_allowed, synced_at, tracker, actions, colour FROM repos WHERE bridge = ? AND name = ?`, []any{to, bridge, from}},
 		{`UPDATE items SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
 		{`UPDATE runs SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
 		{`UPDATE actions SET repo = ? WHERE bridge = ? AND repo = ?`, []any{to, bridge, from}},
@@ -193,8 +199,9 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 func (s *Store) Repos() ([]api.Repo, error) {
 	// A bridge's own personal repo is only a source for the personal list.
 	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in, r.agents_allowed, r.tracker, r.actions,
-		r.epics, r.epics_on FROM repos r
+		r.epics, r.epics_on, r.colour, COALESCE(i.hash, '') FROM repos r
 		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
+		LEFT JOIN repo_icons i ON i.bridge = r.bridge AND i.repo = r.name
 		WHERE r.personal = 0 OR r.bridge = ? ORDER BY r.bridge, r.name`, HubBridge)
 	if err != nil {
 		return nil, err
@@ -204,9 +211,14 @@ func (s *Store) Repos() ([]api.Repo, error) {
 	for rows.Next() {
 		var r api.Repo
 		var actions sql.NullString
+		var colour sql.NullInt64
 		if err := rows.Scan(&r.Bridge, &r.Name, &r.Personal, &r.OptedIn, &r.AgentsAllowed, &r.Tracker, &actions,
-			&r.Epics, &r.EpicsOn); err != nil {
+			&r.Epics, &r.EpicsOn, &colour, &r.Icon); err != nil {
 			return nil, err
+		}
+		if colour.Valid {
+			c := int(colour.Int64)
+			r.Colour = &c
 		}
 		if r.Actions, err = decodeActions(actions); err != nil {
 			return nil, err

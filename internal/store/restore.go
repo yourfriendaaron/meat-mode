@@ -449,6 +449,10 @@ func (s *Store) load(ex api.Export) (api.RestoreResult, error) {
 		}
 	}
 
+	if _, err := fillColours(tx, listOrder); err != nil {
+		return res, err
+	}
+
 	for _, o := range ex.Origins {
 		if _, err := tx.Exec(`INSERT INTO personal_origins (bridge, bead_id, item_id) VALUES (?, ?, ?)`,
 			o.Machine, o.BeadID, o.ItemID); err != nil {

@@ -80,7 +80,7 @@ func (s *Store) CreateBridge(name string) (string, error) {
 }
 
 // RevokeBridge revokes a bridge's token. Its items leave the app's view,
-// and its epic rows are dropped.
+// and its epic rows and repo icons are dropped.
 func (s *Store) RevokeBridge(name string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -96,6 +96,9 @@ func (s *Store) RevokeBridge(name string) error {
 		return notFoundf("no bridge named %q", name)
 	}
 	if _, err := tx.Exec(`DELETE FROM epic_rows WHERE bridge = ?`, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM repo_icons WHERE bridge = ?`, name); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`UPDATE repos SET epics_synced_at = NULL WHERE bridge = ?`, name); err != nil {

@@ -160,7 +160,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 17
+const schemaVersion = 18
 
 var migrations = []string{
 	// 1: initial schema.
@@ -356,6 +356,8 @@ CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id
 	``,
 	// 17: epics, by goMigrations.
 	``,
+	// 18: repos.colour and repo_icons, by goMigrations.
+	``,
 }
 
 // goMigrations are the schema steps written in Go, run in the same
@@ -367,6 +369,7 @@ var goMigrations = map[int]func(*Store, *sql.Tx) error{
 	15: (*Store).migrateActionMachine,
 	16: (*Store).migrateProjectHidden,
 	17: (*Store).migrateEpics,
+	18: (*Store).migrateIdentity,
 }
 
 // migrateEpics adds the Epics view's tables (epics.go). repos gains epics,
