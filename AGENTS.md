@@ -30,6 +30,10 @@ How to work within that:
 - CI also scans the messages of pushed commits, so merge and squash commits made on GitHub's side, which no hook sees, are caught too. Make tags and releases from the command line: a tag or release written on github.com passes no guard.
 - Never commit with `--no-verify`. When a guard fires, remove the data. Widen a pattern's allowlist only when the operator agrees in that conversation.
 
+## Design
+
+- One thing, one way: a new switch, mark or control for something the app already shows works and looks like the existing one (switches work as sync's does; list marks come from `web/src/identity.ts`). A departure needs a reason the user agrees to.
+
 ## Checks
 
 - While building, run targeted tests: one Go package, one Playwright spec.
