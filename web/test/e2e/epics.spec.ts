@@ -178,26 +178,30 @@ test.describe("desktop", () => {
     await expect(page.locator("#nav").getByRole("button", { name: "Epics" })).toHaveCount(0);
   });
 
-  test("Settings switches a repo's epics off, and shows the command that switches them on", async ({ page, hub }) => {
+  test("Settings switches a repo's epics on and off, as it does sync", async ({ page, hub }) => {
     withEpics(hub);
     await openApp(page);
     await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
-    const sw = page.getByRole("switch", { name: "Epics of garden (garden) show in the app" });
+    const sw = page.getByRole("switch", { name: "Show the epics of garden (garden)" });
     await expect(sw).toHaveAttribute("aria-checked", "true");
-    const website = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync website (website)" }) });
-    await expect(website).toContainText("Epics are off here");
-    await expect(website.locator("code", { hasText: "epics" })).toHaveText("meat-mode bridge epics on website");
+    const web = page.getByRole("switch", { name: "Show the epics of website (website)" });
+    await expect(web).toHaveAttribute("aria-checked", "false");
     await axe(page);
 
+    await web.click();
+    expect(hub.posted.find((a) => a.kind === "epics")).toMatchObject({ bridge: "home", repo: "website", payload: { on: true } });
+    const website = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync website (website)" }) });
+    await expect(web).toHaveAttribute("aria-checked", "true");
+    await expect(website).toContainText("Waiting for home");
+
     await sw.click();
-    expect(hub.posted.find((a) => a.kind === "epics")).toMatchObject({ bridge: "home", repo: "garden", payload: { on: false } });
+    expect(hub.posted.filter((a) => a.kind === "epics").at(-1)).toMatchObject({ bridge: "home", repo: "garden", payload: { on: false } });
     const garden = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync garden (garden)" }) });
-    await expect(garden).toContainText("Epics are off here");
+    await expect(sw).toHaveAttribute("aria-checked", "false");
     await expect(garden).toContainText("Waiting for home");
-    // No repo shows epics now, so the view leaves the sidebar.
-    await expect(page.locator("#nav").getByRole("button", { name: "Epics" })).toHaveCount(0);
     await page.locator(".sidebar .sync-pill").click();
     await expect(page.locator("#syncpop")).toContainText("Epics off: garden on home");
+    await expect(page.locator("#syncpop")).toContainText("Epics on: website on home");
   });
 });
 

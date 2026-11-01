@@ -272,10 +272,6 @@ func (s *Store) appendAction(na api.NewAction, author, machine string, after fun
 			return a, false, invalidf("agents are switched on at the agent machine, not in the app: run `meat-mode bridge agents on %s` there", na.Repo)
 		case na.Kind == api.KindEpics && onHub(na.Bridge):
 			return a, false, invalidf("the personal list and projects have no epics")
-		case na.Kind == api.KindEpics && *a.Payload.On:
-			// Epics copy a repo's plan to the hub, so only the agent machine
-			// switches them on.
-			return a, false, invalidf("epics are switched on at the agent machine, not in the app: run `meat-mode bridge epics on %s` there", na.Repo)
 		case na.Kind == api.KindEpics:
 			if err := checkEpicsShown(tx, na.Bridge, na.Repo); err != nil {
 				return a, false, err

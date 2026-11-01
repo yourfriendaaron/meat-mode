@@ -194,9 +194,9 @@ type Repo struct {
 	// Epics: the repo's tracker can show epics (tracker.Epics). Absent from
 	// an older bridge and on the hub's own lists.
 	Epics bool `json:"epics,omitempty"`
-	// EpicsOn: the repo's epics are switched on at the bridge's machine
-	// (`meat-mode bridge epics on`); the app can only switch them off
-	// (the epics action kind).
+	// EpicsOn: the repo's epics show in the app, switched in the app (the
+	// epics action kind) or at the bridge's machine (`meat-mode bridge
+	// epics on`).
 	EpicsOn bool `json:"epicsOn,omitempty"`
 	// Hub-only: an epics switch the bridge has not applied yet. EpicsOn
 	// then shows the position it was switched to.
@@ -329,7 +329,7 @@ const (
 	KindAsk     = "ask"    // wake an agent on an item, with an optional note
 	KindStop    = "stop"   // end an item's live run
 	KindAgents  = "agents" // switch whether agents may work in a repo
-	KindEpics   = "epics"  // switch a repo's epics off (on only at the bridge's machine)
+	KindEpics   = "epics"  // switch whether a repo's epics show
 	KindLimits  = "limits" // change a machine's limits on agent runs
 	// Personal list only.
 	KindEdit        = "edit"

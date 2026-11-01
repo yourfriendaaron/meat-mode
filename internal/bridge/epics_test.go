@@ -244,23 +244,18 @@ func TestEpicsRefusedSet(t *testing.T) {
 	}
 }
 
-// TestEpicsSwitch mirrors the agents switch: the app switches epics off,
-// never on; the switch-off is reported at once, drops the rows and stops
-// the sends.
+// TestEpicsSwitch mirrors the sync switch: the app switches epics either
+// way; a switch-off is reported at once, drops the rows and stops the
+// sends, and a switch-on sends the set again.
 func TestEpicsSwitch(t *testing.T) {
 	ew := newEpicsWorld(t)
 	saved := map[string]bool{}
 	ew.b.SaveEpics = func(repo string, on bool) error { saved[repo] = on; return nil }
 	ew.tick(ew.b)
 	on, off := true, false
-	ew.hub.Enqueue(us, action("ep-on", api.KindEpics, "projects/garden", "", api.Payload{On: &on}))
 	ew.hub.Enqueue(us, action("ep-unknown", api.KindEpics, "projects/shed", "", api.Payload{On: &off}))
 	ew.hub.Enqueue(us, action("ep-off", api.KindEpics, "projects/garden", "", api.Payload{On: &off}))
 	ew.after(RefreshEvery)
-	if rs := ew.hub.Results(aid("ep-on")); len(rs) != 1 || rs[0].OK ||
-		rs[0].Error != "switch epics on at this machine: meat-mode bridge epics on projects/garden" {
-		t.Errorf("on: %+v", rs)
-	}
 	if rs := ew.hub.Results(aid("ep-unknown")); len(rs) != 1 || rs[0].Error != ErrUnknownRepo {
 		t.Errorf("unknown repo: %+v", rs)
 	}
@@ -281,6 +276,19 @@ func TestEpicsSwitch(t *testing.T) {
 	ew.after(RefreshEvery)
 	if ew.puts() != 1 {
 		t.Errorf("sent after the switch-off: %d puts", ew.puts())
+	}
+
+	ew.hub.Enqueue(us, action("ep-on", api.KindEpics, "projects/garden", "", api.Payload{On: &on}))
+	ew.after(RefreshEvery)
+	ew.oneOK(aid("ep-on"))
+	if !maps.Equal(saved, map[string]bool{"projects/garden": true}) {
+		t.Errorf("saved after the switch-on %v", saved)
+	}
+	if got := ew.hub.Repos(us); len(got) != 1 || !got[0].EpicsOn {
+		t.Errorf("repos after the switch-on = %+v", got)
+	}
+	if _, ok := ew.hub.Epics(us, "projects/garden"); !ok {
+		t.Errorf("no set after the switch-on: %d puts", ew.puts())
 	}
 
 	ew.b.SaveEpics = nil

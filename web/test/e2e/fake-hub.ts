@@ -1088,9 +1088,7 @@ export class FakeHub {
       const r = this.repos.find((x) => x.bridge === bridge && x.name === repo);
       if (!r || r.bridge === HUB) return this.json(route, 404, { error: "no such repo" });
       if (!r.epics) return this.json(route, 400, { error: `the tracker of repo "${repo}" cannot show epics` });
-      // Epics switch on only at the agent machine (docs/api.md, Epics).
-      if (a.payload.on) return this.json(route, 400, { error: `switch epics on at this machine: meat-mode bridge epics on ${repo}` });
-      r.epicsOn = false;
+      r.epicsOn = !!a.payload.on;
       r.epicsPending = true;
     } else if (a.kind === "add") {
       if (a.payload.ask) {

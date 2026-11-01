@@ -41,9 +41,8 @@ type Config struct {
 	// Agents holds the agents switches set in the app, by repo name. Agents
 	// run only in a repo switched on here; no repo file can do it.
 	Agents map[string]bool `json:"agents,omitempty"`
-	// Epics holds the epics switches, by repo name. Epics are switched on
-	// here only, with `meat-mode bridge epics on`; the app can only switch
-	// them off.
+	// Epics holds the epics switches, by repo name, set in the app or with
+	// `meat-mode bridge epics on|off`.
 	Epics map[string]bool `json:"epics,omitempty"`
 	// Limits holds the limits on agent runs set in the app. The bridge
 	// takes none above its ceilings (MEAT_MODE_AGENT_MAX_*).

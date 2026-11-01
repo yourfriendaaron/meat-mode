@@ -49,11 +49,6 @@ export function agentsOnCommand(repo: string): string {
   return `meat-mode bridge agents on ${shellWord(repo)}`;
 }
 
-/** The command, run on the agent machine, that shows a repo's epics in the app (docs/api.md, Epics). */
-export function epicsOnCommand(repo: string): string {
-  return `meat-mode bridge epics on ${shellWord(repo)}`;
-}
-
 /**
  * Where agents are off: the command that switches them on at the machine,
  * with a Copy button whose click reaches main.ts as "agents-on-copy". The
@@ -65,20 +60,12 @@ export function agentsOnHTML(bridge: string, repo: string, id: string): string {
 }
 
 /**
- * Where a repo's epics are off: the command that shows them, with a Copy
- * button whose click reaches main.ts as "epics-on-copy".
- */
-function epicsOnHTML(bridge: string, repo: string, id: string): string {
-  return `<p class="muted small">To show this repo's epics in the app, run this on ${esc(bridge)}:</p>
-<div class="cmd-row"><code class="cmd" id="${esc(id)}">${esc(epicsOnCommand(repo))}</code><button class="btn btn-small" data-act="epics-on-copy" data-copy="${esc(id)}" aria-label="Copy the epics command for ${esc(repo)}">Copy</button></div>`;
-}
-
-/**
  * The repos a machine found, each with its sync switch and, under it,
  * whether agents may work there and, where its tracker can show them,
- * whether its epics show. Agents and epics switch on only at the machine,
- * so a repo with one off shows that command (for agents, on a repo that
- * syncs) and one with it on shows a switch that turns it off. A click on a
+ * whether its epics show. Agents switch on only at the machine, so a repo
+ * with agents off shows that command (on a repo that syncs) and one with
+ * them on shows a switch that turns them off. Epics switch either way, as
+ * sync does. A click on a
  * switch reaches main.ts as "sync-switch", "agents-switch" or
  * "epics-switch". idPrefix keeps the ids apart where Settings and the
  * wizard are both in the page.
@@ -109,21 +96,17 @@ export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync
 }
 
 /**
- * A repo's epics switch, for a tracker that can show epics: off with the
- * command that shows them, or on with a switch that turns them off. Either
- * way, "Waiting" until the machine applies a switch from the app. The
- * switch is apart from the sync switch, so it shows on a repo that does
- * not sync too.
+ * A repo's epics switch, for a tracker that can show epics: a switch that
+ * works either way, as the sync switch does, with "Waiting" until the
+ * machine applies it. It is apart from the sync switch, so it shows on a
+ * repo that does not sync too.
  */
 function epicsSwitchHTML(r: Repo, bridge: string, idPrefix: string): string {
   if (!r.epics) return "";
+  const on = r.epicsOn === true;
   const waiting = r.epicsPending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-  if (r.epicsOn === true) {
-    const off = `<button class="switch" role="switch" id="${esc(`${idPrefix}epics-${bridge}/${r.name}`)}" aria-checked="true" aria-label="Epics of ${esc(repoLabel(r))} (${esc(r.name)}) show in the app" data-act="epics-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
-    return `<div class="m-repo-agents m-repo-epics"><div class="m-repo-name"><div class="small">Epics show in the app</div>${waiting}</div>${off}</div>`;
-  }
-  const how = r.epicsPending ? "" : epicsOnHTML(bridge, r.name, `${idPrefix}epics-cmd-${bridge}/${r.name}`);
-  return `<div class="m-repo-agents m-repo-agents-off m-repo-epics"><div class="m-repo-name"><div class="small">Epics are off here</div>${waiting}${how}</div></div>`;
+  const sw = `<button class="switch" role="switch" id="${esc(`${idPrefix}epics-${bridge}/${r.name}`)}" aria-checked="${on}" aria-label="Show the epics of ${esc(repoLabel(r))} (${esc(r.name)})" data-act="epics-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
+  return `<div class="m-repo-agents m-repo-epics"><div class="m-repo-name"><div class="small">Show epics</div>${waiting}</div>${sw}</div>`;
 }
 
 /**
