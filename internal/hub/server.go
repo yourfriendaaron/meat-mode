@@ -142,6 +142,7 @@ func newServer(cfg Config, st *store.Store, push PushRegistry, static fs.FS) *Se
 	s.exportRoutes(m)
 	s.restoreRoutes(m)
 	s.attachmentRoutes(m)
+	s.iconRoutes(m)
 
 	m.Handle("POST /bridge/v1/hello", s.bridgeAuth(s.handleHello))
 	m.Handle("PUT /bridge/v1/repos", s.bridgeAuth(s.handlePutRepos))
