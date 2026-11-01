@@ -20,6 +20,7 @@ import {
   progressText,
   shownRows,
   statusName,
+  typeIconSVG,
   type EpicsUI,
 } from "../../src/epics.ts";
 import type { EpicRow, Epics, Item, Repo, RepoEpics } from "../../src/types.ts";
@@ -399,4 +400,11 @@ test("Details of a human row with its State item say it is also your task and of
   assert.match(html, /Order compost for the beds/);
   assert.match(html, /Also your task/);
   assert.match(html, /<button class="btn btn-primary btn-small" data-act="open" data-key="home\/projects\/garden\/gd-3">Open task<\/button>/);
+});
+
+test("a status or type that is an inherited object key reads as an unknown one", () => {
+  for (const k of ["constructor", "toString", "__proto__"]) {
+    assert.equal(statusName(k), "Open");
+    assert.equal(typeIconSVG(k), typeIconSVG("task"));
+  }
 });

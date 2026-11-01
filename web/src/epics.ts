@@ -43,6 +43,16 @@ export function statusName(s: string): string {
   return Object.hasOwn(STATUS_NAMES, s) ? STATUS_NAMES[s] : "Open";
 }
 
+/** The icon for a tracker type; the task icon for a type it does not know, inherited object keys included. */
+export function typeIconSVG(t: string): string {
+  return Object.hasOwn(TYPE_ICON, t) ? TYPE_ICON[t] : ICON.task;
+}
+
+/** A status's rank in the need-first order; an unknown one ranks as open. */
+function needRank(s: string): number {
+  return Object.hasOwn(NEED_RANK, s) ? NEED_RANK[s] : 2;
+}
+
 function knownStatus(s: string): string {
   return Object.hasOwn(STATUS_NAMES, s) ? s : "open";
 }
@@ -195,7 +205,7 @@ function updated(r: EpicRow): number {
 export function byPriority(a: EpicRow, b: EpicRow): number {
   return (
     a.priority - b.priority ||
-    (NEED_RANK[a.status] ?? 2) - (NEED_RANK[b.status] ?? 2) ||
+    needRank(a.status) - needRank(b.status) ||
     updated(b) - updated(a) ||
     naturalCompare(a.id, b.id)
   );
@@ -209,7 +219,7 @@ export function byPriority(a: EpicRow, b: EpicRow): number {
 export function sorter(sort: EpicsSort, percent: (r: EpicRow) => number | undefined): (a: EpicRow, b: EpicRow) => number {
   switch (sort) {
     case "status":
-      return (a, b) => (NEED_RANK[a.status] ?? 2) - (NEED_RANK[b.status] ?? 2) || a.priority - b.priority || updated(b) - updated(a) || naturalCompare(a.id, b.id);
+      return (a, b) => needRank(a.status) - needRank(b.status) || a.priority - b.priority || updated(b) - updated(a) || naturalCompare(a.id, b.id);
     case "progress":
       return (a, b) => (percent(a) ?? 101) - (percent(b) ?? 101) || byPriority(a, b);
     case "updated":
@@ -356,7 +366,7 @@ function typeName(r: EpicRow): string {
 /** A bead's type as an icon, with the type in words for screen readers and on hover. */
 function typeIcon(r: EpicRow): string {
   const t = typeName(r);
-  return `<span class="ep-type" title="${esc(t)}">${TYPE_ICON[t] ?? ICON.task}<span class="sr">${esc(t)}</span></span>`;
+  return `<span class="ep-type" title="${esc(t)}">${typeIconSVG(t)}<span class="sr">${esc(t)}</span></span>`;
 }
 
 function copyButton(id: string): string {
@@ -650,7 +660,7 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
     : "";
   return `<div class="detail-inner" role="region" aria-labelledby="d-title">
 <div class="grip" aria-hidden="true"></div>
-<div class="d-head"><span class="ep-mark">${TYPE_ICON[typeName(r)] ?? ICON.task}</span><h2 id="d-title" class="d-title">${esc(r.title)}</h2><button class="icon-btn" data-act="close-detail" aria-label="Close details">${ICON.close}</button></div>
+<div class="d-head"><span class="ep-mark">${typeIconSVG(typeName(r))}</span><h2 id="d-title" class="d-title">${esc(r.title)}</h2><button class="icon-btn" data-act="close-detail" aria-label="Close details">${ICON.close}</button></div>
 ${human}
 <dl class="ep-facts">${facts.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>
 <section class="d-section" aria-labelledby="ep-d-desc"><h3 id="ep-d-desc">Description</h3>${desc}</section>
