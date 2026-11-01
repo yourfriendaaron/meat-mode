@@ -30,7 +30,7 @@ func agentsCommand(args []string, env Env) error {
 		listAgents(env.Stdout, repos, s.Config.Agents)
 		return nil
 	case len(args) == 2 && (args[0] == "on" || args[0] == "off"):
-		r, err := findRepo(repos, args[1], env.Paths.Home)
+		r, err := findRepo(repos, args[1], env.Paths.Home, "agents")
 		if err != nil {
 			return err
 		}
@@ -69,8 +69,9 @@ func listAgents(out io.Writer, repos []Repo, switches map[string]bool) {
 }
 
 // findRepo matches arg to a repo the bridge found: by the name it reports, or
-// else as the path of the repo's folder.
-func findRepo(repos []Repo, arg, home string) (Repo, error) {
+// else as the path of the repo's folder. command is the bridge command that
+// lists them.
+func findRepo(repos []Repo, arg, home, command string) (Repo, error) {
 	for _, r := range repos {
 		if r.Name == arg {
 			return r, nil
@@ -84,5 +85,5 @@ func findRepo(repos []Repo, arg, home string) (Repo, error) {
 			}
 		}
 	}
-	return Repo{}, fmt.Errorf("%q is not a repo this bridge finds with its roots; run `meat-mode bridge agents` to list them", strings.TrimSpace(arg))
+	return Repo{}, fmt.Errorf("%q is not a repo this bridge finds with its roots; run `meat-mode bridge %s` to list them", strings.TrimSpace(arg), command)
 }

@@ -41,6 +41,10 @@ type Config struct {
 	// Agents holds the agents switches set in the app, by repo name. Agents
 	// run only in a repo switched on here; no repo file can do it.
 	Agents map[string]bool `json:"agents,omitempty"`
+	// Epics holds the epics switches, by repo name. Epics are switched on
+	// here only, with `meat-mode bridge epics on`; the app can only switch
+	// them off.
+	Epics map[string]bool `json:"epics,omitempty"`
 	// Limits holds the limits on agent runs set in the app. The bridge
 	// takes none above its ceilings (MEAT_MODE_AGENT_MAX_*).
 	Limits SavedLimits `json:"limits,omitzero"`
@@ -154,6 +158,11 @@ func SaveAgents(path, repo string, on bool) error {
 	return saveSwitch(path, func(c *Config) *map[string]bool { return &c.Agents }, repo, on)
 }
 
+// SaveEpics records one repo's epics switch in the config file at path.
+func SaveEpics(path, repo string, on bool) error {
+	return saveSwitch(path, func(c *Config) *map[string]bool { return &c.Epics }, repo, on)
+}
+
 func saveSwitch(path string, field func(*Config) *map[string]bool, repo string, on bool) error {
 	return WithConfigLock(path, func() error {
 		c, err := readConfigFile(path)
@@ -245,6 +254,13 @@ func SaveLimits(path string, c api.LimitsChange) (SavedLimits, error) {
 func LoadAgents(path string) (map[string]bool, error) {
 	c, err := readConfigFile(path)
 	return c.Agents, err
+}
+
+// LoadEpics reads the epics map as saved in the config file at path. The
+// running bridge calls it before each repo report, as LoadAgents.
+func LoadEpics(path string) (map[string]bool, error) {
+	c, err := readConfigFile(path)
+	return c.Epics, err
 }
 
 // WithConfigLock runs fn holding the lock that serializes every

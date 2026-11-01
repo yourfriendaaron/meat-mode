@@ -53,6 +53,12 @@ type Bridge struct {
 	// each repo report and before each ask, so a change made with `meat-mode
 	// bridge agents` while the bridge runs takes effect at once.
 	LoadAgents func() (map[string]bool, error)
+	// Epics are the epics switches by repo name, SaveEpics records one
+	// switched off in the app, and LoadEpics rereads them before each repo
+	// report, as for agents. A nil SaveEpics refuses them.
+	Epics     map[string]bool
+	SaveEpics func(repo string, on bool) error
+	LoadEpics func() (map[string]bool, error)
 	// SaveLimits records a limits change from the app (in bridge.json) and
 	// returns the limits now saved. A nil SaveLimits refuses them.
 	SaveLimits func(api.LimitsChange) (SavedLimits, error)
@@ -81,6 +87,11 @@ type Bridge struct {
 	reposSent  []api.Repo
 	reposAt    time.Time
 	lastFullAt time.Time
+	// The epics pass: what it knows by repo, until when it sends no epics
+	// to a hub that has no epics route, and whether it said so.
+	epicStates      map[string]*epicState
+	epicsOffUntil   time.Time
+	epicsGoneLogged bool
 }
 
 type repoState struct {
@@ -267,7 +278,7 @@ func (b *Bridge) stopRuns() {
 
 // Tick runs one round: hello if needed, report repos, replay actions, then
 // sync the repos that had actions, or all of them when full is set or
-// SyncEvery has passed since the last full round. full also rescans the
+// SyncEvery has passed since the last full round, then run the epics pass. full also rescans the
 // roots, which otherwise happens every ScanEvery. It returns hub errors;
 // tracker errors are logged per repo. Each hello checks the trackers again.
 func (b *Bridge) Tick(ctx context.Context, full bool) error {
@@ -312,6 +323,9 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	}
 	if full {
 		b.lastFullAt = b.now()
+	}
+	if err := b.syncEpics(ctx); err != nil {
+		return b.hubErr(err)
 	}
 	if b.Runner == nil {
 		return nil
@@ -376,6 +390,7 @@ func (b *Bridge) syncedNames() []string {
 // changed.
 func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 	b.reloadAgents()
+	b.reloadEpics()
 	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.scanEvery() {
 		b.found = Discover(b.Roots, b.Home, b.available, b.log())
 		b.scannedAt = b.now()
@@ -394,7 +409,7 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		next[r.Name] = st
 		info := r.Tracker.Info()
 		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced(), AgentsAllowed: b.Agents[r.Name],
-			Tracker: info.Title, Actions: info.Actions})
+			Tracker: info.Title, Actions: info.Actions, Epics: epicsOf(r.Tracker) != nil, EpicsOn: b.epicsOn(*r)})
 	}
 	b.repos = next
 	if reflect.DeepEqual(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {

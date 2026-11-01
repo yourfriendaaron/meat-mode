@@ -52,11 +52,11 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 			// The journal keys on the id; the hub only ever mints UUIDs.
 			b.log().Warn("ignoring an action without a valid id", "kind", a.Kind, "repo", a.Repo)
 			continue
-		} else if a.Kind == api.KindSync || a.Kind == api.KindAgents {
+		} else if a.Kind == api.KindSync || a.Kind == api.KindAgents || a.Kind == api.KindEpics {
 			if res, err = b.applySwitch(ctx, a, st); err != nil {
 				return touched, err
 			}
-			if res.OK {
+			if res.OK && a.Kind != api.KindEpics {
 				touched[a.Repo] = true
 			}
 		} else if a.Kind == api.KindLimits {
@@ -141,13 +141,16 @@ func AgentsOnError(repo string) string {
 // not find.
 const ErrUnknownRepo = "unknown repo"
 
-// applySwitch saves a sync or agents switch from the app and reports the new
-// repo list at once. It takes switches only for repos this bridge found
+// applySwitch saves a sync, agents or epics switch from the app and reports
+// the new repo list at once. Agents and epics switch only off from the app. It takes switches only for repos this bridge found
 // itself, looked up by name, so the app cannot point it anywhere else.
 func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (api.ActionResult, error) {
 	kind, save, switches := "sync", b.SaveSwitch, &b.Switches
 	if a.Kind == api.KindAgents {
 		kind, save, switches = "agents", b.SaveAgents, &b.Agents
+	}
+	if a.Kind == api.KindEpics {
+		kind, save, switches = "epics", b.SaveEpics, &b.Epics
 	}
 	switch {
 	case st == nil:
@@ -156,6 +159,8 @@ func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (
 		return api.ActionResult{Error: kind + " switch has no position"}, nil
 	case a.Kind == api.KindAgents && *a.Payload.On:
 		return api.ActionResult{Error: AgentsOnError(a.Repo)}, nil
+	case a.Kind == api.KindEpics && *a.Payload.On:
+		return api.ActionResult{Error: EpicsOnError(a.Repo)}, nil
 	case save == nil:
 		return api.ActionResult{Error: "this bridge cannot save " + kind + " switches"}, nil
 	}
@@ -167,6 +172,9 @@ func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (
 		*switches = map[string]bool{}
 	}
 	(*switches)[a.Repo] = on
+	if a.Kind == api.KindEpics {
+		delete(b.epicStates, a.Repo)
+	}
 	// Report the repo list before the result, so the app never shows the old
 	// position between the two.
 	if err := b.discover(ctx, false); err != nil {

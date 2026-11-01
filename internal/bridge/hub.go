@@ -192,6 +192,11 @@ func (h *Hub) PutItems(ctx context.Context, repo string, items []api.Item) error
 	return h.do(ctx, http.MethodPut, "/bridge/v1/items?repo="+url.QueryEscape(repo), items, nil)
 }
 
+// PutEpics replaces the epic rows of one repo.
+func (h *Hub) PutEpics(ctx context.Context, repo string, rows []api.EpicRow) error {
+	return h.do(ctx, http.MethodPut, "/bridge/v1/epics?repo="+url.QueryEscape(repo), rows, nil)
+}
+
 // Actions returns this bridge's pending actions, oldest first.
 func (h *Hub) Actions(ctx context.Context) ([]api.Action, error) {
 	var a []api.Action
