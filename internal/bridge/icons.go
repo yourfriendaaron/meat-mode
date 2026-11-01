@@ -19,6 +19,7 @@ import (
 const (
 	IconsEvery   = 10 * time.Minute // how often the bridge looks for a repo's icon, at most
 	IconsBackoff = time.Hour        // how long it sends no icons to a hub that has no icons route
+	IconsResend  = 6                // looks between sends of an unchanged icon: once an hour
 )
 
 // Where FindIcon looks (docs/api.md, List identity, Icons).
@@ -116,12 +117,14 @@ func (f iconFinder) read(rel string, limit int64, whole bool) []byte {
 	if err != nil || !fi.Mode().IsRegular() || (whole && fi.Size() > limit) {
 		return nil
 	}
-	file, err := os.Open(path)
+	// Non-blocking and not through a link, so a FIFO or a link swapped in
+	// since the check can neither hang the open nor lead elsewhere.
+	file, err := openNoFollow(path)
 	if err != nil {
 		return nil
 	}
 	defer file.Close()
-	if now, err := file.Stat(); err != nil || !os.SameFile(fi, now) {
+	if now, err := file.Stat(); err != nil || !now.Mode().IsRegular() || !os.SameFile(fi, now) {
 		return nil // swapped since the check
 	}
 	b, err := io.ReadAll(io.LimitReader(file, limit+1))
@@ -286,6 +289,7 @@ type iconState struct {
 	dir      string
 	lookedAt time.Time // the last look
 	took     bool      // the hub took an icon, or none, since the start
+	tookAt   time.Time // when it last took one
 	sent     string    // api.IconHash of what it took; "" for none
 	// refused holds the hashes the hub refused (400 or 413); none is sent
 	// again, and each is logged once.
@@ -343,14 +347,16 @@ func (b *Bridge) syncIcons(ctx context.Context) error {
 		if icon != nil {
 			sum = api.IconHash(icon)
 		}
-		if is.refused[sum] || (is.took && sum == is.sent) {
+		// The same icon goes again once an hour, so a hub restored from a
+		// backup that lacks it gets it back.
+		if is.refused[sum] || (is.took && sum == is.sent && b.now().Sub(is.tookAt) < IconsResend*b.iconsEvery()) {
 			continue
 		}
 		err := b.Hub.PutIcon(ctx, name, icon)
 		var h *HTTPError
 		switch {
 		case err == nil:
-			is.took, is.sent = true, sum
+			is.took, is.sent, is.tookAt = true, sum, b.now()
 		case errors.As(err, &h) && h.Status == http.StatusNotFound:
 			if !b.iconsGoneLogged {
 				b.log().Warn("the hub does not take icons; sending none to it for an hour", "err", err)

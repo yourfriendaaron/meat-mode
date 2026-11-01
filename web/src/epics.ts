@@ -40,11 +40,11 @@ function clampPriority(p: number): number {
 
 /** A status in words; one the app does not know reads as Open, as the hub keeps it. */
 export function statusName(s: string): string {
-  return STATUS_NAMES[s] ?? "Open";
+  return Object.hasOwn(STATUS_NAMES, s) ? STATUS_NAMES[s] : "Open";
 }
 
 function knownStatus(s: string): string {
-  return s in STATUS_NAMES ? s : "open";
+  return Object.hasOwn(STATUS_NAMES, s) ? s : "open";
 }
 
 /** Whether any repo shows its epics, which is when the view is offered. */

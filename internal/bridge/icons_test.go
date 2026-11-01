@@ -322,6 +322,25 @@ func TestIconsSent(t *testing.T) {
 	}
 }
 
+// TestIconsResentHourly: an unchanged icon goes again once an hour, so a
+// hub restored from a backup that lacks it gets it back.
+func TestIconsResentHourly(t *testing.T) {
+	iw := newIconsWorld(t)
+	iw.setIcon(iconOf("one"))
+	iw.tick(iw.b)
+	iw.hub.DropIcon(us, iw.name) // the hub lost it
+	for range IconsResend - 1 {
+		iw.after(IconsEvery)
+	}
+	if iw.puts() != 1 {
+		t.Fatalf("resent within the hour: %d puts", iw.puts())
+	}
+	iw.after(IconsEvery)
+	if iw.puts() != 2 || !bytes.Equal(iw.held(), iconOf("one")) {
+		t.Errorf("after an hour: %d puts, hub holds %q", iw.puts(), iw.held())
+	}
+}
+
 // TestIconsAfterStart: a new bridge sends every repo's icon once, an empty
 // body for a repo with none, so an icon removed while it was down goes.
 func TestIconsAfterStart(t *testing.T) {
