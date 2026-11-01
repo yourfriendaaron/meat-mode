@@ -65,9 +65,11 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 		}
 	}
 	rows := make([]api.EpicRow, 0, len(tasks))
+	cards := map[string]bool{}
 	for _, t := range tasks {
 		is := toIssue(t, statuses)
 		if is.Status != tracker.StatusClosed && (strings.EqualFold(deref(t.Type), "epic") || hasChild[idKey(t.ID)]) {
+			cards[descKey(dir, t.ID)] = true
 			is.Description, err = b.cardDesc(ctx, dir, t)
 			if err != nil {
 				return nil, err
@@ -90,7 +92,23 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 		}
 		rows = append(rows, r)
 	}
+	b.sweepDescs(dir, cards)
 	return rows, nil
+}
+
+// descKey is a card's key in the description cache.
+func descKey(dir, id string) string { return dir + "\x00" + idKey(id) }
+
+// sweepDescs drops the cached descriptions of dir's tasks that are no
+// longer cards, so the cache holds only what the last read used.
+func (b *Tracker) sweepDescs(dir string, cards map[string]bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for k := range b.descs {
+		if strings.HasPrefix(k, dir+"\x00") && !cards[k] {
+			delete(b.descs, k)
+		}
+	}
 }
 
 // cardDesc is a card's own description. It is cached per repo and task
@@ -100,7 +118,7 @@ func (b *Tracker) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, erro
 // fails the set. A card whose id the tracker would refuse gets none.
 func (b *Tracker) cardDesc(ctx context.Context, dir string, t taskJSON) (string, error) {
 	updated := deref(t.UpdatedAt)
-	key := dir + "\x00" + idKey(t.ID)
+	key := descKey(dir, t.ID)
 	b.mu.Lock()
 	if e, ok := b.descs[key]; ok && e.updated == updated {
 		b.mu.Unlock()
