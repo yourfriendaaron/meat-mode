@@ -56,7 +56,7 @@ const DBFile = "meat-mode.db"
 // Change describes one committed change, for listeners such as the SSE
 // broadcaster and the notifier.
 type Change struct {
-	Kind   string // bridges, repos, items, actions, seen, runs
+	Kind   string // bridges, repos, items, actions, seen, runs, epics
 	Bridge string
 	Repo   string
 	// NewItems lists items the hub received for the first time (Kind items).
@@ -160,7 +160,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 16
+const schemaVersion = 17
 
 var migrations = []string{
 	// 1: initial schema.
@@ -354,6 +354,8 @@ CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id
 	``,
 	// 16: repos.hidden, by goMigrations.
 	``,
+	// 17: epics, by goMigrations.
+	``,
 }
 
 // goMigrations are the schema steps written in Go, run in the same
@@ -364,6 +366,42 @@ var goMigrations = map[int]func(*Store, *sql.Tx) error{
 	14: (*Store).migrateChecklists,
 	15: (*Store).migrateActionMachine,
 	16: (*Store).migrateProjectHidden,
+	17: (*Store).migrateEpics,
+}
+
+// migrateEpics adds the Epics view's tables (epics.go). repos gains epics,
+// the repo's tracker can show epics, and epics_on, its epics switch, both
+// as the bridge last reported them, and epics_synced_at, when the hub last
+// took the repo's epic set; NULL until it has one. epic_rows holds each
+// set, one api.EpicRow (as JSON) per bead, apart from items so that no
+// path serving the person's own to-dos can reach one. A row goes with its
+// repo. It is Go so that the tests of older migrations, which step
+// user_version back, can run it again.
+func (s *Store) migrateEpics(tx *sql.Tx) error {
+	for _, col := range []struct{ name, def string }{
+		{"epics", "INTEGER NOT NULL DEFAULT 0"},
+		{"epics_on", "INTEGER NOT NULL DEFAULT 0"},
+		{"epics_synced_at", "TEXT"},
+	} {
+		var n int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('repos') WHERE name = ?`, col.name).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			if _, err := tx.Exec(`ALTER TABLE repos ADD COLUMN ` + col.name + ` ` + col.def); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS epic_rows (
+	bridge TEXT NOT NULL,
+	repo   TEXT NOT NULL,
+	id     TEXT NOT NULL,
+	data   TEXT NOT NULL,
+	PRIMARY KEY (bridge, repo, id),
+	FOREIGN KEY (bridge, repo) REFERENCES repos(bridge, name) ON DELETE CASCADE
+)`)
+	return err
 }
 
 // migrateProjectHidden adds repos.hidden: 1 for a project deleted in the

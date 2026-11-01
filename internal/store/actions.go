@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // Limits on what the app may post.
@@ -152,7 +153,7 @@ func (s *Store) appendAction(na api.NewAction, author, machine string, after fun
 			}
 		}
 		p = add
-	case api.KindSync, api.KindAgents:
+	case api.KindSync, api.KindAgents, api.KindEpics:
 		if p.On == nil {
 			return a, false, invalidf("%s needs payload.on", na.Kind)
 		}
@@ -231,7 +232,7 @@ func (s *Store) appendAction(na api.NewAction, author, machine string, after fun
 			return a, false, err
 		}
 		a.Bridge, a.Repo = na.Bridge, na.Repo
-	} else if na.Kind == api.KindAdd || na.Kind == api.KindSync || na.Kind == api.KindAgents {
+	} else if na.Kind == api.KindAdd || na.Kind == api.KindSync || na.Kind == api.KindAgents || na.Kind == api.KindEpics {
 		if !ValidBridgeName(na.Bridge) || !ValidRepoName(na.Repo) {
 			return a, false, invalidf("%s needs a bridge and a repo", na.Kind)
 		}
@@ -269,6 +270,16 @@ func (s *Store) appendAction(na api.NewAction, author, machine string, after fun
 		case na.Kind == api.KindAgents && *a.Payload.On:
 			// A hub that is taken over must not widen what agents may do.
 			return a, false, invalidf("agents are switched on at the agent machine, not in the app: run `meat-mode bridge agents on %s` there", na.Repo)
+		case na.Kind == api.KindEpics && onHub(na.Bridge):
+			return a, false, invalidf("the personal list and projects have no epics")
+		case na.Kind == api.KindEpics && *a.Payload.On:
+			// Epics copy a repo's plan to the hub, so only the agent machine
+			// switches them on.
+			return a, false, invalidf("epics are switched on at the agent machine, not in the app: run `meat-mode bridge epics on %s` there", na.Repo)
+		case na.Kind == api.KindEpics:
+			if err := checkEpicsShown(tx, na.Bridge, na.Repo); err != nil {
+				return a, false, err
+			}
 		case na.Kind == api.KindAdd && !optedIn:
 			return a, false, invalidf("repo %q is not synced with Meat Mode", na.Repo)
 		case na.Kind == api.KindAdd && a.Payload.Ask:
@@ -407,6 +418,23 @@ func checkAgentsAllowed(tx *sql.Tx, bridge, repo string) error {
 	}
 	if !ok {
 		return invalidf("agents are not allowed in repo %q; switch them on at the agent machine with `meat-mode bridge agents on %s`", repo, repo)
+	}
+	return nil
+}
+
+// checkEpicsShown refuses an epics switch on a repo whose tracker cannot
+// show epics.
+func checkEpicsShown(tx *sql.Tx, bridge, repo string) error {
+	var epics bool
+	var name string
+	if err := tx.QueryRow(`SELECT epics, tracker FROM repos WHERE bridge = ? AND name = ?`, bridge, repo).Scan(&epics, &name); err != nil {
+		return err
+	}
+	if !epics {
+		if name == "" {
+			name = "this list's tracker"
+		}
+		return invalidf("%s", tracker.Refusal(name, api.KindEpics))
 	}
 	return nil
 }
