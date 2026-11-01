@@ -111,8 +111,8 @@ func (s *Store) State() (api.State, error) {
 		return st, err
 	}
 	st.Unapplied = len(pending)
-	// The latest pending sync or agents switch on a repo shows where it was
-	// switched to.
+	// The latest pending sync, agents or epics switch on a repo shows where
+	// it was switched to.
 	repoAt := map[string]int{}
 	for i, r := range st.Repos {
 		repoAt[r.Bridge+"/"+r.Name] = i
@@ -139,6 +139,8 @@ func (s *Store) State() (api.State, error) {
 			st.Repos[i].OptedIn, st.Repos[i].Pending = *a.Payload.On, true
 		case api.KindAgents:
 			st.Repos[i].AgentsAllowed, st.Repos[i].AgentsPending = *a.Payload.On, true
+		case api.KindEpics:
+			st.Repos[i].EpicsOn, st.Repos[i].EpicsPending = *a.Payload.On, true
 		}
 	}
 

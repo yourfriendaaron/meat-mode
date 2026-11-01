@@ -39,7 +39,8 @@ func SplitKey(key string) (bridge, repo, id string, ok bool) {
 // loses its items. A repo stored under an older bridge's folder-name key
 // (garden) moves to the one new path key ending in that name
 // (projects/garden), with its items, actions and reminders; see
-// renameRepo.
+// renameRepo. A repo reported without epicsOn, or not at all, loses its
+// epic rows.
 func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 	repos, err := api.CheckRepos(repos)
 	if err != nil {
@@ -54,6 +55,10 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		return err
 	}
 	defer tx.Rollback()
+	epicsBefore, err := epicsHeld(tx, bridge)
+	if err != nil {
+		return err
+	}
 	existing, err := queryStrings(tx, `SELECT name FROM repos WHERE bridge = ?`, bridge)
 	if err != nil {
 		return err
@@ -66,12 +71,13 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, tracker, actions)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, tracker, actions, epics, epics_on)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in,
-				agents_allowed = excluded.agents_allowed, tracker = excluded.tracker, actions = excluded.actions`,
+				agents_allowed = excluded.agents_allowed, tracker = excluded.tracker, actions = excluded.actions,
+				epics = excluded.epics, epics_on = excluded.epics_on`,
 			bridge, r.Name, r.Personal && r.Name == PersonalRepo, r.OptedIn, r.AgentsAllowed,
-			truncRunes(strings.TrimSpace(r.Tracker), maxTrackerLen), actions); err != nil {
+			truncRunes(strings.TrimSpace(r.Tracker), maxTrackerLen), actions, r.Epics, r.EpicsOn); err != nil {
 			return err
 		}
 	}
@@ -90,10 +96,26 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 			}
 		}
 	}
+	// A dropped repo's epic rows went with it; one whose switch is off
+	// loses them here, and shows no set until the bridge sends one again.
+	if _, err := tx.Exec(`DELETE FROM epic_rows WHERE bridge = ? AND repo IN
+		(SELECT name FROM repos WHERE bridge = ? AND epics_on = 0)`, bridge, bridge); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE repos SET epics_synced_at = NULL WHERE bridge = ? AND epics_on = 0`, bridge); err != nil {
+		return err
+	}
+	epicsAfter, err := epicsHeld(tx, bridge)
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	s.emit(Change{Kind: "repos", Bridge: bridge})
+	if epicsAfter != epicsBefore {
+		s.emit(Change{Kind: "epics", Bridge: bridge})
+	}
 	return nil
 }
 
@@ -170,7 +192,8 @@ func renameRepo(tx *sql.Tx, bridge, from, to string) error {
 // Repos lists the repos of active bridges.
 func (s *Store) Repos() ([]api.Repo, error) {
 	// A bridge's own personal repo is only a source for the personal list.
-	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in, r.agents_allowed, r.tracker, r.actions FROM repos r
+	rows, err := s.db.Query(`SELECT r.bridge, r.name, r.personal, r.opted_in, r.agents_allowed, r.tracker, r.actions,
+		r.epics, r.epics_on FROM repos r
 		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
 		WHERE r.personal = 0 OR r.bridge = ? ORDER BY r.bridge, r.name`, HubBridge)
 	if err != nil {
@@ -181,7 +204,8 @@ func (s *Store) Repos() ([]api.Repo, error) {
 	for rows.Next() {
 		var r api.Repo
 		var actions sql.NullString
-		if err := rows.Scan(&r.Bridge, &r.Name, &r.Personal, &r.OptedIn, &r.AgentsAllowed, &r.Tracker, &actions); err != nil {
+		if err := rows.Scan(&r.Bridge, &r.Name, &r.Personal, &r.OptedIn, &r.AgentsAllowed, &r.Tracker, &actions,
+			&r.Epics, &r.EpicsOn); err != nil {
 			return nil, err
 		}
 		if r.Actions, err = decodeActions(actions); err != nil {

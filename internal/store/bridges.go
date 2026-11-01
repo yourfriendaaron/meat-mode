@@ -79,9 +79,15 @@ func (s *Store) CreateBridge(name string) (string, error) {
 	return token, nil
 }
 
-// RevokeBridge revokes a bridge's token. Its items leave the app's view.
+// RevokeBridge revokes a bridge's token. Its items leave the app's view,
+// and its epic rows are dropped.
 func (s *Store) RevokeBridge(name string) error {
-	res, err := s.db.Exec(`UPDATE bridges SET revoked_at = ? WHERE name = ? AND name != ? AND revoked_at IS NULL`,
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`UPDATE bridges SET revoked_at = ? WHERE name = ? AND name != ? AND revoked_at IS NULL`,
 		fmtTime(s.now()), name, HubBridge)
 	if err != nil {
 		return err
@@ -89,7 +95,17 @@ func (s *Store) RevokeBridge(name string) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return notFoundf("no bridge named %q", name)
 	}
+	if _, err := tx.Exec(`DELETE FROM epic_rows WHERE bridge = ?`, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE repos SET epics_synced_at = NULL WHERE bridge = ?`, name); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 	s.emit(Change{Kind: "bridges", Bridge: name})
+	s.emit(Change{Kind: "epics", Bridge: name})
 	return nil
 }
 
