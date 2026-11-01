@@ -660,6 +660,14 @@ func (h *Hub) Icon(bridge, repo string) ([]byte, bool) {
 	return slices.Clone(icon), ok
 }
 
+// DropIcon forgets a repo's icon, as a hub restored from a backup without
+// it would.
+func (h *Hub) DropIcon(bridge, repo string) {
+	h.mu.Lock()
+	delete(h.icons, bridge+"/"+repo)
+	h.mu.Unlock()
+}
+
 // IconPuts counts the icons sent for a repo, taken or not, empty ones
 // included.
 func (h *Hub) IconPuts(bridge, repo string) int {

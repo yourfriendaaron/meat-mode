@@ -58,6 +58,14 @@ export function listColourClass(r: Repo, repos: Repo[]): string {
 }
 
 /**
+ * Forgets the icons that failed to load, so the next render tries them
+ * again: a failure may have been a moment offline or an expired session.
+ */
+export function retryIcons(): void {
+  failed.clear();
+}
+
+/**
  * Turns a badge whose icon failed to load into its letter, and remembers
  * the hash so the next render draws the letter at once. Listen for "error"
  * in the capture phase, since an image's error does not bubble.

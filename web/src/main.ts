@@ -75,7 +75,7 @@ import { esc } from "./html.ts";
 import { agentsOnHTML } from "./agents.ts";
 import { copyText, copyValue } from "./clipboard.ts";
 import { chipsHTML, clearFilters, collapseAll, epicDetailHTML, epicsHTML, epicsOn, expandAll, findRow, menusHTML, newEpicsUI, toggle, type EpicsMenu, type EpicsSort } from "./epics.ts";
-import { listBadge, onIconError } from "./identity.ts";
+import { listBadge, onIconError, retryIcons } from "./identity.ts";
 import { ICON } from "./icons.ts";
 import { remote, type Remote } from "./remote.ts";
 import { HISTORY_SHOWN, byLine, changeText, shownChanges, undoFor, type HistoryContext } from "./changes.ts";
@@ -4085,6 +4085,7 @@ function boot() {
   trackKeyboard();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
+      retryIcons();
       void refresh();
       // Epic rows are not State; load them here too, so the Epics view is
       // fresh after the background. loadEpics does nothing off that view.
