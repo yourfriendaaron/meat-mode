@@ -150,11 +150,34 @@ test("a single newline stays a line break", () => {
   assert.equal(renderMarkdown("Water the plants\nthen the herbs"), "<p>Water the plants<br>then the herbs</p>\n");
 });
 
-test("tables and strikethrough render; typographer and linkify stay off", () => {
+test("tables and strikethrough render; typographer stays off", () => {
   assert.match(renderMarkdown("| a |\n|---|\n| 1 |"), /<table>/);
   assert.match(renderMarkdown("| a | b |\n|:-:|---|\n| 1 | 2 |"), /<th class="md-center">a<\/th>\n<th>b<\/th>/);
   assert.equal(renderMarkdown("~~old~~"), "<p><s>old</s></p>\n");
-  assert.equal(renderMarkdown('"quoted" -- (c) https://example.com'), '<p>&quot;quoted&quot; -- (c) https://example.com</p>\n');
+  assert.equal(renderMarkdown('"quoted" -- (c)'), '<p>&quot;quoted&quot; -- (c)</p>\n');
+});
+
+const A = (href: string, text = href) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+
+test("a bare http or https address becomes a link", () => {
+  assert.equal(renderMarkdown("See https://example.com/a/b.html for more"), `<p>See ${A("https://example.com/a/b.html")} for more</p>\n`);
+  assert.equal(renderMarkdown("Read http://example.com."), `<p>Read ${A("http://example.com")}.</p>\n`);
+  assert.equal(renderMarkdown("(see https://example.com/x)"), `<p>(see ${A("https://example.com/x")})</p>\n`);
+  assert.equal(renderMarkdown("https://example.com/wiki/A_(b)"), `<p>${A("https://example.com/wiki/A_(b)")}</p>\n`);
+  assert.equal(renderMarkdown("a https://example.com/1 and https://example.com/2"), `<p>a ${A("https://example.com/1")} and ${A("https://example.com/2")}</p>\n`);
+});
+
+test("only addresses with a scheme link, and text in a link or code stays as it is", () => {
+  assert.equal(renderMarkdown("Edit main.ts and example.com"), "<p>Edit main.ts and example.com</p>\n");
+  assert.equal(renderMarkdown("https://"), "<p>https://</p>\n");
+  assert.equal(renderMarkdown("[https://example.com/a](https://example.com/b)"), `<p>${A("https://example.com/b", "https://example.com/a")}</p>\n`);
+  assert.equal(renderMarkdown("`https://example.com`"), "<p><code>https://example.com</code></p>\n");
+  assert.equal(renderMarkdown("ftp://example.com javascript:alert(1)"), "<p>ftp://example.com javascript:alert(1)</p>\n");
+});
+
+test("a bare address is escaped like any other", () => {
+  const input = 'https://example.com/"><b>x</b>&a=1';
+  assertSafe(renderMarkdown(input), input);
 });
 
 test("a fence's info string adds no class", () => {
@@ -166,4 +189,11 @@ test("the allowlist check itself catches a stray tag, attribute or address", () 
   assert.throws(() => assertSafe('<p onclick="x">a</p>', ""));
   assert.throws(() => assertSafe('<a href="javascript:x" target="_blank" rel="noopener noreferrer">a</a>', ""));
   assert.throws(() => assertSafe("<p>a <b onclick=x></p>", ""));
+});
+
+test("a long run of closing brackets trims in linear time", () => {
+  const input = `https://example.com/${")".repeat(200_000)}`;
+  const start = performance.now();
+  assert.equal(renderMarkdown(input), `<p>${A("https://example.com/")}${")".repeat(200_000)}</p>\n`);
+  assert.ok(performance.now() - start < 2000);
 });

@@ -68,6 +68,77 @@ function guardLinks(state: StateCore) {
     block.children = out;
   }
 }
+/** A bare web address in running text. One pass, no nested quantifiers. */
+const BARE_URL = /https?:\/\/[^\s<>]+/gi;
+
+/** Trims what usually ends a sentence rather than the address it follows. */
+function trimUrl(url: string): string {
+  const trail = /[.,;:!?'"*_]$/;
+  let open = 0;
+  let close = 0;
+  for (const c of url) {
+    if (c === "(") open++;
+    else if (c === ")") close++;
+  }
+  let end = url.length;
+  for (;;) {
+    const c = url[end - 1];
+    if (trail.test(c)) end--;
+    else if (c === ")" && close > open) {
+      end--;
+      close--;
+    } else break;
+  }
+  return url.slice(0, end);
+}
+
+/**
+ * Turns each bare http or https address in text into a link. Only addresses
+ * with a scheme count: linkify-it's fuzzy matching would link file names
+ * such as main.ts, and its matcher has had quadratic inputs. Text already
+ * inside a link stays as it is.
+ */
+function bareLinks(state: StateCore) {
+  for (const block of state.tokens) {
+    if (block.type !== "inline" || !block.children) continue;
+    const out: Token[] = [];
+    let depth = 0;
+    for (const t of block.children) {
+      if (t.type === "link_open") depth++;
+      else if (t.type === "link_close") depth--;
+      if (t.type !== "text" || depth > 0) {
+        out.push(t);
+        continue;
+      }
+      let last = 0;
+      for (const m of t.content.matchAll(BARE_URL)) {
+        const url = trimUrl(m[0]);
+        if (!/^https?:\/\/./i.test(url)) continue;
+        const start = m.index;
+        if (start > last) {
+          const before = new state.Token("text", "", 0);
+          before.content = t.content.slice(last, start);
+          out.push(before);
+        }
+        const open = new state.Token("link_open", "a", 1);
+        open.attrs = [["href", state.md.normalizeLink(url)]];
+        const text = new state.Token("text", "", 0);
+        text.content = url;
+        out.push(open, text, new state.Token("link_close", "a", -1));
+        last = start + url.length;
+      }
+      if (last === 0) {
+        out.push(t);
+      } else if (last < t.content.length) {
+        const after = new state.Token("text", "", 0);
+        after.content = t.content.slice(last);
+        out.push(after);
+      }
+    }
+    block.children = out;
+  }
+}
+md.core.ruler.push("bare_links", bareLinks);
 md.core.ruler.push("guard_links", guardLinks);
 
 const rules = md.renderer.rules;

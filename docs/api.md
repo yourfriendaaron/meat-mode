@@ -322,6 +322,7 @@ Nothing sends a tag back to a tracker. The `edit` action is refused on an agent'
 The detail view renders an item's `description` and each comment's `text` as Markdown, on every item: agents write Markdown into beads, and the user may too. The hub stores and sends the text as it was typed; the app renders it. Lists and rows show titles only, as plain text. Editing stays a plain text box.
 
 - The renderer is markdown-it (research: [research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)) with `html: false`, `linkify: false`, `typographer: false` and `breaks: true`, so a single newline stays a line break as in plain text. Any HTML in the text shows as text.
+- A bare `http://` or `https://` address in the text renders as a link to itself. Trailing sentence punctuation and an unmatched closing bracket stay outside it. An address without a scheme, such as `example.com`, stays text.
 - CommonMark and GitHub tables and strikethrough render. A task list item (`- [ ]`) renders as its text, with no checkbox.
 - A link renders only for `http:`, `https:` and `mailto:` addresses, opening in a new tab with `rel="noopener noreferrer"`; any other address renders as the link's text alone.
 - An image renders as a link to its address, named by its alt text: the page's `img-src` loads no image from elsewhere, and a remote image would tell its host when the item was opened.
