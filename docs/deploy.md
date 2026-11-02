@@ -316,6 +316,46 @@ Anyone with the address can read your to-dos' titles and due times, without a pa
 
 The feed works only for calendar apps on your own devices, such as Apple Calendar or Thunderbird, and only while that device is on your private network. Google Calendar and Outlook (Outlook.com, Outlook on the web and the new Outlook) fetch a subscribed feed from their own servers on the internet, which cannot reach the hub.
 
+## Watch from a terminal
+
+`meat-mode tui` shows your to-dos and your agents' epics in a terminal, for a pane beside your agent sessions in tmux, Herdr or any terminal. It has three tabs: **To-dos** (the Today groups, as in the app), **Epics** (each repo's epics with their progress) and **All** (what is waiting on you, what comes later, and one line per epic). From 90 columns wide, the selected row's details sit beside the list. Its main job is to copy a task's id and title into an agent session with one key. It also marks to-dos done, reopens and snoozes them; everything else stays in the app.
+
+It runs on any machine on your private network that can reach the hub, paired or not:
+
+```sh
+meat-mode tui --hub https://meat-mode.example.com
+```
+
+The first time, it asks for the hub's address (on a paired machine it offers the bridge's hub) and the app's password, then logs in. Later starts reuse the session: give `--hub` to pick a hub when you have logged in to several. If the hub has no password yet, set one in the app first. When the session ends (a logout elsewhere, a password change, or 14 days unused), the viewer asks for the password again in place and keeps your view.
+
+The session is kept in `tui.json`, beside the bridge's `bridge.json` in the same config folder (`~/.config/meat-mode` on Linux), readable only by you (mode `0600`). It is a full app login: whoever holds the file can do anything the app can. `meat-mode tui logout` ends the session on the hub and removes it from the file.
+
+The viewer dials only private addresses, as the bridge does (see [Private network only](#private-network-only)). If your network uses addresses outside the private ranges, list them in `MEAT_MODE_TRUSTED_NETWORKS`; for the paired hub it also takes the networks saved at pairing. Use the hub's own host name, the one in its `MEAT_MODE_PUBLIC_URL` or in `MEAT_MODE_ALLOWED_HOSTS`: the hub refuses other names, such as its bare IP address, and the viewer says so.
+
+| Key | Does |
+|---|---|
+| `j` `k` or the arrows | move; `g` `G` top and bottom, PageUp and PageDown a page |
+| `Enter`, `Esc` | open a row or go into an epic; back |
+| `l` `h` | unfold and fold an epic, or go into and out of it |
+| `Tab`, `1` `2` `3` | switch tab |
+| `/` | filter by title or id |
+| `y` | copy the id and title, such as `mm-4 (projects/garden) Order bark mulch` |
+| `Y` | copy that line with the details: list, due date, tags, description, notes and an epic's tasks |
+| `x` | done, or reopen a closed to-do |
+| `s` | snooze, with the app's choices, one key each |
+| `u` | undo the last done or snooze |
+| `o` | show the item's link in the app |
+| `r`, `?`, `q` | refresh, list the keys, quit |
+
+Epic rows that are not tasks for you are read-only: `x` and `s` on one say so.
+
+**Copying.** `y` sends the text to your terminal's clipboard with an OSC 52 escape sequence, which passes through ssh and reaches the machine you are sitting at, as long as your terminal allows OSC 52 (most do; some ask first or need it switched on). In a session that is not over ssh, it also copies with the machine's own clipboard tool (`pbcopy`, `wl-copy`, `xclip` or `xsel`). The message says **Copied** only when that local copy worked; otherwise it says **Sent to the terminal's clipboard**, since a terminal never confirms OSC 52. Text over 64 KiB is too long to send to the terminal.
+
+- **tmux**: the viewer wraps the sequence for tmux to pass through, so tmux needs `set -g allow-passthrough on` (off by default since tmux 3.3), and the terminal outside tmux must allow OSC 52.
+- **screen**: the viewer wraps the sequence for screen to pass through.
+
+The viewer never captures the mouse, so selecting text with the mouse and your terminal's own copy always work too.
+
 ## Let agents add to your personal list
 
 An agent on a paired machine puts a to-do on your personal list, or on a repo's project (see [Projects](#projects-for-repos-with-no-tracker)), with one command. It uses the hub address and token in the bridge's config, so it needs no token of its own and works whether or not the bridge service is running:
