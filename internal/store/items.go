@@ -39,8 +39,9 @@ func SplitKey(key string) (bridge, repo, id string, ok bool) {
 // loses its items. A repo stored under an older bridge's folder-name key
 // (garden) moves to the one new path key ending in that name
 // (projects/garden), with its items, actions and reminders; see
-// renameRepo. A repo reported without epicsOn, or not at all, loses its
-// epic rows.
+// renameRepo. A repo reported with spaceColour takes that colour slot
+// (docs/api.md, List identity, Workspace colours). A repo reported without
+// epicsOn, or not at all, loses its epic rows.
 func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 	repos, err := api.CheckRepos(repos)
 	if err != nil {
@@ -71,13 +72,21 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, tracker, actions, epics, epics_on)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		personal := r.Personal && r.Name == PersonalRepo
+		// A workspace colour sets the slot, after any rename above and
+		// before fillColours, which then counts it as held. Without one the
+		// row keeps its slot, or a new row waits for fillColours.
+		var colour any
+		if r.SpaceColour != nil && !personal {
+			colour = *r.SpaceColour
+		}
+		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, tracker, actions, epics, epics_on, colour)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in,
 				agents_allowed = excluded.agents_allowed, tracker = excluded.tracker, actions = excluded.actions,
-				epics = excluded.epics, epics_on = excluded.epics_on`,
-			bridge, r.Name, r.Personal && r.Name == PersonalRepo, r.OptedIn, r.AgentsAllowed,
-			truncRunes(strings.TrimSpace(r.Tracker), maxTrackerLen), actions, r.Epics, r.EpicsOn); err != nil {
+				epics = excluded.epics, epics_on = excluded.epics_on, colour = COALESCE(excluded.colour, repos.colour)`,
+			bridge, r.Name, personal, r.OptedIn, r.AgentsAllowed,
+			truncRunes(strings.TrimSpace(r.Tracker), maxTrackerLen), actions, r.Epics, r.EpicsOn, colour); err != nil {
 			return err
 		}
 	}

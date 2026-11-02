@@ -118,6 +118,13 @@ func CheckRepos(repos []Repo) ([]Repo, error) {
 		r.Bridge, r.Pending, r.AgentsPending, r.EpicsPending = "", false, false, false
 		out = append(out, r)
 	}
+	// Workspace colours are checked after the rest, so a report with a bad
+	// name and a bad colour gives the name's error.
+	for _, r := range out {
+		if r.SpaceColour != nil && (*r.SpaceColour < 0 || *r.SpaceColour >= ListColours) {
+			return nil, Invalidf("repo %q has a spaceColour %d outside 0 to %d", r.Name, *r.SpaceColour, ListColours-1)
+		}
+	}
 	return out, nil
 }
 
