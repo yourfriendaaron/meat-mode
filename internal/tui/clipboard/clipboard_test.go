@@ -274,9 +274,12 @@ func TestSystemRun(t *testing.T) {
 	}
 
 	// A background child that keeps stdin open while the text is too large
-	// to write, as xclip can, counts as success once WaitDelay expires.
+	// to write, as xclip can, counts as success once WaitDelay expires. The
+	// pipe goes to fd 3 first: dash points a background job's stdin at
+	// /dev/null before its own redirections, so "<&0" alone gives sleep
+	// /dev/null there.
 	start := time.Now()
-	if err := run(ctx, "sh", []string{"-c", "sleep 5 <&0 & exit 0"}, strings.Repeat("x", 1<<20)); err != nil {
+	if err := run(ctx, "sh", []string{"-c", "exec 3<&0; sleep 5 <&3 & exit 0"}, strings.Repeat("x", 1<<20)); err != nil {
 		t.Fatalf("ErrWaitDelay should be success: %v", err)
 	}
 	if d := time.Since(start); d < 500*time.Millisecond || d > 4*time.Second {
