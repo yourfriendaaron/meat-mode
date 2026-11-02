@@ -276,7 +276,7 @@ func TestSystemRun(t *testing.T) {
 	// A background child that keeps stdin open while the text is too large
 	// to write, as xclip can, counts as success once WaitDelay expires.
 	start := time.Now()
-	if err := run(ctx, "sh", []string{"-c", "sleep 5 & exit 0"}, strings.Repeat("x", 1<<20)); err != nil {
+	if err := run(ctx, "sh", []string{"-c", "sleep 5 <&0 & exit 0"}, strings.Repeat("x", 1<<20)); err != nil {
 		t.Fatalf("ErrWaitDelay should be success: %v", err)
 	}
 	if d := time.Since(start); d < 500*time.Millisecond || d > 4*time.Second {
