@@ -1,7 +1,7 @@
 == 56 x 20, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  / log   Esc clear                                      |
- A acme/api  synced 4m ago                              |
+ API acme/api  synced 4m ago                            |
 › ▾ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
     ✓ api-z9p.1    Log callers of /v1/login             |
     ✓ api-z9p.3    Delete /v1/login                     |
@@ -23,7 +23,7 @@
 == 89 x 20, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  / log   Esc clear                                                                       |
- A acme/api  synced 4m ago                                                               |
+ API acme/api  synced 4m ago                                                             |
 › ▾ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
     ✓ api-z9p.1    Log callers of /v1/login                                              |
     ✓ api-z9p.3    Delete /v1/login                                                      |
@@ -45,8 +45,8 @@
 == 90 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
  / log   Esc clear                                                                        |
-›A api-z9p   Remove legacy auth end⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
-                                                 ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4      |
+›API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
+                                                 ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4    |
                                                  ╎                                        |
                                                  ╎  ✓ api-z9p.1    Log callers of /v1/log⋯|
                                                  ╎  ✓ api-z9p.2    Email the two remainin⋯|
@@ -67,8 +67,8 @@
 == 140 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
  / log   Esc clear                                                                                                                          |
-›A api-z9p   Remove legacy auth endpoints                     ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
-                                                                             ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4                            |
+›API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
+                                                                             ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4                          |
                                                                              ╎                                                              |
                                                                              ╎  ✓ api-z9p.1    Log callers of /v1/login                     |
                                                                              ╎  ✓ api-z9p.2    Email the two remaining callers              |
@@ -89,7 +89,7 @@
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  / log   Esc clear                                      |
- A acme/api  synced 4m ago                              |
+ API acme/api  synced 4m ago                            |
 › ▾ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
     ✓ api-z9p.1    Log callers of /v1/login             |
     ✓ api-z9p.3    Delete /v1/login                     |
@@ -121,7 +121,7 @@
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  / log   Esc clear                                                                       |
- A acme/api  synced 4m ago                                                               |
+ API acme/api  synced 4m ago                                                             |
 › ▾ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
     ✓ api-z9p.1    Log callers of /v1/login                                              |
     ✓ api-z9p.3    Delete /v1/login                                                      |
@@ -153,8 +153,8 @@
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
  / log   Esc clear                                                                        |
-›A api-z9p   Remove legacy auth end⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
-                                                 ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4      |
+›API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
+                                                 ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4    |
                                                  ╎                                        |
                                                  ╎  ✓ api-z9p.1    Log callers of /v1/log⋯|
                                                  ╎  ✓ api-z9p.2    Email the two remainin⋯|
@@ -185,8 +185,8 @@
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
  / log   Esc clear                                                                                                                          |
-›A api-z9p   Remove legacy auth endpoints                     ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
-                                                                             ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4                            |
+›API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
+                                                                             ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4                          |
                                                                              ╎                                                              |
                                                                              ╎  ✓ api-z9p.1    Log callers of /v1/login                     |
                                                                              ╎  ✓ api-z9p.2    Email the two remaining callers              |

@@ -15,9 +15,9 @@
      s          snooze                                  |
      u          undo the last done or snooze            |
      o          copy the item's app link                |
+     p          this project, or every list             |
      r          refresh                                 |
      q          quit                                    |
-    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
  any key close                                  1-18/21 |
 
 == 89 x 20, layout a
@@ -37,9 +37,9 @@
                      s          snooze                                                   |
                      u          undo the last done or snooze                             |
                      o          copy the item's app link                                 |
+                     p          this project, or every list                              |
                      r          refresh                                                  |
                      q          quit                                                     |
-                    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                   1-18/21 |
 
 == 90 x 20, layout b
@@ -59,9 +59,9 @@
                       s          snooze                                                   |
                       u          undo the last done or snooze                             |
                       o          copy the item's app link                                 |
+                      p          this project, or every list                              |
                       r          refresh                                                  |
                       q          quit                                                     |
-                     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                    1-18/21 |
 
 == 140 x 20, layout b
@@ -81,16 +81,16 @@
                                                s          snooze                                                                            |
                                                u          undo the last done or snooze                                                      |
                                                o          copy the item's app link                                                          |
+                                               p          this project, or every list                                                       |
                                                r          refresh                                                                           |
                                                q          quit                                                                              |
-                                              ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
  any key close                                                                                                                      1-18/21 |
 
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  Past due 2                                             |
-› ◦ ✓ Book the boiler service                1d overdue |
-  ✦ A Rotate the staging API key in the va⋯ 17h overdue |
+› ◦  ✓  Book the boiler service              1d overdue |
+  ✦ API Rotate the staging API key in the ⋯ 17h overdue |
  Today 1                                                |
     ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
      j k        move (or up, down)                      |
@@ -107,10 +107,10 @@
      s          snooze                                  |
      u          undo the last done or snooze            |
      o          copy the item's app link                |
+     p          this project, or every list             |
      r          refresh                                 |
      q          quit                                    |
     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
-                                                        |
                                                         |
                                                         |
                                                         |
@@ -121,8 +121,8 @@
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  Past due 2                                                                              |
-› ◦ ✓ mm-28     Book the boiler service                                #home  1d overdue |
-  ✦ A api-9fq   Rotate the staging API key in the vault                      17h overdue |
+› ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
+  ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
  Today 1                                                                                 |
                     ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
                      j k        move (or up, down)                                       |
@@ -139,10 +139,10 @@
                      s          snooze                                                   |
                      u          undo the last done or snooze                             |
                      o          copy the item's app link                                 |
+                     p          this project, or every list                              |
                      r          refresh                                                  |
                      q          quit                                                     |
                     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
-                                                                                         |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -153,8 +153,8 @@
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
  Past due 2                                      ╎ Book the boiler service                |
-› ◦ ✓ Book the boiler service         1d overdue ╎ mm-28  ✓ personal                      |
-  ✦ A Rotate the staging API key in⋯ 17h overdue ╎ 1d overdue  #home                      |
+› ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
+  ✦ API Rotate the staging API key ⋯ 17h overdue ╎ 1d overdue  #home                      |
  Today 1                                         ╎                                        |
                      ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
                       j k        move (or up, down)                                       |
@@ -171,10 +171,10 @@
                       s          snooze                                                   |
                       u          undo the last done or snooze                             |
                       o          copy the item's app link                                 |
+                      p          this project, or every list                              |
                       r          refresh                                                  |
                       q          quit                                                     |
                      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
-                                                 ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
@@ -185,8 +185,8 @@
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
  Past due 2                                                                  ╎ Book the boiler service                                      |
-› ◦ ✓ mm-28     Book the boiler service                    #home  1d overdue ╎ mm-28  ✓ personal                                            |
-  ✦ A api-9fq   Rotate the staging API key in the vault          17h overdue ╎ 1d overdue  #home                                            |
+› ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
+  ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ 1d overdue  #home                                            |
  Today 1                                                                     ╎                                                              |
                                               ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
                                                j k        move (or up, down)                                                                |
@@ -203,10 +203,10 @@
                                                s          snooze                                                                            |
                                                u          undo the last done or snooze                                                      |
                                                o          copy the item's app link                                                          |
+                                               p          this project, or every list                                                       |
                                                r          refresh                                                                           |
                                                q          quit                                                                              |
                                               ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
-                                                                             ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |

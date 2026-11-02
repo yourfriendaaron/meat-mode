@@ -89,3 +89,78 @@ func checkFrame(t *testing.T, name string, m Model) {
 		}
 	}
 }
+
+// TestListCodes checks the badge codes: three letters or digits, leading
+// punctuation skipped, and lists that share their first three told apart
+// by a later word's initial or character.
+func TestListCodes(t *testing.T) {
+	cases := map[string]string{
+		"projects/garden": "GAR",
+		".agents":         "AGE",
+		"ui":              "UI",
+		"x":               "X",
+		"🌱":               "?",
+		"éclair":          "ÉCL",
+	}
+	for name, want := range cases {
+		if got := codeCandidates(name)[0]; got != want {
+			t.Errorf("codeCandidates(%q)[0] = %q, want %q", name, got, want)
+		}
+	}
+	repos := []api.Repo{
+		{Bridge: "laptop", Name: "work/garden.plan", OptedIn: true},
+		{Bridge: "laptop", Name: "work/gardenparty", OptedIn: true},
+		{Bridge: "laptop", Name: "work/garden-shed", OptedIn: true},
+	}
+	got := listCodes(repos)
+	want := map[string]string{"work/garden-shed": "GAR", "work/garden.plan": "GAP", "work/gardenparty": "GAD"}
+	for name, code := range want {
+		if c := got[listKey("laptop", name)]; c != code {
+			t.Errorf("code of %s = %q, want %q", name, c, code)
+		}
+	}
+	for _, c := range []string{"X", "UI", "AGE"} {
+		if w := lipgloss.Width(badgeText(c)); w != codeWidth {
+			t.Errorf("badgeText(%q) is %d cells", c, w)
+		}
+	}
+}
+
+// TestHereScope checks that the viewer opens on the project it was started
+// in, that p switches to every list and back, and that a folder in no
+// project leaves every list showing.
+func TestHereScope(t *testing.T) {
+	s, e := load(t)
+	open := func(m Model) map[string]bool {
+		out := map[string]bool{}
+		for _, it := range m.d.state.Items {
+			out[it.Repo] = true
+		}
+		for _, re := range m.d.epics.Repos {
+			out[re.Repo] = true
+		}
+		return out
+	}
+	// A root outside home matches by the last segments of the path.
+	m := New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/acme/storefront/web"}).SetData(s, e, now)
+	if got := open(m); len(got) != 1 || !got["acme/storefront"] {
+		t.Fatalf("scoped lists = %v, want acme/storefront alone", got)
+	}
+	m, _ = m.Key("p")
+	if got := open(m); !got["personal"] || !got["acme/api"] {
+		t.Fatalf("after p, lists = %v, want every list", got)
+	}
+	m, _ = m.Key("p")
+	if got := open(m); len(got) != 1 {
+		t.Fatalf("after p p, lists = %v, want the project again", got)
+	}
+	// A folder that names no list shows everything, and p says so.
+	m = New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam/notes"}).SetData(s, e, now)
+	if got := open(m); !got["personal"] {
+		t.Fatalf("unmatched folder lists = %v, want every list", got)
+	}
+	m, _ = m.Key("p")
+	if m.notice == "" || m.noticeKind != NoticeWarn {
+		t.Fatalf("p outside a project gave notice %q", m.notice)
+	}
+}

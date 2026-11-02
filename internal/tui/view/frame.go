@@ -23,6 +23,7 @@ var helpKeys = []hint{
 	{"s", "snooze"},
 	{"u", "undo the last done or snooze"},
 	{"o", "copy the item's app link"},
+	{"p", "this project, or every list"},
 	{"r", "refresh"},
 	{"q", "quit"},
 }
@@ -74,13 +75,16 @@ func (m *Model) tabBar(w int) line {
 	left := line{sg(" ", sPlain), tab(TabTodos, " 1 To-dos "+itoa(open)+" "), sg(" ", sPlain),
 		tab(TabEpics, " 2 Epics "+itoa(cards)+" "), sg(" ", sPlain), tab(TabAll, " 3 All ")}
 	var right line
+	if m.inScope() {
+		right = line{sg(clean(m.scopeName())+"  ", sAccent)}
+	}
 	switch m.conn {
 	case ConnLive:
-		right = line{sg(gLive+" live ", sGreen)}
+		right = append(right, sg(gLive+" live ", sGreen))
 	case ConnDown:
-		right = line{sg(gLive+" retrying ", sRed)}
+		right = append(right, sg(gLive+" retrying ", sRed))
 	default:
-		right = line{sg(gLive+" connecting ", sYellow)}
+		right = append(right, sg(gLive+" connecting ", sYellow))
 	}
 	return lr(left, right, w)
 }

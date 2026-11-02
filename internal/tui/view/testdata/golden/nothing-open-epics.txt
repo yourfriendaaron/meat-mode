@@ -1,10 +1,10 @@
 == 56 x 20, layout a
   1 To-dos 4   2 Epics 0   3 All           ◉ connecting |
- A acme/api  synced 4m ago                              |
+ API acme/api  synced 4m ago                            |
    Nothing open.                                        |
- S acme/storefront  synced 1m ago                       |
+ STO acme/storefront  synced 1m ago                     |
    Nothing open.                                        |
- D dotfiles  synced 12m ago                             |
+ DOT dotfiles  synced 12m ago                           |
    Nothing open.                                        |
                                                         |
                                                         |
@@ -22,11 +22,11 @@
 
 == 89 x 20, layout a
   1 To-dos 4   2 Epics 0   3 All                                            ◉ connecting |
- A acme/api  synced 4m ago                                                               |
+ API acme/api  synced 4m ago                                                             |
    Nothing open.                                                                         |
- S acme/storefront  synced 1m ago                                                        |
+ STO acme/storefront  synced 1m ago                                                      |
    Nothing open.                                                                         |
- D dotfiles  synced 12m ago                                                              |
+ DOT dotfiles  synced 12m ago                                                            |
    Nothing open.                                                                         |
                                                                                          |
                                                                                          |
@@ -88,11 +88,11 @@
 
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 0   3 All           ◉ connecting |
- A acme/api  synced 4m ago                              |
+ API acme/api  synced 4m ago                            |
    Nothing open.                                        |
- S acme/storefront  synced 1m ago                       |
+ STO acme/storefront  synced 1m ago                     |
    Nothing open.                                        |
- D dotfiles  synced 12m ago                             |
+ DOT dotfiles  synced 12m ago                           |
    Nothing open.                                        |
                                                         |
                                                         |
@@ -120,11 +120,11 @@
 
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 0   3 All                                            ◉ connecting |
- A acme/api  synced 4m ago                                                               |
+ API acme/api  synced 4m ago                                                             |
    Nothing open.                                                                         |
- S acme/storefront  synced 1m ago                                                        |
+ STO acme/storefront  synced 1m ago                                                      |
    Nothing open.                                                                         |
- D dotfiles  synced 12m ago                                                              |
+ DOT dotfiles  synced 12m ago                                                            |
    Nothing open.                                                                         |
                                                                                          |
                                                                                          |

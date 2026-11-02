@@ -320,13 +320,15 @@ The feed works only for calendar apps on your own devices, such as Apple Calenda
 
 `meat-mode tui` shows your to-dos and your agents' epics in a terminal, for a pane beside your agent sessions in tmux, Herdr or any terminal. It has three tabs: **To-dos** (the Today groups, as in the app), **Epics** (each repo's epics with their progress) and **All** (what is waiting on you, what comes later, and one line per epic). From 90 columns wide, the selected row's details sit beside the list. Its main job is to copy a task's id and title into an agent session with one key. It also marks to-dos done, reopens and snoozes them; everything else stays in the app.
 
+Started inside a project the hub knows, it shows that project's tasks and epics alone, and names the project at the top right; `p` switches to every list and back, and `--all` starts on every list. Each row's badge is its list's colour with up to three letters of its name, such as `GAR` for `projects/garden`; lists that share their first three letters get a later one instead.
+
 It runs on any machine on your private network that can reach the hub, paired or not:
 
 ```sh
 meat-mode tui --hub https://meat-mode.example.com
 ```
 
-The first time, it asks for the hub's address (on a paired machine it offers the bridge's hub) and the app's password, then logs in. Later starts reuse the session: give `--hub` to pick a hub when you have logged in to several. If the hub has no password yet, set one in the app first. When the session ends (a logout elsewhere, a password change, or 14 days unused), the viewer asks for the password again in place and keeps your view.
+The first time, it asks for the app's password and logs in; on a paired machine it uses the bridge's hub, and elsewhere it first asks for the hub's address. Later starts reuse the session: give `--hub` to pick a hub when you have logged in to several. If the hub has no password yet, set one in the app first. When the session ends (a logout elsewhere, a password change, or 14 days unused), the viewer asks for the password again in place and keeps your view.
 
 The session is kept in `tui.json`, beside the bridge's `bridge.json` in the same config folder (`~/.config/meat-mode` on Linux), readable only by you (mode `0600`). It is a full app login: whoever holds the file can do anything the app can. `meat-mode tui logout` ends the session on the hub and removes it from the file.
 
@@ -343,6 +345,7 @@ The viewer dials only private addresses, as the bridge does (see [Private networ
 | `Y` | copy that line with the details: list, due date, tags, description, notes and an epic's tasks |
 | `x` | done, or reopen a closed to-do |
 | `s` | snooze, with the app's choices, one key each |
+| `p` | this project only, or every list |
 | `u` | undo the last done or snooze |
 | `o` | copy the item's link in the app, and show it |
 | `r`, `?`, `q` | refresh, list the keys, quit |

@@ -23,6 +23,7 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 	"github.com/yourfriendaaron/meat-mode/internal/tui"
 	"github.com/yourfriendaaron/meat-mode/internal/tui/clipboard"
+	"github.com/yourfriendaaron/meat-mode/internal/tui/view"
 )
 
 // maxPasswordTries is how many times the first login asks for the password.
@@ -40,6 +41,9 @@ type tuiEnv struct {
 	out        io.Writer
 	errOut     io.Writer
 	run        func(context.Context, tui.Options) error
+	// here is where the command runs, for the viewer to open on that
+	// project; nil or a zero Here shows every list.
+	here func() view.Here
 }
 
 // runTUI runs `meat-mode tui [--hub URL]` and `meat-mode tui logout [--hub URL]`.
@@ -79,6 +83,14 @@ func runTUI(args []string) error {
 		isTerminal: func() bool {
 			return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 		},
+		here: func() view.Here {
+			dir, err := os.Getwd()
+			if err != nil {
+				return view.Here{}
+			}
+			home, _ := os.UserHomeDir()
+			return view.Here{Home: home, Dir: dir}
+		},
 		run: func(ctx context.Context, o tui.Options) error {
 			ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -92,6 +104,7 @@ func runTUI(args []string) error {
 type tuiArgs struct {
 	logout bool
 	hub    string
+	all    bool // start on every list, not the current project's
 }
 
 func parseTUIArgs(args []string) (tuiArgs, error) {
@@ -103,11 +116,16 @@ func parseTUIArgs(args []string) (tuiArgs, error) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&a.hub, "hub", "", "the hub's URL")
+	usage := name + " [--hub URL]"
+	if !a.logout {
+		fs.BoolVar(&a.all, "all", false, "show every list, not just the current project's")
+		usage = name + " [--hub URL] [--all]"
+	}
 	if err := fs.Parse(args); err != nil {
-		return a, fmt.Errorf("%s: %w; usage: meat-mode %s [--hub URL]", name, err, name)
+		return a, fmt.Errorf("%s: %w; usage: meat-mode %s", name, err, usage)
 	}
 	if fs.NArg() > 0 {
-		return a, fmt.Errorf("%s: unexpected %q; usage: meat-mode %s [--hub URL]", name, fs.Arg(0), name)
+		return a, fmt.Errorf("%s: unexpected %q; usage: meat-mode %s", name, fs.Arg(0), usage)
 	}
 	return a, nil
 }
@@ -120,7 +138,7 @@ func tuiMain(ctx context.Context, args []string, env tuiEnv) error {
 	if a.logout {
 		return tuiLogout(ctx, a.hub, env)
 	}
-	return tuiRun(ctx, a.hub, env)
+	return tuiRun(ctx, a.hub, a.all, env)
 }
 
 // pairedHub is the hub this machine's bridge is paired with, as bridge.json
@@ -142,8 +160,8 @@ func (e tuiEnv) pairedHub() (hub, trusted string) {
 func (e tuiEnv) savedHubs() ([]string, error) { return appclient.SavedHubs(e.dir) }
 
 // pickHub chooses the hub without asking: --hub, else the only hub with a
-// saved session, else the paired hub when it has one. It returns "" when
-// none applies.
+// saved session, else the paired hub when it has a session or none has
+// one. It returns "" when none applies.
 func (e tuiEnv) pickHub(flagHub string) (string, error) {
 	if flagHub != "" {
 		return appclient.NormalizeHub(flagHub)
@@ -156,7 +174,7 @@ func (e tuiEnv) pickHub(flagHub string) (string, error) {
 		return saved[0], nil
 	}
 	if paired, _ := e.pairedHub(); paired != "" {
-		if hub, err := appclient.NormalizeHub(paired); err == nil && slices.Contains(saved, hub) {
+		if hub, err := appclient.NormalizeHub(paired); err == nil && (len(saved) == 0 || slices.Contains(saved, hub)) {
 			return hub, nil
 		}
 	}
@@ -203,7 +221,7 @@ func (s *saver) failed() error {
 // tuiRun is `meat-mode tui`: it finds or makes a session, then runs the viewer.
 // It refuses to start without a terminal on both ends, before it asks for
 // anything, so piping it somewhere fails at once.
-func tuiRun(ctx context.Context, flagHub string, env tuiEnv) error {
+func tuiRun(ctx context.Context, flagHub string, all bool, env tuiEnv) error {
 	if env.isTerminal == nil || !env.isTerminal() {
 		return errors.New("meat-mode tui needs a terminal")
 	}
@@ -241,7 +259,11 @@ func tuiRun(ctx context.Context, flagHub string, env tuiEnv) error {
 			fmt.Fprintln(env.errOut, "meat-mode:", err)
 		}
 	}
-	err = env.run(ctx, tui.Options{Client: c, Clipboard: clipboard.System()})
+	o := tui.Options{Client: c, Clipboard: clipboard.System()}
+	if !all && env.here != nil {
+		o.Here = env.here()
+	}
+	err = env.run(ctx, o)
 	if serr := sv.failed(); serr != nil && err == nil {
 		err = serr
 	}
@@ -265,7 +287,13 @@ func (e tuiEnv) askHub() (string, error) {
 	if raw == "" {
 		return "", errors.New("no hub URL given; run meat-mode tui --hub URL")
 	}
-	return appclient.NormalizeHub(raw)
+	hub, err := appclient.NormalizeHub(raw)
+	if err != nil {
+		// Not the error itself: it quotes what was typed, which may be a
+		// password typed at the wrong prompt.
+		return "", errors.New("that is not a hub URL such as https://hub.example.com; run meat-mode tui --hub URL")
+	}
+	return hub, nil
 }
 
 // login asks for the password and logs in, up to maxPasswordTries times.

@@ -27,9 +27,13 @@ export function listSlot(r: Repo, repos: Repo[]): number {
   return repoColours(repos).get(repoKey(r)) ?? 0;
 }
 
-/** The first character (code point) of the list's name, upper case. */
+/**
+ * The first character (code point) of the list's name, upper case,
+ * skipping leading punctuation, so ".agents" is A.
+ */
 export function listInitial(r: { name: string }): string {
-  const first = [...repoLabel(r)][0] ?? "?";
+  const chars = [...repoLabel(r)];
+  const first = chars.find((c) => !/\p{P}/u.test(c)) ?? chars[0] ?? "?";
   return first.toLocaleUpperCase();
 }
 

@@ -102,7 +102,8 @@ func (Quit) effect()    {}
 //     name its repo).
 //   - A list's mark: the personal list (api.Repo.Personal) its own mark;
 //     others the repo's Colour slot (0 to 5, --role-repo-0..5 of
-//     web/src/styles.css) and first letter. Dark Dracula palette only.
+//     web/src/styles.css) and a code of up to three letters (listCodes).
+//     Dark Dracula palette only.
 //   - o links to <hub>/?item=<url-escaped key>, as web/src/sw.ts does; a
 //     read-only epic row has no link.
 //   - Groups use now's Location; the program passes time.Now() (local time,
@@ -116,7 +117,7 @@ func (Quit) effect()    {}
 // Keys are Bubble Tea v2's KeyPressMsg.String() names: "j", "k", "up",
 // "down", "left", "right", "h", "l", "g", "G", "home", "end", "pgup",
 // "pgdown", "enter", "esc", "backspace", "tab", "shift+tab", "space", "/",
-// "?", "y", "Y", "x", "u", "s", "o", "r", "q", "ctrl+c", "1" to "6". The
+// "?", "y", "Y", "x", "u", "s", "o", "p", "r", "q", "ctrl+c", "1" to "6". The
 // snooze menu takes "1" to "6" in snoozeOptions order (one is missing after
 // 18:00, as in the app).
 //
@@ -130,6 +131,10 @@ type Model struct {
 	height int
 	tab    Tab
 	conn   Conn
+
+	hereAt Here            // where the viewer was started
+	here   map[string]bool // the lists hereAt is in, by listKey; nil for none
+	every  bool            // p: show every list, not just here's
 
 	d      *data // state and epics, indexed; nil before SetData
 	selKey string
@@ -167,12 +172,38 @@ type Model struct {
 // app links that o shows).
 func New(hubURL string) Model { return Model{hub: hubURL} }
 
+// SetHere sets where the viewer was started. While that folder is in a
+// project the hub knows, the viewer shows that project's lists alone
+// until p switches to every list.
+func (m Model) SetHere(h Here) Model {
+	m.hereAt = h
+	if m.d != nil {
+		m.reindex(m.now)
+		m.fix()
+	}
+	return m
+}
+
+// reindex indexes the state and epics, cut to here's lists unless every
+// list is shown.
+func (m *Model) reindex(now time.Time) {
+	m.here = hereLists(m.state.Repos, m.hereAt)
+	s, e := m.state, m.epics
+	if m.inScope() {
+		s, e = scoped(s, e, m.here)
+	}
+	m.d = index(s, e, now)
+}
+
+// inScope reports whether the viewer shows here's lists alone.
+func (m *Model) inScope() bool { return len(m.here) > 0 && !m.every }
+
 // SetData replaces the state and epics and the time the groups are worked
 // out from (its Location is the user's). The selection stays on the same
 // item key or epic row when it still exists, else on the nearest row.
 func (m Model) SetData(s api.State, e api.Epics, now time.Time) Model {
 	m.state, m.epics, m.now = s, e, now
-	m.d = index(s, e, now)
+	m.reindex(now)
 	m.fix()
 	return m
 }
@@ -181,7 +212,7 @@ func (m Model) SetData(s api.State, e api.Epics, now time.Time) Model {
 func (m Model) SetNow(now time.Time) Model {
 	m.now = now
 	if m.d != nil {
-		m.d = index(m.state, m.epics, now)
+		m.reindex(now)
 	}
 	m.fix()
 	return m

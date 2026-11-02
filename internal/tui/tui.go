@@ -29,6 +29,9 @@ type Options struct {
 	// in-place login and the daily renewal both persist.
 	Client    *appclient.Client
 	Clipboard clipboard.Env
+	// Here is where the viewer was started: it opens on that project's
+	// lists alone. The zero Here shows every list.
+	Here view.Here
 }
 
 // Run shows the viewer until the user quits or ctx ends.
@@ -108,7 +111,7 @@ func newProgram(ctx context.Context, o Options) *program {
 		clip:   clip,
 		getenv: getenv,
 		now:    time.Now,
-		m:      view.New(o.Client.Hub()),
+		m:      view.New(o.Client.Hub()).SetHere(o.Here),
 		events: make(chan tea.Msg, 16),
 	}
 }

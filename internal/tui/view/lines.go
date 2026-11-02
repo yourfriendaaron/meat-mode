@@ -55,17 +55,24 @@ func statusWords(status string) string {
 	return status
 }
 
-// mark is a list's one-cell mark: the personal list's check, otherwise the
-// first letter of its name on its colour slot (web/src/identity.ts).
+// mark is a list's badge, codeWidth cells: the personal list's check,
+// otherwise its code (listCodes) on its colour slot (web/src/identity.ts).
+// The web shows one letter on a square; a terminal cell is half as wide,
+// so the terminal shows up to three, which also tells apart lists that
+// share an initial.
 func (d *data) mark(bridge, name string) seg {
 	r := d.repoOf(bridge, name)
 	if r == nil {
 		r = &api.Repo{Bridge: bridge, Name: name}
 	}
 	if isPersonalList(r) {
-		return sg(gClosed, style{fg: cOnAcc, bg: cPurple, bold: true})
+		return sg(badgeText(gClosed), style{fg: cOnAcc, bg: cPurple, bold: true})
 	}
-	return sg(clean(listInitial(r.Name)), style{fg: cOnAcc, bg: repoColours[listSlot(r, d.state.Repos)], bold: true})
+	code, ok := d.codes[listKey(bridge, name)]
+	if !ok {
+		code = codeCandidates(name)[0]
+	}
+	return sg(badgeText(code), style{fg: cOnAcc, bg: repoColours[listSlot(r, d.state.Repos)], bold: true})
 }
 
 // listName is the name the app shows for a list, with its path or machine

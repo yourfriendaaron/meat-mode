@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+
+	"charm.land/lipgloss/v2"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
@@ -374,12 +377,83 @@ func repoCan(r *api.Repo, kind string) bool {
 // repoLabel is a repo's display name: the last segment of its path.
 func repoLabel(name string) string { return name[strings.LastIndex(name, "/")+1:] }
 
-// listInitial is the first character of the list's label, upper case.
-func listInitial(name string) string {
-	for _, r := range repoLabel(name) {
-		return strings.ToUpper(string(r))
+// codeWidth is the cells a list's badge takes: three, so the tile reads as
+// a square in a terminal, whose cells are twice as tall as they are wide.
+const codeWidth = 3
+
+// codeRune reports whether r can stand in a list's code: a letter or digit
+// that draws one cell wide in every terminal.
+func codeRune(r rune) bool {
+	return (unicode.IsLetter(r) || unicode.IsDigit(r)) && r < 0x1100 && lipgloss.Width(string(r)) == 1
+}
+
+// codeCandidates are the codes a list's label can take, best first: its
+// first three letters or digits, then the first two with the initial of
+// each later word, then the first two with each later character. Leading
+// punctuation is skipped, so ".agents" is AGE.
+func codeCandidates(name string) []string {
+	var runes []rune
+	var initials []rune // of the words after the first
+	word := false
+	for _, r := range strings.ToUpper(repoLabel(name)) {
+		if !codeRune(r) {
+			word = false
+			continue
+		}
+		if !word && len(runes) > 0 {
+			initials = append(initials, r)
+		}
+		word = true
+		runes = append(runes, r)
 	}
-	return "?"
+	if len(runes) <= codeWidth {
+		if len(runes) == 0 {
+			return []string{"?"}
+		}
+		return []string{string(runes)}
+	}
+	out := []string{string(runes[:codeWidth])}
+	for _, r := range initials {
+		out = append(out, string(runes[:2])+string(r))
+	}
+	for _, r := range runes[codeWidth:] {
+		out = append(out, string(runes[:2])+string(r))
+	}
+	return out
+}
+
+// listCodes gives each visible list other than the personal list its
+// code, in the order the app lists them: the first candidate no earlier
+// list holds, else its first. Keyed by listKey.
+func listCodes(repos []api.Repo) map[string]string {
+	out := map[string]string{}
+	held := map[string]bool{}
+	for _, r := range visibleRepos(repos) {
+		if isPersonalList(r) {
+			continue
+		}
+		cs := codeCandidates(r.Name)
+		code := cs[0]
+		for _, c := range cs {
+			if !held[c] {
+				code = c
+				break
+			}
+		}
+		held[code] = true
+		out[listKey(r.Bridge, r.Name)] = code
+	}
+	return out
+}
+
+// badgeText is a code centred in the badge's cells.
+func badgeText(code string) string {
+	n := lipgloss.Width(code)
+	if n >= codeWidth {
+		return code
+	}
+	left := (codeWidth - n) / 2
+	return strings.Repeat(" ", left) + code + strings.Repeat(" ", codeWidth-n-left)
 }
 
 // visibleRepos are the repos shown as lists: the hub's own and opted-in

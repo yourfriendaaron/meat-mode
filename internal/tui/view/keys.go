@@ -180,10 +180,30 @@ func (m *Model) key(k string) []Effect {
 		default:
 			return []Effect{OpenURL{URL: strings.TrimRight(m.hub, "/") + "/?item=" + encodeURIComponent(t.item.Key)}}
 		}
+	case "p":
+		m.toggleScope()
 	case "r":
 		return []Effect{Refresh{}}
 	}
 	return nil
+}
+
+// toggleScope switches between the project the viewer was started in and
+// every list.
+func (m *Model) toggleScope() {
+	if len(m.here) == 0 {
+		m.say("This folder is in no project the hub knows.", NoticeWarn)
+		return
+	}
+	m.every = !m.every
+	m.reindex(m.now)
+	m.open, m.drill, m.right = false, "", false
+	m.resetSel()
+	if m.every {
+		m.say("Showing every list.", NoticeInfo)
+	} else {
+		m.say("Showing "+clean(m.scopeName())+" only.", NoticeInfo)
+	}
 }
 
 // page is the rows a page key moves.

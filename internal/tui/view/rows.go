@@ -57,6 +57,7 @@ type data struct {
 	now   time.Time
 	items map[string]*api.Item
 	repos map[string]*api.Repo // by "<bridge>/<repo>"
+	codes map[string]string    // each visible list's badge code, by "<bridge>/<repo>"
 }
 
 func index(s api.State, e api.Epics, now time.Time) *data {
@@ -68,6 +69,7 @@ func index(s api.State, e api.Epics, now time.Time) *data {
 		r := &d.state.Repos[k]
 		d.repos[listKey(r.Bridge, r.Name)] = r
 	}
+	d.codes = listCodes(d.state.Repos)
 	return d
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/hub/hubtest"
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 	"github.com/yourfriendaaron/meat-mode/internal/tui"
+	"github.com/yourfriendaaron/meat-mode/internal/tui/view"
 )
 
 func TestParseTUIArgs(t *testing.T) {
@@ -25,6 +26,8 @@ func TestParseTUIArgs(t *testing.T) {
 		{[]string{"--hub", "https://meat-mode.example.com"}, tuiArgs{hub: "https://meat-mode.example.com"}, ""},
 		{[]string{"-hub=meat-mode.example.com"}, tuiArgs{hub: "meat-mode.example.com"}, ""},
 		{[]string{"logout"}, tuiArgs{logout: true}, ""},
+		{[]string{"--all"}, tuiArgs{all: true}, ""},
+		{[]string{"logout", "--all"}, tuiArgs{}, "not defined"},
 		{[]string{"logout", "--hub", "meat-mode.example.com"}, tuiArgs{logout: true, hub: "meat-mode.example.com"}, ""},
 		{[]string{"--hub"}, tuiArgs{}, "flag needs an argument"},
 		{[]string{"--port", "1"}, tuiArgs{}, "not defined"},
@@ -185,20 +188,18 @@ func TestTUIHubWithoutPassword(t *testing.T) {
 	}
 }
 
-func TestTUIAsksForTheHubWithThePairedOneOffered(t *testing.T) {
+func TestTUIUsesThePairedHubWithoutAsking(t *testing.T) {
 	h := hubtest.New(t, hubtest.Options{})
 	e := newTestEnv(t, hubtest.Password)
 	cfg := `{"hubURL": "` + h.URL + `", "token": "t", "trustedNetworks": "198.51.100.0/24"}`
 	if err := os.WriteFile(filepath.Join(e.dir, "bridge.json"), []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var prompt string
-	e.readLine = func(p string) (string, error) { prompt = p; return "", nil }
 	if err := tuiMain(context.Background(), nil, e.tuiEnv); err != nil {
 		t.Fatal(err)
 	}
-	if prompt != "Hub URL ["+h.URL+"]: " || e.ran == nil || e.ran.Client.Hub() != h.URL {
-		t.Errorf("prompt %q, ran %v", prompt, e.ran != nil)
+	if e.ran == nil || e.ran.Client.Hub() != h.URL {
+		t.Errorf("ran %v", e.ran != nil)
 	}
 	set, err := e.allowed(h.URL)
 	if err != nil || len(set.Trusted()) != 1 {
@@ -206,5 +207,35 @@ func TestTUIAsksForTheHubWithThePairedOneOffered(t *testing.T) {
 	}
 	if set, _ := e.allowed("https://meat-mode.example.com"); len(set.Trusted()) != 0 {
 		t.Errorf("another hub got the paired hub's trusted networks: %v", set.Trusted())
+	}
+}
+
+func TestTUIHubErrorHidesWhatWasTyped(t *testing.T) {
+	e := newTestEnv(t)
+	e.readLine = func(string) (string, error) { return "Sesame open 1", nil }
+	err := tuiMain(context.Background(), nil, e.tuiEnv)
+	if err == nil || strings.Contains(err.Error(), "Sesame") {
+		t.Errorf("error %v", err)
+	}
+}
+
+func TestTUIOpensOnTheProjectHereUnlessAll(t *testing.T) {
+	h := hubtest.New(t, hubtest.Options{})
+	here := view.Here{Home: "/srv/sam", Dir: "/srv/sam/projects/garden"}
+	for _, c := range []struct {
+		args []string
+		want view.Here
+	}{
+		{[]string{"--hub", h.URL}, here},
+		{[]string{"--hub", h.URL, "--all"}, view.Here{}},
+	} {
+		e := newTestEnv(t, hubtest.Password)
+		e.here = func() view.Here { return here }
+		if err := tuiMain(context.Background(), c.args, e.tuiEnv); err != nil {
+			t.Fatal(err)
+		}
+		if e.ran == nil || e.ran.Here != c.want {
+			t.Errorf("%q: ran with Here %+v, want %+v", c.args, e.ran, c.want)
+		}
 	}
 }

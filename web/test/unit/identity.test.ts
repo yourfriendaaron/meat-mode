@@ -35,6 +35,9 @@ test("the letter is the first character of the list's label, upper case", () => 
   assert.equal(listInitial({ name: "éclair" }), "É");
   // A character outside the basic plane stays whole.
   assert.equal(listInitial({ name: "\u{1F331}sprouts" }), "\u{1F331}");
+  // Leading punctuation is skipped; a name of nothing else keeps its first.
+  assert.equal(listInitial({ name: "work/.agents" }), "A");
+  assert.equal(listInitial({ name: "..." }), ".");
 });
 
 test("a badge is the letter on the list's colour, or the icon on a neutral tile with the letter behind it", () => {

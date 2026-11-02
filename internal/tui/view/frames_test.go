@@ -123,6 +123,12 @@ var scenarios = []scenario{
 	{"personal-only", func(t *testing.T, w, h int) Model {
 		return only(t, w, h, func(b, r string) bool { return b == "hub" && r == "personal" }, false, "3")
 	}},
+	{"here", func(t *testing.T, w, h int) Model {
+		s, e := load(t)
+		m := New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam/acme/api/internal"}).Resize(w, h).SetConn(ConnLive).SetData(s, e, now)
+		m, _ = m.Key("3")
+		return m
+	}},
 	{"loading", func(t *testing.T, w, h int) Model { return New(hub).Resize(w, h) }},
 }
 
