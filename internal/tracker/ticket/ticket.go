@@ -173,7 +173,7 @@ func (t *Ticket) EpicRows(_ context.Context, dir string) ([]api.EpicRow, error) 
 			continue // not a ticket name, even with an .md suffix
 		}
 		path := filepath.Join(dir, storeDir, f.Name())
-		data, err := os.ReadFile(path)
+		data, err := tracker.ReadFile(path)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue // removed between the listing and the read
 		}
@@ -222,7 +222,7 @@ func read(dir, id string) (tracker.Issue, error) {
 		return tracker.Issue{}, fmt.Errorf("%s: %w", id, tracker.ErrNotFound)
 	}
 	path := filepath.Join(dir, storeDir, id+".md")
-	data, err := os.ReadFile(path)
+	data, err := tracker.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return tracker.Issue{}, fmt.Errorf("%s: %w", id, tracker.ErrNotFound)
 	}
@@ -349,7 +349,7 @@ func (t *Ticket) Create(ctx context.Context, dir string, in tracker.NewIssue) (s
 // half a file.
 func finish(dir, id string, due *time.Time, title string) error {
 	path := filepath.Join(dir, storeDir, id+".md")
-	data, err := os.ReadFile(path)
+	data, err := tracker.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -405,7 +405,7 @@ func (t *Ticket) FindByActionID(_ context.Context, dir, actionID string) (string
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".md") {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, storeDir, f.Name()))
+		data, err := tracker.ReadFile(filepath.Join(dir, storeDir, f.Name()))
 		if err != nil {
 			continue
 		}

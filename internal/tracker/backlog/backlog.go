@@ -140,7 +140,7 @@ func isStoreDir(name string) bool {
 // parseBacklogConfigMetadata does: ok when it sets project_name, without
 // which Backlog.md ignores the file, and the folder backlog_directory names.
 func readRootConfig(path string) (folder string, ok bool) {
-	data, err := os.ReadFile(path)
+	data, err := tracker.ReadFile(path)
 	if err != nil {
 		return "", false
 	}

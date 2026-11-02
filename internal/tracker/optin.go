@@ -2,7 +2,7 @@ package tracker
 
 import (
 	"bufio"
-	"os"
+	"bytes"
 	"path/filepath"
 	"strings"
 )
@@ -16,17 +16,21 @@ func RepoOptIn(dir string) bool {
 	return ConfigTrue(filepath.Join(dir, OptInFile), "sync")
 }
 
+// maxConfigBytes is how much of an opt-in file ConfigTrue reads.
+const maxConfigBytes = 1 << 20
+
 // ConfigTrue reports whether the YAML file at path sets the top-level key
 // to true (true, yes or on). The last occurrence wins, as in YAML loaders;
-// a missing file is false.
+// a missing file, or one that is not a regular file, is false.
 func ConfigTrue(path, key string) bool {
-	f, err := os.Open(path)
+	// A repo's own file: a link to a pipe or device must not hang the scan,
+	// and only its first MiB is read.
+	data, err := ReadRegular(path, maxConfigBytes)
 	if err != nil {
 		return false
 	}
-	defer f.Close()
 	on := false
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(bytes.NewReader(data[:min(len(data), maxConfigBytes)]))
 	for sc.Scan() {
 		if k, v, ok := yamlLine(sc.Text()); ok && k == key {
 			on = isTrue(v)

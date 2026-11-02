@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // TestFindIconSkipsFIFO: a FIFO named favicon.svg is skipped without being
@@ -52,5 +53,34 @@ func TestOpenNoFollow(t *testing.T) {
 	if f, err := openNoFollow(link); err == nil {
 		f.Close()
 		t.Error("opened through a link")
+	}
+}
+
+// TestReadSpaceColoursFIFO: a pipe at the workspace colours path, or a link
+// to one, gives no colours at once with an error, instead of hanging the
+// bridge's loop.
+func TestReadSpaceColoursFIFO(t *testing.T) {
+	dir := t.TempDir()
+	fifo := filepath.Join(dir, "space-colours.json")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Skip("cannot make a FIFO:", err)
+	}
+	link := filepath.Join(dir, "link.json")
+	if err := os.Symlink(fifo, link); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, p := range []string{fifo, link} {
+			if got, err := ReadSpaceColours(p); err == nil || got != nil {
+				t.Errorf("ReadSpaceColours(%s) = %v, %v; want an error", filepath.Base(p), got, err)
+			}
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ReadSpaceColours blocked on a FIFO")
 	}
 }

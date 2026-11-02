@@ -172,7 +172,7 @@ func readTaskFiles(folder string) ([]taskJSON, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(folder, e.Name()))
+		data, err := tracker.ReadFile(filepath.Join(folder, e.Name()))
 		if err != nil {
 			return nil, err
 		}

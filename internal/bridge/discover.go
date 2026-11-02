@@ -221,8 +221,8 @@ func relTo(base, path string) (string, bool) {
 // pointing into another checkout's .git/worktrees. A submodule's .git file
 // points into .git/modules instead and is searched.
 func isWorktree(dir string) bool {
-	b, err := os.ReadFile(filepath.Join(dir, ".git"))
-	if err != nil {
+	b, err := tracker.ReadRegular(filepath.Join(dir, ".git"), 4096) // a gitdir line is short
+	if err != nil || len(b) > 4096 {
 		return false
 	}
 	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir:")

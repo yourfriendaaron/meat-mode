@@ -14,7 +14,9 @@ import (
 // gives each repo row once and keeps with it, and the icon its bridge
 // sends. Both go with the row: a dropped repo loses them, and a repo moved
 // to a new folder name keeps its colour (renameRepo) while its bridge
-// sends the icon again.
+// sends the icon again. The one exception to "once" is a workspace colour
+// its bridge reports for the repo (SpaceColour), which sets the slot again
+// (docs/api.md, Workspace colours).
 
 // migrateIdentity adds repos.colour, NULL until the repo has a slot, and
 // repo_icons, each repo's icon as its bridge last sent it, kept apart from
