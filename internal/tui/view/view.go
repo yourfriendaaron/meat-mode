@@ -162,7 +162,6 @@ type Model struct {
 	last *undoable
 }
 
-
 // New is the model before any data, for the hub at hubURL (used for the
 // app links that o shows).
 func New(hubURL string) Model { return Model{hub: hubURL} }

@@ -163,3 +163,16 @@ func TestFrames(t *testing.T) {
 		})
 	}
 }
+
+// TestTinySizes draws every scenario in panes too small for it: the frame
+// keeps its exact size and nothing panics.
+func TestTinySizes(t *testing.T) {
+	for _, sc := range scenarios {
+		for _, w := range []int{0, 1, 5, 12, 30} {
+			for _, h := range []int{0, 1, 2, 3, 6} {
+				m := sc.build(t, 56, 20).Resize(w, h)
+				checkFrame(t, fmt.Sprintf("%s %dx%d", sc.name, w, h), m)
+			}
+		}
+	}
+}
