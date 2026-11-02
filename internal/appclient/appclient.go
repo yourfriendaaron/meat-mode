@@ -334,7 +334,8 @@ func statusError(resp *http.Response, data []byte) error {
 const maxMessageRunes = 2000
 
 // safeMessage makes one line of the hub's text safe to print: no control
-// or bidi character survives, and it stops at maxMessageRunes runes.
+// character, bidi control or invisible format character survives, and it
+// stops at maxMessageRunes runes.
 func safeMessage(s string) string {
 	var b strings.Builder
 	n := 0
@@ -342,7 +343,7 @@ func safeMessage(s string) string {
 		if n >= maxMessageRunes {
 			break
 		}
-		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) || unicode.Is(unicode.Cf, r) {
 			continue
 		}
 		b.WriteRune(r)

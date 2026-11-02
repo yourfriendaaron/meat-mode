@@ -621,6 +621,9 @@ func TestHubMessageSafeToPrint(t *testing.T) {
 	if msg != "]0;xownedreply" {
 		t.Errorf("hubMessage = %q", msg)
 	}
+	if msg := hubMessage([]byte(`{"error": "wait\u200b\u2060\ufeff\udb40\udc41 here"}`)); msg != "wait here" {
+		t.Errorf("hubMessage kept invisible format characters: %q", msg)
+	}
 	msg = hubMessage([]byte(strings.Repeat("a", 1<<20)))
 	if n := utf8.RuneCountInString(msg); n != maxMessageRunes {
 		t.Errorf("hubMessage kept %d runes of a 1 MiB body, want %d", n, maxMessageRunes)
