@@ -85,6 +85,7 @@ import type { AppContext } from "./app-context.ts";
 import { attachmentsHTML } from "./attachments.ts";
 import { extAct, extChange, extSubmit } from "./ext.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { attachMarkdownTyping } from "./mdedit.ts";
 import { trackKeyboard } from "./keyboard.ts";
 import { loadStatusIfStale, publicDnsWarningHTML } from "./connection.ts";
 import { leaveSettings, sectionsHTML } from "./settings/registry.ts";
@@ -1359,7 +1360,7 @@ function parentRowHTML(item: Item): string {
 function detailsHTML(item: Item): string {
   const head = '<h3 id="d-desc-h">Details</h3>';
   if (S.inline?.key === item.key && S.inline.field === "description") {
-    return `<section class="d-section" aria-labelledby="d-desc-h">${head}<textarea id="d-desc" rows="4" maxlength="${TEXT_MAX}" aria-labelledby="d-desc-h" aria-describedby="d-desc-hint"></textarea><p class="muted small" id="d-desc-hint">Saves when you leave the field. Markdown works.</p>${inlineErrorHTML(item, "description")}</section>`;
+    return `<section class="d-section" aria-labelledby="d-desc-h">${head}<textarea id="d-desc" class="md-input" rows="4" maxlength="${TEXT_MAX}" aria-labelledby="d-desc-h" aria-describedby="d-desc-hint"></textarea><p class="muted small" id="d-desc-hint">Saves when you leave the field. Markdown works.</p>${inlineErrorHTML(item, "description")}</section>`;
   }
   if (!item.description) return `<button class="add-details" data-act="inline" data-field="description">${ICON.edit}Add details</button>`;
   return `<section class="d-section" aria-labelledby="d-desc-h"><div class="d-sec-head">${head}<button class="link-btn" data-act="inline" data-field="description" aria-label="Edit details" title="Edit details">${ICON.edit}</button></div><div class="md d-desc">${renderMarkdown(item.description)}</div></section>`;
@@ -1649,7 +1650,7 @@ function composeHTML(item: Item, allowed: boolean): string {
  */
 function noteBoxHTML(item: Item, allowed: boolean): string {
   if (!allows(item, "note")) return "";
-  return `<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" rows="3" maxlength="${TEXT_MAX}"></textarea>${composeHTML(item, allowed)}`;
+  return `<label for="note-input" class="note-label">Add a note</label><textarea id="note-input" class="md-input" rows="3" maxlength="${TEXT_MAX}"></textarea>${composeHTML(item, allowed)}`;
 }
 
 function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): string {
@@ -1658,7 +1659,7 @@ function noteHTML(item: Item, c: Comment, editable: boolean, queued = false): st
   const unread = isUnreadComment(c.createdAt, c.author, S.openSeenAt, user());
   const editing = editable && S.noteEdit?.key === item.key && S.noteEdit.commentId === c.id;
   const body = editing
-    ? `<form class="note-edit" data-form="note-edit"><label class="sr" for="note-edit-input">Edit note</label><textarea id="note-edit-input" rows="3" maxlength="${TEXT_MAX}"></textarea><div class="btn-row"><button type="submit" class="btn btn-small btn-primary">Save</button><button type="button" class="btn btn-small" data-act="note-edit-cancel">Cancel</button></div></form>`
+    ? `<form class="note-edit" data-form="note-edit"><label class="sr" for="note-edit-input">Edit note</label><textarea id="note-edit-input" class="md-input" rows="3" maxlength="${TEXT_MAX}"></textarea><div class="btn-row"><button type="submit" class="btn btn-small btn-primary">Save</button><button type="button" class="btn btn-small" data-act="note-edit-cancel">Cancel</button></div></form>`
     : `<div class="md">${renderMarkdown(c.text)}</div>`;
   const tools =
     editable && !editing
@@ -4080,6 +4081,7 @@ function boot() {
   // An image's error does not bubble: a repo icon that fails to load turns into its letter.
   document.addEventListener("error", onIconError, true);
   document.addEventListener("keydown", onKey);
+  attachMarkdownTyping();
   document.addEventListener("input", onInput);
   document.addEventListener("change", onChange);
   document.addEventListener("submit", onSubmit);

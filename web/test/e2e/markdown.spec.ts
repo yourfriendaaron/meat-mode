@@ -87,3 +87,28 @@ test("a plain-text description keeps its lines and blank lines", async ({ page, 
   expect(Math.round(second.top - first.bottom)).toBe(Math.round(lineHeight));
   expect(Math.round(first.height)).toBe(Math.round(2 * lineHeight));
 });
+
+test("the note box continues lists, wraps with shortcuts and undoes in one step", async ({ page, hub }) => {
+  void hub;
+  await openApp(page);
+  await row(page, "Water the plants").locator(".row-body").click();
+  const box = page.locator("#detail").getByLabel("Add a note");
+  await box.click();
+  await box.pressSequentially("- Basil");
+  await box.press("Enter");
+  await box.pressSequentially("Mint");
+  await box.press("Tab");
+  await expect(box).toBeFocused();
+  await box.press("Enter");
+  await box.press("Enter");
+  await expect(box).toHaveValue("- Basil\n  - Mint\n");
+  await box.press("ControlOrMeta+z");
+  await expect(box).toHaveValue("- Basil\n  - Mint\n  - ");
+
+  await box.fill("Water the plants");
+  await box.press("Shift+Home");
+  await box.press("ControlOrMeta+b");
+  await expect(box).toHaveValue("**Water the plants**");
+  // The detail's own keys do not fire while typing in the box.
+  await expect(box).toBeFocused();
+});

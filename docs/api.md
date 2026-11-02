@@ -319,7 +319,7 @@ Nothing sends a tag back to a tracker. The `edit` action is refused on an agent'
 
 ### Descriptions and notes in Markdown
 
-The detail view renders an item's `description` and each comment's `text` as Markdown, on every item: agents write Markdown into beads, and the user may too. The hub stores and sends the text as it was typed; the app renders it. Lists and rows show titles only, as plain text. Editing stays a plain text box.
+The detail view renders an item's `description` and each comment's `text` as Markdown, on every item: agents write Markdown into beads, and the user may too. The hub stores and sends the text as it was typed; the app renders it. Lists and rows show titles only, as plain text. Editing stays a plain text box with no toolbar, which helps with Markdown as GitHub's comment box does: Enter on a list item starts the next one (the next number, an empty task box) and Enter on an empty item ends the list; Tab and Shift+Tab nest and un-nest list items; Ctrl or Cmd with B, I and E wraps the selection in bold, italic or code, and with K makes a link; and a web address pasted over selected text links that text.
 
 - The renderer is markdown-it (research: [research/0006-rich-todos](research/0006-rich-todos/RESEARCH.md)) with `html: false`, `linkify: false`, `typographer: false` and `breaks: true`, so a single newline stays a line break as in plain text. Any HTML in the text shows as text.
 - A bare `http://` or `https://` address in the text renders as a link to itself. Trailing sentence punctuation and an unmatched closing bracket stay outside it. An address without a scheme, such as `example.com`, stays text.
