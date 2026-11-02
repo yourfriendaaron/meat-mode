@@ -1,5 +1,5 @@
-// Command meat-mode runs the hub (`meat-mode hub`) or the bridge
-// (`meat-mode bridge ...`).
+// Command meat-mode runs the hub (`meat-mode hub`), the bridge
+// (`meat-mode bridge ...`) or the terminal viewer (`meat-mode tui`).
 package main
 
 import (
@@ -61,6 +61,8 @@ func main() {
 		err = runHub(os.Args[2:])
 	case "bridge":
 		err = runBridge(os.Args[2:])
+	case "tui":
+		err = runTUI(os.Args[2:])
 	case "add", "edit", "done", "reopen", "list", "show", "projects":
 		err = runPersonal(os.Args[1], os.Args[2:])
 	case "hash-password":
@@ -89,6 +91,9 @@ func usage() {
                                       list the repos whose tracker can show epics with their epics switch,
                                       or switch a repo's epics on or off in the app
   meat-mode bridge uninstall          remove the user service and config
+  meat-mode tui [--hub URL]           watch the to-dos and epics in this terminal; logs in to the hub
+                                      with its password the first time and keeps the session in tui.json
+  meat-mode tui logout [--hub URL]    end the viewer's session on the hub and remove it from tui.json
   meat-mode add "<title>" [--project NAME|.] [--parent ID] [--due TIME [--every RULE [--from-done] [--until DATE]]]
                 [--tag TAG]... [--note TEXT] [--author NAME] [--id UUID]
                                       add a to-do to the personal list, or to a project with --project
