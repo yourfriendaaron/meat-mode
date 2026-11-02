@@ -209,6 +209,12 @@ type Repo struct {
 	// (PUT /bridge/v1/icons); the app loads it from GET /api/icons/{hash}.
 	// Empty when the repo has none.
 	Icon string `json:"icon,omitempty"`
+	// Bridge-only: the slot, 0 to ListColours-1, of the colour the user gave
+	// the repo's workspace on the bridge's machine (docs/api.md, List
+	// identity, Workspace colours). The hub sets Colour to it and never
+	// sends it in State. Nil when the repo is no workspace or the bridge is
+	// older.
+	SpaceColour *int `json:"spaceColour,omitempty"`
 }
 
 // TrackerVersion is one tracker a bridge runs and its tool's version.

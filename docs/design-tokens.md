@@ -6,7 +6,7 @@ Every colour in the web app is picked by what it means, not by its name in the p
 
 The token block is the three `:root` rules at the top of `web/src/styles.css`. It has two layers:
 
-- **Palette tokens**, `--palette-*`, hold the raw colours: [Dracula Classic](https://draculatheme.com/spec) in the dark theme and Alucard Classic in the light one. Only the token block uses them.
+- **Palette tokens**, `--palette-*`, hold the raw colours: [Dracula Classic](https://draculatheme.com/spec) in the dark theme and Alucard Classic in the light one. Only the token block uses them. Two are not in Dracula: `--palette-blue` (`#82aaff` dark, `#2a5db0` light) and `--palette-rose` (`#f4a6c8` dark, `#c2418a` light), the list colours slots 4 and 5 need. Each keeps at least 3:1 against the page and the pane in its theme; the rose stays clear of the agent's pink by lightness in the dark theme and by hue in the light one.
 - **Role tokens**, `--role-*`, say what a colour means and point at a palette token. Both themes share one set of roles; each resolves against the palette of the theme in force.
 
 Every other rule, in every `web/src/*.css` file, uses role tokens only. `web/test/unit/tokens.test.ts` fails when a rule outside the token block uses a palette token or a literal colour (a hex value, `rgb()`, `hsl()`, `oklch()` and the like, or a named colour). `transparent`, `currentColor` and `inherit` are fine, and so is `color-mix()` over role tokens.
@@ -15,7 +15,7 @@ To change what a meaning looks like, change the role's line in the token block. 
 
 ## The colour rules
 
-- Pink is the agent's channel, and nothing else is pink.
+- Pink is the agent's channel, and nothing else is pink, except one list colour (below), which is never an edge or a button.
 - Solid pink plus the sparkle icon means "this wakes an agent".
 - A pink edge means "the agent said it".
 - Cyan is only the user's own words.
@@ -76,7 +76,7 @@ Do: show a run's state on its surface plus one line of text in the edge colour. 
 | Role | Means | Used on | Do | Don't |
 |---|---|---|---|---|
 | `--role-hl-date`, `--role-hl-list`, `--role-hl-repeat` | What quick add read out of the typed text: a date, a list, a repeat. | Highlights behind the typed words. | Highlight parsed words with them. | Use them outside quick add. |
-| `--role-repo-0` to `--role-repo-5` | Tells one list from another. | The coloured dot beside a list's name. | Pick the dot by the list's place in order. | Add pink, so no list reads as an agent. |
+| `--role-repo-0` to `--role-repo-5` | Tells one list from another: slot 0 purple, 1 cyan (Herdr's teal), 2 green, 3 orange, 4 blue (`--palette-blue`), 5 rose (`--palette-rose`), the six colours a workspace can have (docs/api.md, Workspace colours). | A list's mark: the dot or square beside its name, and the bar down its section on Epics. | Pick the colour by the list's `colour` slot (`web/src/identity.ts`). | Draw a list colour as an edge on text or as a button fill, so the rose never reads as the agent's pink. |
 
 ### Surfaces and text
 
