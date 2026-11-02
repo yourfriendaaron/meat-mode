@@ -10,8 +10,9 @@ import (
 // ErrTooLarge is the error ReadFile gives for a file over MaxFileBytes.
 var ErrTooLarge = errors.New("file too large")
 
-// MaxFileBytes is the most ReadFile reads of a tracker's file.
-const MaxFileBytes = 8 << 20
+// MaxFileBytes is the most ReadFile reads of a tracker's file: the hub's
+// limit on a whole repo's item set, so no file it could take is refused.
+const MaxFileBytes = 16 << 20
 
 // ReadFile reads a file a repo holds, as os.ReadFile does, through
 // ReadRegular: a pipe or device there, or a link to one, gives
