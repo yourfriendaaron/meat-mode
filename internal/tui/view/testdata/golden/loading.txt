@@ -1,0 +1,216 @@
+== 56 x 20, layout a
+  1 To-dos 0   2 Epics 0   3 All           ◉ connecting |
+  Loading                                               |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ r refresh  ? keys  q quit                              |
+
+== 89 x 20, layout a
+  1 To-dos 0   2 Epics 0   3 All                                            ◉ connecting |
+  Loading                                                                                |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ r refresh  ? keys  q quit                                                               |
+
+== 90 x 20, layout b
+  1 To-dos 0   2 Epics 0   3 All                                             ◉ connecting |
+  Loading                                                                                 |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ r refresh  ? keys  q quit                                                                |
+
+== 140 x 20, layout b
+  1 To-dos 0   2 Epics 0   3 All                                                                                               ◉ connecting |
+  Loading                                                                                                                                   |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ r refresh  ? keys  q quit                                                                                                                  |
+
+== 56 x 30, layout a
+  1 To-dos 0   2 Epics 0   3 All           ◉ connecting |
+  Loading                                               |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ r refresh  ? keys  q quit                              |
+
+== 89 x 30, layout a
+  1 To-dos 0   2 Epics 0   3 All                                            ◉ connecting |
+  Loading                                                                                |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ r refresh  ? keys  q quit                                                               |
+
+== 90 x 30, layout b
+  1 To-dos 0   2 Epics 0   3 All                                             ◉ connecting |
+  Loading                                                                                 |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ r refresh  ? keys  q quit                                                                |
+
+== 140 x 30, layout b
+  1 To-dos 0   2 Epics 0   3 All                                                                                               ◉ connecting |
+  Loading                                                                                                                                   |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ r refresh  ? keys  q quit                                                                                                                  |
+

@@ -1,0 +1,216 @@
+== 56 x 20, layout a
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ / log   Esc clear                                      |
+ A acme/api  synced 4m ago                              |
+› ▾ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
+    ✓ api-z9p.1    Log callers of /v1/login             |
+    ✓ api-z9p.3    Delete /v1/login                     |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  l h fold  y copy  / filter  ? keys         |
+
+== 89 x 20, layout a
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ / log   Esc clear                                                                       |
+ A acme/api  synced 4m ago                                                               |
+› ▾ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
+    ✓ api-z9p.1    Log callers of /v1/login                                              |
+    ✓ api-z9p.3    Delete /v1/login                                                      |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
+
+== 90 x 20, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ / log   Esc clear                                                                        |
+›A api-z9p   Remove legacy auth end⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
+                                                 ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4      |
+                                                 ╎                                        |
+                                                 ╎  ✓ api-z9p.1    Log callers of /v1/log⋯|
+                                                 ╎  ✓ api-z9p.2    Email the two remainin⋯|
+                                                 ╎  ✓ api-z9p.3    Delete /v1/login       |
+                                                 ╎  ✓ api-z9p.4    Delete /v1/token       |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ l into epic  y copy  Y copy all  / filter  ? keys                                        |
+
+== 140 x 20, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ / log   Esc clear                                                                                                                          |
+›A api-z9p   Remove legacy auth endpoints                     ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
+                                                                             ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4                            |
+                                                                             ╎                                                              |
+                                                                             ╎  ✓ api-z9p.1    Log callers of /v1/login                     |
+                                                                             ╎  ✓ api-z9p.2    Email the two remaining callers              |
+                                                                             ╎  ✓ api-z9p.3    Delete /v1/login                             |
+                                                                             ╎  ✓ api-z9p.4    Delete /v1/token                             |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+
+== 56 x 30, layout a
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ / log   Esc clear                                      |
+ A acme/api  synced 4m ago                              |
+› ▾ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
+    ✓ api-z9p.1    Log callers of /v1/login             |
+    ✓ api-z9p.3    Delete /v1/login                     |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  l h fold  y copy  / filter  ? keys         |
+
+== 89 x 30, layout a
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ / log   Esc clear                                                                       |
+ A acme/api  synced 4m ago                                                               |
+› ▾ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
+    ✓ api-z9p.1    Log callers of /v1/login                                              |
+    ✓ api-z9p.3    Delete /v1/login                                                      |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
+
+== 90 x 30, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ / log   Esc clear                                                                        |
+›A api-z9p   Remove legacy auth end⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
+                                                 ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4      |
+                                                 ╎                                        |
+                                                 ╎  ✓ api-z9p.1    Log callers of /v1/log⋯|
+                                                 ╎  ✓ api-z9p.2    Email the two remainin⋯|
+                                                 ╎  ✓ api-z9p.3    Delete /v1/login       |
+                                                 ╎  ✓ api-z9p.4    Delete /v1/token       |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ l into epic  y copy  Y copy all  / filter  ? keys                                        |
+
+== 140 x 30, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ / log   Esc clear                                                                                                                          |
+›A api-z9p   Remove legacy auth endpoints                     ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
+                                                                             ╎ api-z9p  A acme/api  ▰▰▰▰▰▰▰▰ 4/4                            |
+                                                                             ╎                                                              |
+                                                                             ╎  ✓ api-z9p.1    Log callers of /v1/login                     |
+                                                                             ╎  ✓ api-z9p.2    Email the two remaining callers              |
+                                                                             ╎  ✓ api-z9p.3    Delete /v1/login                             |
+                                                                             ╎  ✓ api-z9p.4    Delete /v1/token                             |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+

@@ -1,0 +1,216 @@
+== 56 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ ‹ Esc Epics › Checkout redesign                        |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront    |
+  Replace the three-page checkout with one page. Design |
+  in `docs/checkout.md`.                                |
+                                                        |
+ Blocked 1                                              |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox acco⋯ ✦ you |
+ In progress 1                                          |
+  ◒ sf-c1x.3  Payment step layout              @builder |
+ Open 2                                                 |
+  ◦ sf-c1x.4  Order confirmation email                  |
+  ◦ sf-c1x.6  Remove the old checkout routes and every⋯ |
+ Done 2                                                 |
+  ✓ sf-c1x.1  Cart summary component                    |
+  ✓ sf-c1x.2  Address form validation                   |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  y copy  Esc back  ? keys                   |
+
+== 89 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ ‹ Esc Epics › Checkout redesign                                                         |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                     |
+  Replace the three-page checkout with one page. Design in `docs/checkout.md`.           |
+                                                                                         |
+ Blocked 1                                                                               |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                ✦ you |
+ In progress 1                                                                           |
+  ◒ sf-c1x.3  Payment step layout                                               @builder |
+ Open 2                                                                                  |
+  ◦ sf-c1x.4  Order confirmation email                                                   |
+  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at th⋯ |
+ Done 2                                                                                  |
+  ✓ sf-c1x.1  Cart summary component                                                     |
+  ✓ sf-c1x.2  Address form validation                                                    |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  y copy  Esc back  ? keys                                                    |
+
+== 90 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ ‹ Esc Epics › Checkout redesign                                                          |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                      |
+  Replace the three-page checkout with one page. Design in `docs/checkout.md`.            |
+                                                                                          |
+ Blocked 1                                                                                |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                 ✦ you |
+ In progress 1                                                                            |
+  ◒ sf-c1x.3  Payment step layout                                                @builder |
+ Open 2                                                                                   |
+  ◦ sf-c1x.4  Order confirmation email                                                    |
+  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at the⋯ |
+ Done 2                                                                                   |
+  ✓ sf-c1x.1  Cart summary component                                                      |
+  ✓ sf-c1x.2  Address form validation                                                     |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ Enter open  y copy  Esc back  ? keys                                                     |
+
+== 140 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ ‹ Esc Epics › Checkout redesign                                                                                                            |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                                                                        |
+  Replace the three-page checkout with one page. Design in `docs/checkout.md`.                                                              |
+                                                                                                                                            |
+ Blocked 1                                                                                                                                  |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                                                                   ✦ you |
+ In progress 1                                                                                                                              |
+  ◒ sf-c1x.3  Payment step layout                                                                                                  @builder |
+ Open 2                                                                                                                                     |
+  ◦ sf-c1x.4  Order confirmation email                                                                                                      |
+  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at them from marketing pages                              |
+ Done 2                                                                                                                                     |
+  ✓ sf-c1x.1  Cart summary component                                                                                                        |
+  ✓ sf-c1x.2  Address form validation                                                                                                       |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ Enter open  y copy  Esc back  ? keys                                                                                                       |
+
+== 56 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ ‹ Esc Epics › Checkout redesign                        |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront    |
+  Replace the three-page checkout with one page. Design |
+  in `docs/checkout.md`.                                |
+                                                        |
+ Blocked 1                                              |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox acco⋯ ✦ you |
+ In progress 1                                          |
+  ◒ sf-c1x.3  Payment step layout              @builder |
+ Open 2                                                 |
+  ◦ sf-c1x.4  Order confirmation email                  |
+  ◦ sf-c1x.6  Remove the old checkout routes and every⋯ |
+ Done 2                                                 |
+  ✓ sf-c1x.1  Cart summary component                    |
+  ✓ sf-c1x.2  Address form validation                   |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  y copy  Esc back  ? keys                   |
+
+== 89 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ ‹ Esc Epics › Checkout redesign                                                         |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                     |
+  Replace the three-page checkout with one page. Design in `docs/checkout.md`.           |
+                                                                                         |
+ Blocked 1                                                                               |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                ✦ you |
+ In progress 1                                                                           |
+  ◒ sf-c1x.3  Payment step layout                                               @builder |
+ Open 2                                                                                  |
+  ◦ sf-c1x.4  Order confirmation email                                                   |
+  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at th⋯ |
+ Done 2                                                                                  |
+  ✓ sf-c1x.1  Cart summary component                                                     |
+  ✓ sf-c1x.2  Address form validation                                                    |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  y copy  Esc back  ? keys                                                    |
+
+== 90 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ ‹ Esc Epics › Checkout redesign                                                          |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                      |
+  Replace the three-page checkout with one page. Design in `docs/checkout.md`.            |
+                                                                                          |
+ Blocked 1                                                                                |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                 ✦ you |
+ In progress 1                                                                            |
+  ◒ sf-c1x.3  Payment step layout                                                @builder |
+ Open 2                                                                                   |
+  ◦ sf-c1x.4  Order confirmation email                                                    |
+  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at the⋯ |
+ Done 2                                                                                   |
+  ✓ sf-c1x.1  Cart summary component                                                      |
+  ✓ sf-c1x.2  Address form validation                                                     |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ Enter open  y copy  Esc back  ? keys                                                     |
+
+== 140 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ ‹ Esc Epics › Checkout redesign                                                                                                            |
+ ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                                                                        |
+  Replace the three-page checkout with one page. Design in `docs/checkout.md`.                                                              |
+                                                                                                                                            |
+ Blocked 1                                                                                                                                  |
+› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                                                                   ✦ you |
+ In progress 1                                                                                                                              |
+  ◒ sf-c1x.3  Payment step layout                                                                                                  @builder |
+ Open 2                                                                                                                                     |
+  ◦ sf-c1x.4  Order confirmation email                                                                                                      |
+  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at them from marketing pages                              |
+ Done 2                                                                                                                                     |
+  ✓ sf-c1x.1  Cart summary component                                                                                                        |
+  ✓ sf-c1x.2  Address form validation                                                                                                       |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ Enter open  y copy  Esc back  ? keys                                                                                                       |
+

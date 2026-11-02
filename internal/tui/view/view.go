@@ -9,8 +9,6 @@ package view
 import (
 	"time"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
@@ -131,10 +129,39 @@ type Model struct {
 	height int
 	tab    Tab
 	conn   Conn
-	// Lane 2 adds the rest: selection by item key or epic row, scroll,
-	// open detail, drill, B focus, filter, help, snooze menu, password
-	// prompt, notice, the last undoable action.
+
+	d      *data // state and epics, indexed; nil before SetData
+	selKey string
+	selIdx int // among the selectable rows
+	scroll int // first row drawn
+
+	open         bool // a full-screen detail (layouts A and C)
+	openKey      string
+	openRow      bool // openKey is an epic row's
+	detailScroll int
+
+	drill    string          // All: the card drilled into
+	expanded map[string]bool // Epics in layout A: unfolded cards, by row id; shared between copies, so copied before a change
+	right    bool            // Epics in layout B: the keys move in the selected card's children
+	rightIdx int
+
+	filter    string
+	filtering bool
+	help      bool
+	snoozeKey string // the item the snooze menu is open for
+
+	pw       bool // the password prompt
+	pwReason string
+	pwText   string
+
+	notice     string
+	noticeKind NoticeKind
+	noticeSeq  int
+	seq        int
+
+	last *undoable
 }
+
 
 // New is the model before any data, for the hub at hubURL (used for the
 // app links that o shows).
@@ -143,42 +170,113 @@ func New(hubURL string) Model { return Model{hub: hubURL} }
 // SetData replaces the state and epics and the time the groups are worked
 // out from (its Location is the user's). The selection stays on the same
 // item key or epic row when it still exists, else on the nearest row.
-func (m Model) SetData(s api.State, e api.Epics, now time.Time) Model { return m }
+func (m Model) SetData(s api.State, e api.Epics, now time.Time) Model {
+	m.state, m.epics, m.now = s, e, now
+	m.d = index(s, e, now)
+	m.fix()
+	return m
+}
 
 // SetNow moves the clock without new data (due labels, groups).
-func (m Model) SetNow(now time.Time) Model { return m }
+func (m Model) SetNow(now time.Time) Model {
+	m.now = now
+	if m.d != nil {
+		m.d = index(m.state, m.epics, now)
+	}
+	m.fix()
+	return m
+}
 
 // Resize sets the pane size. Crossing below SplitAt with a row selected in
 // layout B opens that row's detail in layout A.
-func (m Model) Resize(width, height int) Model { return m }
+func (m Model) Resize(width, height int) Model {
+	was := LayoutFor(m.tab, m.width)
+	var t *target
+	if was == "b" && m.width > 0 {
+		t = m.target()
+	}
+	m.width, m.height = max(width, 0), max(height, 0)
+	now := LayoutFor(m.tab, m.width)
+	switch {
+	case was == "b" && now == "a":
+		if t != nil {
+			m.openTarget(t)
+		}
+		m.right = false
+	case was == "a" && now == "b":
+		m.open = false
+		m.toSplit()
+	}
+	m.fix()
+	return m
+}
 
 // SetConn sets the link state.
-func (m Model) SetConn(c Conn) Model { return m }
+func (m Model) SetConn(c Conn) Model {
+	m.conn = c
+	return m
+}
 
 // Notice shows a message in the status line until the next key or 3 s,
 // whichever comes first. It returns the notice's number; the program's 3 s
 // tick calls ClearNotice with it, which clears only that notice.
-func (m Model) Notice(text string, kind NoticeKind) (Model, int) { return m, 0 }
+func (m Model) Notice(text string, kind NoticeKind) (Model, int) {
+	m.say(text, kind)
+	return m, m.noticeSeq
+}
 
 // ClearNotice removes the status line's message if it is still notice seq.
-func (m Model) ClearNotice(seq int) Model { return m }
+func (m Model) ClearNotice(seq int) Model {
+	if m.noticeSeq == seq {
+		m.notice = ""
+	}
+	return m
+}
 
 // Acted records the stored action a successful Act returned, for undo.
-func (m Model) Acted(a api.Action) Model { return m }
+func (m Model) Acted(a api.Action) Model {
+	key := a.Bridge + "/" + a.Repo + "/" + a.BeadID
+	switch a.Kind {
+	case api.KindDone:
+		m.last = &undoable{kind: api.KindDone, key: key, id: a.BeadID, movedOn: a.Payload.Was != nil}
+	case api.KindSnooze:
+		m.last = &undoable{kind: api.KindSnooze, key: key, id: a.BeadID, until: a.Payload.Until, previous: a.Payload.Previous}
+	}
+	return m
+}
 
 // AskPassword opens the in-place password prompt with a reason line
 // ("The session ended. Enter the hub's password."). Typed keys go to it,
 // masked; Enter gives a Login effect, Esc gives Quit. The program calls it
 // again with "Wrong password." or the wait of a 429.
-func (m Model) AskPassword(reason string) Model { return m }
+func (m Model) AskPassword(reason string) Model {
+	m.pw, m.pwReason, m.pwText = true, reason, ""
+	m.help, m.snoozeKey, m.filtering = false, "", false
+	return m
+}
 
 // Key applies one key, named as Bubble Tea's KeyPressMsg.String() names it
 // ("j", "enter", "esc", "tab", "shift+tab", "pgdown", "ctrl+c").
-func (m Model) Key(k string) (Model, []Effect) { return m, nil }
+func (m Model) Key(k string) (Model, []Effect) {
+	if k == "ctrl+c" {
+		return m, []Effect{Quit{}}
+	}
+	if m.pw {
+		return m.passwordKey(k)
+	}
+	m.notice = ""
+	fx := m.key(k)
+	m.fix()
+	return m, fx
+}
 
 // Frame draws the model: exactly height lines, each exactly width cells
 // wide (ansi.StringWidth), styled with Lip Gloss in the app's palette.
-func Frame(m Model) []string { return nil }
-
-// keep Lip Gloss in the module graph until lane 2 styles the frame
-var _ = lipgloss.NewStyle
+func Frame(m Model) []string {
+	lines := m.frame()
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = l.render()
+	}
+	return out
+}

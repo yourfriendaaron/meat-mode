@@ -1,0 +1,216 @@
+== 56 x 20, layout a
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ / card   Enter keep ∙ Esc clear                        |
+ This week 2                                            |
+› ◦ ✓ Buy birthday card for Alex         1/2 Thu, Nov 5 |
+    ◦ ✓ Choose a card                        Thu, Nov 5 |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter keep  Esc clear                                  |
+
+== 89 x 20, layout a
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ / card   Enter keep ∙ Esc clear                                                         |
+ This week 2                                                                             |
+› ◦ ✓ mm-46     Buy birthday card for Alex                      #errands 1/2  Thu, Nov 5 |
+    ◦ ✓ mm-47     Choose a card                                               Thu, Nov 5 |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter keep  Esc clear                                                                   |
+
+== 90 x 20, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ / card   Enter keep ∙ Esc clear                                                          |
+ This week 2                                     ╎ Buy birthday card for Alex             |
+› ◦ ✓ Buy birthday card for Alex  1/2 Thu, Nov 5 ╎ mm-46  ✓ personal                      |
+    ◦ ✓ Choose a card                 Thu, Nov 5 ╎ due Thu, Nov 5 9:00  #errands          |
+                                                 ╎                                        |
+                                                 ╎  No description                        |
+                                                 ╎                                        |
+                                                 ╎ Sub-tasks 1/2                          |
+                                                 ╎  ◦ mm-47 Choose a card                 |
+                                                 ╎  ✓ mm-48 Write the card                |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ Enter keep  Esc clear                                                                    |
+
+== 140 x 20, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ / card   Enter keep ∙ Esc clear                                                                                                            |
+ This week 2                                                                 ╎ Buy birthday card for Alex                                   |
+› ◦ ✓ mm-46     Buy birthday card for Alex          #errands 1/2  Thu, Nov 5 ╎ mm-46  ✓ personal                                            |
+    ◦ ✓ mm-47     Choose a card                                   Thu, Nov 5 ╎ due Thu, Nov 5 9:00  #errands                                |
+                                                                             ╎                                                              |
+                                                                             ╎  No description                                              |
+                                                                             ╎                                                              |
+                                                                             ╎ Sub-tasks 1/2                                                |
+                                                                             ╎  ◦ mm-47 Choose a card                                       |
+                                                                             ╎  ✓ mm-48 Write the card                                      |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ Enter keep  Esc clear                                                                                                                      |
+
+== 56 x 30, layout a
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ / card   Enter keep ∙ Esc clear                        |
+ This week 2                                            |
+› ◦ ✓ Buy birthday card for Alex         1/2 Thu, Nov 5 |
+    ◦ ✓ Choose a card                        Thu, Nov 5 |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter keep  Esc clear                                  |
+
+== 89 x 30, layout a
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ / card   Enter keep ∙ Esc clear                                                         |
+ This week 2                                                                             |
+› ◦ ✓ mm-46     Buy birthday card for Alex                      #errands 1/2  Thu, Nov 5 |
+    ◦ ✓ mm-47     Choose a card                                               Thu, Nov 5 |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter keep  Esc clear                                                                   |
+
+== 90 x 30, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ / card   Enter keep ∙ Esc clear                                                          |
+ This week 2                                     ╎ Buy birthday card for Alex             |
+› ◦ ✓ Buy birthday card for Alex  1/2 Thu, Nov 5 ╎ mm-46  ✓ personal                      |
+    ◦ ✓ Choose a card                 Thu, Nov 5 ╎ due Thu, Nov 5 9:00  #errands          |
+                                                 ╎                                        |
+                                                 ╎  No description                        |
+                                                 ╎                                        |
+                                                 ╎ Sub-tasks 1/2                          |
+                                                 ╎  ◦ mm-47 Choose a card                 |
+                                                 ╎  ✓ mm-48 Write the card                |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ Enter keep  Esc clear                                                                    |
+
+== 140 x 30, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ / card   Enter keep ∙ Esc clear                                                                                                            |
+ This week 2                                                                 ╎ Buy birthday card for Alex                                   |
+› ◦ ✓ mm-46     Buy birthday card for Alex          #errands 1/2  Thu, Nov 5 ╎ mm-46  ✓ personal                                            |
+    ◦ ✓ mm-47     Choose a card                                   Thu, Nov 5 ╎ due Thu, Nov 5 9:00  #errands                                |
+                                                                             ╎                                                              |
+                                                                             ╎  No description                                              |
+                                                                             ╎                                                              |
+                                                                             ╎ Sub-tasks 1/2                                                |
+                                                                             ╎  ◦ mm-47 Choose a card                                       |
+                                                                             ╎  ✓ mm-48 Write the card                                      |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ Enter keep  Esc clear                                                                                                                      |
+
