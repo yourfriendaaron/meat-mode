@@ -373,6 +373,7 @@ func New(s Settings, log *slog.Logger) (*Bridge, error) {
 		SaveEpics: func(repo string, on bool) error {
 			return SaveEpics(env.Paths.Config, repo, on)
 		},
+		LoadSpaceColours: LoadSpaceColours(env.getenv(), env.Paths.State),
 		SaveLimits: func(c api.LimitsChange) (SavedLimits, error) {
 			return SaveLimits(env.Paths.Config, c)
 		},
