@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // SessionFile is the file, beside bridge.json in the same directory
@@ -61,6 +62,21 @@ func readSessions(dir string) (sessionFile, error) {
 		f.Sessions = map[string]Session{}
 	}
 	return f, nil
+}
+
+// SavedHubs lists the hubs dir/SessionFile holds a session for, sorted. A
+// missing file holds none.
+func SavedHubs(dir string) ([]string, error) {
+	f, err := readSessions(dir)
+	if err != nil {
+		return nil, err
+	}
+	hubs := make([]string, 0, len(f.Sessions))
+	for h := range f.Sessions {
+		hubs = append(hubs, h)
+	}
+	slices.Sort(hubs)
+	return hubs, nil
 }
 
 // writeSessions writes f to dir/SessionFile through a temporary file in the

@@ -288,3 +288,28 @@ func TestSystemRun(t *testing.T) {
 		t.Fatal("exit 3 should fail")
 	}
 }
+
+// Inside tmux the text also goes through tmux load-buffer -w, which reaches
+// the outer terminal under tmux's defaults (set-clipboard external,
+// allow-passthrough off), over ssh too.
+func TestCopyTmuxLoadBuffer(t *testing.T) {
+	f := &fake{goos: "linux", env: map[string]string{"TMUX": "/tmp/x,1,0", "SSH_TTY": "/dev/pts/1"}, have: map[string]bool{"tmux": true}}
+	r := Copy(context.Background(), "mm-12 Water the plants", f.Env())
+	if !r.Sent || r.Native || r.Err != nil {
+		t.Fatalf("result = %+v, want Sent only", r)
+	}
+	if len(f.calls) != 1 || f.calls[0].name != "tmux" || strings.Join(f.calls[0].args, " ") != "load-buffer -w -" || f.calls[0].text != "mm-12 Water the plants" {
+		t.Fatalf("calls = %+v", f.calls)
+	}
+
+	f = &fake{goos: "linux", env: map[string]string{"TMUX": "x"}, have: map[string]bool{"tmux": true}, fail: map[string]error{"tmux": errors.New("no server")}}
+	if r := Copy(context.Background(), "a", f.Env()); r.Sent || r.Err == nil {
+		t.Fatalf("failing tmux: result = %+v, want an error", r)
+	}
+
+	f = &fake{goos: "linux", env: map[string]string{}, have: map[string]bool{"tmux": true}}
+	Copy(context.Background(), "a", f.Env())
+	if f.names() != "" {
+		t.Fatalf("outside tmux ran %s", f.names())
+	}
+}

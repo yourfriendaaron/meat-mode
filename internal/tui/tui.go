@@ -172,6 +172,8 @@ func (p *program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var effects []view.Effect
 		p.m, effects = p.m.Key(k)
 		return p, p.run(effects)
+	case tea.PasteMsg:
+		p.m = p.m.Paste(msg.Content)
 	case eventMsg:
 		if msg.gen != p.gen {
 			return p, p.listen
@@ -255,7 +257,7 @@ func (p *program) onCopied(msg copiedMsg) tea.Cmd {
 		return p.notice("Nothing to copy", view.NoticeWarn)
 	case r.Native:
 		return p.notice("Copied "+msg.ref, view.NoticeInfo)
-	case msg.sent:
+	case msg.sent || r.Sent:
 		return p.notice("Sent "+msg.ref+" to the terminal's clipboard", view.NoticeInfo)
 	case r.TooLong:
 		return p.notice(msg.ref+" is too long to send to the terminal's clipboard", view.NoticeWarn)

@@ -578,3 +578,19 @@ func TestSessionFile(t *testing.T) {
 		t.Errorf("SaveSession over a broken file: %v", err)
 	}
 }
+
+func TestSavedHubs(t *testing.T) {
+	dir := t.TempDir()
+	if hubs, err := SavedHubs(dir); err != nil || len(hubs) != 0 {
+		t.Fatalf("empty dir: %v %v", hubs, err)
+	}
+	for _, h := range []string{"https://b.example.com", "https://a.example.com"} {
+		if err := SaveSession(dir, Session{Hub: h, CookieName: "meat_mode_session", Cookie: "c"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hubs, err := SavedHubs(dir)
+	if err != nil || strings.Join(hubs, " ") != "https://a.example.com https://b.example.com" {
+		t.Fatalf("hubs = %v, %v", hubs, err)
+	}
+}

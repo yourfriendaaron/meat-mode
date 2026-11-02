@@ -403,3 +403,22 @@ func TestSnoozeOptions(t *testing.T) {
 		t.Fatalf("6 after 18:00 gave %#v", fx)
 	}
 }
+
+// A paste goes into the password prompt or the filter, never runs as keys.
+func TestPaste(t *testing.T) {
+	m := model(t, 56, 20).AskPassword("The session ended.").Paste("correct horse\n")
+	if _, fx := m.Key("enter"); !reflect.DeepEqual(fx, []Effect{Login{Password: "correct horse"}}) {
+		t.Fatalf("paste into prompt gave %#v", fx)
+	}
+	m = model(t, 56, 20)
+	before := strings.Join(plain(m), "\n")
+	m = m.Paste("xxsu")
+	if got := strings.Join(plain(m), "\n"); got != before {
+		t.Fatal("a paste outside an input changed the screen")
+	}
+	m, _ = m.Key("/")
+	m = m.Paste("plants")
+	if m.filter != "plants" {
+		t.Fatalf("filter = %q", m.filter)
+	}
+}

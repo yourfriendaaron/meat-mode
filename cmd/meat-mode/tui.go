@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -131,29 +130,8 @@ func (e tuiEnv) pairedHub() (hub, trusted string) {
 	return c.HubURL, c.TrustedNetworks
 }
 
-// savedHubs lists the hubs tui.json holds a session for, in the file's
-// documented shape (appclient.SessionFile).
-func (e tuiEnv) savedHubs() ([]string, error) {
-	b, err := os.ReadFile(filepath.Join(e.dir, appclient.SessionFile))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var f struct {
-		Sessions map[string]json.RawMessage `json:"sessions"`
-	}
-	if err := json.Unmarshal(b, &f); err != nil {
-		return nil, fmt.Errorf("read %s: %w", appclient.SessionFile, err)
-	}
-	var hubs []string
-	for h := range f.Sessions {
-		hubs = append(hubs, h)
-	}
-	slices.Sort(hubs)
-	return hubs, nil
-}
+// savedHubs lists the hubs tui.json holds a session for.
+func (e tuiEnv) savedHubs() ([]string, error) { return appclient.SavedHubs(e.dir) }
 
 // pickHub chooses the hub without asking: --hub, else the only hub with a
 // saved session, else the paired hub when it has one. It returns "" when

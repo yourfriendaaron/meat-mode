@@ -119,6 +119,22 @@ func Copy(ctx context.Context, text string, env Env) Result {
 			}
 		}
 	}
+	// Inside tmux, the wrapped sequence needs allow-passthrough, which is off
+	// by default; tmux load-buffer -w hands the text to tmux, which sets the
+	// outer terminal's clipboard itself under the default set-clipboard
+	// external. It runs over ssh too: tmux is on this machine with the pane.
+	if !res.TooLong && env.Getenv("TMUX") != "" && env.LookPath != nil && env.Run != nil {
+		if path, err := env.LookPath("tmux"); err == nil {
+			cctx, cancel := context.WithTimeout(ctx, nativeTimeout)
+			err = env.Run(cctx, path, []string{"load-buffer", "-w", "-"}, text)
+			cancel()
+			if err == nil {
+				res.Sent = true
+			} else {
+				fail(err)
+			}
+		}
+	}
 	for _, c := range nativeCandidates(env) {
 		path, err := env.LookPath(c.name)
 		if err != nil {

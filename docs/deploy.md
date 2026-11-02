@@ -351,7 +351,7 @@ Epic rows that are not tasks for you are read-only: `x` and `s` on one say so.
 
 **Copying.** `y` sends the text to your terminal's clipboard with an OSC 52 escape sequence, which passes through ssh and reaches the machine you are sitting at, as long as your terminal allows OSC 52 (most do; some ask first or need it switched on). In a session that is not over ssh, it also copies with the machine's own clipboard tool (`pbcopy`, `wl-copy`, `xclip` or `xsel`). The message says **Copied** only when that local copy worked; otherwise it says **Sent to the terminal's clipboard**, since a terminal never confirms OSC 52. Text over 64 KiB is too long to send to the terminal.
 
-- **tmux**: the viewer wraps the sequence for tmux to pass through, so tmux needs `set -g allow-passthrough on` (off by default since tmux 3.3), and the terminal outside tmux must allow OSC 52.
+- **tmux**: the viewer also hands the text to `tmux load-buffer -w`, and tmux sets the outer terminal's clipboard itself, which works with tmux's default `set-clipboard external`. The terminal outside tmux must allow OSC 52. With `set -g allow-passthrough on` the viewer's own sequence also passes through.
 - **screen**: the viewer wraps the sequence for screen to pass through.
 
 The viewer never captures the mouse, so selecting text with the mouse and your terminal's own copy always work too.

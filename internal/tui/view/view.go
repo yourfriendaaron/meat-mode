@@ -7,6 +7,7 @@
 package view
 
 import (
+	"strings"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -251,6 +252,27 @@ func (m Model) Acted(a api.Action) Model {
 func (m Model) AskPassword(reason string) Model {
 	m.pw, m.pwReason, m.pwText = true, reason, ""
 	m.help, m.snoozeKey, m.filtering = false, "", false
+	return m
+}
+
+// Paste puts pasted text into the password prompt or the filter, whichever
+// is open, without line breaks. Anywhere else it does nothing, so pasted
+// text never runs as keys.
+func (m Model) Paste(text string) Model {
+	text = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r < ' ' {
+			return -1
+		}
+		return r
+	}, text)
+	switch {
+	case m.pw:
+		m.pwText += text
+	case m.filtering:
+		m.filter += text
+		m.resetSel()
+		m.fix()
+	}
 	return m
 }
 
