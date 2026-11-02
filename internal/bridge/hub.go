@@ -36,9 +36,7 @@ type Hub struct {
 }
 
 // Resolver looks up the addresses of a host name.
-type Resolver interface {
-	LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error)
-}
+type Resolver = netguard.Resolver
 
 // HTTPError is a non-2xx reply from the hub.
 type HTTPError struct {
@@ -79,46 +77,18 @@ func (h *Hub) newClient() *http.Client {
 	return c
 }
 
-// dial resolves the hub's host, refuses it when any address is outside the
-// allowed set, and dials one of the checked addresses itself, so a name that
-// answers differently the second time cannot move the connection.
+// dial goes through netguard.Dialer, which refuses a hub outside the allowed
+// set and dials the address it checked.
 func (h *Hub) dial(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
+	d := netguard.Dialer{Allowed: h.Allowed, Refused: func(host string, ip netip.Addr) error {
+		return fmt.Errorf("refusing the hub at %s: %s is outside the private network, "+
+			"and the bridge sends its token only to a hub on one; "+
+			"set MEAT_MODE_TRUSTED_NETWORKS if this is your own network", host, ip)
+	}}
+	if h.Resolver != nil {
+		d.Resolver = h.Resolver
 	}
-	var ips []netip.Addr
-	if ip, err := netip.ParseAddr(host); err == nil {
-		ips = []netip.Addr{ip}
-	} else {
-		var r Resolver = net.DefaultResolver
-		if h.Resolver != nil {
-			r = h.Resolver
-		}
-		if ips, err = r.LookupNetIP(ctx, "ip", host); err != nil {
-			return nil, err
-		}
-	}
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("the hub's host %s has no address", host)
-	}
-	for _, ip := range ips {
-		if !h.Allowed.Contains(ip) {
-			return nil, fmt.Errorf("refusing the hub at %s: %s is outside the private network, "+
-				"and the bridge sends its token only to a hub on one; "+
-				"set MEAT_MODE_TRUSTED_NETWORKS if this is your own network", host, netguard.Normalize(ip))
-		}
-	}
-	var d net.Dialer
-	var last error
-	for _, ip := range ips {
-		c, err := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-		if err == nil {
-			return c, nil
-		}
-		last = err
-	}
-	return nil, last
+	return d.DialContext(ctx, network, addr)
 }
 
 func (h *Hub) do(ctx context.Context, method, path string, in, out any) error {
