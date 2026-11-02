@@ -72,8 +72,14 @@ type program struct {
 	state *api.State
 	epics *api.Epics
 
-	want      fetchSet // asked for and not yet being fetched
-	fetching  bool
+	want     fetchSet // asked for and not yet being fetched
+	fetching bool
+	// busy holds the items with an action under way, by key: 0 while it is
+	// being sent, then the fetch round after which the screen shows it. A
+	// second x before then would act on the old status, so it waits.
+	busy      map[string]int
+	round     int // fetches started
+	fetchedTo int // the round of the fetch in flight
 	scheduled bool
 
 	events     chan tea.Msg // from the event goroutine; one listen is always waiting on it
@@ -135,7 +141,9 @@ type (
 		sent bool
 		res  clipboard.Result
 	}
-	actedMsg struct {
+	restartMsg struct{ gen int }
+	actedMsg   struct {
+		key    string
 		action api.Action
 		done   string
 		err    error
@@ -199,6 +207,10 @@ func (p *program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, p.onLogin(msg)
 	case clearMsg:
 		p.m = p.m.ClearNotice(msg.seq)
+	case restartMsg:
+		if msg.gen == p.gen {
+			p.startEvents()
+		}
 	case minuteMsg:
 		p.m = p.m.SetNow(p.now())
 		return p, p.everyMinute()
@@ -214,14 +226,25 @@ func (p *program) run(effects []view.Effect) tea.Cmd {
 		case view.Copy:
 			cmds = append(cmds, p.copy(e)...)
 		case view.Act:
+			key := e.Action.Key
+			if _, ok := p.busy[key]; ok && key != "" {
+				cmds = append(cmds, p.notice("Still sending the last change to this item", view.NoticeWarn))
+				continue
+			}
+			if key != "" {
+				if p.busy == nil {
+					p.busy = map[string]int{}
+				}
+				p.busy[key] = 0
+			}
 			cmds = append(cmds, func() tea.Msg {
 				a, err := p.client.Act(p.ctx, e.Action)
-				return actedMsg{action: a, done: e.Done, err: err}
+				return actedMsg{key: key, action: a, done: e.Done, err: err}
 			})
 		case view.OpenURL:
-			// No 3 s clear: the URL stays until the next key, so there is
-			// time to select it with the mouse.
-			p.m, _ = p.m.Notice(e.URL, view.NoticeInfo)
+			// A terminal may have no browser and a narrow pane cuts the
+			// line, so the link goes to the clipboard as a copy does.
+			cmds = append(cmds, p.copy(view.Copy{Text: e.URL, Ref: "the link " + e.URL})...)
 		case view.Refresh:
 			cmds = append(cmds, p.ask(both))
 		case view.Login:
@@ -268,6 +291,12 @@ func (p *program) onCopied(msg copiedMsg) tea.Cmd {
 }
 
 func (p *program) onActed(msg actedMsg) tea.Cmd {
+	if msg.err != nil {
+		delete(p.busy, msg.key)
+	} else if msg.key != "" {
+		// Free once a state fetch that starts from now on has come back.
+		p.busy[msg.key] = p.round + 1
+	}
 	if errors.Is(msg.err, appclient.ErrAuth) {
 		return tea.Batch(p.notice("Not sent: the session ended", view.NoticeError), p.auth())
 	}
@@ -310,6 +339,10 @@ func (p *program) fetch() tea.Cmd {
 	w := p.want
 	p.want = fetchSet{}
 	p.fetching = true
+	if w.state {
+		p.round++
+		p.fetchedTo = p.round
+	}
 	return func() tea.Msg {
 		var msg fetchedMsg
 		if w.state {
@@ -334,6 +367,13 @@ func (p *program) fetch() tea.Cmd {
 
 func (p *program) onFetched(msg fetchedMsg) tea.Cmd {
 	p.fetching = false
+	if msg.state != nil {
+		for k, r := range p.busy {
+			if r > 0 && r <= p.fetchedTo {
+				delete(p.busy, k)
+			}
+		}
+	}
 	if msg.state != nil {
 		p.state = msg.state
 	}
@@ -378,6 +418,16 @@ func (p *program) startEvents() {
 		err := p.client.Events(ctx, func(e appclient.Event) { send(eventMsg{gen: gen, ev: e}) })
 		send(eventsEndedMsg{gen: gen, err: err})
 	}()
+}
+
+// restartPause is how long the event stream waits before it starts again
+// after a session check that did not end in a password prompt.
+var restartPause = 5 * time.Second
+
+// restartLater starts the event stream again after restartPause.
+func (p *program) restartLater() tea.Cmd {
+	gen := p.gen
+	return tea.Tick(restartPause, func(time.Time) tea.Msg { return restartMsg{gen: gen} })
 }
 
 // listen waits for the next message from the event goroutine.
@@ -425,17 +475,19 @@ func (p *program) auth() tea.Cmd {
 func (p *program) onSession(msg sessionMsg) tea.Cmd {
 	switch {
 	case msg.err != nil:
-		// The hub is out of reach; the event stream retries and checks again.
+		// The hub is out of reach; the event stream starts again after a
+		// pause, so a check that keeps failing cannot spin.
 		p.authing = false
-		p.startEvents()
-		return p.notice(p.downText(msg.err), view.NoticeWarn)
+		return tea.Batch(p.notice(p.downText(msg.err), view.NoticeWarn), p.restartLater())
 	case !msg.login:
 		p.authing = false
 		return p.notice("The hub has no password now: set one in the app, then restart the viewer", view.NoticeError)
 	case msg.authed:
+		// The session is good though the stream was refused: start it again
+		// after a pause, in case something in front of the hub answers the
+		// two routes differently.
 		p.authing = false
-		p.startEvents()
-		return p.ask(both)
+		return tea.Batch(p.restartLater(), p.ask(both))
 	}
 	p.m = p.m.AskPassword("The session ended. Enter the hub's password.")
 	return nil

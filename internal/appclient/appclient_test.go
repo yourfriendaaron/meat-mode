@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/hub/hubtest"
@@ -592,5 +593,92 @@ func TestSavedHubs(t *testing.T) {
 	hubs, err := SavedHubs(dir)
 	if err != nil || strings.Join(hubs, " ") != "https://a.example.com https://b.example.com" {
 		t.Fatalf("hubs = %v, %v", hubs, err)
+	}
+}
+
+func TestRetryAfterClamped(t *testing.T) {
+	far := time.Now().Add(100 * 365 * 24 * time.Hour).UTC().Format(http.TimeFormat)
+	for _, v := range []string{"9223372037", "18446744074", far} {
+		if got := retryAfter(v); got != 300 {
+			t.Errorf("retryAfter(%q) = %d, want 300", v, got)
+		}
+	}
+	for v, want := range map[string]int{
+		"": 0, "0": 0, "7": 7, "301": 300, "-5": 0, "not a date": 0,
+		"Mon, 02 Jan 2006 15:04:05 GMT": 0,
+	} {
+		if got := retryAfter(v); got != want {
+			t.Errorf("retryAfter(%q) = %d, want %d", v, got, want)
+		}
+	}
+}
+
+func TestHubMessageSafeToPrint(t *testing.T) {
+	msg := hubMessage([]byte(`{"error": "\u001b]0;x\u0007owned\u202ereply"}`))
+	if strings.ContainsAny(msg, "\x1b\a\u202e") {
+		t.Errorf("hubMessage kept a hostile character: %q", msg)
+	}
+	if msg != "]0;xownedreply" {
+		t.Errorf("hubMessage = %q", msg)
+	}
+	msg = hubMessage([]byte(strings.Repeat("a", 1<<20)))
+	if n := utf8.RuneCountInString(msg); n != maxMessageRunes {
+		t.Errorf("hubMessage kept %d runes of a 1 MiB body, want %d", n, maxMessageRunes)
+	}
+}
+
+func TestRetryErrorPrintsCleanMessage(t *testing.T) {
+	url := fakeHub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprint(w, `{"error": "\u001b]0;x\u0007owned"}`)
+	})
+	c := newClient(t, url, &Session{Hub: url, CookieName: sessionCookie, Cookie: "c"}, nil)
+	_, err := c.State(context.Background())
+	var re *RetryError
+	if !errors.As(err, &re) {
+		t.Fatalf("State = %v, want a RetryError", err)
+	}
+	if re.Msg != "]0;xowned" {
+		t.Errorf("RetryError.Msg = %q, want no control character", re.Msg)
+	}
+}
+
+func TestLoadSessionTightensLooseFile(t *testing.T) {
+	dir := t.TempDir()
+	s := Session{Hub: "https://hub.example.com", CookieName: secureSessionCookie, Cookie: "c"}
+	if err := SaveSession(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, SessionFile)
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := LoadSession(dir, s.Hub); err != nil || !ok {
+		t.Fatalf("LoadSession = %v, %v", ok, err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v after LoadSession, want 0600", fi.Mode().Perm())
+	}
+}
+
+// A plain http hub is dialed only at loopback: "localhost" goes to
+// 127.0.0.1 or ::1 without a lookup, and any other address is refused
+// before the password could leave the machine.
+func TestPlainHTTPDialsLoopbackOnly(t *testing.T) {
+	h := hubtest.New(t, hubtest.Options{})
+	h.Seed(t)
+	port := h.URL[strings.LastIndex(h.URL, ":")+1:]
+	c := newClient(t, "http://localhost:"+port, nil, nil)
+	login(t, c)
+
+	for _, addr := range []string{"192.0.2.10:80", "[2001:db8::1]:80"} {
+		if _, err := c.dial(context.Background(), "tcp", addr); err == nil || !strings.Contains(err.Error(), "only on this machine") {
+			t.Errorf("dial %s: err = %v, want a refusal", addr, err)
+		}
 	}
 }

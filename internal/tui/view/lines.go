@@ -283,7 +283,7 @@ func (m *Model) itemDetail(t *target, w int) []line {
 		idl = append(idl, sg("  "+gHuman+" for you", sOrange))
 	}
 	if it.Status != "open" && it.Status != "closed" {
-		idl = append(idl, sg("  ", sPlain), statusGlyph(it.Status), sg(" "+statusWords(it.Status), sSoft))
+		idl = append(idl, sg("  ", sPlain), statusGlyph(it.Status), sg(" "+clean(statusWords(it.Status)), sSoft))
 	}
 	out = append(out, idl)
 	var meta line
@@ -361,7 +361,7 @@ func (m *Model) rowDetail(t *target, w int) []line {
 	d, re, r := m.d, t.repo, t.row
 	out := titleLines(r.Title, w)
 	idl := line{sg(" "+clean(r.ID), sDim), sg("  ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+clean(re.Repo), sSoft),
-		sg("  ", sPlain), statusGlyph(r.Status), sg(" "+statusWords(r.Status), sSoft), priority(r.Priority)}
+		sg("  ", sPlain), statusGlyph(r.Status), sg(" "+clean(statusWords(r.Status)), sSoft), priority(r.Priority)}
 	if r.Human {
 		idl = append(idl, sg("  "+gHuman+" needs you", sOrange))
 	}

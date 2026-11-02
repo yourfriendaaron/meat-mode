@@ -16,11 +16,13 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
@@ -172,9 +174,35 @@ func New(hub string, allowed netguard.Set, s *Session, onSession func(Session)) 
 }
 
 // dial goes through netguard.Dialer, which refuses a hub outside the allowed
-// set and dials the address it checked.
+// set and dials the address it checked. A plain http hub is allowed only on
+// this machine, so it is dialed only at a loopback address: "localhost" is
+// never looked up, since a resolver could answer it with another private
+// address and the password would cross the network in clear text.
 func (c *Client) dial(ctx context.Context, network, addr string) (net.Conn, error) {
-	return c.dialer.DialContext(ctx, network, addr)
+	if !strings.HasPrefix(c.hub, "http://") {
+		return c.dialer.DialContext(ctx, network, addr)
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	var ips []string
+	if host == "localhost" {
+		ips = []string{"127.0.0.1", "::1"}
+	} else if ip, err := netip.ParseAddr(host); err == nil && ip.Unmap().IsLoopback() {
+		ips = []string{ip.String()}
+	} else {
+		return nil, fmt.Errorf("refusing the hub at %s: plain http is allowed only on this machine", host)
+	}
+	var last error
+	for _, ip := range ips {
+		conn, err := c.dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
+		if err == nil {
+			return conn, nil
+		}
+		last = err
+	}
+	return nil, last
 }
 
 // Hub is the client's hub URL.
@@ -286,7 +314,7 @@ func statusError(resp *http.Response, data []byte) error {
 	if code/100 == 3 {
 		return &HTTPError{Status: code, Msg: fmt.Sprintf(
 			"the hub replied %d with a redirect to %q; the viewer does not follow redirects, so give the final address",
-			code, resp.Header.Get("Location"))}
+			code, safeMessage(resp.Header.Get("Location")))}
 	}
 	msg := hubMessage(data)
 	if msg == "" {
@@ -301,29 +329,55 @@ func statusError(resp *http.Response, data []byte) error {
 	return &HTTPError{Status: code, Msg: fmt.Sprintf("the hub replied %d: %s", code, msg)}
 }
 
-// hubMessage is the hub's {"error"} text, or the body as it is.
+// maxMessageRunes is the most of the hub's text an error message carries;
+// anything longer is cut, so a huge body cannot flood the terminal.
+const maxMessageRunes = 2000
+
+// safeMessage makes one line of the hub's text safe to print: no control
+// or bidi character survives, and it stops at maxMessageRunes runes.
+func safeMessage(s string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range s {
+		if n >= maxMessageRunes {
+			break
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			continue
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// hubMessage is the hub's {"error"} text, or the body as it is, made
+// safe to print.
 func hubMessage(data []byte) string {
 	var e struct {
 		Error string `json:"error"`
 	}
 	if json.Unmarshal(data, &e) == nil && e.Error != "" {
-		return e.Error
+		return safeMessage(e.Error)
 	}
-	return strings.TrimSpace(string(data))
+	return safeMessage(string(data))
 }
 
-// retryAfter reads Retry-After as seconds or an HTTP date; 0 when absent or
-// unreadable.
+// retryAfter reads Retry-After as seconds or an HTTP date; 0 when absent
+// or unreadable. It is clamped to 5 minutes either way: a hub that asks
+// for a century, or names a date that far off, would otherwise overflow
+// the Duration the caller multiplies it into.
 func retryAfter(v string) int {
+	const maxWait = 300
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return 0
 	}
 	if n, err := strconv.Atoi(v); err == nil {
-		return max(n, 0)
+		return min(max(n, 0), maxWait)
 	}
 	if t, err := http.ParseTime(v); err == nil {
-		return max(int(math.Ceil(time.Until(t).Seconds())), 0)
+		return min(max(int(math.Ceil(time.Until(t).Seconds())), 0), maxWait)
 	}
 	return 0
 }

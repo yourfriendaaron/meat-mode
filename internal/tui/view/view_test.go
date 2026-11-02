@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +66,8 @@ func plain(m Model) []string {
 }
 
 // checkFrame checks the frame's size: exactly height lines, each exactly
-// width cells, styled and plain, and no escape left after the styles go.
+// width cells, styled and plain, and no control, bidi or other invisible
+// character left after the styles go.
 func checkFrame(t *testing.T, name string, m Model) {
 	t.Helper()
 	styled := Frame(m)
@@ -79,8 +79,10 @@ func checkFrame(t *testing.T, name string, m Model) {
 			t.Errorf("%s: line %d is %d cells, want %d: %q", name, i, w, m.width, sgr.ReplaceAllString(l, ""))
 		}
 		p := sgr.ReplaceAllString(l, "")
-		if strings.ContainsRune(p, 0x1b) {
-			t.Errorf("%s: line %d keeps an escape: %q", name, i, p)
+		for _, r := range p {
+			if badRune(r) {
+				t.Errorf("%s: line %d keeps %q (U+%04X), which must not be drawn", name, i, r, r)
+			}
 		}
 		if w := lipgloss.Width(p); w != m.width {
 			t.Errorf("%s: plain line %d is %d cells, want %d", name, i, w, m.width)

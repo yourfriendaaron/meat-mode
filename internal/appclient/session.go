@@ -16,8 +16,10 @@ import (
 //
 //	{"version": 1, "sessions": {"<Session.Hub>": {"hub", "cookieName", "cookie"}}}
 //
-// Writes go to a temporary file renamed over it; two viewers saving at once
-// leave the last writer's file, which loses at most the other's renewal.
+// Writes go to a temporary file renamed over it, with no lock: two
+// viewers saving at once leave the last writer's file, which can lose
+// more than the other's cookie renewal, dropping a login the other
+// viewer just made or bringing back an entry it had deleted.
 const SessionFile = "tui.json"
 
 // sessionVersion is the version of SessionFile's shape this package writes.
@@ -41,10 +43,17 @@ type sessionFile struct {
 	Sessions map[string]Session `json:"sessions"`
 }
 
-// readSessions reads dir/SessionFile; a missing file is an empty one.
+// readSessions reads dir/SessionFile; a missing file is an empty one. A
+// file whose mode lets the group or others read it holds full app
+// logins, so it is tightened to 0600 before it is read.
 func readSessions(dir string) (sessionFile, error) {
 	f := sessionFile{Version: sessionVersion, Sessions: map[string]Session{}}
 	path := filepath.Join(dir, SessionFile)
+	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 {
+		if err := os.Chmod(path, 0o600); err != nil {
+			return f, err
+		}
+	}
 	b, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return f, nil

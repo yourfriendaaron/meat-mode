@@ -34,15 +34,21 @@ type tuiEnv struct {
 	getenv     func(string) string
 	readLine   func(prompt string) (string, error)
 	readSecret func(prompt string) (string, error)
+	// isTerminal reports whether stdin and stdout are terminals. The
+	// viewer needs both, so it is checked before the first prompt.
+	isTerminal func() bool
 	out        io.Writer
 	errOut     io.Writer
 	run        func(context.Context, tui.Options) error
 }
 
 // runTUI runs `meat-mode tui [--hub URL]` and `meat-mode tui logout [--hub URL]`.
+//
+// SIGINT and SIGTERM keep their default while the prompts and logout run,
+// so Ctrl+C at "Password for ..." ends the command; only the viewer
+// itself turns them into a clean quit.
 func runTUI(args []string) error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	ctx := context.Background()
 	paths, err := bridge.DefaultPaths()
 	if err != nil {
 		return err
@@ -70,10 +76,12 @@ func runTUI(args []string) error {
 		},
 		out:    os.Stdout,
 		errOut: os.Stderr,
+		isTerminal: func() bool {
+			return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+		},
 		run: func(ctx context.Context, o tui.Options) error {
-			if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
-				return errors.New("meat-mode tui needs a terminal")
-			}
+			ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+			defer stop()
 			return tui.Run(ctx, o)
 		},
 	}
@@ -193,7 +201,12 @@ func (s *saver) failed() error {
 }
 
 // tuiRun is `meat-mode tui`: it finds or makes a session, then runs the viewer.
+// It refuses to start without a terminal on both ends, before it asks for
+// anything, so piping it somewhere fails at once.
 func tuiRun(ctx context.Context, flagHub string, env tuiEnv) error {
+	if env.isTerminal == nil || !env.isTerminal() {
+		return errors.New("meat-mode tui needs a terminal")
+	}
 	hub, err := env.pickHub(flagHub)
 	if err != nil {
 		return err

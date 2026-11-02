@@ -3,6 +3,7 @@ package view
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
@@ -111,5 +112,51 @@ func TestCleanDropsControls(t *testing.T) {
 	}
 	if got != "Water [2J the plants now" {
 		t.Fatalf("clean = %q", got)
+	}
+}
+
+// TestCleanDropsFormat keeps invisible format characters out too: tag
+// characters, zero width spaces, word joiners and the BOM all go, while
+// the zero width joiner stays, since emoji sequences need it.
+func TestCleanDropsFormat(t *testing.T) {
+	got := clean("Wa\U000E0041ter\u200b the plan\u2060ts\ufeff")
+	if strings.ContainsAny(got, "\U000E0041\u200b\u2060\ufeff\u00ad") {
+		t.Fatalf("clean kept a format character: %q", got)
+	}
+	if got != "Wa ter the plan ts" {
+		t.Fatalf("clean = %q", got)
+	}
+	if got := clean("a\u200db"); got != "a\u200db" {
+		t.Fatalf("clean dropped the zero width joiner: %q", got)
+	}
+}
+
+// TestWrapLongWordFast wraps a word far longer than a line: every line
+// stays within the width, no text is lost, and the work stays a single
+// pass, not one measurement per line.
+func TestWrapLongWordFast(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want int
+	}{
+		{strings.Repeat("x", 20000), 500},
+		{strings.Repeat("種", 20000), 1000},
+	} {
+		start := time.Now()
+		ls := wrap(c.in, 40)
+		if d := time.Since(start); d > 200*time.Millisecond {
+			t.Errorf("wrap of %d runes took %s, want under 200 ms", utf8.RuneCountInString(c.in), d)
+		}
+		if len(ls) != c.want {
+			t.Errorf("wrap gave %d lines, want %d", len(ls), c.want)
+		}
+		for i, l := range ls {
+			if w := lipgloss.Width(l); w > 40 {
+				t.Errorf("line %d is %d cells, want at most 40: %q", i, w, l)
+			}
+		}
+		if strings.Join(ls, "") != c.in {
+			t.Error("wrapping lost text")
+		}
 	}
 }

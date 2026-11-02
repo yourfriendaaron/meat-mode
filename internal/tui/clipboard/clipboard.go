@@ -1,7 +1,7 @@
 // Package clipboard copies text for the terminal viewer so that it reaches
 // the user's own clipboard: an OSC 52 sequence to the terminal every time,
 // which passes through ssh and multiplexers, and the native clipboard as
-// well on a session that is not over ssh. See the epic's design.
+// well on a session that is not over ssh.
 package clipboard
 
 import (
@@ -75,7 +75,7 @@ func System() Env {
 // Result is what Copy did.
 type Result struct {
 	Native  bool // a native clipboard command succeeded
-	Sent    bool // the OSC 52 sequence was written to the terminal
+	Sent    bool // the text was written to the terminal as OSC 52, or handed to tmux to set the clipboard
 	TooLong bool // text was over MaxOSC52, so no OSC 52 was sent
 	// Err is ErrEmpty for empty text, otherwise set only when neither path
 	// worked and something failed.
@@ -88,9 +88,8 @@ var ErrEmpty = errors.New("nothing to copy")
 
 // Copy sends text by every path the environment allows. It bounds each
 // native command with a 2 s timeout on ctx; System's Run adds a 1 s
-// WaitDelay. The program calls it from a tea.Cmd, between frames; if the
-// /dev/tty write could interleave with Bubble Tea's output, lane 4 uses
-// Bubble Tea's raw output instead and reports it.
+// WaitDelay. The program calls it from a tea.Cmd, between frames, so the
+// write to /dev/tty does not interleave with Bubble Tea's output.
 func Copy(ctx context.Context, text string, env Env) Result {
 	if text == "" {
 		return Result{Err: ErrEmpty}

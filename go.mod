@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/coder/safedial v0.2.0
 	github.com/google/uuid v1.6.0
+	github.com/rivo/uniseg v0.4.7
 	golang.org/x/crypto v0.31.0
 	golang.org/x/net v0.25.0
 	golang.org/x/term v0.47.0
@@ -31,7 +32,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
