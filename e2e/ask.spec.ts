@@ -53,7 +53,9 @@ base.beforeAll(async () => {
     body: JSON.stringify({ name: "laptop" }),
   });
   await w.pair("laptop", w.hubURL, token);
-  w.startBridge("laptop", { ...(await w.fakeAgentEnv("2s")), MEAT_MODE_AGENT_NAME: AGENT });
+  // 4 s between the fake's slow steps: the follow-up must reach the run while it
+  // still works, and CI's runners can take longer than 2 s to deliver it.
+  w.startBridge("laptop", { ...(await w.fakeAgentEnv("4s")), MEAT_MODE_AGENT_NAME: AGENT });
 });
 
 base.afterEach(async ({}, info) => {

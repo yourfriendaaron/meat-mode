@@ -244,7 +244,9 @@ test("a push subscription belongs to the session and logging out drops it", asyn
   await app.getByRole("button", { name: "Log out" }).click();
   await expect(app.getByLabel("Password")).toBeVisible();
 
-  expect(await pushOwners(w, FAKE_ENDPOINT)).toEqual([]);
+  // The hub ends the session, then drops its subscriptions, and the app can
+  // show the login before the logout's answer arrives, so wait for the drop.
+  await expect.poll(() => pushOwners(w, FAKE_ENDPOINT)).toEqual([]);
   expect((await ctx!.cookies()).find((c) => c.name === "meat_mode_session")).toBeUndefined();
   // The old cookie is dead on the hub, not only gone from the browser.
   expect((await viaProxy(w, "GET", "/api/state", { cookie: `meat_mode_session=${token}` })).status).toBe(401);
