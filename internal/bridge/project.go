@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // projectFlag adds --project, which every command on the hub's lists takes.
@@ -83,8 +84,8 @@ func gitTop(dir string) (string, error) {
 // worktreeMain is the main checkout of the linked worktree at dir, whose
 // .git file points into <main>/.git/worktrees/<name>.
 func worktreeMain(dir string) (string, bool) {
-	b, err := os.ReadFile(filepath.Join(dir, ".git"))
-	if err != nil {
+	b, err := tracker.ReadRegular(filepath.Join(dir, ".git"), 4096) // a gitdir line is short
+	if err != nil || len(b) > 4096 {
 		return "", false
 	}
 	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir:")

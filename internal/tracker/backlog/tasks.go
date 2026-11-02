@@ -109,7 +109,7 @@ func (b *Tracker) List(ctx context.Context, dir string) ([]tracker.Issue, error)
 		}
 		var file []byte
 		if path, ok := files[idKey(t.ID)]; ok {
-			if file, err = os.ReadFile(path); err != nil {
+			if file, err = tracker.ReadFile(path); err != nil {
 				return nil, err
 			}
 		}
@@ -148,7 +148,7 @@ func (b *Tracker) Show(ctx context.Context, dir, id string) (tracker.Issue, erro
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(dir, path)
 		}
-		if file, err = os.ReadFile(path); err != nil {
+		if file, err = tracker.ReadFile(path); err != nil {
 			return tracker.Issue{}, err
 		}
 	}

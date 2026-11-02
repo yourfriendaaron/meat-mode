@@ -160,7 +160,7 @@
   --role-hl-tag: color-mix(in srgb, var(--palette-orange) 28%, transparent);
 
   /* List marks: tell lists apart. Slot 0 purple, 1 cyan, 2 green, 3 orange, 4 blue, 5 rose.
-     The rose is the one list colour near pink, so a list colour is never an edge or a button. */
+     The rose is the one list colour near pink, so it is never an edge on someone's words or a button fill. */
   --role-repo-0: var(--palette-purple);
   --role-repo-1: var(--palette-cyan);
   --role-repo-2: var(--palette-green);

@@ -203,7 +203,8 @@ type Repo struct {
 	EpicsPending bool `json:"epicsPending,omitempty"`
 	// Hub-only: the list's colour, a slot from 0 to ListColours-1 that the
 	// hub gives a repo when it first holds it and keeps (docs/api.md, List
-	// identity). Nil from an older hub.
+	// identity), or sets it to the workspace colour its bridge reports
+	// (SpaceColour). Nil from an older hub.
 	Colour *int `json:"colour,omitempty"`
 	// Hub-only: the IconHash of the repo's icon as its bridge last sent it
 	// (PUT /bridge/v1/icons); the app loads it from GET /api/icons/{hash}.

@@ -293,6 +293,41 @@ func TestNewWarnsWhenTheAgentIsNotOnPATH(t *testing.T) {
 	}
 }
 
+// New gives the bridge the loader for the workspace colours file in the state
+// folder (docs/api.md, Workspace colours).
+func TestNewWiresLoadSpaceColours(t *testing.T) {
+	env, _, _ := testEnv(t, fakeBD(t, "1.3.1"))
+	env.Paths.State = t.TempDir()
+	// The loader looks at the variable first; a host that sets it must not
+	// send this test to another file.
+	t.Setenv("MEAT_MODE_SPACE_COLOURS", "")
+	must(t, Config{HubURL: "https://meat-mode.example.com", Token: token}.Save(env.Paths.Config))
+	file := filepath.Join(env.Paths.State, SpaceColoursName)
+	must(t, os.WriteFile(file, []byte(`{"version":1,"spaces":[]}`), 0o600))
+	s, err := LoadSettings(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := New(s, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Journal.Close()
+	if b.LoadSpaceColours == nil {
+		t.Fatal("New left LoadSpaceColours unset")
+	}
+	if got, err := b.LoadSpaceColours(); err != nil || len(got) != 0 {
+		t.Errorf("an empty list: got %+v, %v; want no entries and no error", got, err)
+	}
+	// An empty list reads the same as a missing file, so also show that the
+	// loader looks in the state folder: it finds an entry written there, and
+	// finds it afresh on the next call.
+	must(t, os.WriteFile(file, []byte(`{"version":1,"spaces":[{"path":"/srv/projects/garden","colour":"ansi6"}]}`), 0o600))
+	if got, err := b.LoadSpaceColours(); err != nil || len(got) != 1 || got[0].Slot != 1 {
+		t.Errorf("one entry: got %+v, %v; want one entry in slot 1 and no error", got, err)
+	}
+}
+
 func TestStatus(t *testing.T) {
 	hub := fakehub.New(map[string]string{token: us})
 	defer hub.Close()

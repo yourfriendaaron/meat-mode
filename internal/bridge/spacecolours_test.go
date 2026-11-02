@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
 func TestSpaceSlot(t *testing.T) {
@@ -289,6 +291,11 @@ func TestDiscoverReportsSpaceColours(t *testing.T) {
 	w := newWorld(t, false)
 	garden := w.repo("garden", true)
 	w.repo("shed", true)
+	// Discover resolves links in repo folders; match it where the temp
+	// folder sits under one.
+	if real, err := filepath.EvalSymlinks(garden); err == nil {
+		garden = real
+	}
 	file := filepath.Join(t.TempDir(), "space-colours.json")
 	var logs bytes.Buffer
 	b := w.start()
@@ -365,4 +372,17 @@ func showMap(m map[string]*int) map[string]any {
 		}
 	}
 	return out
+}
+
+// The slot tables match the hub's colour slots, so a bridge never sends a
+// spaceColour the hub refuses (which would fail every repo report).
+func TestSpaceSlotsFitListColours(t *testing.T) {
+	if len(spaceRefs) != api.ListColours {
+		t.Errorf("%d reference colours; the hub has %d slots", len(spaceRefs), api.ListColours)
+	}
+	for name, slot := range spaceNames {
+		if slot < 0 || slot >= api.ListColours {
+			t.Errorf("%s maps to slot %d, outside 0 to %d", name, slot, api.ListColours-1)
+		}
+	}
 }

@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // SpaceColoursName is the file in the state folder that holds the workspace
@@ -32,8 +32,9 @@ var spaceNames = map[string]int{
 	"ansi5": 0, "ansi6": 1, "ansi2": 2, "ansi3": 3, "ansi4": 4, "ansi1": 5,
 }
 
-// spaceRefs are the reference colours of slots 0 to 5 (the --role-repo-*
-// tokens), which a picked colour is matched against.
+// spaceRefs are the reference colours of slots 0 to 5 that a picked colour
+// is matched against: Herdr's own space colours (docs/api.md, Workspace
+// colours), not the app's --role-repo-* tokens.
 var spaceRefs = [6][3]int{
 	{0x8b, 0x7c, 0xf6}, {0x22, 0xa9, 0x9a}, {0x3f, 0xae, 0x6a},
 	{0xe3, 0x81, 0x4f}, {0x5b, 0x8d, 0xef}, {0xd9, 0x64, 0x9a},
@@ -110,19 +111,15 @@ func LoadSpaceColours(getenv func(string) string, state string) func() ([]SpaceC
 
 // ReadSpaceColours reads the workspace colours file at path and returns its
 // kept entries in file order. A missing file gives none and no error. An
-// unreadable file, one over 1 MiB, or one that is not a JSON object whose
+// unreadable file, one that is not a regular file, one over 1 MiB, or one that is not a JSON object whose
 // version is the number 1 gives an error, and no entries. An entry whose
 // path or colour breaks the rules is skipped.
 func ReadSpaceColours(path string) ([]SpaceColour, error) {
-	f, err := os.Open(path)
+	// Not blocking, so a pipe or device at the path cannot hang the bridge.
+	data, err := tracker.ReadRegular(path, maxSpaceColours)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, fmt.Errorf("cannot read the workspace colours file: %w", err)
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, maxSpaceColours+1))
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the workspace colours file %s: %w", path, err)
 	}
