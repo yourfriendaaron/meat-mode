@@ -212,10 +212,13 @@ func TestTUIUsesThePairedHubWithoutAsking(t *testing.T) {
 
 func TestTUIHubErrorHidesWhatWasTyped(t *testing.T) {
 	e := newTestEnv(t)
-	e.readLine = func(string) (string, error) { return "Sesame open 1", nil }
-	err := tuiMain(context.Background(), nil, e.tuiEnv)
-	if err == nil || strings.Contains(err.Error(), "Sesame") {
-		t.Errorf("error %v", err)
+	// A bare word would pass as a host name; it is refused before a lookup.
+	for _, typed := range []string{"Sesame open 1", "Sesame1"} {
+		e.readLine = func(string) (string, error) { return typed, nil }
+		err := tuiMain(context.Background(), nil, e.tuiEnv)
+		if err == nil || strings.Contains(err.Error(), "Sesame") || e.ran != nil {
+			t.Errorf("%q: error %v, ran %v", typed, err, e.ran != nil)
+		}
 	}
 }
 

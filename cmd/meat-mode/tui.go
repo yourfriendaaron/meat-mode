@@ -287,11 +287,17 @@ func (e tuiEnv) askHub() (string, error) {
 	if raw == "" {
 		return "", errors.New("no hub URL given; run meat-mode tui --hub URL")
 	}
+	// What was typed may be a password typed at the wrong prompt, so the
+	// error never quotes it, and a bare word, which would pass as a host
+	// name, is refused before any lookup could send it to a DNS server.
+	// A hub on a short host name is given with --hub.
+	bad := errors.New("that is not a hub URL such as https://hub.example.com; run meat-mode tui --hub URL")
+	if !strings.Contains(raw, "://") && !strings.Contains(raw, ".") && !strings.HasPrefix(strings.ToLower(raw), "localhost") {
+		return "", bad
+	}
 	hub, err := appclient.NormalizeHub(raw)
 	if err != nil {
-		// Not the error itself: it quotes what was typed, which may be a
-		// password typed at the wrong prompt.
-		return "", errors.New("that is not a hub URL such as https://hub.example.com; run meat-mode tui --hub URL")
+		return "", bad
 	}
 	return hub, nil
 }
