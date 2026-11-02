@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/appclient"
 	"github.com/yourfriendaaron/meat-mode/internal/hub/hubtest"
 	"github.com/yourfriendaaron/meat-mode/internal/netguard"
@@ -273,5 +274,43 @@ func TestReason(t *testing.T) {
 	}
 	if got := p.downText(errors.New("connection refused")); got != "Hub unreachable, retrying: connection refused" {
 		t.Errorf("other: %q", got)
+	}
+}
+
+// A second action on an item waits until the screen shows the first: a
+// second x before the refetch would act on the old status, and two dones
+// on a repeating to-do would skip a date.
+func TestSecondActionWaits(t *testing.T) {
+	c, err := appclient.New("http://localhost:1", netguard.Set{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := newProgram(context.Background(), Options{Client: c, Clipboard: noNative()})
+	act := []view.Effect{view.Act{Action: api.NewAction{Kind: "done", Key: "hub/personal/mm-1"}, Done: "Done"}}
+
+	p.run(act)
+	if _, ok := p.busy["hub/personal/mm-1"]; !ok {
+		t.Fatal("the item is not marked busy while its action is sent")
+	}
+	p.run(act)
+	if !strings.Contains(strings.Join(view.Frame(p.m.Resize(80, 10)), "\n"), "Still sending") {
+		t.Fatal("a second x on a busy item was not held")
+	}
+
+	p.onActed(actedMsg{key: "hub/personal/mm-1"})
+	if _, ok := p.busy["hub/personal/mm-1"]; !ok {
+		t.Fatal("the item was freed before the screen shows the change")
+	}
+	p.scheduled, p.want = false, fetchSet{state: true}
+	p.fetch()
+	p.onFetched(fetchedMsg{state: &api.State{}})
+	if _, ok := p.busy["hub/personal/mm-1"]; ok {
+		t.Fatal("the item is still busy after the refetch")
+	}
+
+	p.run(act)
+	p.onActed(actedMsg{key: "hub/personal/mm-1", err: errors.New("down")})
+	if _, ok := p.busy["hub/personal/mm-1"]; ok {
+		t.Fatal("a failed action left the item busy")
 	}
 }

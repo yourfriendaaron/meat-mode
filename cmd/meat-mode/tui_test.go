@@ -66,8 +66,9 @@ func newTestEnv(t *testing.T, passwords ...string) *testEnv {
 			e.asked++
 			return passwords[e.asked-1], nil
 		},
-		out:    &e.out,
-		errOut: &e.errOut,
+		isTerminal: func() bool { return true },
+		out:        &e.out,
+		errOut:     &e.errOut,
 		run: func(_ context.Context, o tui.Options) error {
 			e.ran = &o
 			return nil
@@ -146,6 +147,32 @@ func TestTUIThreeWrongPasswords(t *testing.T) {
 	err := tuiMain(context.Background(), []string{"--hub", h.URL}, e.tuiEnv)
 	if err == nil || err.Error() != "wrong password" || e.asked != 3 || e.ran != nil {
 		t.Errorf("error %v, asked %d, ran %v", err, e.asked, e.ran != nil)
+	}
+}
+
+// TestTUIWithoutTerminal checks the first thing the tui path does: with
+// stdin or stdout piped it says so before any prompt or saved session,
+// while logout still works.
+func TestTUIWithoutTerminal(t *testing.T) {
+	h := hubtest.New(t, hubtest.Options{})
+	e := newTestEnv(t, hubtest.Password)
+	e.isTerminal = func() bool { return false }
+	err := tuiMain(context.Background(), []string{"--hub", h.URL}, e.tuiEnv)
+	if err == nil || err.Error() != "meat-mode tui needs a terminal" {
+		t.Fatalf("error %v, want the terminal message", err)
+	}
+	if e.asked != 0 {
+		t.Errorf("asked for the password %d times before the check", e.asked)
+	}
+	if e.ran != nil {
+		t.Error("the viewer ran without a terminal")
+	}
+	e.out.Reset()
+	if err := tuiMain(context.Background(), []string{"logout", "--hub", h.URL}, e.tuiEnv); err != nil {
+		t.Fatalf("logout without a terminal: %v", err)
+	}
+	if got := e.out.String(); got != "No saved session for "+h.URL+"; nothing to log out of.\n" {
+		t.Errorf("output %q", got)
 	}
 }
 

@@ -35,7 +35,7 @@ func (d *data) refFull(t *target) string {
 	if it := t.item; it != nil {
 		meta := []string{d.listName(it.Bridge, it.Repo)}
 		if it.Status != "open" {
-			meta = append(meta, statusWords(it.Status))
+			meta = append(meta, clean(statusWords(it.Status)))
 		}
 		if it.DueAt != nil {
 			meta = append(meta, "due "+fmtFull(it.DueAt.In(d.now.Location())))
@@ -50,7 +50,7 @@ func (d *data) refFull(t *target) string {
 			meta = append(meta, strings.Join(ts, " "))
 		}
 		b.WriteString("\n" + strings.Join(meta, " · "))
-		if desc := strings.TrimSpace(it.Description); desc != "" {
+		if desc := strings.TrimSpace(blockClean(it.Description)); desc != "" {
 			b.WriteString("\n\n" + desc)
 		}
 		if subs := subtasksOf(it, d.state.Items); len(subs) > 0 {
@@ -68,8 +68,8 @@ func (d *data) refFull(t *target) string {
 		return b.String()
 	}
 	re, r := t.repo, t.row
-	b.WriteString("\n" + clean(re.Repo) + " · " + statusWords(r.Status) + " · P" + itoa(r.Priority))
-	if desc := strings.TrimSpace(r.Description); desc != "" {
+	b.WriteString("\n" + clean(re.Repo) + " · " + clean(statusWords(r.Status)) + " · P" + itoa(r.Priority))
+	if desc := strings.TrimSpace(blockClean(r.Description)); desc != "" {
 		b.WriteString("\n\n" + desc)
 	}
 	if kids := d.children(re, r.ID); len(kids) > 0 {

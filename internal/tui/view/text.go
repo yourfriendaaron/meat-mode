@@ -5,6 +5,7 @@ import (
 	"unicode"
 
 	"charm.land/lipgloss/v2"
+	"github.com/rivo/uniseg"
 )
 
 // The screen is built as lines of styled segments, cut and padded to an
@@ -190,14 +191,28 @@ func withBg(l line, bg string) line {
 	return out
 }
 
-// clean makes one line of text safe to draw: control characters become
-// spaces, so no text from the hub can move the cursor or change the
-// terminal's state, and runs of space shrink to one.
+// joiner is the zero width joiner: the one format character kept, since
+// emoji sequences need it to stay one cluster.
+const joiner = '‍'
+
+// badRune reports whether r is a character that must never reach the
+// terminal as itself: a control character, one of the Unicode line and
+// paragraph separators, a bidi control, or an invisible format character
+// other than the zero width joiner.
+func badRune(r rune) bool {
+	return unicode.IsControl(r) || r == ' ' || r == ' ' ||
+		unicode.Is(unicode.Bidi_Control, r) || (unicode.Is(unicode.Cf, r) && r != joiner)
+}
+
+// clean makes one line of text safe to draw: every bad rune, line feed
+// and tab among them, becomes a space, so no text from the hub can move
+// the cursor or change the terminal's state, and runs of space shrink
+// to one.
 func clean(s string) string {
 	var b strings.Builder
 	space := false
 	for _, r := range s {
-		if unicode.IsControl(r) || r == ' ' || r == ' ' || unicode.Is(unicode.Bidi_Control, r) {
+		if badRune(r) {
 			r = ' '
 		}
 		if r == ' ' {
@@ -211,6 +226,22 @@ func clean(s string) string {
 		b.WriteRune(r)
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// blockClean makes a block of hub text safe to hand on, as the text Y
+// copies: CR and CRLF become LF, line feed and tab stay, every other bad
+// rune is dropped, and indentation and blank lines are kept as they are.
+func blockClean(s string) string {
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r != '\n' && r != '\t' && badRune(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // paragraphs splits multi-line text into cleaned lines, keeping blank lines.
@@ -244,18 +275,39 @@ func wrap(text string, w int) []string {
 				out = append(out, cur)
 				cur = word
 			}
-			for lipgloss.Width(cur) > w {
-				head := cut(cur, w)
-				if head == "" {
-					head = string([]rune(cur)[:1])
-				}
-				out = append(out, head)
-				cur = cur[len(head):]
+			if lipgloss.Width(cur) > w {
+				ls := splitLong(cur, w)
+				out = append(out, ls[:len(ls)-1]...)
+				cur = ls[len(ls)-1]
 			}
 		}
 		out = append(out, cur)
 	}
 	return out
+}
+
+// splitLong breaks one word too wide for a line into pieces at most w
+// cells wide, in a single pass over its grapheme clusters, so a very long
+// word costs one walk rather than one measurement per line and an emoji
+// sequence is never split. A cluster wider than w (a wide one on a
+// one-cell line) goes out alone.
+func splitLong(word string, w int) []string {
+	var out []string
+	start, n, state := 0, 0, -1
+	rest := word
+	pos := 0
+	for len(rest) > 0 {
+		var cluster string
+		var cw int
+		cluster, rest, cw, state = uniseg.FirstGraphemeClusterInString(rest, state)
+		if n > 0 && n+cw > w {
+			out = append(out, word[start:pos])
+			start, n = pos, 0
+		}
+		pos += len(cluster)
+		n += cw
+	}
+	return append(out, word[start:])
 }
 
 // padRight pads s with spaces to n cells; longer text is left as it is.

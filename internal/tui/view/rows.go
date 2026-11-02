@@ -431,7 +431,7 @@ func (d *data) drillRows(q string, t *target, w int) []row {
 	re, card := t.repo, t.row
 	done, total := d.progress(re, card.ID)
 	rows := []row{headRow(append(append(line{sg(" ", sPlain)}, bar(done, total, 16)...),
-		sg(" "+itoa(done)+"/"+itoa(total)+" done", sSoft), sg("  "+card.ID+" ∙ "+clean(re.Repo), sDim))...)}
+		sg(" "+itoa(done)+"/"+itoa(total)+" done", sSoft), sg("  "+clean(card.ID)+" ∙ "+clean(re.Repo), sDim))...)}
 	if card.Description != "" {
 		for _, l := range wrap(card.Description, w-3) {
 			rows = append(rows, headRow(sg("  "+l, sSoft)))

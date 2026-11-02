@@ -22,7 +22,7 @@ var helpKeys = []hint{
 	{"x", "done, or reopen"},
 	{"s", "snooze"},
 	{"u", "undo the last done or snooze"},
-	{"o", "show the item's app link"},
+	{"o", "copy the item's app link"},
 	{"r", "refresh"},
 	{"q", "quit"},
 }

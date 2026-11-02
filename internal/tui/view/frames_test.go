@@ -176,3 +176,46 @@ func TestTinySizes(t *testing.T) {
 		}
 	}
 }
+
+// TestFramesHostileText draws an item and an epic card whose id, title,
+// status and description carry ESC, U+009B, U+202E, U+2028 and BEL: none
+// of them may reach the frame, in All, in the drill and in the item
+// detail.
+func TestFramesHostileText(t *testing.T) {
+	s, e := load(t)
+	for i := range s.Items {
+		if s.Items[i].ID != "mm-28" {
+			continue
+		}
+		it := &s.Items[i]
+		it.ID = "mm-28\x1b\u009b\u202e\u2028"
+		it.Title = "Book the \x1b[2Jboiler\u009bser\u202evice\u2028"
+		it.Status = "in_progress\x1b]0;x\a"
+		it.Description = "Boiler \x1b]0;x\aser\u202evice\u2028\n\u009b service"
+	}
+	const cardID = "sf-c1x\u009b"
+	for k := range e.Repos {
+		if e.Repos[k].Repo != "acme/storefront" {
+			continue
+		}
+		for j := range e.Repos[k].Rows {
+			r := &e.Repos[k].Rows[j]
+			if r.ID == "sf-c1x" {
+				r.ID = cardID
+			}
+			if r.Parent == "sf-c1x" {
+				r.Parent = cardID
+			}
+		}
+	}
+	m := New(hub).Resize(90, 30).SetConn(ConnLive).SetData(s, e, now)
+	m, _ = m.Key("3")
+	checkFrame(t, "all hostile", m)
+	m = selectKey(t, m, "laptop/acme/storefront/"+cardID)
+	m, _ = m.Key("enter")
+	checkFrame(t, "drill hostile", m)
+	d := New(hub).Resize(90, 30).SetConn(ConnLive).SetData(s, e, now)
+	d = selectKey(t, d, "hub/personal/mm-28")
+	d, _ = d.Key("enter")
+	checkFrame(t, "item detail hostile", d)
+}
