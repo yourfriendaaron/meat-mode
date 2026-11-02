@@ -44,47 +44,47 @@
 
 == 90 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
-›API api-h3k   Rate limiting v2      ▰▰▱▱▱   2/5 ╎ Rate limiting v2                       |
- API api-h3k.3 Limits per plan       ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
- API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis,       |
- STO sf-c1x    Checkout redesign     ▰▰▱▱▱   2/6 ╎  replacing the per-IP limiter.         |
- STO sf-a8m    Accessibility pass    ▰▱▱▱▱   2/8 ╎                                        |
- STO sf-r4t    Search relevance      ▱▱▱▱▱   0/0 ╎› ◒ api-h3k.3    Limits per plan        |
- No epic 4                                       ╎  ◦ api-h3k.4    Load test at 5k rps    |
- STO sf-q2e    Flaky test in cart.spec         ◦ ╎  ◦ api-h3k.5    Docs for the new 429 b⋯|
- STO sf-q1w    Bump image CDN timeout          ◦ ╎  ✓ api-h3k.1    Token bucket store     |
- DOT dot-7aa   Move shell config to XDG paths  ◦ ╎  ✓ api-h3k.2    Middleware and headers |
- DOT dot-7ab   Pin the editor plugins          ◦ ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
- h back  y copy  Y copy all  ? keys                                                       |
+ ‹ Esc Epics                                                                              |
+ Limits per plan                                                                          |
+ api-h3k.3  API acme/api  ◒ in progress  P2                                               |
+ epic ∙ updated 23h ago                                                                   |
+ Epic: Rate limiting v2                                                                   |
+                                                                                          |
+  No description                                                                          |
+                                                                                          |
+ Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                  |
+  ◦ api-h3k.3.2  Admin override                                                           |
+  ✓ api-h3k.3.1  Plan table migration                                                     |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ y copy  Y copy all  Esc back  ? keys                                                     |
 
 == 140 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
-›API api-h3k   Rate limiting v2                               ▰▰▰▱▱▱▱▱   2/5 ╎ Rate limiting v2                                             |
- API api-h3k.3 Limits per plan                                ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
- API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis, replacing the per-IP        |
- STO sf-c1x    Checkout redesign                              ▰▰▰▱▱▱▱▱   2/6 ╎  limiter.                                                    |
- STO sf-a8m    Accessibility pass                             ▰▰▱▱▱▱▱▱   2/8 ╎                                                              |
- STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱   0/0 ╎› ◒ api-h3k.3    Limits per plan                              |
- No epic 4                                                                   ╎  ◦ api-h3k.4    Load test at 5k rps                          |
- STO sf-q2e    Flaky test in cart.spec                                     ◦ ╎  ◦ api-h3k.5    Docs for the new 429 body                    |
- STO sf-q1w    Bump image CDN timeout                                      ◦ ╎  ✓ api-h3k.1    Token bucket store                           |
- DOT dot-7aa   Move shell config to XDG paths                              ◦ ╎  ✓ api-h3k.2    Middleware and headers                       |
- DOT dot-7ab   Pin the editor plugins                                      ◦ ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
- h back  y copy  Y copy all  ? keys                                                                                                         |
+ ‹ Esc Epics                                                                                                                                |
+ Limits per plan                                                                                                                            |
+ api-h3k.3  API acme/api  ◒ in progress  P2                                                                                                 |
+ epic ∙ updated 23h ago                                                                                                                     |
+ Epic: Rate limiting v2                                                                                                                     |
+                                                                                                                                            |
+  No description                                                                                                                            |
+                                                                                                                                            |
+ Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                                                                    |
+  ◦ api-h3k.3.2  Admin override                                                                                                             |
+  ✓ api-h3k.3.1  Plan table migration                                                                                                       |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ y copy  Y copy all  Esc back  ? keys                                                                                                       |
 
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
@@ -152,65 +152,65 @@
 
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
-›API api-h3k   Rate limiting v2      ▰▰▱▱▱   2/5 ╎ Rate limiting v2                       |
- API api-h3k.3 Limits per plan       ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
- API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis,       |
- STO sf-c1x    Checkout redesign     ▰▰▱▱▱   2/6 ╎  replacing the per-IP limiter.         |
- STO sf-a8m    Accessibility pass    ▰▱▱▱▱   2/8 ╎                                        |
- STO sf-r4t    Search relevance      ▱▱▱▱▱   0/0 ╎› ◒ api-h3k.3    Limits per plan        |
- No epic 4                                       ╎  ◦ api-h3k.4    Load test at 5k rps    |
- STO sf-q2e    Flaky test in cart.spec         ◦ ╎  ◦ api-h3k.5    Docs for the new 429 b⋯|
- STO sf-q1w    Bump image CDN timeout          ◦ ╎  ✓ api-h3k.1    Token bucket store     |
- DOT dot-7aa   Move shell config to XDG paths  ◦ ╎  ✓ api-h3k.2    Middleware and headers |
- DOT dot-7ab   Pin the editor plugins          ◦ ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
- h back  y copy  Y copy all  ? keys                                                       |
+ ‹ Esc Epics                                                                              |
+ Limits per plan                                                                          |
+ api-h3k.3  API acme/api  ◒ in progress  P2                                               |
+ epic ∙ updated 23h ago                                                                   |
+ Epic: Rate limiting v2                                                                   |
+                                                                                          |
+  No description                                                                          |
+                                                                                          |
+ Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                  |
+  ◦ api-h3k.3.2  Admin override                                                           |
+  ✓ api-h3k.3.1  Plan table migration                                                     |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ y copy  Y copy all  Esc back  ? keys                                                     |
 
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
-›API api-h3k   Rate limiting v2                               ▰▰▰▱▱▱▱▱   2/5 ╎ Rate limiting v2                                             |
- API api-h3k.3 Limits per plan                                ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
- API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis, replacing the per-IP        |
- STO sf-c1x    Checkout redesign                              ▰▰▰▱▱▱▱▱   2/6 ╎  limiter.                                                    |
- STO sf-a8m    Accessibility pass                             ▰▰▱▱▱▱▱▱   2/8 ╎                                                              |
- STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱   0/0 ╎› ◒ api-h3k.3    Limits per plan                              |
- No epic 4                                                                   ╎  ◦ api-h3k.4    Load test at 5k rps                          |
- STO sf-q2e    Flaky test in cart.spec                                     ◦ ╎  ◦ api-h3k.5    Docs for the new 429 body                    |
- STO sf-q1w    Bump image CDN timeout                                      ◦ ╎  ✓ api-h3k.1    Token bucket store                           |
- DOT dot-7aa   Move shell config to XDG paths                              ◦ ╎  ✓ api-h3k.2    Middleware and headers                       |
- DOT dot-7ab   Pin the editor plugins                                      ◦ ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
- h back  y copy  Y copy all  ? keys                                                                                                         |
+ ‹ Esc Epics                                                                                                                                |
+ Limits per plan                                                                                                                            |
+ api-h3k.3  API acme/api  ◒ in progress  P2                                                                                                 |
+ epic ∙ updated 23h ago                                                                                                                     |
+ Epic: Rate limiting v2                                                                                                                     |
+                                                                                                                                            |
+  No description                                                                                                                            |
+                                                                                                                                            |
+ Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                                                                    |
+  ◦ api-h3k.3.2  Admin override                                                                                                             |
+  ✓ api-h3k.3.1  Plan table migration                                                                                                       |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ y copy  Y copy all  Esc back  ? keys                                                                                                       |
 

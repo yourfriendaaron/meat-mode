@@ -117,7 +117,8 @@ func (Quit) effect()    {}
 // Keys are Bubble Tea v2's KeyPressMsg.String() names: "j", "k", "up",
 // "down", "left", "right", "h", "l", "g", "G", "home", "end", "pgup",
 // "pgdown", "enter", "esc", "backspace", "tab", "shift+tab", "space", "/",
-// "?", "y", "Y", "x", "u", "s", "o", "p", "r", "q", "ctrl+c", "1" to "6". The
+// "?", "y", "Y", "x", "u", "s", "o", "p", "r", "q", "ctrl+c", "ctrl+d",
+// "ctrl+u", "ctrl+f", "ctrl+b", "ctrl+n", "ctrl+p", "ctrl+w", "0" to "6". The
 // snooze menu takes "1" to "6" in snoozeOptions order (one is missing after
 // 18:00, as in the app).
 //
@@ -151,10 +152,11 @@ type Model struct {
 	right    bool            // Epics in layout B: the keys move in the selected card's children
 	rightIdx int
 
-	filter    string
-	filtering bool
-	help      bool
-	snoozeKey string // the item the snooze menu is open for
+	filter     string
+	filtering  bool
+	help       bool
+	helpScroll int
+	snoozeKey  string // the item the snooze menu is open for
 
 	pw       bool // the password prompt
 	pwReason string

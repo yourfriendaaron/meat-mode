@@ -336,19 +336,20 @@ The viewer dials only private addresses, as the bridge does (see [Private networ
 
 | Key | Does |
 |---|---|
-| `j` `k` or the arrows | move; `g` `G` top and bottom, PageUp and PageDown a page |
-| `Enter`, `Esc` | open a row or go into an epic; back |
-| `l` `h` | unfold and fold an epic, or go into and out of it |
+| `j` `k` or the arrows | move; `g` `G` top and bottom; Space, PageUp and PageDown a page; `Ctrl+D` `Ctrl+U` half a page |
+| `Enter` | open the row full screen, wherever it is: a to-do, an epic, or a task inside an epic |
+| `l` or right | go into an epic's tasks, or unfold it in a narrow pane |
+| `h`, left or `Esc` | go back; `h` also folds an epic in a narrow pane |
 | `Tab`, `1` `2` `3` | switch tab |
-| `/` | filter by title or id |
+| `/` | filter by title or id; the arrows still move, `Ctrl+W` deletes a word, `Ctrl+U` the whole filter |
 | `y` | copy the id and title, such as `mm-4 (projects/garden) Order bark mulch` |
 | `Y` | copy that line with the details: list, due date, tags, description, notes and an epic's tasks |
-| `x` | done, or reopen a closed to-do |
-| `s` | snooze, with the app's choices, one key each |
+| `x` | done, or reopen a closed to-do; the selection moves on to the next row |
+| `s` | snooze, with the app's choices, one key each; `0` clears a snooze |
 | `p` | this project only, or every list |
 | `u` | undo the last done or snooze |
-| `o` | copy the item's link in the app, and show it |
-| `r`, `?`, `q` | refresh, list the keys, quit |
+| `o` | show the item's link in the app |
+| `r`, `?`, `q` | refresh, list the keys and what the marks mean, quit |
 
 Epic rows that are not tasks for you are read-only: `x` and `s` on one say so.
 

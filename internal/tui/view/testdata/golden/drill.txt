@@ -1,6 +1,6 @@
 == 56 x 20, layout c
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
- ‹ Esc Epics › Checkout redesign                        |
+ ‹ Esc All › Checkout redesign                          |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront    |
   Replace the three-page checkout with one page. Design |
   in `docs/checkout.md`.                                |
@@ -22,7 +22,7 @@
 
 == 89 x 20, layout c
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
- ‹ Esc Epics › Checkout redesign                                                         |
+ ‹ Esc All › Checkout redesign                                                           |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                     |
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.           |
                                                                                          |
@@ -44,7 +44,7 @@
 
 == 90 x 20, layout c
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
- ‹ Esc Epics › Checkout redesign                                                          |
+ ‹ Esc All › Checkout redesign                                                            |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                      |
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.            |
                                                                                           |
@@ -66,7 +66,7 @@
 
 == 140 x 20, layout c
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
- ‹ Esc Epics › Checkout redesign                                                                                                            |
+ ‹ Esc All › Checkout redesign                                                                                                              |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                                                                        |
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.                                                              |
                                                                                                                                             |
@@ -88,7 +88,7 @@
 
 == 56 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
- ‹ Esc Epics › Checkout redesign                        |
+ ‹ Esc All › Checkout redesign                          |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront    |
   Replace the three-page checkout with one page. Design |
   in `docs/checkout.md`.                                |
@@ -120,7 +120,7 @@
 
 == 89 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
- ‹ Esc Epics › Checkout redesign                                                         |
+ ‹ Esc All › Checkout redesign                                                           |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                     |
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.           |
                                                                                          |
@@ -152,7 +152,7 @@
 
 == 90 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
- ‹ Esc Epics › Checkout redesign                                                          |
+ ‹ Esc All › Checkout redesign                                                            |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                      |
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.            |
                                                                                           |
@@ -184,7 +184,7 @@
 
 == 140 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
- ‹ Esc Epics › Checkout redesign                                                                                                            |
+ ‹ Esc All › Checkout redesign                                                                                                              |
  ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱ 2/6 done  sf-c1x ∙ acme/storefront                                                                                        |
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.                                                              |
                                                                                                                                             |

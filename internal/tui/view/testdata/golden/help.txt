@@ -3,21 +3,21 @@
     ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
      j k        move (or up, down)                      |
      g G        top, bottom                             |
-     PgUp PgDn  a page up, down                         |
-     Enter      open; into an epic                      |
-     Esc        back                                    |
-     l h        unfold, fold; into, out of              |
+     Space      a page down; PgUp PgDn too              |
+     ^d ^u      half a page down, up                    |
+     Enter      open full screen                        |
+     l          into an epic, or unfold it              |
+     h Esc      back (h also folds)                     |
      Tab 1 2 3  switch tab                              |
      /          filter by title or id                   |
      y          copy id and title                       |
      Y          copy with details                       |
      x          done, or reopen                         |
-     s          snooze                                  |
+     s          snooze; 0 clears one                    |
      u          undo the last done or snooze            |
-     o          copy the item's app link                |
-     p          this project, or every list             |
-     r          refresh                                 |
-     q          quit                                    |
+     o          show the item's app link                |
+     j k scroll, any other key closes                   |
+    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
  any key close                                  1-18/21 |
 
 == 89 x 20, layout a
@@ -25,21 +25,21 @@
                     ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
                      j k        move (or up, down)                                       |
                      g G        top, bottom                                              |
-                     PgUp PgDn  a page up, down                                          |
-                     Enter      open; into an epic                                       |
-                     Esc        back                                                     |
-                     l h        unfold, fold; into, out of                               |
+                     Space      a page down; PgUp PgDn too                               |
+                     ^d ^u      half a page down, up                                     |
+                     Enter      open full screen                                         |
+                     l          into an epic, or unfold it                               |
+                     h Esc      back (h also folds)                                      |
                      Tab 1 2 3  switch tab                                               |
                      /          filter by title or id                                    |
                      y          copy id and title                                        |
                      Y          copy with details                                        |
                      x          done, or reopen                                          |
-                     s          snooze                                                   |
+                     s          snooze; 0 clears one                                     |
                      u          undo the last done or snooze                             |
-                     o          copy the item's app link                                 |
-                     p          this project, or every list                              |
-                     r          refresh                                                  |
-                     q          quit                                                     |
+                     o          show the item's app link                                 |
+                     j k scroll, any other key closes                                    |
+                    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                   1-18/21 |
 
 == 90 x 20, layout b
@@ -47,21 +47,21 @@
                      ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
                       j k        move (or up, down)                                       |
                       g G        top, bottom                                              |
-                      PgUp PgDn  a page up, down                                          |
-                      Enter      open; into an epic                                       |
-                      Esc        back                                                     |
-                      l h        unfold, fold; into, out of                               |
+                      Space      a page down; PgUp PgDn too                               |
+                      ^d ^u      half a page down, up                                     |
+                      Enter      open full screen                                         |
+                      l          into an epic, or unfold it                               |
+                      h Esc      back (h also folds)                                      |
                       Tab 1 2 3  switch tab                                               |
                       /          filter by title or id                                    |
                       y          copy id and title                                        |
                       Y          copy with details                                        |
                       x          done, or reopen                                          |
-                      s          snooze                                                   |
+                      s          snooze; 0 clears one                                     |
                       u          undo the last done or snooze                             |
-                      o          copy the item's app link                                 |
-                      p          this project, or every list                              |
-                      r          refresh                                                  |
-                      q          quit                                                     |
+                      o          show the item's app link                                 |
+                      j k scroll, any other key closes                                    |
+                     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                    1-18/21 |
 
 == 140 x 20, layout b
@@ -69,148 +69,148 @@
                                               ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
                                                j k        move (or up, down)                                                                |
                                                g G        top, bottom                                                                       |
-                                               PgUp PgDn  a page up, down                                                                   |
-                                               Enter      open; into an epic                                                                |
-                                               Esc        back                                                                              |
-                                               l h        unfold, fold; into, out of                                                        |
+                                               Space      a page down; PgUp PgDn too                                                        |
+                                               ^d ^u      half a page down, up                                                              |
+                                               Enter      open full screen                                                                  |
+                                               l          into an epic, or unfold it                                                        |
+                                               h Esc      back (h also folds)                                                               |
                                                Tab 1 2 3  switch tab                                                                        |
                                                /          filter by title or id                                                             |
                                                y          copy id and title                                                                 |
                                                Y          copy with details                                                                 |
                                                x          done, or reopen                                                                   |
-                                               s          snooze                                                                            |
+                                               s          snooze; 0 clears one                                                              |
                                                u          undo the last done or snooze                                                      |
-                                               o          copy the item's app link                                                          |
-                                               p          this project, or every list                                                       |
-                                               r          refresh                                                                           |
-                                               q          quit                                                                              |
+                                               o          show the item's app link                                                          |
+                                               j k scroll, any other key closes                                                             |
+                                              ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
  any key close                                                                                                                      1-18/21 |
 
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
- Past due 2                                             |
-› ◦  ✓  Book the boiler service              1d overdue |
-  ✦ API Rotate the staging API key in the ⋯ 17h overdue |
- Today 1                                                |
     ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
      j k        move (or up, down)                      |
      g G        top, bottom                             |
-     PgUp PgDn  a page up, down                         |
-     Enter      open; into an epic                      |
-     Esc        back                                    |
-     l h        unfold, fold; into, out of              |
+     Space      a page down; PgUp PgDn too              |
+     ^d ^u      half a page down, up                    |
+     Enter      open full screen                        |
+     l          into an epic, or unfold it              |
+     h Esc      back (h also folds)                     |
      Tab 1 2 3  switch tab                              |
      /          filter by title or id                   |
      y          copy id and title                       |
      Y          copy with details                       |
      x          done, or reopen                         |
-     s          snooze                                  |
+     s          snooze; 0 clears one                    |
      u          undo the last done or snooze            |
-     o          copy the item's app link                |
+     o          show the item's app link                |
      p          this project, or every list             |
      r          refresh                                 |
      q          quit                                    |
+                                                        |
+      ✓         badge of your personal list             |
+     GAR        badge of a project: its colour, its⋯    |
+     ✦          a task an agent left for you            |
+     ◦ ◒ ⊘      open, in progress, blocked              |
+     ✓          done (green)                            |
+     ☾          snoozed                                 |
+     ↻          repeats                                 |
     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
  any key close                                          |
 
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
- Past due 2                                                                              |
-› ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
-  ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
- Today 1                                                                                 |
                     ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
                      j k        move (or up, down)                                       |
                      g G        top, bottom                                              |
-                     PgUp PgDn  a page up, down                                          |
-                     Enter      open; into an epic                                       |
-                     Esc        back                                                     |
-                     l h        unfold, fold; into, out of                               |
+                     Space      a page down; PgUp PgDn too                               |
+                     ^d ^u      half a page down, up                                     |
+                     Enter      open full screen                                         |
+                     l          into an epic, or unfold it                               |
+                     h Esc      back (h also folds)                                      |
                      Tab 1 2 3  switch tab                                               |
                      /          filter by title or id                                    |
                      y          copy id and title                                        |
                      Y          copy with details                                        |
                      x          done, or reopen                                          |
-                     s          snooze                                                   |
+                     s          snooze; 0 clears one                                     |
                      u          undo the last done or snooze                             |
-                     o          copy the item's app link                                 |
+                     o          show the item's app link                                 |
                      p          this project, or every list                              |
                      r          refresh                                                  |
                      q          quit                                                     |
+                                                                                         |
+                      ✓         badge of your personal list                              |
+                     GAR        badge of a project: its colour, its⋯                     |
+                     ✦          a task an agent left for you                             |
+                     ◦ ◒ ⊘      open, in progress, blocked                               |
+                     ✓          done (green)                                             |
+                     ☾          snoozed                                                  |
+                     ↻          repeats                                                  |
                     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
  any key close                                                                           |
 
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
- Past due 2                                      ╎ Book the boiler service                |
-› ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
-  ✦ API Rotate the staging API key ⋯ 17h overdue ╎ 1d overdue  #home                      |
- Today 1                                         ╎                                        |
                      ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
                       j k        move (or up, down)                                       |
                       g G        top, bottom                                              |
-                      PgUp PgDn  a page up, down                                          |
-                      Enter      open; into an epic                                       |
-                      Esc        back                                                     |
-                      l h        unfold, fold; into, out of                               |
+                      Space      a page down; PgUp PgDn too                               |
+                      ^d ^u      half a page down, up                                     |
+                      Enter      open full screen                                         |
+                      l          into an epic, or unfold it                               |
+                      h Esc      back (h also folds)                                      |
                       Tab 1 2 3  switch tab                                               |
                       /          filter by title or id                                    |
                       y          copy id and title                                        |
                       Y          copy with details                                        |
                       x          done, or reopen                                          |
-                      s          snooze                                                   |
+                      s          snooze; 0 clears one                                     |
                       u          undo the last done or snooze                             |
-                      o          copy the item's app link                                 |
+                      o          show the item's app link                                 |
                       p          this project, or every list                              |
                       r          refresh                                                  |
                       q          quit                                                     |
+                                                                                          |
+                       ✓         badge of your personal list                              |
+                      GAR        badge of a project: its colour, its⋯                     |
+                      ✦          a task an agent left for you                             |
+                      ◦ ◒ ⊘      open, in progress, blocked                               |
+                      ✓          done (green)                                             |
+                      ☾          snoozed                                                  |
+                      ↻          repeats                                                  |
                      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
  any key close                                                                            |
 
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
- Past due 2                                                                  ╎ Book the boiler service                                      |
-› ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
-  ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ 1d overdue  #home                                            |
- Today 1                                                                     ╎                                                              |
                                               ╌ Keys ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
                                                j k        move (or up, down)                                                                |
                                                g G        top, bottom                                                                       |
-                                               PgUp PgDn  a page up, down                                                                   |
-                                               Enter      open; into an epic                                                                |
-                                               Esc        back                                                                              |
-                                               l h        unfold, fold; into, out of                                                        |
+                                               Space      a page down; PgUp PgDn too                                                        |
+                                               ^d ^u      half a page down, up                                                              |
+                                               Enter      open full screen                                                                  |
+                                               l          into an epic, or unfold it                                                        |
+                                               h Esc      back (h also folds)                                                               |
                                                Tab 1 2 3  switch tab                                                                        |
                                                /          filter by title or id                                                             |
                                                y          copy id and title                                                                 |
                                                Y          copy with details                                                                 |
                                                x          done, or reopen                                                                   |
-                                               s          snooze                                                                            |
+                                               s          snooze; 0 clears one                                                              |
                                                u          undo the last done or snooze                                                      |
-                                               o          copy the item's app link                                                          |
+                                               o          show the item's app link                                                          |
                                                p          this project, or every list                                                       |
                                                r          refresh                                                                           |
                                                q          quit                                                                              |
+                                                                                                                                            |
+                                                ✓         badge of your personal list                                                       |
+                                               GAR        badge of a project: its colour, its⋯                                              |
+                                               ✦          a task an agent left for you                                                      |
+                                               ◦ ◒ ⊘      open, in progress, blocked                                                        |
+                                               ✓          done (green)                                                                      |
+                                               ☾          snoozed                                                                           |
+                                               ↻          repeats                                                                           |
                                               ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
  any key close                                                                                                                              |
 

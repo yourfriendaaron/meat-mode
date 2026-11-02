@@ -57,6 +57,16 @@ func (m *Model) key(k string) []Effect {
 		case "backspace":
 			m.filter = dropLast(m.filter)
 			m.resetSel()
+		case "up", "ctrl+p":
+			m.move(-1)
+		case "down", "ctrl+n":
+			m.move(1)
+		case "ctrl+u":
+			m.filter = ""
+			m.resetSel()
+		case "ctrl+w":
+			m.filter = dropWord(m.filter)
+			m.resetSel()
 		default:
 			if s := typed(k); s != "" {
 				m.filter += s
@@ -66,7 +76,14 @@ func (m *Model) key(k string) []Effect {
 		return nil
 	}
 	if m.help {
-		m.help = false
+		switch k {
+		case "j", "down":
+			m.helpScroll = min(m.helpScroll+1, m.helpMax())
+		case "k", "up":
+			m.helpScroll = max(0, m.helpScroll-1)
+		default:
+			m.help, m.helpScroll = false, 0
+		}
 		return nil
 	}
 	if m.snoozeKey != "" {
@@ -92,10 +109,14 @@ func (m *Model) key(k string) []Effect {
 		m.move(1)
 	case "k", "up":
 		m.move(-1)
-	case "pgdown", "space":
+	case "pgdown", "space", "ctrl+f":
 		m.move(m.page())
-	case "pgup":
+	case "pgup", "ctrl+b":
 		m.move(-m.page())
+	case "ctrl+d":
+		m.move(max(1, m.page()/2))
+	case "ctrl+u":
+		m.move(-max(1, m.page()/2))
 	case "g", "home":
 		m.move(-1 << 30)
 	case "G", "end":
@@ -117,8 +138,11 @@ func (m *Model) key(k string) []Effect {
 	case "h", "left":
 		switch {
 		case m.open:
+			m.open = false
 		case m.right:
 			m.right = false
+		case m.drill != "":
+			m.selKey, m.drill = m.drill, ""
 		case lay == "a" && m.tab == TabEpics && t != nil:
 			if parent, _, ok := strings.Cut(m.selKey, ">"); ok {
 				m.selKey = parent
@@ -130,10 +154,6 @@ func (m *Model) key(k string) []Effect {
 	case "enter":
 		switch {
 		case t == nil || m.open:
-		case lay == "b":
-			if m.tab == TabEpics && !m.right && m.rightKids() > 0 {
-				m.right, m.rightIdx = true, 0
-			}
 		case lay == "c" && m.drill == "" && t.card && t.row != nil:
 			m.drill = t.key
 			m.resetSel()
@@ -167,7 +187,11 @@ func (m *Model) key(k string) []Effect {
 			return []Effect{Copy{Text: m.d.refFull(t), Ref: t.id()}}
 		}
 	case "x":
-		return m.done(t)
+		fx := m.done(t)
+		if len(fx) > 0 && t.item != nil && isOpen(t.item) {
+			m.stepPast(t.key)
+		}
+		return fx
 	case "s":
 		m.openSnooze(t)
 	case "u":
@@ -204,6 +228,34 @@ func (m *Model) toggleScope() {
 	} else {
 		m.say("Showing "+clean(m.scopeName())+" only.", NoticeInfo)
 	}
+}
+
+// stepPast moves the list's selection off key, to the next row or else
+// the one before, so a done to-do that moves to "Done today" does not take
+// the selection with it.
+func (m *Model) stepPast(key string) {
+	if m.open || m.right {
+		return
+	}
+	rows := m.rows()
+	sel := selectable(rows)
+	if len(sel) < 2 || m.selIdx >= len(sel) || rows[sel[m.selIdx]].id != key {
+		return
+	}
+	if m.selIdx+1 < len(sel) {
+		m.setSel(m.selIdx + 1)
+	} else {
+		m.setSel(m.selIdx - 1)
+	}
+}
+
+// dropWord removes the last word of s and the spaces after it.
+func dropWord(s string) string {
+	s = strings.TrimRight(s, " ")
+	if i := strings.LastIndex(s, " "); i >= 0 {
+		return s[:i+1]
+	}
+	return ""
 }
 
 // page is the rows a page key moves.
@@ -298,12 +350,17 @@ func (m *Model) snoozeMenuKey(k string) []Effect {
 		m.snoozeKey = ""
 		return nil
 	}
+	it := m.d.items[m.snoozeKey]
+	if k == "0" && it != nil && isSnoozed(it, m.now) {
+		m.snoozeKey = ""
+		prev := *it.DeferUntil
+		return []Effect{Act{Action: api.NewAction{Kind: api.KindSnooze, Key: it.Key, Payload: api.Payload{Previous: &prev}}, Done: "Snooze cleared"}}
+	}
 	if len(k) != 1 || k[0] < '1' || k[0] > '6' {
 		return nil
 	}
 	opts := snoozeOptions(m.now)
 	n := int(k[0] - '1')
-	it := m.d.items[m.snoozeKey]
 	if n >= len(opts) || it == nil {
 		return nil
 	}

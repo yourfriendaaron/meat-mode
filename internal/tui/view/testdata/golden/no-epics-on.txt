@@ -62,7 +62,7 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- l into epic  y copy  Y copy all  / filter  ? keys                                        |
+ Enter open  l into epic  y copy  / filter  ? keys                                        |
 
 == 140 x 20, layout b
   1 To-dos 4   2 Epics 0   3 All                                                                                                     ◉ live |
@@ -84,7 +84,7 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+ Enter open  l into epic  y copy  / filter  ? keys                                                                                          |
 
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 0   3 All                 ◉ live |
@@ -180,7 +180,7 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- l into epic  y copy  Y copy all  / filter  ? keys                                        |
+ Enter open  l into epic  y copy  / filter  ? keys                                        |
 
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 0   3 All                                                                                                     ◉ live |
@@ -212,5 +212,5 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+ Enter open  l into epic  y copy  / filter  ? keys                                                                                          |
 

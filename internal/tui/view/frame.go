@@ -11,21 +11,33 @@ type hint struct{ key, does string }
 var helpKeys = []hint{
 	{"j k", "move (or up, down)"},
 	{"g G", "top, bottom"},
-	{"PgUp PgDn", "a page up, down"},
-	{"Enter", "open; into an epic"},
-	{"Esc", "back"},
-	{"l h", "unfold, fold; into, out of"},
+	{"Space", "a page down; PgUp PgDn too"},
+	{"^d ^u", "half a page down, up"},
+	{"Enter", "open full screen"},
+	{"l", "into an epic, or unfold it"},
+	{"h Esc", "back (h also folds)"},
 	{"Tab 1 2 3", "switch tab"},
 	{"/", "filter by title or id"},
 	{"y", "copy id and title"},
 	{"Y", "copy with details"},
 	{"x", "done, or reopen"},
-	{"s", "snooze"},
+	{"s", "snooze; 0 clears one"},
 	{"u", "undo the last done or snooze"},
-	{"o", "copy the item's app link"},
+	{"o", "show the item's app link"},
 	{"p", "this project, or every list"},
 	{"r", "refresh"},
 	{"q", "quit"},
+}
+
+// legend explains the marks the rows carry.
+var legend = []hint{
+	{" " + gClosed + " ", "badge of your personal list"},
+	{"GAR", "badge of a project: its colour, its name"},
+	{gHuman, "a task an agent left for you"},
+	{gOpen + " " + gProgress + " " + gBlocked, "open, in progress, blocked"},
+	{gClosed, "done (green)"},
+	{gDeferred, "snoozed"},
+	{gRepeat, "repeats"},
 }
 
 // frame is the whole screen as lines, each exactly width cells.
@@ -147,11 +159,11 @@ func (m *Model) hints() []hint {
 	case m.open:
 		return append(append([]hint{{"y", "copy"}, {"Y", "copy all"}}, acts...), hint{"Esc", "back"}, hint{"?", "keys"})
 	case lay == "b" && m.tab == TabEpics && m.right:
-		return []hint{{"h", "back"}, {"y", "copy"}, {"Y", "copy all"}, {"?", "keys"}}
+		return []hint{{"Enter", "open"}, {"h", "back"}, {"y", "copy"}, {"Y", "copy all"}, {"?", "keys"}}
 	case lay == "b" && m.tab == TabEpics:
-		return []hint{{"l", "into epic"}, {"y", "copy"}, {"Y", "copy all"}, {"/", "filter"}, {"?", "keys"}}
+		return []hint{{"Enter", "open"}, {"l", "into epic"}, {"y", "copy"}, {"/", "filter"}, {"?", "keys"}}
 	case lay == "b":
-		return append(append([]hint{{"y", "copy"}, {"Y", "copy all"}}, acts...), hint{"/", "filter"}, hint{"?", "keys"})
+		return append(append([]hint{{"Enter", "open"}, {"y", "copy"}}, acts...), hint{"/", "filter"}, hint{"?", "keys"})
 	case lay == "a" && m.tab == TabEpics:
 		return []hint{{"Enter", "open"}, {"l h", "fold"}, {"y", "copy"}, {"/", "filter"}, {"?", "keys"}}
 	case m.drill != "":
@@ -180,7 +192,7 @@ func (m *Model) body(w, h int) ([]line, string) {
 		return m.splitBody(w, h)
 	case "c":
 		if t := m.drillTarget(); t != nil {
-			crumb := fit(line{sg(" "+gBack+" Esc ", sAccent), sg("Epics "+gCrumb+" ", sDim), sg(clean(t.row.Title), sBold)}, w, sPlain)
+			crumb := fit(line{sg(" "+gBack+" Esc ", sAccent), sg("All "+gCrumb+" ", sDim), sg(clean(t.row.Title), sBold)}, w, sPlain)
 			lines, more := m.viewport(m.rows(), h-1, w, true)
 			return append([]line{crumb}, lines...), more
 		}
@@ -258,7 +270,7 @@ func (m *Model) viewport(rows []row, h, w int, focus bool) ([]line, string) {
 func (m *Model) detailBody(t *target, w, h int) []line {
 	from := map[Tab]string{TabTodos: "To-dos", TabEpics: "Epics", TabAll: "All"}[m.tab]
 	if d := m.drillTarget(); d != nil {
-		from = "Epics " + gCrumb + " " + clean(d.row.Title)
+		from = "All " + gCrumb + " " + clean(d.row.Title)
 	}
 	out := []line{fit(line{sg(" "+gBack+" Esc ", sAccent), sg(from, sDim)}, w, sPlain)}
 	lines := m.detailLines(t, w)
@@ -327,11 +339,18 @@ func (m *Model) cardPane(t *target, w, h int) []line {
 	idl := line{sg(" "+clean(r.ID), sDim), sg("  ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+clean(re.Repo)+"  ", sSoft)}
 	idl = append(idl, bar(done, total, 8)...)
 	out = append(out, append(idl, sg(" "+itoa(done)+"/"+itoa(total), sSoft)))
+	kids := d.children(re, r.ID)
 	if strings.TrimSpace(r.Description) != "" {
-		out = append(out, textLines(r.Description, w, sSoft)...)
+		// A long description keeps room for the children below it, at
+		// least half the pane; Enter on the epic shows the rest.
+		desc := textLines(r.Description, w, sSoft)
+		keep := min(len(kids), max(3, h/2))
+		if most := max(2, h-len(out)-1-keep); len(desc) > most {
+			desc = append(desc[:most-1], line{sg(" "+ellipsis+" Enter shows the rest", sDim)})
+		}
+		out = append(out, desc...)
 	}
 	out = append(out, nil)
-	kids := d.children(re, r.ID)
 	if len(kids) == 0 {
 		return append(out, line{sg("  No children yet.", sDim)})
 	}
@@ -393,11 +412,31 @@ func (m *Model) overlay(lines []line, p panel) {
 
 func panelWidth(w, want int) int { return max(1, min(want, w-4)) }
 
+// helpMax is the furthest the help scrolls: its keys, a gap and the
+// legend, in height-4 rows less the row that says it scrolls.
+func (m *Model) helpMax() int {
+	n, room := len(helpKeys)+1+len(legend), m.height-4
+	if room <= 2 || n <= room {
+		return 0
+	}
+	return n - (room - 1)
+}
+
 func (m *Model) helpPanel(w int) panel {
 	bw := panelWidth(w, 48)
 	var c []line
 	for _, k := range helpKeys {
 		c = append(c, line{sg(padRight(k.key, 11), style{fg: cPurple, bg: cRaise, bold: true}), sg(k.does, style{fg: cFg, bg: cRaise})})
+	}
+	c = append(c, nil)
+	for _, k := range legend {
+		c = append(c, line{sg(padRight(k.key, 11), style{fg: cSoft, bg: cRaise, bold: true}), sg(k.does, style{fg: cFg, bg: cRaise})})
+	}
+	// The panel's edges and the tab and status lines leave height-4 rows;
+	// past that, j and k scroll it and the last row says so.
+	if room := m.height - 4; room > 2 && len(c) > room {
+		top := min(m.helpScroll, m.helpMax())
+		c = append(c[top:top+room-1:top+room-1], line{sg("j k scroll, any other key closes", style{fg: cSoft, bg: cRaise})})
 	}
 	return box("Keys", c, bw)
 }

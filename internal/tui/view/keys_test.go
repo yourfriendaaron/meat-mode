@@ -12,7 +12,8 @@ import (
 // contractKeys are the keys the contract names.
 var contractKeys = []string{"j", "k", "up", "down", "left", "right", "h", "l", "g", "G", "home", "end", "pgup",
 	"pgdown", "enter", "esc", "backspace", "tab", "shift+tab", "space", "/", "?", "y", "Y", "x", "u", "s", "o",
-	"r", "q", "ctrl+c", "1", "2", "3", "4", "5", "6"}
+	"r", "q", "ctrl+c", "0", "1", "2", "3", "4", "5", "6", "p", "ctrl+d", "ctrl+u", "ctrl+f", "ctrl+b", "ctrl+n",
+	"ctrl+p", "ctrl+w"}
 
 func ptime(t time.Time) *time.Time { return &t }
 
@@ -175,6 +176,72 @@ func TestKeyTable(t *testing.T) {
 			}
 		}},
 		{name: "u with nothing to undo", w: 56, keys: []string{"u"}, note: "Nothing to undo."},
+		{name: "enter on a to-do in B opens it full screen", w: 140, keys: []string{"enter"}, check: func(t *testing.T, m Model) {
+			if !m.open || m.openKey != "hub/personal/mm-28" {
+				t.Fatalf("open %v key %q", m.open, m.openKey)
+			}
+			m, _ = m.Key("h")
+			if m.open {
+				t.Fatal("h left the detail open")
+			}
+		}},
+		{name: "enter on a child in B opens the child, esc comes back to it", w: 140, setup: []string{"2"}, sel: "laptop/acme/storefront/sf-c1x",
+			keys: []string{"l", "j", "enter"}, check: func(t *testing.T, m Model) {
+				if !m.open || m.openKey != "laptop/acme/storefront/sf-c1x.3" {
+					t.Fatalf("open %v key %q", m.open, m.openKey)
+				}
+				m, _ = m.Key("esc")
+				if m.open || !m.right || m.rightIdx != 1 {
+					t.Fatalf("esc: open %v right %v idx %d", m.open, m.right, m.rightIdx)
+				}
+			}},
+		{name: "h leaves a drill in All", w: 56, setup: []string{"3"}, sel: "laptop/acme/api/api-h3k", keys: []string{"enter", "h"}, check: func(t *testing.T, m Model) {
+			if m.drill != "" || m.selKey != "laptop/acme/api/api-h3k" {
+				t.Fatalf("drill %q selection %q", m.drill, m.selKey)
+			}
+		}},
+		{name: "x moves the selection off the done to-do", w: 56, keys: []string{"x"},
+			want: []Effect{Act{Action: api.NewAction{Kind: "done", Key: "hub/personal/mm-28"}, Done: "Done: Book the boiler service"}},
+			check: func(t *testing.T, m Model) {
+				if m.selKey == "hub/personal/mm-28" {
+					t.Fatal("selection stayed on the done to-do")
+				}
+			}},
+		{name: "s 0 clears a snooze", w: 140, sel: "hub/personal/mm-50", keys: []string{"s", "0"},
+			want: []Effect{Act{Action: api.NewAction{Kind: "snooze", Key: "hub/personal/mm-50",
+				Payload: api.Payload{Previous: ptime(time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC))}}, Done: "Snooze cleared"}}},
+		{name: "s 0 on a to-do with no snooze does nothing", w: 56, keys: []string{"s", "0"}, check: func(t *testing.T, m Model) {
+			if m.snoozeKey == "" {
+				t.Fatal("0 closed the menu without a snooze to clear")
+			}
+		}},
+		{name: "ctrl+d moves half a page", w: 56, keys: []string{"ctrl+d"}, check: func(t *testing.T, m Model) {
+			if m.selIdx == 0 {
+				t.Fatal("ctrl+d did not move")
+			}
+			m, _ = m.Key("ctrl+u")
+			if m.selIdx != 0 {
+				t.Fatalf("ctrl+u left %d", m.selIdx)
+			}
+		}},
+		{name: "arrows move while filtering; ctrl+w and ctrl+u edit", w: 56, keys: []string{"/", "o", "r", " ", "b", "down"}, check: func(t *testing.T, m Model) {
+			if m.filter != "or b" || !m.filtering {
+				t.Fatalf("filter %q typing %v", m.filter, m.filtering)
+			}
+			m, _ = m.Key("ctrl+w")
+			if m.filter != "or " {
+				t.Fatalf("ctrl+w left %q", m.filter)
+			}
+			m, _ = m.Key("ctrl+u")
+			if m.filter != "" || !m.filtering {
+				t.Fatalf("ctrl+u left %q typing %v", m.filter, m.filtering)
+			}
+		}},
+		{name: "help scrolls on a short screen", w: 56, keys: []string{"?", "j", "j"}, check: func(t *testing.T, m Model) {
+			if !m.help || m.helpScroll != 2 {
+				t.Fatalf("help %v scroll %d", m.help, m.helpScroll)
+			}
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

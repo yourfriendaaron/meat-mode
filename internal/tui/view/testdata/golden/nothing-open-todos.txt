@@ -62,7 +62,7 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- y copy  Y copy all  x done  s snooze  / filter  ? keys                                   |
+ Enter open  y copy  x done  s snooze  / filter  ? keys                                   |
 
 == 140 x 20, layout b
   1 To-dos 0   2 Epics 0   3 All                                                                                                     ◉ live |
@@ -84,7 +84,7 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- y copy  Y copy all  x done  s snooze  / filter  ? keys                                                                                     |
+ Enter open  y copy  x done  s snooze  / filter  ? keys                                                                                     |
 
 == 56 x 30, layout a
   1 To-dos 0   2 Epics 0   3 All                 ◉ live |
@@ -180,7 +180,7 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- y copy  Y copy all  x done  s snooze  / filter  ? keys                                   |
+ Enter open  y copy  x done  s snooze  / filter  ? keys                                   |
 
 == 140 x 30, layout b
   1 To-dos 0   2 Epics 0   3 All                                                                                                     ◉ live |
@@ -212,5 +212,5 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- y copy  Y copy all  x done  s snooze  / filter  ? keys                                                                                     |
+ Enter open  y copy  x done  s snooze  / filter  ? keys                                                                                     |
 
