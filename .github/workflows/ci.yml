@@ -1,7 +1,10 @@
 name: ci
 
 on:
+  # Branches only: a release tag points at a commit already tested on main,
+  # and release.yml waits for that run, so a tag push would test it twice.
   push:
+    branches: ["**"]
   pull_request:
 
 permissions:

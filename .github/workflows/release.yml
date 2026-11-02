@@ -14,10 +14,11 @@ permissions:
   contents: read
 
 jobs:
-  # Waits for ci on the tagged commit. The builds run meanwhile; only the
-  # release job waits for this one.
+  # Waits for ci on the tagged commit, from its push to main (ci does not
+  # run for tags). The builds run meanwhile; only the release job waits for
+  # this one. It only polls, so it takes the smallest runner.
   ci-green:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     permissions:
       actions: read
     steps:
