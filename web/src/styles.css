@@ -34,6 +34,8 @@
   --palette-orange: #ffb86c;
   --palette-red: #ff5555;
   --palette-yellow: #f1fa8c;
+  --palette-blue: #82aaff;
+  --palette-rose: #f4a6c8;
   --palette-on-accent: #282a36;
   /* Surface for panes and the selected row: darker than --palette-bg in Dracula, white in
      Alucard, so coloured chip text keeps its contrast on it. */
@@ -90,6 +92,8 @@
   --palette-orange: #a34d14;
   --palette-red: #cb3a2a;
   --palette-yellow: #846e15;
+  --palette-blue: #2a5db0;
+  --palette-rose: #c2418a;
   --palette-on-accent: #fffbeb;
   --palette-pane: #ffffff;
   --palette-scrim: rgba(31, 31, 31, 0.35);
@@ -155,13 +159,14 @@
   --role-hl-repeat: color-mix(in srgb, var(--palette-green) 28%, transparent);
   --role-hl-tag: color-mix(in srgb, var(--palette-orange) 28%, transparent);
 
-  /* Repo dots: tell lists apart. No pink, so no repo reads as an agent. */
+  /* List marks: tell lists apart. Slot 0 purple, 1 cyan, 2 green, 3 orange, 4 blue, 5 rose.
+     The rose is the one list colour near pink, so a list colour is never an edge or a button. */
   --role-repo-0: var(--palette-purple);
   --role-repo-1: var(--palette-cyan);
   --role-repo-2: var(--palette-green);
   --role-repo-3: var(--palette-orange);
-  --role-repo-4: var(--palette-dim);
-  --role-repo-5: var(--palette-yellow);
+  --role-repo-4: var(--palette-blue);
+  --role-repo-5: var(--palette-rose);
 }
 
 *,

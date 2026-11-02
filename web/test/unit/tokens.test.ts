@@ -160,3 +160,52 @@ test("every role token used is defined", () => {
   const used = new Set([...all.matchAll(/var\(\s*(--(?:role|palette)-[\w-]+)/g)].map((m) => m[1]));
   assert.deepEqual([...used].filter((u) => !defined.has(u)), []);
 });
+
+// The list colours slots 4 and 5 need are not in Dracula: blue and rose, pinned here with
+// the lines that point the slots at them.
+const STYLES = readFileSync(new URL(TOKEN_FILE, SRC), "utf8");
+
+/** The declarations of the token-block rule with this selector, as name to value. */
+function tokenRule(selector: string): Map<string, string> {
+  const body = STYLES.match(new RegExp(`^${selector.replace(/[[\]".]/g, "\\$&")} \\{([^}]*)\\}`, "m"));
+  assert.ok(body, selector);
+  const css = body[1].replace(/\/\*[\s\S]*?\*\//g, "");
+  return new Map([...css.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+}
+
+const dark = tokenRule(":root");
+const light = tokenRule(':root[data-theme="light"]');
+
+test("blue and rose are palette tokens in both themes", () => {
+  assert.equal(dark.get("--palette-blue"), "#82aaff");
+  assert.equal(dark.get("--palette-rose"), "#f4a6c8");
+  assert.equal(light.get("--palette-blue"), "#2a5db0");
+  assert.equal(light.get("--palette-rose"), "#c2418a");
+});
+
+test("list slots 4 and 5 are blue and rose", () => {
+  assert.match(STYLES, /--role-repo-4: var\(--palette-blue\);/);
+  assert.match(STYLES, /--role-repo-5: var\(--palette-rose\);/);
+});
+
+function luminance(hex: string): number {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const [r, g, b] = c.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+test("blue and rose keep 3:1 against the page and the pane in each theme", () => {
+  for (const [theme, rule] of [["dark", dark], ["light", light]] as const) {
+    for (const colour of ["--palette-blue", "--palette-rose"]) {
+      for (const ground of ["--palette-bg", "--palette-pane"]) {
+        const ratio = contrast(rule.get(colour)!, rule.get(ground)!);
+        assert.ok(ratio >= 3, `${theme} ${colour} on ${ground}: ${ratio.toFixed(2)}`);
+      }
+    }
+  }
+});
