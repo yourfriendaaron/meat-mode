@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -190,9 +191,71 @@ func TestRestoreGivesColours(t *testing.T) {
 	if len(names) > 0 {
 		t.Errorf("restored lists without a colour: %v", names)
 	}
-	var n int
-	must(t, s.db.QueryRow(`SELECT COUNT(*) FROM repos WHERE bridge = ?`, HubBridge).Scan(&n))
-	if n < 2 {
-		t.Errorf("the export restored %d hub lists; the test needs a project", n)
+	// Each takes the least-used slot in turn, so a few lists hold one each.
+	slots, err := queryStrings(s.db, `SELECT colour FROM repos WHERE bridge = ? ORDER BY colour`, HubBridge)
+	must(t, err)
+	if len(slots) < 2 || len(slots) > api.ListColours {
+		t.Fatalf("the export restored %d hub lists; the test needs 2 to %d", len(slots), api.ListColours)
+	}
+	for i, c := range slots {
+		if c != strconv.Itoa(i) {
+			t.Errorf("restored slots %v, want 0 to %d", slots, len(slots)-1)
+			break
+		}
+	}
+}
+
+func TestSpaceColours(t *testing.T) {
+	s, _ := open(t)
+	_, err := s.CreateBridge("laptop")
+	must(t, err)
+	one, two, four, five := 1, 2, 4, 5
+	// A new repo takes its reported slot, which the repos filled after it
+	// in the same write count as held: the personal list holds 0, beans 1.
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "apple"}, {Name: "beans", SpaceColour: &one}, {Name: "chores"}}))
+	if a, b, c := colourOf(t, s, "laptop", "apple"), colourOf(t, s, "laptop", "beans"), colourOf(t, s, "laptop", "chores"); a != 2 || b != 1 || c != 3 {
+		t.Fatalf("apple %d, beans %d, chores %d, want 2, 1 and 3", a, b, c)
+	}
+	for _, r := range mustState(t, s).Repos {
+		if r.SpaceColour != nil {
+			t.Errorf("State's %s/%s carries spaceColour %d", r.Bridge, r.Name, *r.SpaceColour)
+		}
+	}
+
+	// A reported slot moves an existing repo, and changes State.
+	ch := watch(s)
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "apple"}, {Name: "beans", SpaceColour: &four}, {Name: "chores"}}))
+	if got := colourOf(t, s, "laptop", "beans"); got != 4 {
+		t.Errorf("beans %d, want 4", got)
+	}
+	if k := ch.kinds(); k != "repos" {
+		t.Errorf("changes %q, want repos", k)
+	}
+	// A report without one leaves the slot.
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "apple"}, {Name: "beans"}, {Name: "chores"}}))
+	if got := colourOf(t, s, "laptop", "beans"); got != 4 {
+		t.Errorf("beans %d after a report without spaceColour, want 4", got)
+	}
+
+	// A hidden repo takes one too.
+	_, err = s.db.Exec(`UPDATE repos SET hidden = 1 WHERE bridge = 'laptop' AND name = 'apple'`)
+	must(t, err)
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "apple", SpaceColour: &five}, {Name: "beans"}, {Name: "chores"}}))
+	if got := colourOf(t, s, "laptop", "apple"); got != 5 {
+		t.Errorf("hidden apple %d, want 5", got)
+	}
+
+	// A repo moved to a path key takes the reported slot over the one it
+	// carried; the personal list never takes one.
+	must(t, s.ReplaceRepos("laptop", []api.Repo{{Name: "apple"}, {Name: "beans"}, {Name: "projects/chores", SpaceColour: &two},
+		{Name: PersonalRepo, Personal: true, SpaceColour: &one}}))
+	if got := colourOf(t, s, "laptop", "projects/chores"); got != 2 {
+		t.Errorf("projects/chores %d, want 2", got)
+	}
+	if got := colourOf(t, s, "laptop", PersonalRepo); got != -1 {
+		t.Errorf("the bridge's personal repo has slot %d", got)
+	}
+	if got := colourOf(t, s, HubBridge, PersonalRepo); got != 0 {
+		t.Errorf("the personal list %d, want 0", got)
 	}
 }

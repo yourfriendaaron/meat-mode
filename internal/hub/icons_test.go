@@ -103,3 +103,43 @@ func TestReposCarryColours(t *testing.T) {
 		t.Errorf("colours %v", colours)
 	}
 }
+
+// slot is a reported workspace colour slot.
+func slot(n int) *int { return &n }
+
+func TestSpaceColourRoute(t *testing.T) {
+	h := newHarness(t, nil, false)
+	h.pair()
+	colour := func(name string) int {
+		for _, r := range decode[api.State](t, h.do("GET", "/api/state", nil, "")).Repos {
+			if r.Bridge == "laptop" && r.Name == name {
+				return *r.Colour
+			}
+		}
+		t.Fatalf("no repo %q in State", name)
+		return -1
+	}
+	rev := h.rev()
+	h.expect(h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "garden", OptedIn: true, SpaceColour: slot(4)}, {Name: "chores"}}, h.token), http.StatusNoContent)
+	if h.rev() == rev {
+		t.Error("a moved colour did not change State")
+	}
+	if got := colour("garden"); got != 4 {
+		t.Errorf("garden %d, want 4", got)
+	}
+	if w := h.do("GET", "/api/state", nil, ""); strings.Contains(w.Body.String(), "spaceColour") {
+		t.Error("State carries spaceColour")
+	}
+
+	// Out of range is refused and changes nothing; a bad name wins.
+	h.expect(h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "garden", OptedIn: true, SpaceColour: slot(api.ListColours)}, {Name: "chores"}}, h.token), http.StatusBadRequest)
+	h.expect(h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "garden", SpaceColour: slot(-1)}}, h.token), http.StatusBadRequest)
+	w := h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "garden", SpaceColour: slot(9)}, {Name: "../chores"}}, h.token)
+	h.expect(w, http.StatusBadRequest)
+	if !strings.Contains(w.Body.String(), "name") {
+		t.Errorf("bad name and colour: %s", w.Body)
+	}
+	if got := colour("garden"); got != 4 {
+		t.Errorf("garden %d after refused reports, want 4", got)
+	}
+}
