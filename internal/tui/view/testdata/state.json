@@ -1,0 +1,354 @@
+{
+ "items": [
+  {
+   "key": "hub/personal/mm-28",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-28",
+   "title": "Book the boiler service",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "dueAt": "2026-10-31T12:00:00Z",
+   "labels": [
+    "home"
+   ],
+   "description": "Last one was in October. The engineer's number is on the fridge."
+  },
+  {
+   "key": "laptop/acme/api/api-9fq",
+   "bridge": "laptop",
+   "repo": "acme/api",
+   "id": "api-9fq",
+   "title": "Rotate the staging API key in the vault",
+   "status": "open",
+   "priority": 1,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [
+    {
+     "id": "c1",
+     "author": "agent",
+     "text": "The deploy is blocked on this; everything else is ready.",
+     "createdAt": "2026-11-01T10:00:00Z"
+    }
+   ],
+   "dueAt": "2026-11-01T17:00:00Z",
+   "labels": [
+    "human"
+   ],
+   "description": "The agent cannot reach the vault UI.\n\n1. Open the staging vault.\n2. Rotate `STAGING_API_KEY`.\n3. Run `bd close api-9fq` or tick it here."
+  },
+  {
+   "key": "hub/personal/mm-44",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-44",
+   "title": "Pick up dry cleaning",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "dueAt": "2026-11-02T12:30:00Z",
+   "labels": [
+    "errands"
+   ]
+  },
+  {
+   "key": "hub/personal/mm-31",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-31",
+   "title": "Water the plants",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "dueAt": "2026-11-02T18:00:00Z",
+   "labels": [
+    "home"
+   ],
+   "repeat": {
+    "every": "day",
+    "interval": 3,
+    "timeZone": "UTC"
+   }
+  },
+  {
+   "key": "laptop/acme/storefront/sf-k2a",
+   "bridge": "laptop",
+   "repo": "acme/storefront",
+   "id": "sf-k2a",
+   "title": "Approve the footer text",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [
+    {
+     "id": "c2",
+     "author": "planner",
+     "text": "Draft B is shorter and matches the header tone.",
+     "createdAt": "2026-11-02T07:00:00Z"
+    }
+   ],
+   "labels": [
+    "human"
+   ],
+   "description": "Two drafts are in `docs/footer.md`. Pick one or edit it; the agent ships whichever is marked."
+  },
+  {
+   "key": "hub/personal/mm-46",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-46",
+   "title": "Buy birthday card for Alex",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "dueAt": "2026-11-05T09:00:00Z",
+   "labels": [
+    "errands"
+   ]
+  },
+  {
+   "key": "hub/personal/mm-47",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-47",
+   "title": "Choose a card",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "parent": "mm-46",
+   "dueAt": "2026-11-05T09:00:00Z"
+  },
+  {
+   "key": "hub/personal/mm-48",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-48",
+   "title": "Write the card",
+   "status": "closed",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "parent": "mm-46",
+   "closeReason": "Done in Meat Mode",
+   "closedAt": "2026-11-01T10:00:00Z"
+  },
+  {
+   "key": "hub/projects/garden/mm-6",
+   "bridge": "hub",
+   "repo": "projects/garden",
+   "id": "mm-6",
+   "title": "Fix the gate latch",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "dueAt": "2026-11-08T10:00:00Z"
+  },
+  {
+   "key": "hub/personal/mm-40",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-40",
+   "title": "Renew passport",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "dueAt": "2026-11-14T09:00:00Z",
+   "labels": [
+    "admin"
+   ],
+   "description": "Form is online. Needs a new photo (the old one is from 2017) and the countersignature from Sam. Fee is on the site; pay by card.\n\nKeep the old passport until the new one arrives."
+  },
+  {
+   "key": "laptop/dotfiles/dot-3mm",
+   "bridge": "laptop",
+   "repo": "dotfiles",
+   "id": "dot-3mm",
+   "title": "Sign in to the package registry once so the agent can publish",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "labels": [
+    "human"
+   ]
+  },
+  {
+   "key": "hub/personal/mm-45",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-45",
+   "title": "Read through the lease renewal and write down every clause that changed since last year before replying to the letting agent",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "labels": [
+    "admin",
+    "home"
+   ]
+  },
+  {
+   "key": "hub/personal/mm-12",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-12",
+   "title": "Call Sam about the weekend",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": []
+  },
+  {
+   "key": "hub/projects/garden/mm-4",
+   "bridge": "hub",
+   "repo": "projects/garden",
+   "id": "mm-4",
+   "title": "Order bark mulch",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "labels": [
+    "garden"
+   ]
+  },
+  {
+   "key": "hub/projects/garden/mm-52",
+   "bridge": "hub",
+   "repo": "projects/garden",
+   "id": "mm-52",
+   "title": "Label the seed packets 🌱 種",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": []
+  },
+  {
+   "key": "hub/personal/mm-50",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-50",
+   "title": "Cancel the trial subscription",
+   "status": "open",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "deferUntil": "2026-11-04T09:00:00Z"
+  },
+  {
+   "key": "hub/personal/mm-30",
+   "bridge": "hub",
+   "repo": "personal",
+   "id": "mm-30",
+   "title": "Take out recycling",
+   "status": "closed",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "closeReason": "Done in Meat Mode",
+   "closedAt": "2026-11-02T08:15:00Z"
+  },
+  {
+   "key": "laptop/acme/storefront/sf-c1x.5",
+   "bridge": "laptop",
+   "repo": "acme/storefront",
+   "id": "sf-c1x.5",
+   "title": "Set up the wallet-pay sandbox account",
+   "status": "blocked",
+   "priority": 2,
+   "createdAt": "2026-10-23T10:00:00Z",
+   "updatedAt": "2026-11-01T10:00:00Z",
+   "comments": [],
+   "labels": [
+    "human"
+   ],
+   "parent": "sf-c1x",
+   "parentTitle": "Checkout redesign"
+  }
+ ],
+ "repos": [
+  {
+   "bridge": "hub",
+   "name": "personal",
+   "personal": true,
+   "optedIn": true,
+   "agentsAllowed": false
+  },
+  {
+   "bridge": "hub",
+   "name": "projects/garden",
+   "personal": false,
+   "optedIn": true,
+   "agentsAllowed": false,
+   "colour": 2
+  },
+  {
+   "bridge": "laptop",
+   "name": "acme/storefront",
+   "personal": false,
+   "optedIn": true,
+   "agentsAllowed": false,
+   "tracker": "beads",
+   "epics": true,
+   "epicsOn": true,
+   "colour": 0
+  },
+  {
+   "bridge": "laptop",
+   "name": "acme/api",
+   "personal": false,
+   "optedIn": true,
+   "agentsAllowed": false,
+   "tracker": "beads",
+   "epics": true,
+   "epicsOn": true,
+   "colour": 1
+  },
+  {
+   "bridge": "laptop",
+   "name": "dotfiles",
+   "personal": false,
+   "optedIn": true,
+   "agentsAllowed": false,
+   "tracker": "beads",
+   "epics": true,
+   "epicsOn": true,
+   "colour": 3
+  }
+ ],
+ "bridges": [
+  {
+   "name": "laptop",
+   "createdAt": "2026-10-03T10:00:00Z",
+   "lastSeen": "2026-11-02T09:59:00Z"
+  }
+ ],
+ "unapplied": 0,
+ "user": "alex",
+ "serverTime": "2026-11-02T10:00:00Z"
+}

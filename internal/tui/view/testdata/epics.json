@@ -1,0 +1,346 @@
+{
+ "repos": [
+  {
+   "bridge": "laptop",
+   "repo": "acme/api",
+   "tracker": "beads",
+   "syncedAt": "2026-11-02T09:56:00Z",
+   "rows": [
+    {
+     "id": "api-h3k",
+     "title": "Rate limiting v2",
+     "status": "in_progress",
+     "priority": 1,
+     "updatedAt": "2026-11-01T14:00:00Z",
+     "epic": true,
+     "type": "epic",
+     "description": "Per-key token buckets in Redis, replacing the per-IP limiter."
+    },
+    {
+     "id": "api-h3k.1",
+     "title": "Token bucket store",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-01T13:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-01T13:00:00Z",
+     "parent": "api-h3k"
+    },
+    {
+     "id": "api-h3k.2",
+     "title": "Middleware and headers",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-01T12:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-01T12:00:00Z",
+     "parent": "api-h3k"
+    },
+    {
+     "id": "api-h3k.3",
+     "title": "Limits per plan",
+     "status": "in_progress",
+     "priority": 2,
+     "updatedAt": "2026-11-01T11:00:00Z",
+     "epic": true,
+     "type": "epic",
+     "parent": "api-h3k"
+    },
+    {
+     "id": "api-h3k.3.1",
+     "title": "Plan table migration",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-01T10:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-01T10:00:00Z",
+     "parent": "api-h3k.3"
+    },
+    {
+     "id": "api-h3k.3.2",
+     "title": "Admin override",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T09:00:00Z",
+     "type": "task",
+     "parent": "api-h3k.3"
+    },
+    {
+     "id": "api-h3k.4",
+     "title": "Load test at 5k rps",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T08:00:00Z",
+     "type": "task",
+     "parent": "api-h3k"
+    },
+    {
+     "id": "api-h3k.5",
+     "title": "Docs for the new 429 body",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T07:00:00Z",
+     "type": "task",
+     "parent": "api-h3k"
+    },
+    {
+     "id": "api-z9p",
+     "title": "Remove legacy auth endpoints",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T06:00:00Z",
+     "epic": true,
+     "type": "epic"
+    },
+    {
+     "id": "api-z9p.1",
+     "title": "Log callers of /v1/login",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-01T05:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-01T05:00:00Z",
+     "parent": "api-z9p"
+    },
+    {
+     "id": "api-z9p.2",
+     "title": "Email the two remaining callers",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-01T04:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-01T04:00:00Z",
+     "parent": "api-z9p"
+    },
+    {
+     "id": "api-z9p.3",
+     "title": "Delete /v1/login",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-01T03:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-01T03:00:00Z",
+     "parent": "api-z9p"
+    },
+    {
+     "id": "api-z9p.4",
+     "title": "Delete /v1/token",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-01T02:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-01T02:00:00Z",
+     "parent": "api-z9p"
+    }
+   ]
+  },
+  {
+   "bridge": "laptop",
+   "repo": "acme/storefront",
+   "tracker": "beads",
+   "syncedAt": "2026-11-02T09:59:00Z",
+   "rows": [
+    {
+     "id": "sf-a8m",
+     "title": "Accessibility pass",
+     "status": "in_progress",
+     "priority": 2,
+     "updatedAt": "2026-11-02T02:00:00Z",
+     "epic": true,
+     "type": "epic"
+    },
+    {
+     "id": "sf-a8m.1",
+     "title": "Focus rings on all buttons",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-02T01:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-02T01:00:00Z",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-a8m.2",
+     "title": "Alt text audit",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-02T00:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-02T00:00:00Z",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-a8m.3",
+     "title": "Colour contrast in dark theme",
+     "status": "in_progress",
+     "priority": 2,
+     "updatedAt": "2026-11-01T23:00:00Z",
+     "type": "task",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-a8m.4",
+     "title": "Skip-to-content link",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T22:00:00Z",
+     "type": "task",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-a8m.5",
+     "title": "Form error announcements",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T21:00:00Z",
+     "type": "task",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-a8m.6",
+     "title": "Keyboard trap in modal",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T20:00:00Z",
+     "type": "task",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-a8m.7",
+     "title": "Reduced-motion support",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T19:00:00Z",
+     "type": "task",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-a8m.8",
+     "title": "Landmark roles",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T18:00:00Z",
+     "type": "task",
+     "parent": "sf-a8m"
+    },
+    {
+     "id": "sf-c1x",
+     "title": "Checkout redesign",
+     "status": "open",
+     "priority": 1,
+     "updatedAt": "2026-11-02T09:00:00Z",
+     "epic": true,
+     "type": "epic",
+     "description": "Replace the three-page checkout with one page. Design in `docs/checkout.md`."
+    },
+    {
+     "id": "sf-c1x.1",
+     "title": "Cart summary component",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-02T08:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-02T08:00:00Z",
+     "parent": "sf-c1x"
+    },
+    {
+     "id": "sf-c1x.2",
+     "title": "Address form validation",
+     "status": "closed",
+     "priority": 2,
+     "updatedAt": "2026-11-02T07:00:00Z",
+     "type": "task",
+     "closedAt": "2026-11-02T07:00:00Z",
+     "parent": "sf-c1x"
+    },
+    {
+     "id": "sf-c1x.3",
+     "title": "Payment step layout",
+     "status": "in_progress",
+     "priority": 2,
+     "updatedAt": "2026-11-02T06:00:00Z",
+     "type": "task",
+     "parent": "sf-c1x",
+     "assignee": "builder"
+    },
+    {
+     "id": "sf-c1x.4",
+     "title": "Order confirmation email",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-02T05:00:00Z",
+     "type": "task",
+     "parent": "sf-c1x"
+    },
+    {
+     "id": "sf-c1x.5",
+     "title": "Set up the wallet-pay sandbox account",
+     "status": "blocked",
+     "priority": 2,
+     "updatedAt": "2026-11-02T04:00:00Z",
+     "type": "task",
+     "parent": "sf-c1x",
+     "human": true
+    },
+    {
+     "id": "sf-c1x.6",
+     "title": "Remove the old checkout routes and every redirect that still points at them from marketing pages",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-02T03:00:00Z",
+     "type": "task",
+     "parent": "sf-c1x"
+    },
+    {
+     "id": "sf-q1w",
+     "title": "Bump image CDN timeout",
+     "status": "open",
+     "priority": 3,
+     "updatedAt": "2026-11-01T16:00:00Z",
+     "type": "task"
+    },
+    {
+     "id": "sf-q2e",
+     "title": "Flaky test in cart.spec",
+     "status": "open",
+     "priority": 2,
+     "updatedAt": "2026-11-01T15:00:00Z",
+     "type": "task"
+    },
+    {
+     "id": "sf-r4t",
+     "title": "Search relevance",
+     "status": "open",
+     "priority": 3,
+     "updatedAt": "2026-11-01T17:00:00Z",
+     "epic": true,
+     "type": "epic"
+    }
+   ]
+  },
+  {
+   "bridge": "laptop",
+   "repo": "dotfiles",
+   "tracker": "beads",
+   "syncedAt": "2026-11-02T09:48:00Z",
+   "rows": [
+    {
+     "id": "dot-7aa",
+     "title": "Move shell config to XDG paths",
+     "status": "open",
+     "priority": 3,
+     "updatedAt": "2026-11-01T01:00:00Z",
+     "type": "task"
+    },
+    {
+     "id": "dot-7ab",
+     "title": "Pin the editor plugins",
+     "status": "open",
+     "priority": 4,
+     "updatedAt": "2026-11-01T00:00:00Z",
+     "type": "task"
+    }
+   ]
+  }
+ ]
+}

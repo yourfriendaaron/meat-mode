@@ -1,0 +1,216 @@
+== 56 x 20, layout a
+  1 To-dos 4   2 Epics 0   3 All           ◉ connecting |
+ A acme/api  synced 4m ago                              |
+   Nothing open.                                        |
+ S acme/storefront  synced 1m ago                       |
+   Nothing open.                                        |
+ D dotfiles  synced 12m ago                             |
+   Nothing open.                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  l h fold  y copy  / filter  ? keys         |
+
+== 89 x 20, layout a
+  1 To-dos 4   2 Epics 0   3 All                                            ◉ connecting |
+ A acme/api  synced 4m ago                                                               |
+   Nothing open.                                                                         |
+ S acme/storefront  synced 1m ago                                                        |
+   Nothing open.                                                                         |
+ D dotfiles  synced 12m ago                                                              |
+   Nothing open.                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
+
+== 90 x 20, layout b
+  1 To-dos 4   2 Epics 0   3 All                                             ◉ connecting |
+                                                 ╎                                        |
+  No epics yet. They show here once the machine  ╎                                        |
+  sends them.                                    ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ l into epic  y copy  Y copy all  / filter  ? keys                                        |
+
+== 140 x 20, layout b
+  1 To-dos 4   2 Epics 0   3 All                                                                                               ◉ connecting |
+                                                                             ╎                                                              |
+  No epics yet. They show here once the machine sends them.                  ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+
+== 56 x 30, layout a
+  1 To-dos 4   2 Epics 0   3 All           ◉ connecting |
+ A acme/api  synced 4m ago                              |
+   Nothing open.                                        |
+ S acme/storefront  synced 1m ago                       |
+   Nothing open.                                        |
+ D dotfiles  synced 12m ago                             |
+   Nothing open.                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  l h fold  y copy  / filter  ? keys         |
+
+== 89 x 30, layout a
+  1 To-dos 4   2 Epics 0   3 All                                            ◉ connecting |
+ A acme/api  synced 4m ago                                                               |
+   Nothing open.                                                                         |
+ S acme/storefront  synced 1m ago                                                        |
+   Nothing open.                                                                         |
+ D dotfiles  synced 12m ago                                                              |
+   Nothing open.                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
+
+== 90 x 30, layout b
+  1 To-dos 4   2 Epics 0   3 All                                             ◉ connecting |
+                                                 ╎                                        |
+  No epics yet. They show here once the machine  ╎                                        |
+  sends them.                                    ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ l into epic  y copy  Y copy all  / filter  ? keys                                        |
+
+== 140 x 30, layout b
+  1 To-dos 4   2 Epics 0   3 All                                                                                               ◉ connecting |
+                                                                             ╎                                                              |
+  No epics yet. They show here once the machine sends them.                  ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+

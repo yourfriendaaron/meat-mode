@@ -1,0 +1,216 @@
+== 56 x 20, layout a
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ ‹ Esc To-dos                                           |
+ Rotate the staging API key in the vault                |
+ api-9fq  A api  ✦ for you                              |
+ 17h overdue                                            |
+                                                        |
+  The agent cannot reach the vault UI.                  |
+                                                        |
+  1. Open the staging vault.                            |
+  2. Rotate `STAGING_API_KEY`.                          |
+  3. Run `bd close api-9fq` or tick it here.            |
+                                                        |
+ Notes 1                                                |
+  ‣ agent ∙ 1d ago                                      |
+    The deploy is blocked on this; everything else is   |
+    ready.                                              |
+                                                        |
+                                                        |
+                                                        |
+ y copy  Y copy all  x done  s snooze  Esc back  ? keys |
+
+== 89 x 20, layout a
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ ‹ Esc To-dos                                                                            |
+ Rotate the staging API key in the vault                                                 |
+ api-9fq  A api  ✦ for you                                                               |
+ 17h overdue                                                                             |
+                                                                                         |
+  The agent cannot reach the vault UI.                                                   |
+                                                                                         |
+  1. Open the staging vault.                                                             |
+  2. Rotate `STAGING_API_KEY`.                                                           |
+  3. Run `bd close api-9fq` or tick it here.                                             |
+                                                                                         |
+ Notes 1                                                                                 |
+  ‣ agent ∙ 1d ago                                                                       |
+    The deploy is blocked on this; everything else is ready.                             |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ y copy  Y copy all  x done  s snooze  Esc back  ? keys                                  |
+
+== 90 x 20, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ Past due 2                                      ╎ Rotate the staging API key in the      |
+  ◦ ✓ Book the boiler service         1d overdue ╎ vault                                  |
+› ✦ A Rotate the staging API key in⋯ 17h overdue ╎ api-9fq  A api  ✦ for you              |
+ Today 1                                         ╎ 17h overdue                            |
+  ◦ ✓ Pick up dry cleaning                 12:30 ╎                                        |
+ This evening 1                                  ╎  The agent cannot reach the vault UI.  |
+  ◦ ✓ Water the plants                   ↻ 18:00 ╎                                        |
+ This week 4                                     ╎  1. Open the staging vault.            |
+  ◦ ✓ Cancel the trial subscription ☾ Wed, Nov 4 ╎  2. Rotate `STAGING_API_KEY`.          |
+  ◦ ✓ Buy birthday card for Alex  1/2 Thu, Nov 5 ╎  3. Run `bd close api-9fq` or tick it  |
+    ◦ ✓ Choose a card                 Thu, Nov 5 ╎  here.                                 |
+  ◦ G Fix the gate latch              Sun, Nov 8 ╎                                        |
+ Any time 4                                      ╎ Notes 1                                |
+  ◦ ✓ Call Sam about the weekend                 ╎  ‣ agent ∙ 1d ago                      |
+  ◦ G Label the seed packets 🌱 種               ╎    The deploy is blocked on this;      |
+  ◦ G Order bark mulch                           ╎    everything else is ready.           |
+  ◦ ✓ Read through the lease renewal and write ⋯ ╎                                        |
+ Later 1                                         ╎                                        |
+ y copy  Y copy all  x done  s snooze  / filter  ? keys                           1-18/21 |
+
+== 140 x 20, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ Past due 2                                                                  ╎ Rotate the staging API key in the vault                      |
+  ◦ ✓ mm-28     Book the boiler service                    #home  1d overdue ╎ api-9fq  A api  ✦ for you                                    |
+› ✦ A api-9fq   Rotate the staging API key in the vault          17h overdue ╎ 17h overdue                                                  |
+ Today 1                                                                     ╎                                                              |
+  ◦ ✓ mm-44     Pick up dry cleaning                    #errands       12:30 ╎  The agent cannot reach the vault UI.                        |
+ This evening 1                                                              ╎                                                              |
+  ◦ ✓ mm-31     Water the plants                         #home ↻       18:00 ╎  1. Open the staging vault.                                  |
+ This week 4                                                                 ╎  2. Rotate `STAGING_API_KEY`.                                |
+  ◦ ✓ mm-50     Cancel the trial subscription                   ☾ Wed, Nov 4 ╎  3. Run `bd close api-9fq` or tick it here.                  |
+  ◦ ✓ mm-46     Buy birthday card for Alex          #errands 1/2  Thu, Nov 5 ╎                                                              |
+    ◦ ✓ mm-47     Choose a card                                   Thu, Nov 5 ╎ Notes 1                                                      |
+  ◦ G mm-6      Fix the gate latch                                Sun, Nov 8 ╎  ‣ agent ∙ 1d ago                                            |
+ Any time 4                                                                  ╎    The deploy is blocked on this; everything else is ready.  |
+  ◦ ✓ mm-12     Call Sam about the weekend                                   ╎                                                              |
+  ◦ G mm-52     Label the seed packets 🌱 種                                 ╎                                                              |
+  ◦ G mm-4      Order bark mulch                                     #garden ╎                                                              |
+  ◦ ✓ mm-45     Read through the lease renewal and write down ⋯ #admin #home ╎                                                              |
+ Later 1                                                                     ╎                                                              |
+ y copy  Y copy all  x done  s snooze  / filter  ? keys                                                                             1-18/21 |
+
+== 56 x 30, layout a
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ ‹ Esc To-dos                                           |
+ Rotate the staging API key in the vault                |
+ api-9fq  A api  ✦ for you                              |
+ 17h overdue                                            |
+                                                        |
+  The agent cannot reach the vault UI.                  |
+                                                        |
+  1. Open the staging vault.                            |
+  2. Rotate `STAGING_API_KEY`.                          |
+  3. Run `bd close api-9fq` or tick it here.            |
+                                                        |
+ Notes 1                                                |
+  ‣ agent ∙ 1d ago                                      |
+    The deploy is blocked on this; everything else is   |
+    ready.                                              |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ y copy  Y copy all  x done  s snooze  Esc back  ? keys |
+
+== 89 x 30, layout a
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ ‹ Esc To-dos                                                                            |
+ Rotate the staging API key in the vault                                                 |
+ api-9fq  A api  ✦ for you                                                               |
+ 17h overdue                                                                             |
+                                                                                         |
+  The agent cannot reach the vault UI.                                                   |
+                                                                                         |
+  1. Open the staging vault.                                                             |
+  2. Rotate `STAGING_API_KEY`.                                                           |
+  3. Run `bd close api-9fq` or tick it here.                                             |
+                                                                                         |
+ Notes 1                                                                                 |
+  ‣ agent ∙ 1d ago                                                                       |
+    The deploy is blocked on this; everything else is ready.                             |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ y copy  Y copy all  x done  s snooze  Esc back  ? keys                                  |
+
+== 90 x 30, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ Past due 2                                      ╎ Rotate the staging API key in the      |
+  ◦ ✓ Book the boiler service         1d overdue ╎ vault                                  |
+› ✦ A Rotate the staging API key in⋯ 17h overdue ╎ api-9fq  A api  ✦ for you              |
+ Today 1                                         ╎ 17h overdue                            |
+  ◦ ✓ Pick up dry cleaning                 12:30 ╎                                        |
+ This evening 1                                  ╎  The agent cannot reach the vault UI.  |
+  ◦ ✓ Water the plants                   ↻ 18:00 ╎                                        |
+ This week 4                                     ╎  1. Open the staging vault.            |
+  ◦ ✓ Cancel the trial subscription ☾ Wed, Nov 4 ╎  2. Rotate `STAGING_API_KEY`.          |
+  ◦ ✓ Buy birthday card for Alex  1/2 Thu, Nov 5 ╎  3. Run `bd close api-9fq` or tick it  |
+    ◦ ✓ Choose a card                 Thu, Nov 5 ╎  here.                                 |
+  ◦ G Fix the gate latch              Sun, Nov 8 ╎                                        |
+ Any time 4                                      ╎ Notes 1                                |
+  ◦ ✓ Call Sam about the weekend                 ╎  ‣ agent ∙ 1d ago                      |
+  ◦ G Label the seed packets 🌱 種               ╎    The deploy is blocked on this;      |
+  ◦ G Order bark mulch                           ╎    everything else is ready.           |
+  ◦ ✓ Read through the lease renewal and write ⋯ ╎                                        |
+ Later 1                                         ╎                                        |
+  ◦ ✓ Renew passport                 Sat, Nov 14 ╎                                        |
+ Done today 1                                    ╎                                        |
+  ✓ ✓ Take out recycling                         ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ y copy  Y copy all  x done  s snooze  / filter  ? keys                                   |
+
+== 140 x 30, layout b
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ Past due 2                                                                  ╎ Rotate the staging API key in the vault                      |
+  ◦ ✓ mm-28     Book the boiler service                    #home  1d overdue ╎ api-9fq  A api  ✦ for you                                    |
+› ✦ A api-9fq   Rotate the staging API key in the vault          17h overdue ╎ 17h overdue                                                  |
+ Today 1                                                                     ╎                                                              |
+  ◦ ✓ mm-44     Pick up dry cleaning                    #errands       12:30 ╎  The agent cannot reach the vault UI.                        |
+ This evening 1                                                              ╎                                                              |
+  ◦ ✓ mm-31     Water the plants                         #home ↻       18:00 ╎  1. Open the staging vault.                                  |
+ This week 4                                                                 ╎  2. Rotate `STAGING_API_KEY`.                                |
+  ◦ ✓ mm-50     Cancel the trial subscription                   ☾ Wed, Nov 4 ╎  3. Run `bd close api-9fq` or tick it here.                  |
+  ◦ ✓ mm-46     Buy birthday card for Alex          #errands 1/2  Thu, Nov 5 ╎                                                              |
+    ◦ ✓ mm-47     Choose a card                                   Thu, Nov 5 ╎ Notes 1                                                      |
+  ◦ G mm-6      Fix the gate latch                                Sun, Nov 8 ╎  ‣ agent ∙ 1d ago                                            |
+ Any time 4                                                                  ╎    The deploy is blocked on this; everything else is ready.  |
+  ◦ ✓ mm-12     Call Sam about the weekend                                   ╎                                                              |
+  ◦ G mm-52     Label the seed packets 🌱 種                                 ╎                                                              |
+  ◦ G mm-4      Order bark mulch                                     #garden ╎                                                              |
+  ◦ ✓ mm-45     Read through the lease renewal and write down ⋯ #admin #home ╎                                                              |
+ Later 1                                                                     ╎                                                              |
+  ◦ ✓ mm-40     Renew passport                            #admin Sat, Nov 14 ╎                                                              |
+ Done today 1                                                                ╎                                                              |
+  ✓ ✓ mm-30     Take out recycling                                           ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ y copy  Y copy all  x done  s snooze  / filter  ? keys                                                                                     |
+

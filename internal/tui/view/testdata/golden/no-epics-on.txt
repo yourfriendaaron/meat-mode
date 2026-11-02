@@ -1,0 +1,216 @@
+== 56 x 20, layout a
+  1 To-dos 4   2 Epics 0   3 All                 ◉ live |
+                                                        |
+  No repo shows its epics. Switch them on for a repo    |
+  in the app's Settings.                                |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  l h fold  y copy  / filter  ? keys         |
+
+== 89 x 20, layout a
+  1 To-dos 4   2 Epics 0   3 All                                                  ◉ live |
+                                                                                         |
+  No repo shows its epics. Switch them on for a repo in the app's Settings.              |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
+
+== 90 x 20, layout b
+  1 To-dos 4   2 Epics 0   3 All                                                   ◉ live |
+                                                 ╎                                        |
+  No repo shows its epics. Switch them on for a  ╎                                        |
+  repo in the app's Settings.                    ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ l into epic  y copy  Y copy all  / filter  ? keys                                        |
+
+== 140 x 20, layout b
+  1 To-dos 4   2 Epics 0   3 All                                                                                                     ◉ live |
+                                                                             ╎                                                              |
+  No repo shows its epics. Switch them on for a repo in the app's Settings.  ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+
+== 56 x 30, layout a
+  1 To-dos 4   2 Epics 0   3 All                 ◉ live |
+                                                        |
+  No repo shows its epics. Switch them on for a repo    |
+  in the app's Settings.                                |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ Enter open  l h fold  y copy  / filter  ? keys         |
+
+== 89 x 30, layout a
+  1 To-dos 4   2 Epics 0   3 All                                                  ◉ live |
+                                                                                         |
+  No repo shows its epics. Switch them on for a repo in the app's Settings.              |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
+
+== 90 x 30, layout b
+  1 To-dos 4   2 Epics 0   3 All                                                   ◉ live |
+                                                 ╎                                        |
+  No repo shows its epics. Switch them on for a  ╎                                        |
+  repo in the app's Settings.                    ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ l into epic  y copy  Y copy all  / filter  ? keys                                        |
+
+== 140 x 30, layout b
+  1 To-dos 4   2 Epics 0   3 All                                                                                                     ◉ live |
+                                                                             ╎                                                              |
+  No repo shows its epics. Switch them on for a repo in the app's Settings.  ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ l into epic  y copy  Y copy all  / filter  ? keys                                                                                          |
+
