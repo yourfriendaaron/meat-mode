@@ -82,6 +82,10 @@ Agents work only where you let them. They start off in every repo, and you switc
 
 If you plan agent work as epics with tasks under them, the **Epics** view shows each repo's open epics as cards, with how many of their tasks are done ("85% 6/7 done"). Open a card to list its tasks, with each one's type, priority and assignee, or tap **Details** to read the epic. The repo's open tasks outside any epic sit under **Other tasks**. The view is read-only: it never adds to Today, your reminders or your notifications. A task in an epic that is also for you opens as that task, with all its buttons. You switch a repo's epics on and off in Settings, under the repo, beside its sync switch, or at the agent machine with `meat-mode bridge epics on <repo>`.
 
+### Watch it from a terminal
+
+`meat-mode tui` shows your to-dos and epics in a terminal pane beside your agent sessions, and copies a task's id and title into one with a single key, even over ssh. See [Watch from a terminal](docs/deploy.md#watch-from-a-terminal).
+
 ### Type a to-do the way you would say it
 
 Quick add reads dates, times and repeats as you type and shows you what it understood before you press Enter. "Water the plants every sunday at 8pm until nov 29" becomes a weekly to-do with an end date. Add `#garden` to put it on another list and `@weekend` to give it a tag. Tags show on the row as #garden, and you can filter the list by one or search for it. An agent's task shows the labels its tracker gives it, read-only.
@@ -198,6 +202,7 @@ It is not:
 | Let an agent work on a task you hand it | [Wake an agent on a task](docs/deploy.md#wake-an-agent-on-a-task) |
 | Choose which coding agent runs a task | [docs/harnesses.md](docs/harnesses.md) |
 | Use Backlog.md or ticket, or add a tracker | [docs/trackers.md](docs/trackers.md) |
+| Watch your list from a terminal beside your agents | [Watch from a terminal](docs/deploy.md#watch-from-a-terminal) |
 | Let agents add to your list from scripts | [Let agents add to your personal list](docs/deploy.md#let-agents-add-to-your-personal-list) |
 | Back up, or move to another host | [Back up](docs/deploy.md#back-up) |
 | Put it at your own domain on your LAN | [Behind a reverse proxy](docs/deploy.md#behind-a-reverse-proxy) |
