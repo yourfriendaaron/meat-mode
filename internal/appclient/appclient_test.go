@@ -499,7 +499,7 @@ func TestNormalizeHub(t *testing.T) {
 	}
 	for _, in := range []string{
 		"", "ftp://hub.example.com", "http://hub.example.com", "http://192.0.2.1",
-		"https://alex@" + "hub.example.com", "https://", "https://hub.example.com:0", "https://hub.example.com:99999",
+		"https://alex@example.com", "https://", "https://hub.example.com:0", "https://hub.example.com:99999",
 	} {
 		if got, err := NormalizeHub(in); err == nil {
 			t.Errorf("NormalizeHub(%q) = %q, want an error", in, got)
