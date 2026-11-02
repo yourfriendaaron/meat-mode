@@ -59,6 +59,9 @@ type Bridge struct {
 	Epics     map[string]bool
 	SaveEpics func(repo string, on bool) error
 	LoadEpics func() (map[string]bool, error)
+	// LoadSpaceColours, when set, rereads the workspace colours file before
+	// each repo report. An error means no colours, never the last read.
+	LoadSpaceColours func() ([]SpaceColour, error)
 	// SaveLimits records a limits change from the app (in bridge.json) and
 	// returns the limits now saved. A nil SaveLimits refuses them.
 	SaveLimits func(api.LimitsChange) (SavedLimits, error)
@@ -85,6 +88,7 @@ type Bridge struct {
 	found      []Repo // the last scan
 	scannedAt  time.Time
 	reposSent  []api.Repo
+	spaceWarn  string // the last workspace colours problem logged
 	reposAt    time.Time
 	lastFullAt time.Time
 	// The epics pass: what it knows by repo, until when it sends no epics
@@ -404,6 +408,11 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		b.found = Discover(b.Roots, b.Home, b.available, b.log())
 		b.scannedAt = b.now()
 	}
+	dirs := make([]string, len(b.found))
+	for i := range b.found {
+		dirs[i] = b.found[i].Dir
+	}
+	colours := assignSpaceColours(b.spaceColours(), dirs)
 	next := map[string]*repoState{}
 	wire := make([]api.Repo, 0, len(b.found))
 	for i := range b.found {
@@ -418,7 +427,7 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		next[r.Name] = st
 		info := r.Tracker.Info()
 		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced(), AgentsAllowed: b.Agents[r.Name],
-			Tracker: info.Title, Actions: info.Actions, Epics: epicsOf(r.Tracker) != nil, EpicsOn: b.epicsOn(*r)})
+			Tracker: info.Title, Actions: info.Actions, Epics: epicsOf(r.Tracker) != nil, EpicsOn: b.epicsOn(*r), SpaceColour: colours[i]})
 	}
 	b.repos = next
 	if reflect.DeepEqual(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {
@@ -429,6 +438,24 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 	}
 	b.reposSent, b.reposAt = wire, b.now()
 	return nil
+}
+
+// spaceColours rereads the workspace colours. A problem gives none, and is
+// logged when it first appears or its message changes, not on every cycle.
+func (b *Bridge) spaceColours() []SpaceColour {
+	if b.LoadSpaceColours == nil {
+		return nil
+	}
+	entries, err := b.LoadSpaceColours()
+	if err != nil {
+		if msg := err.Error(); msg != b.spaceWarn {
+			b.log().Warn("no workspace colours: " + msg)
+			b.spaceWarn = msg
+		}
+		return nil
+	}
+	b.spaceWarn = ""
+	return entries
 }
 
 // reloadAgents rereads the agents map from the config file. A failed read
