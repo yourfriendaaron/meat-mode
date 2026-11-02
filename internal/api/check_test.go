@@ -118,11 +118,23 @@ func TestCheckRepos(t *testing.T) {
 		t.Fatalf("not cleaned: %+v", got[0])
 	}
 	for name, repos := range map[string][]Repo{
-		"duplicate": {{Name: "garden"}, {Name: "garden"}},
-		"bad name":  {{Name: "../garden"}},
+		"duplicate":    {{Name: "garden"}, {Name: "garden"}},
+		"bad name":     {{Name: "../garden"}},
+		"colour below": {{Name: "garden", SpaceColour: intPtr(-1)}},
+		"colour above": {{Name: "garden", SpaceColour: intPtr(ListColours)}},
 	} {
 		if _, err := CheckRepos(repos); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: err = %v, want ErrInvalid", name, err)
 		}
 	}
+	if _, err := CheckRepos([]Repo{{Name: "garden", SpaceColour: intPtr(0)}, {Name: "chores", SpaceColour: intPtr(ListColours - 1)}}); err != nil {
+		t.Errorf("colours in range: %v", err)
+	}
+	// A bad name is reported before a bad colour, even on an earlier repo.
+	_, err = CheckRepos([]Repo{{Name: "garden", SpaceColour: intPtr(9)}, {Name: "../chores"}})
+	if err == nil || !strings.Contains(err.Error(), "name") {
+		t.Errorf("bad name and colour: err = %v, want the name's", err)
+	}
 }
+
+func intPtr(n int) *int { return &n }
