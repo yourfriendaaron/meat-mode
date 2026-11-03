@@ -347,10 +347,8 @@ func (m *Model) splitBody(w, h int) ([]line, string) {
 func (m *Model) cardPane(t *target, w, h int) []line {
 	d, re, r := m.d, t.repo, t.row
 	out := titleLines(d.rowTitle(re, r), w)
-	done, total := d.progress(re, r.ID)
-	idl := line{sg(" "+clean(r.ID), sDim), sg("  ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+clean(re.Repo)+"  ", sSoft)}
-	idl = append(idl, bar(done, total, 8)...)
-	out = append(out, append(idl, sg(" "+itoa(done)+"/"+itoa(total), sSoft)))
+	out = append(out, line{sg(" "+clean(r.ID), sDim), sg("  ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+clean(re.Repo), sSoft)})
+	out = append(out, d.cardFacts(re, r, " ", w)...)
 	kids := d.children(re, r.ID)
 	if strings.TrimSpace(r.Description) != "" {
 		// A long description keeps room for the children below it, at

@@ -1,63 +1,63 @@
 == 56 x 20, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  API acme/api  synced 4m ago                            |
-› ▾ api-h3k   Rate limiting v2 ◒ 1 waiting ▰▰▱▱▱▱ 2/5   |
+   ◒ Moving 2                                           |
+› ▾ api-h3k   Rate limiting v2                          |
+              ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2             |
+              P1                                        |
       api-h3k.4    Load test at 5k rps           ◦ Open |
       api-h3k.5    Docs for the new 429 body  ⊘ Waiting |
       api-h3k.1    Token bucket store          ✓ Closed |
       api-h3k.2    Middleware and headers      ✓ Closed |
-    ▸ api-h3k.3    Limits per plan       ◒ ▰▰▰▱▱▱ 1/2   |
-  ▸ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
+    ▸ api-h3k.3    Limits per plan         ▰▰▰▱▱▱ 1/2   |
+   ◦ Ready to start 1                                   |
+  ▸ api-z9p   Remove legacy auth endpoin⋯  ▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                     |
-  ▸ sf-c1x    Checkout redesign  1 blocked ▰▰▱▱▱▱ 2/6   |
-  ▸ sf-a8m    Accessibility pass         ◒ ▰▰▱▱▱▱ 2/8   |
-  ▸ sf-r4t    Search relevance           ◌ ▱▱▱▱▱▱ 0/0   |
-   No epic                                              |
-    sf-q2e    Flaky test in cart.spec            ◦ Open |
-    sf-q1w    Bump image CDN timeout             ◦ Open |
- DOT dotfiles  synced 12m ago                           |
-   No epic                                              |
-    dot-7aa   Move shell config to XDG paths     ◦ Open |
- Enter open  l h fold  y copy  / filter  ? keys 1-18/19 |
+   ◒ Moving 2                                           |
+  ▸ sf-c1x    Checkout redesign            ▰▰▱▱▱▱ 2/6   |
+  ▸ sf-a8m    Accessibility pass           ▰▱▱▱▱▱ 2/8   |
+   ◌ Deferred 1                                         |
+  ▸ sf-r4t    Search relevance             ▱▱▱▱▱▱ 0/0   |
+ Enter open  l h fold  y copy  / filter  ? keys 1-18/25 |
 
 == 89 x 20, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  API acme/api  synced 4m ago                                                             |
-› ▾ api-h3k   Rate limiting v2                  ◒ In progress 1 waiting ▰▰▰▰▱▱▱▱▱▱ 2/5   |
+   ◒ Moving 2                                                                            |
+› ▾ api-h3k   Rate limiting v2                                                           |
+              ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 in progress ⊘1 waiting ◦1 open ✓2 done                |
+              P1                                                                         |
       api-h3k.4    Load test at 5k rps                                            ◦ Open |
       api-h3k.5    Docs for the new 429 body             2 notes  ⊘ Waiting on api-h3k.4 |
       api-h3k.1    Token bucket store                                           ✓ Closed |
       api-h3k.2    Middleware and headers                                       ✓ Closed |
-    ▸ api-h3k.3    Limits per plan                        ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
-  ▸ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
+    ▸ api-h3k.3    Limits per plan                                 ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
+   ◦ Ready to start 1                                                                    |
+  ▸ api-z9p   Remove legacy auth endpoints                            ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                                                      |
-  ▸ sf-c1x    Checkout redesign                     1 blocked 1 waiting ▰▰▰▱▱▱▱▱▱▱ 2/6   |
-  ▸ sf-a8m    Accessibility pass                          ◒ In progress ▰▰▰▱▱▱▱▱▱▱ 2/8   |
-  ▸ sf-r4t    Search relevance                     ◌ Deferred to Nov 24 ▱▱▱▱▱▱▱▱▱▱ 0/0   |
-   No epic                                                                               |
-    sf-q2e    Flaky test in cart.spec                                    3 notes  ◦ Open |
-    sf-q1w    Bump image CDN timeout                                              ◦ Open |
- DOT dotfiles  synced 12m ago                                                            |
-   No epic                                                                               |
-    dot-7aa   Move shell config to XDG paths                                      ◦ Open |
- Enter open  l h fold  y copy  / filter  ? keys                                  1-18/19 |
+   ◒ Moving 2                                                                            |
+  ▸ sf-c1x    Checkout redesign                           ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   |
+  ▸ sf-a8m    Accessibility pass                                ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   |
+   ◌ Deferred 1                                                                          |
+  ▸ sf-r4t    Search relevance                                            ▱▱▱▱▱▱▱▱ 0/0   |
+ Enter open  l h fold  y copy  / filter  ? keys                                  1-18/25 |
 
 == 90 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
-›API api-h3k   Rate lim⋯ ◒ 1 waiting ▰▰▱▱▱   2/5 ╎ Rate limiting v2                       |
- API   api-h3k.3 Limits per plan   ◒ ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
- API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis,       |
- STO sf-c1x    Checkout r⋯ 1 blocked ▰▰▱▱▱   2/6 ╎  replacing the per-IP limiter.         |
- STO sf-a8m    Accessibility pass  ◒ ▰▱▱▱▱   2/8 ╎                                        |
- STO sf-r4t    Search relevance    ◌ ▱▱▱▱▱   0/0 ╎› api-h3k.3    Limits p⋯  ◒ In progress |
- No epic 4                                       ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
- STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
- STO sf-q1w    Bump image CDN timeout     ◦ Open ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
- DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
+ ◒ Moving 4                                      ╎ Rate limiting v2                       |
+›API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎ api-h3k  API acme/api                  |
+ API api-h3k.3 ↳ Limits per plan    ▰▰▰▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2          |
+ STO sf-c1x    Checkout redesign    ▰▰▱▱▱▱ 2/6   ╎ P1                                     |
+ STO sf-a8m    Accessibility pass   ▰▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis,       |
+ ◦ Ready to start 1                              ╎  replacing the per-IP limiter.         |
+ API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎                                        |
+ ◌ Deferred 1                                    ╎› api-h3k.3    Limits p⋯  ◒ In progress |
+ STO sf-r4t    Search relevance     ▱▱▱▱▱▱ 0/0   ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
+ No epic 4                                       ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
+ STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
+ STO sf-q1w    Bump image CDN timeout     ◦ Open ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
+ DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎                                        |
  DOT dot-7ab   Pin the editor plugi⋯  ◌ Deferred ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
@@ -66,20 +66,20 @@
 
 == 140 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
-›API api-h3k   Rate limiting v2       ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 ╎ Rate limiting v2                                             |
- API   api-h3k.3 Limits per plan                ◒ In progress ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
- API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis, replacing the per-IP        |
- STO sf-c1x    Checkout redesign          1 blocked 1 waiting ▰▰▰▱▱▱▱▱   2/6 ╎  limiter.                                                    |
- STO sf-a8m    Accessibility pass               ◒ In progress ▰▰▱▱▱▱▱▱   2/8 ╎                                                              |
- STO sf-r4t    Search relevance          ◌ Deferred to Nov 24 ▱▱▱▱▱▱▱▱   0/0 ╎› api-h3k.3    Limits per plan                  ◒ In progress |
- No epic 4                                                                   ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
- STO sf-q2e    Flaky test in cart.spec                       3 notes  ◦ Open ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
- STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎  api-h3k.1    Token bucket store                    ✓ Closed |
- DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎  api-h3k.2    Middleware and headers                ✓ Closed |
+ ◒ Moving 4                                                                  ╎ Rate limiting v2                                             |
+›API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎ api-h3k  API acme/api                                        |
+ API api-h3k.3 ↳ Limits per plan                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2                                |
+ STO sf-c1x    Checkout redesign              ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   ╎ P1                                                           |
+ STO sf-a8m    Accessibility pass                   ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis, replacing the per-IP        |
+ ◦ Ready to start 1                                                          ╎  limiter.                                                    |
+ API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎                                                              |
+ ◌ Deferred 1                                                                ╎› api-h3k.3    Limits per plan                  ◒ In progress |
+ STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱ 0/0   ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
+ No epic 4                                                                   ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
+ STO sf-q2e    Flaky test in cart.spec                       3 notes  ◦ Open ╎  api-h3k.1    Token bucket store                    ✓ Closed |
+ STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎  api-h3k.2    Middleware and headers                ✓ Closed |
+ DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎                                                              |
  DOT dot-7ab   Pin the editor plugins                             ◌ Deferred ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
@@ -89,17 +89,23 @@
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  API acme/api  synced 4m ago                            |
-› ▾ api-h3k   Rate limiting v2 ◒ 1 waiting ▰▰▱▱▱▱ 2/5   |
+   ◒ Moving 2                                           |
+› ▾ api-h3k   Rate limiting v2                          |
+              ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2             |
+              P1                                        |
       api-h3k.4    Load test at 5k rps           ◦ Open |
       api-h3k.5    Docs for the new 429 body  ⊘ Waiting |
       api-h3k.1    Token bucket store          ✓ Closed |
       api-h3k.2    Middleware and headers      ✓ Closed |
-    ▸ api-h3k.3    Limits per plan       ◒ ▰▰▰▱▱▱ 1/2   |
-  ▸ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
+    ▸ api-h3k.3    Limits per plan         ▰▰▰▱▱▱ 1/2   |
+   ◦ Ready to start 1                                   |
+  ▸ api-z9p   Remove legacy auth endpoin⋯  ▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                     |
-  ▸ sf-c1x    Checkout redesign  1 blocked ▰▰▱▱▱▱ 2/6   |
-  ▸ sf-a8m    Accessibility pass         ◒ ▰▰▱▱▱▱ 2/8   |
-  ▸ sf-r4t    Search relevance           ◌ ▱▱▱▱▱▱ 0/0   |
+   ◒ Moving 2                                           |
+  ▸ sf-c1x    Checkout redesign            ▰▰▱▱▱▱ 2/6   |
+  ▸ sf-a8m    Accessibility pass           ▰▱▱▱▱▱ 2/8   |
+   ◌ Deferred 1                                         |
+  ▸ sf-r4t    Search relevance             ▱▱▱▱▱▱ 0/0   |
    No epic                                              |
     sf-q2e    Flaky test in cart.spec            ◦ Open |
     sf-q1w    Bump image CDN timeout             ◦ Open |
@@ -110,28 +116,28 @@
                                                         |
                                                         |
                                                         |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
  Enter open  l h fold  y copy  / filter  ? keys         |
 
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  API acme/api  synced 4m ago                                                             |
-› ▾ api-h3k   Rate limiting v2                  ◒ In progress 1 waiting ▰▰▰▰▱▱▱▱▱▱ 2/5   |
+   ◒ Moving 2                                                                            |
+› ▾ api-h3k   Rate limiting v2                                                           |
+              ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 in progress ⊘1 waiting ◦1 open ✓2 done                |
+              P1                                                                         |
       api-h3k.4    Load test at 5k rps                                            ◦ Open |
       api-h3k.5    Docs for the new 429 body             2 notes  ⊘ Waiting on api-h3k.4 |
       api-h3k.1    Token bucket store                                           ✓ Closed |
       api-h3k.2    Middleware and headers                                       ✓ Closed |
-    ▸ api-h3k.3    Limits per plan                        ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
-  ▸ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
+    ▸ api-h3k.3    Limits per plan                                 ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
+   ◦ Ready to start 1                                                                    |
+  ▸ api-z9p   Remove legacy auth endpoints                            ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                                                      |
-  ▸ sf-c1x    Checkout redesign                     1 blocked 1 waiting ▰▰▰▱▱▱▱▱▱▱ 2/6   |
-  ▸ sf-a8m    Accessibility pass                          ◒ In progress ▰▰▰▱▱▱▱▱▱▱ 2/8   |
-  ▸ sf-r4t    Search relevance                     ◌ Deferred to Nov 24 ▱▱▱▱▱▱▱▱▱▱ 0/0   |
+   ◒ Moving 2                                                                            |
+  ▸ sf-c1x    Checkout redesign                           ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   |
+  ▸ sf-a8m    Accessibility pass                                ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   |
+   ◌ Deferred 1                                                                          |
+  ▸ sf-r4t    Search relevance                                            ▱▱▱▱▱▱▱▱ 0/0   |
    No epic                                                                               |
     sf-q2e    Flaky test in cart.spec                                    3 notes  ◦ Open |
     sf-q1w    Bump image CDN timeout                                              ◦ Open |
@@ -142,30 +148,24 @@
                                                                                          |
                                                                                          |
                                                                                          |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
  Enter open  l h fold  y copy  / filter  ? keys                                          |
 
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
-›API api-h3k   Rate lim⋯ ◒ 1 waiting ▰▰▱▱▱   2/5 ╎ Rate limiting v2                       |
- API   api-h3k.3 Limits per plan   ◒ ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
- API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis,       |
- STO sf-c1x    Checkout r⋯ 1 blocked ▰▰▱▱▱   2/6 ╎  replacing the per-IP limiter.         |
- STO sf-a8m    Accessibility pass  ◒ ▰▱▱▱▱   2/8 ╎                                        |
- STO sf-r4t    Search relevance    ◌ ▱▱▱▱▱   0/0 ╎› api-h3k.3    Limits p⋯  ◒ In progress |
- No epic 4                                       ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
- STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
- STO sf-q1w    Bump image CDN timeout     ◦ Open ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
- DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
+ ◒ Moving 4                                      ╎ Rate limiting v2                       |
+›API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎ api-h3k  API acme/api                  |
+ API api-h3k.3 ↳ Limits per plan    ▰▰▰▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2          |
+ STO sf-c1x    Checkout redesign    ▰▰▱▱▱▱ 2/6   ╎ P1                                     |
+ STO sf-a8m    Accessibility pass   ▰▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis,       |
+ ◦ Ready to start 1                              ╎  replacing the per-IP limiter.         |
+ API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎                                        |
+ ◌ Deferred 1                                    ╎› api-h3k.3    Limits p⋯  ◒ In progress |
+ STO sf-r4t    Search relevance     ▱▱▱▱▱▱ 0/0   ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
+ No epic 4                                       ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
+ STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
+ STO sf-q1w    Bump image CDN timeout     ◦ Open ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
+ DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎                                        |
  DOT dot-7ab   Pin the editor plugi⋯  ◌ Deferred ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
@@ -184,20 +184,20 @@
 
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
-›API api-h3k   Rate limiting v2       ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 ╎ Rate limiting v2                                             |
- API   api-h3k.3 Limits per plan                ◒ In progress ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
- API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis, replacing the per-IP        |
- STO sf-c1x    Checkout redesign          1 blocked 1 waiting ▰▰▰▱▱▱▱▱   2/6 ╎  limiter.                                                    |
- STO sf-a8m    Accessibility pass               ◒ In progress ▰▰▱▱▱▱▱▱   2/8 ╎                                                              |
- STO sf-r4t    Search relevance          ◌ Deferred to Nov 24 ▱▱▱▱▱▱▱▱   0/0 ╎› api-h3k.3    Limits per plan                  ◒ In progress |
- No epic 4                                                                   ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
- STO sf-q2e    Flaky test in cart.spec                       3 notes  ◦ Open ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
- STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎  api-h3k.1    Token bucket store                    ✓ Closed |
- DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎  api-h3k.2    Middleware and headers                ✓ Closed |
+ ◒ Moving 4                                                                  ╎ Rate limiting v2                                             |
+›API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎ api-h3k  API acme/api                                        |
+ API api-h3k.3 ↳ Limits per plan                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2                                |
+ STO sf-c1x    Checkout redesign              ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   ╎ P1                                                           |
+ STO sf-a8m    Accessibility pass                   ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis, replacing the per-IP        |
+ ◦ Ready to start 1                                                          ╎  limiter.                                                    |
+ API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎                                                              |
+ ◌ Deferred 1                                                                ╎› api-h3k.3    Limits per plan                  ◒ In progress |
+ STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱ 0/0   ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
+ No epic 4                                                                   ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
+ STO sf-q2e    Flaky test in cart.spec                       3 notes  ◦ Open ╎  api-h3k.1    Token bucket store                    ✓ Closed |
+ STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎  api-h3k.2    Middleware and headers                ✓ Closed |
+ DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎                                                              |
  DOT dot-7ab   Pin the editor plugins                             ◌ Deferred ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |

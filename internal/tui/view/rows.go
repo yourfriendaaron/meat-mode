@@ -43,6 +43,11 @@ type row struct {
 	head line   // a heading's segments; nil for a target
 	t    *target
 	draw func(m *Model, w int) line
+	// lead is an epic row's line up to its title, for opening it in place
+	// (Model.openSelected); nil for a row that does not open.
+	lead func(w int) line
+	// facts marks a line of the selected row opened in place.
+	facts bool
 }
 
 func headRow(segs ...seg) row { return row{head: line(segs)} }
@@ -58,6 +63,8 @@ type data struct {
 	items map[string]*api.Item
 	repos map[string]*api.Repo // by "<bridge>/<repo>"
 	codes map[string]string    // each visible list's badge code, by "<bridge>/<repo>"
+	// blockers caches what each epic row waits on, per repo (blockerMap).
+	blockers map[*api.RepoEpics]map[string][]string
 }
 
 func index(s api.State, e api.Epics, now time.Time) *data {
@@ -338,7 +345,7 @@ func (d *data) epicTreeRows(q string, expanded map[string]bool) []row {
 			open := foldable && (expanded[id] || q != "")
 			rows = append(rows, row{id: id, t: t, draw: func(m *Model, w int) line {
 				return m.epicLine(re, r, depth, t.card, foldable, open, w)
-			}})
+			}, lead: func(int) line { return d.epicLead(re, r, depth, foldable, open) }})
 			n++
 			if open {
 				for _, c := range d.children(re, r.ID) {
@@ -351,8 +358,16 @@ func (d *data) epicTreeRows(q string, expanded map[string]bool) []row {
 				}
 			}
 		}
-		for _, c := range d.cardTree(q, re) {
-			add("", c.row, c.depth)
+		for g, bs := range groupBlocks(d.cardBlocks(q, re)) {
+			if len(bs) == 0 {
+				continue
+			}
+			rows = append(rows, groupHead(g, blockCards(bs), "   "))
+			for _, b := range bs {
+				for _, c := range b.cards {
+					add("", c.row, c.depth)
+				}
+			}
 		}
 		shown := n
 		var top []*api.EpicRow
@@ -381,20 +396,19 @@ func (d *data) repoHead(re *api.RepoEpics) row {
 // ---- Epics, layout B: cards on the left, then the top-level tasks
 
 func (d *data) epicListRows(q string) []row {
-	var rows []row
 	var tops []row
+	var blocks []cardBlock
 	for k := range d.epics.Repos {
 		re := &d.epics.Repos[k]
 		_, tasks := d.cardsAndTasks(re)
-		for _, c := range d.cardTree(q, re) {
-			rows = append(rows, d.cardRow(re, c.row, c.depth))
-		}
+		blocks = append(blocks, d.cardBlocks(q, re)...)
 		for _, t := range tasks {
 			if matches(q, d.rowTitle(re, t), t.ID) {
 				tops = append(tops, d.cardRow(re, t, 0))
 			}
 		}
 	}
+	rows := d.groupedRows(blocks, " ")
 	if len(tops) > 0 {
 		rows = append(rows, headRow(sg(" No epic ", sHead), sg(itoa(len(tops)), sDim)))
 		rows = append(rows, tops...)
@@ -404,7 +418,35 @@ func (d *data) epicListRows(q string) []row {
 
 func (d *data) cardRow(re *api.RepoEpics, r *api.EpicRow, depth int) row {
 	t := d.epicTarget(re, r)
-	return row{id: t.key, t: t, draw: func(m *Model, w int) line { return m.cardLine(re, r, depth, w) }}
+	return row{id: t.key, t: t, draw: func(m *Model, w int) line { return m.cardLine(re, r, depth, w) },
+		lead: func(int) line { return d.cardLead(re, r, depth) }}
+}
+
+// groupedRows are cards in blocks under their group headings, each heading
+// indented by pad.
+func (d *data) groupedRows(blocks []cardBlock, pad string) []row {
+	var rows []row
+	for g, bs := range groupBlocks(blocks) {
+		if len(bs) == 0 {
+			continue
+		}
+		rows = append(rows, groupHead(g, blockCards(bs), pad))
+		for _, b := range bs {
+			for _, c := range b.cards {
+				rows = append(rows, d.cardRow(b.repo, c.row, c.depth))
+			}
+		}
+	}
+	return rows
+}
+
+// blockCards is the number of cards in blocks.
+func blockCards(bs []cardBlock) int {
+	n := 0
+	for _, b := range bs {
+		n += len(b.cards)
+	}
+	return n
 }
 
 // ---- All, layout C
@@ -457,16 +499,13 @@ func (d *data) allRows(q string) (rows []row, hidden int) {
 	rows = append(rows, waiting...)
 	rows = append(rows, headRow(), headRow(sg(" Later ", sHead), sg(itoa(nl), sDim)))
 	rows = append(rows, later...)
-	var cards []row
+	var blocks []cardBlock
 	for k := range d.epics.Repos {
-		re := &d.epics.Repos[k]
-		for _, c := range d.cardTree(q, re) {
-			cards = append(cards, d.cardRow(re, c.row, c.depth))
-		}
+		blocks = append(blocks, d.cardBlocks(q, &d.epics.Repos[k])...)
 	}
-	if len(cards) > 0 || d.epicsSwitchedOn() {
-		rows = append(rows, headRow(), headRow(sg(" Epics ", sHead), sg(itoa(len(cards)), sDim)))
-		rows = append(rows, cards...)
+	if len(blocks) > 0 || d.epicsSwitchedOn() {
+		rows = append(rows, headRow(), headRow(sg(" Epics ", sHead), sg(itoa(blockCards(blocks)), sDim)))
+		rows = append(rows, d.groupedRows(blocks, "  ")...)
 	}
 	return rows, hidden
 }
@@ -481,7 +520,7 @@ var drillStatuses = []struct{ status, label string }{
 func (d *data) drillRows(q string, t *target, w int) []row {
 	re, card := t.repo, t.row
 	done, total := d.progress(re, card.ID)
-	rows := []row{headRow(append(append(line{sg(" ", sPlain)}, bar(done, total, 16)...),
+	rows := []row{headRow(append(append(line{sg(" ", sPlain)}, d.stateBar(re, card.ID, 16)...),
 		sg(" "+itoa(done)+"/"+itoa(total)+" done", sSoft), sg("  "+clean(card.ID)+" ∙ "+clean(re.Repo), sDim))...)}
 	if card.Description != "" {
 		for _, l := range wrap(card.Description, w-3) {
@@ -505,7 +544,7 @@ func (d *data) drillRows(q string, t *target, w int) []row {
 			kt := d.epicTarget(re, k)
 			rows = append(rows, row{id: kt.key, t: kt, draw: func(m *Model, w int) line {
 				return m.epicLine(re, k, 0, kt.card, false, false, w)
-			}})
+			}, lead: func(int) line { return d.epicLead(re, k, 0, false, false) }})
 		}
 	}
 	if len(kids) == 0 {

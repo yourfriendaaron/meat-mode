@@ -21,6 +21,7 @@ const (
 	gRepeat   = "↻" // U+21BB
 	gFolded   = "▸" // U+25B8
 	gUnfolded = "▾" // U+25BE
+	gNested   = "↳" // U+21B3, a card nested in another, in a flat list
 	gBarFull  = "▰" // U+25B0
 	gBarEmpty = "▱" // U+25B1
 	gSplit    = "╎" // U+254E, between the panes of layout B
@@ -35,8 +36,8 @@ const (
 func itoa(n int) string { return strconv.Itoa(n) }
 
 // statusStyle is a row state's colour, the web's role for it (epics.css):
-// in progress is you (cyan), blocked urgent (red), closed done (green), and
-// open, waiting and deferred soft.
+// in progress is you (cyan), blocked urgent (red), closed done (green),
+// waiting on another bead orange, deferred dim, and open soft.
 func statusStyle(state string) style {
 	switch state {
 	case "in_progress":
@@ -45,6 +46,10 @@ func statusStyle(state string) style {
 		return sRed
 	case "closed":
 		return sGreen
+	case "waiting":
+		return sOrange
+	case "deferred":
+		return sDim
 	}
 	return sSoft
 }
@@ -85,7 +90,7 @@ func statusWords(status string) string {
 }
 
 // statusTag is a bead row's state as its mark and words: "Waiting on
-// as-7om +2" names the first bead it waits on, "Deferred to Nov 24" its
+// gd-3 +2" names the first bead it waits on, "Deferred to Nov 24" its
 // wake date, in now's zone. Short drops both, for narrow rows.
 func statusTag(state string, r *api.EpicRow, short bool, now time.Time) line {
 	words := statusWords(state)
@@ -111,28 +116,6 @@ func notesTag(r *api.EpicRow) line {
 		return line{sg(" 1 note", sDim)}
 	}
 	return line{sg(" "+itoa(r.CommentCount)+" notes", sDim)}
-}
-
-// cardCounts is what a card's direct children hold up: "1 blocked" in red
-// and "3 waiting" soft, or nothing. Short keeps only the first of them.
-func (d *data) cardCounts(re *api.RepoEpics, id string, short bool) line {
-	blocked, waiting := 0, 0
-	for _, k := range d.children(re, id) {
-		switch d.rowState(re, k) {
-		case "blocked":
-			blocked++
-		case "waiting":
-			waiting++
-		}
-	}
-	var out line
-	if blocked > 0 {
-		out = append(out, sg(" "+itoa(blocked)+" blocked", sRed))
-	}
-	if waiting > 0 && (!short || blocked == 0) {
-		out = append(out, sg(" "+itoa(waiting)+" waiting", sSoft))
-	}
-	return out
 }
 
 // mark is a list's badge, codeWidth cells: the personal list's check,
@@ -166,19 +149,6 @@ func (d *data) listName(bridge, name string) string {
 		return clean(repoLabel(name) + " " + gDot + " " + det)
 	}
 	return clean(repoLabel(name))
-}
-
-// bar is a progress bar w cells wide.
-func bar(done, total, w int) line {
-	if total == 0 {
-		return line{sg(strings.Repeat(gBarEmpty, w), sDim)}
-	}
-	f := (done*w*2 + total) / (total * 2)
-	st := sAccent
-	if done == total {
-		st = sGreen
-	}
-	return line{sg(strings.Repeat(gBarFull, f), st), sg(strings.Repeat(gBarEmpty, w-f), sDim)}
 }
 
 // tags are an item's labels as the app shows them, without HumanLabel.
@@ -261,11 +231,9 @@ func (m *Model) itemLine(it *api.Item, w int, nested bool) line {
 	return lr(left, right, w)
 }
 
-// epicLine is one row of the epics tree, or of a drilled card.
-func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, foldable, open bool, w int) line {
-	d := m.d
-	status := d.rowStatus(re, r)
-	state := d.rowState(re, r)
+// epicLead is an epics tree row up to its title: the indent, the fold
+// mark, the id, and a nested card's own state when its group differs.
+func (d *data) epicLead(re *api.RepoEpics, r *api.EpicRow, depth int, foldable, open bool) line {
 	left := line{sg("  "+strings.Repeat("  ", depth), sPlain)}
 	switch {
 	case foldable && open:
@@ -280,14 +248,46 @@ func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, fol
 		idw = 12
 	}
 	left = append(left, sg(" ", sPlain), sg(padRight(clean(r.ID), idw)+" ", sDim))
+	return append(left, d.nestedState(re, r)...)
+}
+
+// nestedState is a nested card's state mark when it differs from the
+// group its top-level card shows it under, as the app's status on it.
+func (d *data) nestedState(re *api.RepoEpics, r *api.EpicRow) line {
+	if r.Parent == "" || !d.epicTarget(re, r).card {
+		return nil
+	}
+	top := r
+	for n := 0; top.Parent != "" && n <= len(re.Rows); n++ {
+		_, p := d.findRow(rowKey(re, &api.EpicRow{ID: top.Parent}))
+		if p == nil {
+			break
+		}
+		top = p
+	}
+	if top == r || d.cardGroup(re, r) == d.cardGroup(re, top) {
+		return nil
+	}
+	return line{statusGlyph(d.rowState(re, r)), sg(" ", sPlain)}
+}
+
+// epicLine is one row of the epics tree, or of a drilled card. A card's
+// group heading says its state, so the row shows what it starts after or
+// its children's counts, and its bar.
+func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, foldable, open bool, w int) line {
+	d := m.d
+	left := d.epicLead(re, r, depth, foldable, open)
 	ts := sPlain
 	switch {
-	case status == "closed":
+	case d.rowStatus(re, r) == "closed":
 		ts = sDim
 	case card:
 		ts = sBold
 	}
 	left = append(left, sg(clean(d.rowTitle(re, r)), ts))
+	if card {
+		return lr(left, append(d.cardRight(re, r, w), sg(" ", sPlain)), w)
+	}
 	var right line
 	if r.Human {
 		right = append(right, sg(" "+gHuman+" you", sOrange))
@@ -298,31 +298,55 @@ func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, fol
 	if w >= 70 {
 		right = append(right, notesTag(r)...)
 	}
-	switch {
-	case card && state != "open" && w < 70:
-		right = append(right, sg(" ", sPlain), statusGlyph(state))
-	case !card || state != "open":
-		right = append(right, sg("  ", sPlain))
-		right = append(right, statusTag(state, r, w < 70, d.now)...)
-	}
-	if card {
-		done, total := d.progress(re, r.ID)
-		bw := 10
-		if w < 70 {
-			bw = 6
-		}
-		right = append(right, d.cardCounts(re, r.ID, w < 70)...)
-		right = append(right, sg(" ", sPlain))
-		right = append(right, bar(done, total, bw)...)
-		right = append(right, sg(padRight(" "+itoa(done)+"/"+itoa(total), 6), sSoft))
-	}
+	right = append(right, sg("  ", sPlain))
+	right = append(right, statusTag(d.rowState(re, r), r, w < 70, d.now)...)
 	right = append(right, sg(" ", sPlain))
 	return lr(left, right, w)
 }
 
-// cardLine is one row of layout B's left list and of All's epics: the
-// list mark, id and title, and a card's bar or a task's status. A card
-// nested in another is indented two spaces a level.
+// cardRight is a card row's right side: "after gd-3" when it waits on
+// another bead, else its children's counts when there is room; "you" when
+// it is also the person's; then its bar and done over all.
+func (d *data) cardRight(re *api.RepoEpics, r *api.EpicRow, w int) line {
+	right := line{sg("  ", sPlain)}
+	waiting := d.rowState(re, r) == "waiting"
+	if waiting {
+		right = append(right, sg("after "+clean(strings.Join(d.directBlockers(re, r), ", "))+"  ", sOrange))
+	}
+	if r.Human {
+		right = append(right, sg(gHuman+" you  ", sOrange))
+	}
+	if !waiting && w >= 70 {
+		if c := d.chips(re, r.ID, false); len(c) > 0 {
+			right = append(append(right, c...), sg("  ", sPlain))
+		}
+	}
+	bw := 8
+	if w < 70 {
+		bw = 6
+	}
+	done, total := d.progress(re, r.ID)
+	right = append(right, d.stateBar(re, r.ID, bw)...)
+	return append(right, sg(padRight(" "+itoa(done)+"/"+itoa(total), 6), sSoft))
+}
+
+// cardLead is a row of layout B's left list and of All's epics up to its
+// title: the list mark when epics from more than one repo are in view, the
+// id, and "↳ " for a card nested in another.
+func (d *data) cardLead(re *api.RepoEpics, r *api.EpicRow, depth int) line {
+	left := line{sg(" ", sPlain)}
+	if !d.oneRepo() {
+		left = append(left, d.mark(re.Bridge, re.Repo), sg(" ", sPlain))
+	}
+	left = append(left, sg(padRight(clean(r.ID), 9)+" ", sDim))
+	if depth > 0 {
+		left = append(left, sg(strings.Repeat("  ", depth-1)+gNested+" ", sDim))
+	}
+	return append(left, d.nestedState(re, r)...)
+}
+
+// cardLine is one row of layout B's left list and of All's epics: its lead
+// and title, then a card's facts and bar or a task's status.
 func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, depth int, w int) line {
 	d := m.d
 	t := d.epicTarget(re, r)
@@ -330,39 +354,23 @@ func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, depth int, w int) li
 	if t.card {
 		ts = sBold
 	}
-	left := line{sg(" ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+strings.Repeat("  ", depth), sPlain), sg(padRight(clean(r.ID), 9)+" ", sDim), sg(clean(d.rowTitle(re, r)), ts)}
-	state := d.rowState(re, r)
-	short := w < 70
-	if !t.card {
-		right := line{}
-		if r.Human {
-			right = append(right, sg(" "+gHuman+" you", sOrange))
-		}
-		if !short {
-			right = append(right, notesTag(r)...)
-		}
-		right = append(right, sg("  ", sPlain))
-		right = append(right, statusTag(state, r, short, d.now)...)
-		right = append(right, sg(" ", sPlain))
-		return lr(left, right, w)
+	if d.rowStatus(re, r) == "closed" {
+		ts = sDim
 	}
-	done, total := d.progress(re, r.ID)
-	bw := 8
-	if w < 50 {
-		bw = 5
+	left := append(d.cardLead(re, r, depth), sg(clean(d.rowTitle(re, r)), ts))
+	if t.card {
+		return lr(left, append(d.cardRight(re, r, w), sg(" ", sPlain)), w)
 	}
 	right := line{}
-	switch {
-	case state != "open" && short:
-		right = append(right, sg(" ", sPlain), statusGlyph(state))
-	case state != "open":
-		right = append(right, sg("  ", sPlain))
-		right = append(right, statusTag(state, r, false, d.now)...)
+	if r.Human {
+		right = append(right, sg(" "+gHuman+" you", sOrange))
 	}
-	right = append(right, d.cardCounts(re, r.ID, short)...)
+	if w >= 70 {
+		right = append(right, notesTag(r)...)
+	}
+	right = append(right, sg("  ", sPlain))
+	right = append(right, statusTag(d.rowState(re, r), r, w < 70, d.now)...)
 	right = append(right, sg(" ", sPlain))
-	right = append(right, bar(done, total, bw)...)
-	right = append(right, sg(padLeft(" "+itoa(done)+"/"+itoa(total)+" ", 7), sSoft))
 	return lr(left, right, w)
 }
 
@@ -538,7 +546,7 @@ func (m *Model) rowDetail(t *target, w int) []line {
 	if kids := d.children(re, r.ID); len(kids) > 0 {
 		done, total := d.progress(re, r.ID)
 		head := line{sg(" Children ", sHead)}
-		head = append(head, bar(done, total, 10)...)
+		head = append(head, d.stateBar(re, r.ID, 10)...)
 		out = append(out, nil, append(head, sg(" "+itoa(done)+"/"+itoa(total), sSoft)))
 		pick := m.open && m.openKids && t.key == m.openKey
 		for n, k := range kids {

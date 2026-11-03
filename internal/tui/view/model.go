@@ -2,6 +2,7 @@ package view
 
 import (
 	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -54,8 +55,47 @@ func (m *Model) listHeight() int {
 	return m.bodyHeight()
 }
 
-// rows are the current list's rows.
+// rows are the current list's rows, with the selected epic row opened in
+// place where no pane beside the list shows it (layouts A and C).
 func (m *Model) rows() []row {
+	rows := m.listRows()
+	if m.tab == TabTodos || m.layout() == "b" {
+		return rows
+	}
+	return m.openSelected(rows)
+}
+
+// openSelected opens the selected epic row in place: its own line keeps
+// the title's first line, and the rest of the title and a card's facts
+// follow as lines the selection skips.
+func (m *Model) openSelected(rows []row) []row {
+	sel := selectable(rows)
+	if len(sel) == 0 {
+		return rows
+	}
+	i := sel[min(m.selIdx, len(sel)-1)]
+	for _, j := range sel {
+		if m.selKey != "" && rows[j].id == m.selKey {
+			i = j
+			break
+		}
+	}
+	r := rows[i]
+	if r.lead == nil || r.t == nil || r.t.row == nil {
+		return rows
+	}
+	first, more := m.openLines(r.t.repo, r.t.row, r.lead(m.width), m.width)
+	out := slices.Clone(rows[:i])
+	r.draw = func(*Model, int) line { return first }
+	out = append(out, r)
+	for _, l := range more {
+		out = append(out, row{head: l, facts: true})
+	}
+	return append(out, rows[i+1:]...)
+}
+
+// listRows are the current list's rows, none opened.
+func (m *Model) listRows() []row {
 	if m.d == nil {
 		return nil
 	}
@@ -295,8 +335,12 @@ func (m *Model) fix() {
 	if cur < m.scroll {
 		m.scroll = cur
 	}
-	if h > 0 && cur >= m.scroll+h {
-		m.scroll = cur - h + 1
+	end := cur // the selected row and the lines it opens to
+	for end+1 < len(rows) && rows[end+1].facts {
+		end++
+	}
+	if h > 0 && end >= m.scroll+h {
+		m.scroll = min(cur, end-h+1)
 	}
 	m.scroll = max(0, min(m.scroll, len(rows)-h))
 }
