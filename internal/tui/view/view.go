@@ -69,9 +69,13 @@ type Copy struct{ Text, Ref string }
 // Act asks for one app action (POST /api/actions); ID is left empty for the
 // client to fill. Done is the message to show once it succeeds; the program
 // then hands the stored action back with Acted and refetches the state (and
-// the epics when the target came from an epic row).
+// the epics when the target came from an epic row). Before are sent one by
+// one ahead of Action and After behind it, in order; the first refusal stops
+// the rest.
 type Act struct {
+	Before []api.NewAction
 	Action api.NewAction
+	After  []api.NewAction
 	Done   string
 }
 
@@ -109,15 +113,16 @@ func (Quit) effect()    {}
 //   - Groups use now's Location; the program passes time.Now() (local time,
 //     as the app on the same machine) and calls SetNow each minute.
 //
-// Undo (u) works on the last done or snooze this session made: a snooze is
-// undone by a snooze with until and previous swapped (web/src/changes.ts);
-// a done by a reopen, except a done that moved a repeating to-do to its next
+// Undo (u) works on the last done, dismiss or snooze this session made: a
+// snooze is undone by a snooze with until and previous swapped
+// (web/src/changes.ts); a dismiss by a reopen of it and the sub-tasks it
+// took; a done by a reopen, except a done that moved a repeating to-do to its next
 // date, which says "Undo it in the app".
 //
 // Keys are Bubble Tea v2's KeyPressMsg.String() names: "j", "k", "up",
 // "down", "left", "right", "h", "l", "g", "G", "home", "end", "pgup",
 // "pgdown", "enter", "esc", "backspace", "tab", "shift+tab", "space", "/",
-// "?", "y", "Y", "x", "u", "s", "o", "p", "r", "q", "ctrl+c", "ctrl+d",
+// "?", "y", "Y", "x", "d", "u", "s", "o", "p", "r", "q", "ctrl+c", "ctrl+d",
 // "ctrl+u", "ctrl+f", "ctrl+b", "ctrl+n", "ctrl+p", "ctrl+w", "0" to "6". The
 // snooze menu takes "1" to "6" in snoozeOptions order (one is missing after
 // 18:00, as in the app).
@@ -146,6 +151,9 @@ type Model struct {
 	openKey      string
 	openRow      bool // openKey is an epic row's
 	detailScroll int
+	openKids     bool      // the keys move in the open card's children, as in layout B's right pane
+	openKid      int       // the child selected while openKids
+	openBack     *openFrom // the card a child was opened from, which Esc goes back to
 
 	drill    string          // All: the card drilled into
 	expanded map[string]bool // Epics in layout A: unfolded cards, by row id; shared between copies, so copied before a change
@@ -266,10 +274,17 @@ func (m Model) ClearNotice(seq int) Model {
 	return m
 }
 
-// Acted records the stored action a successful Act returned, for undo.
-func (m Model) Acted(a api.Action) Model {
+// Acted records the stored action a successful Act returned, for undo;
+// before are the stored actions of the Act's Before.
+func (m Model) Acted(a api.Action, before ...api.Action) Model {
 	key := a.Bridge + "/" + a.Repo + "/" + a.BeadID
 	switch a.Kind {
+	case api.KindDismiss:
+		u := &undoable{kind: api.KindDismiss, key: key, id: a.BeadID}
+		for _, b := range before {
+			u.also = append(u.also, b.Bridge+"/"+b.Repo+"/"+b.BeadID)
+		}
+		m.last = u
 	case api.KindDone:
 		m.last = &undoable{kind: api.KindDone, key: key, id: a.BeadID, movedOn: a.Payload.Was != nil}
 	case api.KindSnooze:

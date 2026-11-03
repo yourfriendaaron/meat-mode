@@ -21,8 +21,9 @@ var helpKeys = []hint{
 	{"y", "copy id and title"},
 	{"Y", "copy with details"},
 	{"x", "done, or reopen"},
+	{"d", "won't do, or delete a to-do"},
 	{"s", "snooze; 0 clears one"},
-	{"u", "undo the last done or snooze"},
+	{"u", "undo the last done, d or snooze"},
 	{"o", "show the item's app link"},
 	{"p", "this project, or every list"},
 	{"r", "refresh"},
@@ -141,9 +142,12 @@ func (m *Model) statusLine(w int, more string) line {
 func (m *Model) hints() []hint {
 	t := m.target()
 	lay := m.layout()
-	acts := []hint{{"x", "done"}, {"s", "snooze"}}
-	if t != nil && t.readOnly() {
+	acts := []hint{{"x", "done"}, {"s", "snooze"}, {"d", "won't do"}}
+	switch {
+	case t != nil && t.readOnly():
 		acts = nil
+	case t != nil && isPersonal(t.item.Bridge):
+		acts[2].does = "delete"
 	}
 	switch {
 	case m.pw:
@@ -156,6 +160,10 @@ func (m *Model) hints() []hint {
 		return []hint{{"Enter", "keep"}, {"Esc", "clear"}}
 	case m.d == nil:
 		return []hint{{"r", "refresh"}, {"?", "keys"}, {"q", "quit"}}
+	case m.open && m.openKids:
+		return append(append([]hint{{"Enter", "open"}, {"y", "copy"}}, acts...), hint{"h", "back"}, hint{"?", "keys"})
+	case m.open && len(m.openKidRows()) > 0:
+		return []hint{{"l", "into epic"}, {"y", "copy"}, {"Y", "copy all"}, {"Esc", "back"}, {"?", "keys"}}
 	case m.open:
 		return append(append([]hint{{"y", "copy"}, {"Y", "copy all"}}, acts...), hint{"Esc", "back"}, hint{"?", "keys"})
 	case lay == "b" && m.tab == TabEpics && m.right:
@@ -183,7 +191,7 @@ func (m *Model) body(w, h int) ([]line, string) {
 	}
 	lay := m.layout()
 	if m.open {
-		if t := m.target(); t != nil {
+		if t := m.shown(); t != nil {
 			return m.detailBody(t, w, h), ""
 		}
 	}
@@ -283,7 +291,7 @@ func (m *Model) detailBody(t *target, w, h int) []line {
 
 // detailMax is the furthest an open detail scrolls.
 func (m *Model) detailMax() int {
-	t := m.target()
+	t := m.shown()
 	if t == nil {
 		return 0
 	}

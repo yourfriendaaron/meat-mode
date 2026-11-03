@@ -407,8 +407,13 @@ func (m *Model) rowDetail(t *target, w int) []line {
 		head := line{sg(" Children ", sHead)}
 		head = append(head, bar(done, total, 10)...)
 		out = append(out, nil, append(head, sg(" "+itoa(done)+"/"+itoa(total), sSoft)))
-		for _, k := range kids {
-			out = append(out, m.childLine(re, k, w))
+		pick := m.open && m.openKids && t.key == m.openKey
+		for n, k := range kids {
+			l := m.childLine(re, k, w)
+			if pick && n == m.openKid {
+				l = selected(fit(l, w, sPlain), true)
+			}
+			out = append(out, l)
 		}
 	}
 	return out

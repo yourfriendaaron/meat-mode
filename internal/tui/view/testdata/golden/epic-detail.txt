@@ -18,7 +18,7 @@
                                                         |
                                                         |
                                                         |
- y copy  Y copy all  Esc back  ? keys                   |
+ l into epic  y copy  Y copy all  Esc back  ? keys      |
 
 == 89 x 20, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
@@ -40,7 +40,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- y copy  Y copy all  Esc back  ? keys                                                    |
+ l into epic  y copy  Y copy all  Esc back  ? keys                                       |
 
 == 90 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
@@ -62,7 +62,7 @@
                                                                                           |
                                                                                           |
                                                                                           |
- y copy  Y copy all  Esc back  ? keys                                                     |
+ l into epic  y copy  Y copy all  Esc back  ? keys                                        |
 
 == 140 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
@@ -84,7 +84,7 @@
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
- y copy  Y copy all  Esc back  ? keys                                                                                                       |
+ l into epic  y copy  Y copy all  Esc back  ? keys                                                                                          |
 
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
@@ -116,7 +116,7 @@
                                                         |
                                                         |
                                                         |
- y copy  Y copy all  Esc back  ? keys                   |
+ l into epic  y copy  Y copy all  Esc back  ? keys      |
 
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
@@ -148,7 +148,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- y copy  Y copy all  Esc back  ? keys                                                    |
+ l into epic  y copy  Y copy all  Esc back  ? keys                                       |
 
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
@@ -180,7 +180,7 @@
                                                                                           |
                                                                                           |
                                                                                           |
- y copy  Y copy all  Esc back  ? keys                                                     |
+ l into epic  y copy  Y copy all  Esc back  ? keys                                        |
 
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
@@ -212,5 +212,5 @@
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
- y copy  Y copy all  Esc back  ? keys                                                                                                       |
+ l into epic  y copy  Y copy all  Esc back  ? keys                                                                                          |
 

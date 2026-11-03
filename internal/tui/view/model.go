@@ -4,13 +4,25 @@ import (
 	"maps"
 	"strings"
 	"time"
+
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// undoable is the last done or snooze this session made.
+// undoable is the last done, dismiss or snooze this session made.
 type undoable struct {
 	kind, key, id   string
+	also            []string   // a dismiss: the sub-tasks dismissed with it
 	until, previous *time.Time // snooze
 	movedOn         bool       // a done that moved a repeating to-do to its next date
+}
+
+// openFrom is an open card's detail with a child selected, kept while
+// that child's own detail is open.
+type openFrom struct {
+	key    string
+	row    bool
+	kid    int
+	scroll int
 }
 
 func (m *Model) layout() Layout { return LayoutFor(m.tab, m.width) }
@@ -98,7 +110,11 @@ func (m *Model) target() *target {
 		return nil
 	}
 	if m.open {
-		return m.d.resolve(m.openKey, m.openRow)
+		t := m.shown()
+		if kids := m.openKidRows(); m.openKids && m.openKid < len(kids) {
+			return m.d.epicTarget(t.repo, kids[m.openKid])
+		}
+		return t
 	}
 	t := m.listTarget()
 	if t != nil && m.right && t.row != nil {
@@ -124,6 +140,67 @@ func (m *Model) rightKids() int {
 
 func (m *Model) openTarget(t *target) {
 	m.open, m.openKey, m.openRow, m.detailScroll = true, t.key, t.row != nil, 0
+	m.openKids, m.openKid, m.openBack = false, 0, nil
+}
+
+// shown is the open detail's own target: the card, while the keys move in
+// its children.
+func (m *Model) shown() *target {
+	if m.d == nil || !m.open {
+		return nil
+	}
+	return m.d.resolve(m.openKey, m.openRow)
+}
+
+// openKidRows are the open card's children, or nil.
+func (m *Model) openKidRows() []*api.EpicRow {
+	t := m.shown()
+	if t == nil || t.row == nil {
+		return nil
+	}
+	return m.d.children(t.repo, t.row.ID)
+}
+
+// openKidChild opens the child selected in an open card's detail; Esc
+// comes back to the card with that child selected.
+func (m *Model) openKidChild(t *target) {
+	back := &openFrom{key: m.openKey, row: m.openRow, kid: m.openKid, scroll: m.detailScroll}
+	m.openTarget(t)
+	m.openBack = back
+}
+
+// closeOpen leaves the open detail: back to the card a child was opened
+// from, or to the list.
+func (m *Model) closeOpen() {
+	b := m.openBack
+	if b == nil || m.d.resolve(b.key, b.row) == nil {
+		m.open, m.openKids, m.openBack = false, false, nil
+		return
+	}
+	m.openKey, m.openRow, m.detailScroll = b.key, b.row, b.scroll
+	m.openKids, m.openKid, m.openBack = true, b.kid, nil
+	m.fixOpenKid()
+}
+
+// fixOpenKid keeps the selected child of an open card in range and in view.
+func (m *Model) fixOpenKid() {
+	if !m.openKids {
+		return
+	}
+	n := len(m.openKidRows())
+	if n == 0 {
+		m.openKids, m.openKid = false, 0
+		return
+	}
+	m.openKid = min(max(m.openKid, 0), n-1)
+	t := m.shown()
+	at := len(m.detailLines(t, m.width)) - n + m.openKid
+	h := max(1, m.bodyHeight()-1)
+	if at < m.detailScroll {
+		m.detailScroll = at
+	} else if at >= m.detailScroll+h {
+		m.detailScroll = at - h + 1
+	}
 }
 
 // toSplit carries a selection from layout A's tree into layout B: a child
@@ -174,8 +251,9 @@ func (m *Model) fix() {
 		return
 	}
 	if m.open && m.d.resolve(m.openKey, m.openRow) == nil {
-		m.open = false
+		m.open, m.openKids, m.openBack = false, false, nil
 	}
+	m.fixOpenKid()
 	if m.drill != "" && m.drillTarget() == nil {
 		m.drill = ""
 		m.resetSel()

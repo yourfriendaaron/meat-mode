@@ -314,3 +314,54 @@ func TestSecondActionWaits(t *testing.T) {
 		t.Fatal("a failed action left the item busy")
 	}
 }
+
+// TestActSendsInOrder sends an Act's Before ahead of its action, and the
+// undo of a dismiss reopens what the Before took too.
+func TestActSendsInOrder(t *testing.T) {
+	hub := hubtest.New(t, hubtest.Options{})
+	hub.Seed(t)
+	other, _, err := hub.Store.AddPersonal(api.PersonalTodo{Title: "Water the ferns"}, hubtest.Bridge, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := appclient.New(hub.URL, netguard.Set{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Login(context.Background(), hubtest.Password); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness(t, Options{Client: c, Clipboard: noNative()})
+	h.shows(hubtest.PersonalTitle)
+
+	status := func() (a, b string) {
+		st, err := hub.Store.State()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, it := range st.Items {
+			switch it.Key {
+			case other:
+				a = it.Status
+			case hub.PersonalKey:
+				b = it.Status
+			}
+		}
+		return a, b
+	}
+	h.exec(h.p.run([]view.Effect{view.Act{
+		Before: []api.NewAction{{Kind: api.KindDismiss, Key: other}},
+		Action: api.NewAction{Kind: api.KindDismiss, Key: hub.PersonalKey},
+		Done:   "Deleted both",
+	}}))
+	h.shows("Deleted both")
+	if a, b := status(); a != "closed" || b != "closed" {
+		t.Fatalf("after the dismiss: %s, %s", a, b)
+	}
+	h.until("the deleted to-do gone", func(f string) bool { return !strings.Contains(f, hubtest.PersonalTitle) })
+	h.keys(typed("u")...)
+	h.shows("Restored: ")
+	if a, b := status(); a != "open" || b != "open" {
+		t.Fatalf("after the undo: %s, %s", a, b)
+	}
+}

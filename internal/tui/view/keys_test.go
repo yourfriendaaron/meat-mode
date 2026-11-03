@@ -11,7 +11,7 @@ import (
 
 // contractKeys are the keys the contract names.
 var contractKeys = []string{"j", "k", "up", "down", "left", "right", "h", "l", "g", "G", "home", "end", "pgup",
-	"pgdown", "enter", "esc", "backspace", "tab", "shift+tab", "space", "/", "?", "y", "Y", "x", "u", "s", "o",
+	"pgdown", "enter", "esc", "backspace", "tab", "shift+tab", "space", "/", "?", "y", "Y", "x", "d", "u", "s", "o",
 	"r", "q", "ctrl+c", "0", "1", "2", "3", "4", "5", "6", "p", "ctrl+d", "ctrl+u", "ctrl+f", "ctrl+b", "ctrl+n",
 	"ctrl+p", "ctrl+w"}
 
@@ -31,7 +31,7 @@ func act(fx []Effect) (Act, bool) {
 func TestEveryKeyEverywhere(t *testing.T) {
 	allowed := map[string][]string{
 		"q": {"view.Quit"}, "ctrl+c": {"view.Quit"}, "r": {"view.Refresh"},
-		"y": {"view.Copy"}, "Y": {"view.Copy"}, "x": {"view.Act"}, "o": {"view.OpenURL"},
+		"y": {"view.Copy"}, "Y": {"view.Copy"}, "x": {"view.Act"}, "d": {"view.Act"}, "o": {"view.OpenURL"},
 	}
 	for _, w := range []int{56, 140} {
 		for _, tab := range []string{"1", "2", "3"} {
@@ -90,6 +90,18 @@ func TestKeyTable(t *testing.T) {
 			want: []Effect{Act{Action: api.NewAction{Kind: "reopen", Key: "hub/personal/mm-30"}, Done: "Reopened: Take out recycling"}}},
 		{name: "x with an open sub-task says so", w: 56, sel: "hub/personal/mm-46", keys: []string{"x"},
 			note: "Finish or remove its open sub-task first."},
+		{name: "d on an agent's task is won't do", w: 140, sel: "laptop/acme/api/api-9fq", keys: []string{"d"},
+			want: []Effect{Act{Action: api.NewAction{Kind: "dismiss", Key: "laptop/acme/api/api-9fq"}, Done: "Won't do: Rotate the staging API key in the vault"}}},
+		{name: "d deletes a to-do and its open sub-task first", w: 56, sel: "hub/personal/mm-46", keys: []string{"d"},
+			want: []Effect{Act{Before: []api.NewAction{{Kind: "dismiss", Key: "hub/personal/mm-47"}},
+				Action: api.NewAction{Kind: "dismiss", Key: "hub/personal/mm-46"}, Done: "Deleted: Buy birthday card for Alex and its sub-task"}},
+			check: func(t *testing.T, m Model) {
+				if m.selKey == "hub/personal/mm-46" {
+					t.Fatal("selection stayed on the deleted to-do")
+				}
+			}},
+		{name: "d on a done to-do", w: 140, sel: "hub/personal/mm-30", keys: []string{"d"}, note: "Only open to-dos can be dismissed."},
+		{name: "epic row is read-only for d", w: 56, setup: []string{"2"}, keys: []string{"d"}, note: "in acme/api"},
 		{name: "s 1 snoozes an hour", w: 56, sel: "hub/personal/mm-44", keys: []string{"s", "1"},
 			want: []Effect{Act{Action: api.NewAction{Kind: "snooze", Key: "hub/personal/mm-44",
 				Payload: api.Payload{Until: ptime(now.Add(time.Hour))}}, Done: "Snoozed to 11:00"}}},
@@ -324,6 +336,22 @@ func TestUndo(t *testing.T) {
 		t.Fatalf("undo of a repeating done gave %#v, notice %q", fx, m.notice)
 	}
 
+	// A dismiss reopens the to-do, then the sub-tasks it took.
+	m = m.Acted(api.Action{Kind: "dismiss", Bridge: "hub", Repo: "personal", BeadID: "mm-46"},
+		api.Action{Kind: "dismiss", Bridge: "hub", Repo: "personal", BeadID: "mm-47"})
+	_, fx = m.Key("u")
+	want = []Effect{Act{Action: api.NewAction{Kind: "reopen", Key: "hub/personal/mm-46"},
+		After: []api.NewAction{{Kind: "reopen", Key: "hub/personal/mm-47"}}, Done: "Restored: Buy birthday card for Alex"}}
+	if !reflect.DeepEqual(fx, want) {
+		t.Fatalf("undo of a delete\n got %#v\nwant %#v", fx, want)
+	}
+	m = m.Acted(api.Action{Kind: "dismiss", Bridge: "laptop", Repo: "acme/api", BeadID: "api-9fq"})
+	_, fx = m.Key("u")
+	want = []Effect{Act{Action: api.NewAction{Kind: "reopen", Key: "laptop/acme/api/api-9fq"}, Done: "Reopened: Rotate the staging API key in the vault"}}
+	if !reflect.DeepEqual(fx, want) {
+		t.Fatalf("undo of a won't do\n got %#v\nwant %#v", fx, want)
+	}
+
 	// Other kinds leave the last done or snooze undoable.
 	m = m.Acted(api.Action{Kind: "done", Bridge: "hub", Repo: "personal", BeadID: "mm-12"}).Acted(api.Action{Kind: "reopen", Bridge: "hub", Repo: "personal", BeadID: "mm-30"})
 	if _, fx = m.Key("u"); len(fx) != 1 || fx[0].(Act).Action.Key != "hub/personal/mm-12" {
@@ -487,5 +515,52 @@ func TestPaste(t *testing.T) {
 	m = m.Paste("plants")
 	if m.filter != "plants" {
 		t.Fatalf("filter = %q", m.filter)
+	}
+}
+
+// TestOpenCardChildren walks into an open epic's tasks in a narrow pane,
+// opens one, acts on it and backs out, as layout B's right pane does.
+func TestOpenCardChildren(t *testing.T) {
+	m, _ := keys(t, model(t, 56, 24), "2")
+	m = selectKey(t, m, "laptop/acme/storefront/sf-c1x")
+	m, _ = keys(t, m, "enter", "l")
+	checkFrame(t, "into children", m)
+	kids := m.openKidRows()
+	if !m.openKids || len(kids) < 2 || m.target().id() != kids[0].ID {
+		t.Fatalf("l: in children %v, target %v", m.openKids, m.target().id())
+	}
+	if m, _ = m.Key("j"); m.target().id() != kids[1].ID {
+		t.Fatalf("j: target %v, want %v", m.target().id(), kids[1].ID)
+	}
+	for i := 0; i < 10 && m.target().id() != "sf-c1x.5"; i++ {
+		m, _ = m.Key("k")
+	}
+	if m.target().id() != "sf-c1x.5" {
+		t.Fatalf("j never reached sf-c1x.5: %s", m.target().id())
+	}
+	kid := m.openKid
+	if !strings.Contains(strings.Join(plain(m), "\n"), "Enter open") {
+		t.Fatal("hints do not offer Enter")
+	}
+	_, fx := m.Key("x")
+	if a, ok := act(fx); !ok || a.Action.Key != "laptop/acme/storefront/sf-c1x.5" {
+		t.Fatalf("x on the selected task gave %#v", fx)
+	}
+	m, _ = m.Key("enter")
+	checkFrame(t, "child open", m)
+	if !m.open || m.openKey != "laptop/acme/storefront/sf-c1x.5" || m.openKids {
+		t.Fatalf("enter: open %v key %q kids %v", m.open, m.openKey, m.openKids)
+	}
+	m, _ = m.Key("esc")
+	if !m.open || m.openKey != "laptop/acme/storefront/sf-c1x" || !m.openKids || m.openKid != kid {
+		t.Fatalf("esc from the task: key %q kids %v kid %d", m.openKey, m.openKids, m.openKid)
+	}
+	m, _ = m.Key("h")
+	if !m.open || m.openKids {
+		t.Fatalf("h: open %v kids %v", m.open, m.openKids)
+	}
+	m, _ = m.Key("esc")
+	if m.open {
+		t.Fatal("esc left the detail open")
 	}
 }

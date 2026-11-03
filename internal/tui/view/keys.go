@@ -130,6 +130,10 @@ func (m *Model) key(k string) []Effect {
 	case "l", "right":
 		switch {
 		case m.open:
+			if !m.openKids && len(m.openKidRows()) > 0 {
+				m.openKids, m.openKid = true, 0
+				m.fixOpenKid()
+			}
 		case lay == "b" && m.tab == TabEpics && !m.right && m.rightKids() > 0:
 			m.right, m.rightIdx = true, 0
 		case lay == "a" && m.tab == TabEpics && t != nil && t.card && !strings.Contains(m.selKey, ">"):
@@ -137,8 +141,10 @@ func (m *Model) key(k string) []Effect {
 		}
 	case "h", "left":
 		switch {
+		case m.open && m.openKids:
+			m.openKids = false
 		case m.open:
-			m.open = false
+			m.closeOpen()
 		case m.right:
 			m.right = false
 		case m.drill != "":
@@ -153,6 +159,8 @@ func (m *Model) key(k string) []Effect {
 		}
 	case "enter":
 		switch {
+		case t != nil && m.open && m.openKids:
+			m.openKidChild(t)
 		case t == nil || m.open:
 		case lay == "c" && m.drill == "" && t.card && t.row != nil:
 			m.drill = t.key
@@ -162,8 +170,10 @@ func (m *Model) key(k string) []Effect {
 		}
 	case "esc", "backspace":
 		switch {
+		case m.open && m.openKids:
+			m.openKids = false
 		case m.open:
-			m.open = false
+			m.closeOpen()
 		case m.right:
 			m.right = false
 		case m.drill != "":
@@ -189,6 +199,12 @@ func (m *Model) key(k string) []Effect {
 	case "x":
 		fx := m.done(t)
 		if len(fx) > 0 && t.item != nil && isOpen(t.item) {
+			m.stepPast(t.key)
+		}
+		return fx
+	case "d":
+		fx := m.dismiss(t)
+		if len(fx) > 0 {
 			m.stepPast(t.key)
 		}
 		return fx
@@ -265,6 +281,9 @@ func (m *Model) page() int { return max(1, m.listHeight()-1) }
 // detail's scroll by delta.
 func (m *Model) move(delta int) {
 	switch {
+	case m.open && m.openKids:
+		m.openKid += delta
+		m.fixOpenKid()
 	case m.open:
 		m.detailScroll = max(0, min(m.detailScroll+delta, m.detailMax()))
 	case m.right:
@@ -329,6 +348,49 @@ func (m *Model) done(t *target) []Effect {
 	return []Effect{Act{Action: api.NewAction{Kind: api.KindDone, Key: it.Key}, Done: "Done: " + clean(it.Title)}}
 }
 
+// dismiss is the app's Won't do on an agent's task and Delete on a personal
+// to-do. Its open sub-tasks are dismissed first, as the app does.
+func (m *Model) dismiss(t *target) []Effect {
+	if t == nil {
+		return nil
+	}
+	if t.readOnly() {
+		m.readOnlyNote(t)
+		return nil
+	}
+	it := t.item
+	verb := "Won't do"
+	if isPersonal(it.Bridge) {
+		verb = "Deleted"
+	}
+	switch {
+	case !isOpen(it):
+		m.say("Only open to-dos can be dismissed. x reopens a closed one.", NoticeWarn)
+		return nil
+	case !repoCan(m.d.repoOf(it.Bridge, it.Repo), api.KindDismiss):
+		if isPersonal(it.Bridge) {
+			m.notOffered(it, "delete it")
+		} else {
+			m.notOffered(it, "mark it won't do")
+		}
+		return nil
+	}
+	subs := openSubtasks(it, m.d.state.Items)
+	var before []api.NewAction
+	for _, s := range subs {
+		before = append(before, api.NewAction{Kind: api.KindDismiss, Key: s.Key})
+	}
+	done := verb + ": " + clean(it.Title)
+	switch len(subs) {
+	case 0:
+	case 1:
+		done += " and its sub-task"
+	default:
+		done += " and " + itoa(len(subs)) + " sub-tasks"
+	}
+	return []Effect{Act{Before: before, Action: api.NewAction{Kind: api.KindDismiss, Key: it.Key}, Done: done}}
+}
+
 // openSnooze opens the snooze menu for an open to-do.
 func (m *Model) openSnooze(t *target) {
 	switch {
@@ -374,8 +436,8 @@ func (m *Model) snoozeMenuKey(k string) []Effect {
 	return []Effect{Act{Action: api.NewAction{Kind: api.KindSnooze, Key: it.Key, Payload: p}, Done: "Snoozed to " + fmtWhen(until, m.now)}}
 }
 
-// undo reverses the last done or snooze: a done by a reopen, a snooze by a
-// snooze back. A done that moved a repeating to-do on is left to the app,
+// undo reverses the last done, dismiss or snooze: a done or a dismiss by a
+// reopen (a dismiss's sub-tasks too), a snooze by a snooze back. A done that moved a repeating to-do on is left to the app,
 // whose undo restores its date and sub-tasks.
 func (m *Model) undo(t *target) []Effect {
 	u := m.last
@@ -395,8 +457,19 @@ func (m *Model) undo(t *target) []Effect {
 	if it := m.d.items[u.key]; it != nil {
 		title = clean(it.Title)
 	}
-	if u.kind == api.KindDone {
+	switch u.kind {
+	case api.KindDone:
 		return []Effect{Act{Action: api.NewAction{Kind: api.KindReopen, Key: u.key}, Done: "Reopened: " + title}}
+	case api.KindDismiss:
+		var after []api.NewAction
+		for _, k := range u.also {
+			after = append(after, api.NewAction{Kind: api.KindReopen, Key: k})
+		}
+		verb := "Reopened: "
+		if bridge, _, _ := strings.Cut(u.key, "/"); isPersonal(bridge) {
+			verb = "Restored: "
+		}
+		return []Effect{Act{Action: api.NewAction{Kind: api.KindReopen, Key: u.key}, After: after, Done: verb + title}}
 	}
 	done := "Snooze cleared"
 	if u.previous != nil {

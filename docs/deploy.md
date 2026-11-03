@@ -318,7 +318,7 @@ The feed works only for calendar apps on your own devices, such as Apple Calenda
 
 ## Watch from a terminal
 
-`meat-mode tui` shows your to-dos and your agents' epics in a terminal, for a pane beside your agent sessions in tmux, Herdr or any terminal. It has three tabs: **To-dos** (the Today groups, as in the app), **Epics** (each repo's epics with their progress) and **All** (what is waiting on you, what comes later, and one line per epic). From 90 columns wide, the selected row's details sit beside the list. Its main job is to copy a task's id and title into an agent session with one key. It also marks to-dos done, reopens and snoozes them; everything else stays in the app.
+`meat-mode tui` shows your to-dos and your agents' epics in a terminal, for a pane beside your agent sessions in tmux, Herdr or any terminal. It has three tabs: **To-dos** (the Today groups, as in the app), **Epics** (each repo's epics with their progress) and **All** (what is waiting on you, what comes later, and one line per epic). From 90 columns wide, the selected row's details sit beside the list. Its main job is to copy a task's id and title into an agent session with one key. It also marks to-dos done, reopens, snoozes and deletes them, and marks an agent's task won't do; everything else stays in the app.
 
 Started inside a project the hub knows, it shows that project's tasks and epics alone, and names the project at the top right; `p` switches to every list and back, and `--all` starts on every list. Each row's badge is its list's colour with up to three letters of its name, such as `GAR` for `projects/garden`; lists that share their first three letters get a later one instead.
 
@@ -338,20 +338,21 @@ The viewer dials only private addresses, as the bridge does (see [Private networ
 |---|---|
 | `j` `k` or the arrows | move; `g` `G` top and bottom; Space, PageUp and PageDown a page; `Ctrl+D` `Ctrl+U` half a page |
 | `Enter` | open the row full screen, wherever it is: a to-do, an epic, or a task inside an epic |
-| `l` or right | go into an epic's tasks, or unfold it in a narrow pane |
+| `l` or right | go into an epic's tasks, or unfold it in a narrow pane; in an open epic, step into its tasks, where `Enter` opens one |
 | `h`, left or `Esc` | go back; `h` also folds an epic in a narrow pane |
 | `Tab`, `1` `2` `3` | switch tab |
 | `/` | filter by title or id; the arrows still move, `Ctrl+W` deletes a word, `Ctrl+U` the whole filter |
 | `y` | copy the id and title, such as `mm-4 (projects/garden) Order bark mulch` |
 | `Y` | copy that line with the details: list, due date, tags, description, notes and an epic's tasks |
 | `x` | done, or reopen a closed to-do; the selection moves on to the next row |
+| `d` | won't do on an agent's task, delete on your own to-do, as the app's buttons; its open sub-tasks go with it |
 | `s` | snooze, with the app's choices, one key each; `0` clears a snooze |
 | `p` | this project only, or every list |
-| `u` | undo the last done or snooze |
+| `u` | undo the last done, won't do, delete or snooze |
 | `o` | show the item's link in the app |
 | `r`, `?`, `q` | refresh, list the keys and what the marks mean, quit |
 
-Epic rows that are not tasks for you are read-only: `x` and `s` on one say so.
+Epic rows that are not tasks for you are read-only: `x`, `d` and `s` on one say so.
 
 **Copying.** `y` sends the text to your terminal's clipboard with an OSC 52 escape sequence, which passes through ssh and reaches the machine you are sitting at, as long as your terminal allows OSC 52 (most do; some ask first or need it switched on). In a session that is not over ssh, it also copies with the machine's own clipboard tool (`pbcopy`, `wl-copy`, `xclip` or `xsel`). The message says **Copied** only when that local copy worked; otherwise it says **Sent to the terminal's clipboard**, since a terminal never confirms OSC 52. Text over 64 KiB is too long to send to the terminal.
 

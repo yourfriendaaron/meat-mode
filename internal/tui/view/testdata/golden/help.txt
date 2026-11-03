@@ -13,9 +13,9 @@
      y          copy id and title                       |
      Y          copy with details                       |
      x          done, or reopen                         |
+     d          won't do, or delete a to-do             |
      s          snooze; 0 clears one                    |
-     u          undo the last done or snooze            |
-     o          show the item's app link                |
+     u          undo the last done, d or snooze         |
      j k scroll, any other key closes                   |
     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
  any key close                                  1-18/21 |
@@ -35,9 +35,9 @@
                      y          copy id and title                                        |
                      Y          copy with details                                        |
                      x          done, or reopen                                          |
+                     d          won't do, or delete a to-do                              |
                      s          snooze; 0 clears one                                     |
-                     u          undo the last done or snooze                             |
-                     o          show the item's app link                                 |
+                     u          undo the last done, d or snooze                          |
                      j k scroll, any other key closes                                    |
                     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                   1-18/21 |
@@ -57,9 +57,9 @@
                       y          copy id and title                                        |
                       Y          copy with details                                        |
                       x          done, or reopen                                          |
+                      d          won't do, or delete a to-do                              |
                       s          snooze; 0 clears one                                     |
-                      u          undo the last done or snooze                             |
-                      o          show the item's app link                                 |
+                      u          undo the last done, d or snooze                          |
                       j k scroll, any other key closes                                    |
                      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                    1-18/21 |
@@ -79,9 +79,9 @@
                                                y          copy id and title                                                                 |
                                                Y          copy with details                                                                 |
                                                x          done, or reopen                                                                   |
+                                               d          won't do, or delete a to-do                                                       |
                                                s          snooze; 0 clears one                                                              |
-                                               u          undo the last done or snooze                                                      |
-                                               o          show the item's app link                                                          |
+                                               u          undo the last done, d or snooze                                                   |
                                                j k scroll, any other key closes                                                             |
                                               ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
  any key close                                                                                                                      1-18/21 |
@@ -101,8 +101,9 @@
      y          copy id and title                       |
      Y          copy with details                       |
      x          done, or reopen                         |
+     d          won't do, or delete a to-do             |
      s          snooze; 0 clears one                    |
-     u          undo the last done or snooze            |
+     u          undo the last done, d or snooze         |
      o          show the item's app link                |
      p          this project, or every list             |
      r          refresh                                 |
@@ -113,8 +114,7 @@
      ✦          a task an agent left for you            |
      ◦ ◒ ⊘      open, in progress, blocked              |
      ✓          done (green)                            |
-     ☾          snoozed                                 |
-     ↻          repeats                                 |
+     j k scroll, any other key closes                   |
     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
  any key close                                          |
 
@@ -133,8 +133,9 @@
                      y          copy id and title                                        |
                      Y          copy with details                                        |
                      x          done, or reopen                                          |
+                     d          won't do, or delete a to-do                              |
                      s          snooze; 0 clears one                                     |
-                     u          undo the last done or snooze                             |
+                     u          undo the last done, d or snooze                          |
                      o          show the item's app link                                 |
                      p          this project, or every list                              |
                      r          refresh                                                  |
@@ -145,8 +146,7 @@
                      ✦          a task an agent left for you                             |
                      ◦ ◒ ⊘      open, in progress, blocked                               |
                      ✓          done (green)                                             |
-                     ☾          snoozed                                                  |
-                     ↻          repeats                                                  |
+                     j k scroll, any other key closes                                    |
                     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                           |
 
@@ -165,8 +165,9 @@
                       y          copy id and title                                        |
                       Y          copy with details                                        |
                       x          done, or reopen                                          |
+                      d          won't do, or delete a to-do                              |
                       s          snooze; 0 clears one                                     |
-                      u          undo the last done or snooze                             |
+                      u          undo the last done, d or snooze                          |
                       o          show the item's app link                                 |
                       p          this project, or every list                              |
                       r          refresh                                                  |
@@ -177,8 +178,7 @@
                       ✦          a task an agent left for you                             |
                       ◦ ◒ ⊘      open, in progress, blocked                               |
                       ✓          done (green)                                             |
-                      ☾          snoozed                                                  |
-                      ↻          repeats                                                  |
+                      j k scroll, any other key closes                                    |
                      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                            |
 
@@ -197,8 +197,9 @@
                                                y          copy id and title                                                                 |
                                                Y          copy with details                                                                 |
                                                x          done, or reopen                                                                   |
+                                               d          won't do, or delete a to-do                                                       |
                                                s          snooze; 0 clears one                                                              |
-                                               u          undo the last done or snooze                                                      |
+                                               u          undo the last done, d or snooze                                                   |
                                                o          show the item's app link                                                          |
                                                p          this project, or every list                                                       |
                                                r          refresh                                                                           |
@@ -209,8 +210,7 @@
                                                ✦          a task an agent left for you                                                      |
                                                ◦ ◒ ⊘      open, in progress, blocked                                                        |
                                                ✓          done (green)                                                                      |
-                                               ☾          snoozed                                                                           |
-                                               ↻          repeats                                                                           |
+                                               j k scroll, any other key closes                                                             |
                                               ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
  any key close                                                                                                                              |
 

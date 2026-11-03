@@ -18,7 +18,7 @@
                                                         |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  / fil⋯ +2 hidden |
+ Enter open  y copy  x done  s snooze  d del⋯ +2 hidden |
 
 == 89 x 20, layout c
   1 To-dos 3   2 Epics 0   3 All                                                  ◉ live |
@@ -40,7 +40,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  / filter  ? keys                        +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys              +2 hidden |
 
 == 90 x 20, layout c
   1 To-dos 3   2 Epics 0   3 All                                                   ◉ live |
@@ -62,7 +62,7 @@
                                                                                           |
                                                                                           |
                                                                                           |
- Enter open  y copy  x done  s snooze  / filter  ? keys          2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? ke⋯ 2 snoozed or done hidden |
 
 == 140 x 20, layout c
   1 To-dos 3   2 Epics 0   3 All                                                                                                     ◉ live |
@@ -84,7 +84,7 @@
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                            2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                  2 snoozed or done hidden |
 
 == 56 x 30, layout c
   1 To-dos 3   2 Epics 0   3 All                 ◉ live |
@@ -116,7 +116,7 @@
                                                         |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  / fil⋯ +2 hidden |
+ Enter open  y copy  x done  s snooze  d del⋯ +2 hidden |
 
 == 89 x 30, layout c
   1 To-dos 3   2 Epics 0   3 All                                                  ◉ live |
@@ -148,7 +148,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  / filter  ? keys                        +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys              +2 hidden |
 
 == 90 x 30, layout c
   1 To-dos 3   2 Epics 0   3 All                                                   ◉ live |
@@ -180,7 +180,7 @@
                                                                                           |
                                                                                           |
                                                                                           |
- Enter open  y copy  x done  s snooze  / filter  ? keys          2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? ke⋯ 2 snoozed or done hidden |
 
 == 140 x 30, layout c
   1 To-dos 3   2 Epics 0   3 All                                                                                                     ◉ live |
@@ -212,5 +212,5 @@
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                            2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                  2 snoozed or done hidden |
 

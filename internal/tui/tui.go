@@ -148,6 +148,7 @@ type (
 	actedMsg   struct {
 		key    string
 		action api.Action
+		before []api.Action
 		done   string
 		err    error
 	}
@@ -241,8 +242,22 @@ func (p *program) run(effects []view.Effect) tea.Cmd {
 				p.busy[key] = 0
 			}
 			cmds = append(cmds, func() tea.Msg {
+				var before []api.Action
+				for _, b := range e.Before {
+					a, err := p.client.Act(p.ctx, b)
+					if err != nil {
+						return actedMsg{key: key, done: e.Done, err: err}
+					}
+					before = append(before, a)
+				}
 				a, err := p.client.Act(p.ctx, e.Action)
-				return actedMsg{key: key, action: a, done: e.Done, err: err}
+				for _, n := range e.After {
+					if err != nil {
+						break
+					}
+					_, err = p.client.Act(p.ctx, n)
+				}
+				return actedMsg{key: key, action: a, before: before, done: e.Done, err: err}
 			})
 		case view.OpenURL:
 			// A terminal may have no browser and a narrow pane cuts the
@@ -306,7 +321,7 @@ func (p *program) onActed(msg actedMsg) tea.Cmd {
 	if msg.err != nil {
 		return p.notice("Not sent: "+p.reason(msg.err), view.NoticeError)
 	}
-	p.m = p.m.Acted(msg.action)
+	p.m = p.m.Acted(msg.action, msg.before...)
 	// The view does not say whether the row came from the epics, so both
 	// are fetched again.
 	return tea.Batch(p.notice(msg.done, view.NoticeInfo), p.ask(both))

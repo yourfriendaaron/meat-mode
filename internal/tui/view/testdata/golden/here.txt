@@ -18,7 +18,7 @@
                                                         |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  / filter  ? keys |
+ Enter open  y copy  x done  s snooze  d won't do  / fi⋯|
 
 == 89 x 20, layout c
   1 To-dos 1   2 Epics 3   3 All                                             api  ◉ live |
@@ -40,7 +40,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                  |
+ Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                      |
 
 == 90 x 20, layout c
   1 To-dos 1   2 Epics 3   3 All                                              api  ◉ live |
@@ -62,7 +62,7 @@
                                                                                           |
                                                                                           |
                                                                                           |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                   |
+ Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                       |
 
 == 140 x 20, layout c
   1 To-dos 1   2 Epics 3   3 All                                                                                                api  ◉ live |
@@ -84,7 +84,7 @@
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                                                     |
+ Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                                                                         |
 
 == 56 x 30, layout c
   1 To-dos 1   2 Epics 3   3 All            api  ◉ live |
@@ -116,7 +116,7 @@
                                                         |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  / filter  ? keys |
+ Enter open  y copy  x done  s snooze  d won't do  / fi⋯|
 
 == 89 x 30, layout c
   1 To-dos 1   2 Epics 3   3 All                                             api  ◉ live |
@@ -148,7 +148,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                  |
+ Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                      |
 
 == 90 x 30, layout c
   1 To-dos 1   2 Epics 3   3 All                                              api  ◉ live |
@@ -180,7 +180,7 @@
                                                                                           |
                                                                                           |
                                                                                           |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                   |
+ Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                       |
 
 == 140 x 30, layout c
   1 To-dos 1   2 Epics 3   3 All                                                                                                api  ◉ live |
@@ -212,5 +212,5 @@
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                                                     |
+ Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                                                                         |
 

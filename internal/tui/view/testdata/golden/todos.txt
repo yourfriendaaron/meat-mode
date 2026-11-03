@@ -18,7 +18,7 @@
   ◦ GAR Order bark mulch                                |
   ◦  ✓  Read through the lease renewal and write down ⋯ |
  Later 1                                                |
- Enter open  y copy  x done  s snooze  / filter 1-18/21 |
+ Enter open  y copy  x done  s snooze  d delete 1-18/21 |
 
 == 89 x 20, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
@@ -40,7 +40,7 @@
   ◦ GAR mm-4      Order bark mulch                                               #garden |
   ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
  Later 1                                                                                 |
- Enter open  y copy  x done  s snooze  / filter  ? keys                          1-18/21 |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                1-18/21 |
 
 == 90 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
@@ -62,7 +62,7 @@
   ◦ GAR Order bark mulch                         ╎                                        |
   ◦  ✓  Read through the lease renewal and writ⋯ ╎                                        |
  Later 1                                         ╎                                        |
- Enter open  y copy  x done  s snooze  / filter  ? keys                           1-18/21 |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                 1-18/21 |
 
 == 140 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
@@ -84,7 +84,7 @@
   ◦ GAR mm-4      Order bark mulch                                   #garden ╎                                                              |
   ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎                                                              |
  Later 1                                                                     ╎                                                              |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                                             1-18/21 |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                                   1-18/21 |
 
 == 56 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
@@ -116,7 +116,7 @@
                                                         |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  / filter  ? keys |
+ Enter open  y copy  x done  s snooze  d delete  / filt⋯|
 
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
@@ -148,7 +148,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                  |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                        |
 
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
@@ -180,7 +180,7 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                   |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                         |
 
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
@@ -212,5 +212,5 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                                                     |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                                           |
 

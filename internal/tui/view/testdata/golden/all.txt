@@ -40,7 +40,7 @@
   ◦ GAR mm-52     Label the seed packets 🌱 種                                           |
   ◦ GAR mm-4      Order bark mulch                                               #garden |
   ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
- Enter open  y copy  x done  s snooze  / filter  ? keys                1-18/26 +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys      1-18/26 +2 hidden |
 
 == 90 x 20, layout c
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
@@ -62,7 +62,7 @@
   ◦ GAR mm-52     Label the seed packets 🌱 種                                            |
   ◦ GAR mm-4      Order bark mulch                                                #garden |
   ◦  ✓  mm-45     Read through the lease renewal and write down every claus⋯ #admin #home |
- Enter open  y copy  x done  s snooze  / filter  ? keys 1-18/26  2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / fil⋯ 1-18/26  2 snoozed or done hidden |
 
 == 140 x 20, layout c
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
@@ -84,7 +84,7 @@
   ◦ GAR mm-52     Label the seed packets 🌱 種                                                                                              |
   ◦ GAR mm-4      Order bark mulch                                                                                                  #garden |
   ◦  ✓  mm-45     Read through the lease renewal and write down every clause that changed since last year before replying to ⋯ #admin #home |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                   1-18/26  2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                         1-18/26  2 snoozed or done hidden |
 
 == 56 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
@@ -116,7 +116,7 @@
  STO sf-r4t    Search relevance          ▱▱▱▱▱▱▱▱   0/0 |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  / fil⋯ +2 hidden |
+ Enter open  y copy  x done  s snooze  d del⋯ +2 hidden |
 
 == 89 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
@@ -148,7 +148,7 @@
  STO sf-r4t    Search relevance                                           ▱▱▱▱▱▱▱▱   0/0 |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  / filter  ? keys                        +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys              +2 hidden |
 
 == 90 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
@@ -180,7 +180,7 @@
  STO sf-r4t    Search relevance                                            ▱▱▱▱▱▱▱▱   0/0 |
                                                                                           |
                                                                                           |
- Enter open  y copy  x done  s snooze  / filter  ? keys          2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? ke⋯ 2 snoozed or done hidden |
 
 == 140 x 30, layout c
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
@@ -212,5 +212,5 @@
  STO sf-r4t    Search relevance                                                                                              ▱▱▱▱▱▱▱▱   0/0 |
                                                                                                                                             |
                                                                                                                                             |
- Enter open  y copy  x done  s snooze  / filter  ? keys                                                            2 snoozed or done hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                  2 snoozed or done hidden |
 
