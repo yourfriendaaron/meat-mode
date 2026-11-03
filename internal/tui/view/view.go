@@ -125,7 +125,7 @@ func (Quit) effect()    {}
 // "?", "y", "Y", "x", "d", "u", "s", "o", "p", "r", "q", "ctrl+c", "ctrl+d",
 // "ctrl+u", "ctrl+f", "ctrl+b", "ctrl+n", "ctrl+p", "ctrl+w", "0" to "6". The
 // snooze menu takes "1" to "6" in snoozeOptions order (one is missing after
-// 18:00, as in the app).
+// 18:00, as in the app), or up, down, j and k to pick one and enter.
 //
 // Model is the whole screen state. Methods return a changed copy.
 type Model struct {
@@ -164,7 +164,9 @@ type Model struct {
 	filtering  bool
 	help       bool
 	helpScroll int
-	snoozeKey  string // the item the snooze menu is open for
+	snoozeKey  string    // the item the snooze menu is open for
+	snoozeIdx  int       // the option the arrows have picked in it
+	tabSel     [3]string // each tab's selected row, kept while another tab shows
 
 	pw       bool // the password prompt
 	pwReason string

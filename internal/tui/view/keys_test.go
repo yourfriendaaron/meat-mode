@@ -169,8 +169,62 @@ func TestKeyTable(t *testing.T) {
 				t.Fatalf("selection %q is not a child", m.selKey)
 			}
 			m, _ = m.Key("h")
-			if m.selKey != "laptop/acme/api/api-h3k" || m.expanded[m.selKey] {
-				t.Fatalf("h left %q expanded %v", m.selKey, m.expanded)
+			if m.selKey != "laptop/acme/api/api-h3k" || !m.expanded[m.selKey] {
+				t.Fatalf("h on a child: %q expanded %v, want its card, still unfolded", m.selKey, m.expanded)
+			}
+			m, _ = m.Key("h")
+			if m.expanded[m.selKey] {
+				t.Fatalf("h on the card left it unfolded")
+			}
+		}},
+		{name: "right walks the tree in A: unfold, first child, open", w: 56, setup: []string{"2"}, keys: []string{"right"}, check: func(t *testing.T, m Model) {
+			if !m.expanded[m.selKey] {
+				t.Fatalf("right did not unfold %q", m.selKey)
+			}
+			m, _ = m.Key("right")
+			if !strings.HasPrefix(m.selKey, "laptop/acme/api/api-h3k>") {
+				t.Fatalf("second right selected %q, want the card's first child", m.selKey)
+			}
+			m, _ = m.Key("right")
+			if !m.open {
+				t.Fatal("right on a child did not open it")
+			}
+			m, _ = m.Key("left")
+			if m.open || !strings.HasPrefix(m.selKey, "laptop/acme/api/api-h3k>") {
+				t.Fatalf("left: open %v selection %q", m.open, m.selKey)
+			}
+		}},
+		{name: "right opens a to-do and left comes back", w: 140, keys: []string{"right"}, check: func(t *testing.T, m Model) {
+			if !m.open || m.openKey != "hub/personal/mm-28" {
+				t.Fatalf("right: open %v key %q", m.open, m.openKey)
+			}
+			m, _ = m.Key("left")
+			if m.open || m.selKey != "hub/personal/mm-28" {
+				t.Fatalf("left: open %v selection %q", m.open, m.selKey)
+			}
+		}},
+		{name: "right drills into a card in All", w: 56, setup: []string{"3"}, sel: "laptop/acme/api/api-h3k", keys: []string{"right"}, check: func(t *testing.T, m Model) {
+			if m.drill != "laptop/acme/api/api-h3k" {
+				t.Fatalf("drill %q", m.drill)
+			}
+		}},
+		{name: "right on a child in B opens it", w: 140, setup: []string{"2"}, sel: "laptop/acme/storefront/sf-c1x", keys: []string{"right", "j", "right"}, check: func(t *testing.T, m Model) {
+			if !m.open || !m.right || m.rightIdx != 1 {
+				t.Fatalf("open %v right %v idx %d", m.open, m.right, m.rightIdx)
+			}
+		}},
+		{name: "a tab keeps its selection while another shows", w: 140, keys: []string{"j", "j", "2", "j", "1"}, check: func(t *testing.T, m Model) {
+			if m.selIdx != 2 {
+				t.Fatalf("back on To-dos at %d %q, want the third row", m.selIdx, m.selKey)
+			}
+			m, _ = m.Key("2")
+			if m.selIdx != 1 {
+				t.Fatalf("back on Epics at %d %q, want the second row", m.selIdx, m.selKey)
+			}
+		}},
+		{name: "snooze menu: arrows pick, enter snoozes", w: 56, keys: []string{"s", "down", "down", "up", "enter"}, check: func(t *testing.T, m Model) {
+			if m.snoozeKey != "" {
+				t.Fatal("enter left the menu open")
 			}
 		}},
 		{name: "drill and back in All", w: 56, setup: []string{"3"}, sel: "laptop/acme/api/api-h3k", keys: []string{"enter", "esc"}, check: func(t *testing.T, m Model) {
@@ -562,5 +616,13 @@ func TestOpenCardChildren(t *testing.T) {
 	m, _ = m.Key("esc")
 	if m.open {
 		t.Fatal("esc left the detail open")
+	}
+}
+
+func TestSnoozeArrowsMatchDigits(t *testing.T) {
+	_, byArrows := keys(t, model(t, 56, 24), "s", "down", "down", "up", "enter")
+	_, byDigit := keys(t, model(t, 56, 24), "s", "2")
+	if len(byDigit) != 1 || !reflect.DeepEqual(byArrows, byDigit) {
+		t.Fatalf("arrows gave %#v, 2 gave %#v", byArrows, byDigit)
 	}
 }

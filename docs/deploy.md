@@ -338,15 +338,15 @@ The viewer dials only private addresses, as the bridge does (see [Private networ
 |---|---|
 | `j` `k` or the arrows | move; `g` `G` top and bottom; Space, PageUp and PageDown a page; `Ctrl+D` `Ctrl+U` half a page |
 | `Enter` | open the row full screen, wherever it is: a to-do, an epic, or a task inside an epic |
-| `l` or right | go into an epic's tasks, or unfold it in a narrow pane; in an open epic, step into its tasks, where `Enter` opens one |
-| `h`, left or `Esc` | go back; `h` also folds an epic in a narrow pane |
-| `Tab`, `1` `2` `3` | switch tab |
+| `l` or right | forward: unfold an epic in a narrow pane, then step to its first task; go into an epic's tasks; anywhere else, the same as `Enter` |
+| `h`, left or `Esc` | go back; on a task in an unfolded epic, `h` goes up to the epic, and on the epic it folds it |
+| `Tab`, `1` `2` `3` | switch tab; each tab keeps its selection |
 | `/` | filter by title or id; the arrows still move, `Ctrl+W` deletes a word, `Ctrl+U` the whole filter |
 | `y` | copy the id and title, such as `mm-4 (projects/garden) Order bark mulch` |
 | `Y` | copy that line with the details: list, due date, tags, description, notes and an epic's tasks |
 | `x` | done, or reopen a closed to-do; the selection moves on to the next row |
 | `d` | won't do on an agent's task, delete on your own to-do, as the app's buttons; its open sub-tasks go with it |
-| `s` | snooze, with the app's choices, one key each; `0` clears a snooze |
+| `s` | snooze, with the app's choices: the arrows and `Enter`, or one number key each; `0` clears a snooze |
 | `p` | this project only, or every list |
 | `u` | undo the last done, won't do, delete or snooze |
 | `o` | show the item's link in the app |

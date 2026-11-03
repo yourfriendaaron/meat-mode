@@ -128,16 +128,24 @@ func (m *Model) key(k string) []Effect {
 	case "1", "2", "3":
 		m.tabTo(Tab(k[0] - '1'))
 	case "l", "right":
+		// Forward: into what holds children, else as Enter.
 		switch {
-		case m.open:
-			if !m.openKids && len(m.openKidRows()) > 0 {
-				m.openKids, m.openKid = true, 0
-				m.fixOpenKid()
-			}
-		case lay == "b" && m.tab == TabEpics && !m.right && m.rightKids() > 0:
+		case m.open && !m.openKids && len(m.openKidRows()) > 0:
+			m.openKids, m.openKid = true, 0
+			m.fixOpenKid()
+		case lay == "b" && m.tab == TabEpics && !m.open && !m.right && m.rightKids() > 0:
 			m.right, m.rightIdx = true, 0
-		case lay == "a" && m.tab == TabEpics && t != nil && t.card && !strings.Contains(m.selKey, ">"):
-			m.setExpanded(m.selKey, true)
+		case lay == "a" && m.tab == TabEpics && !m.open && t != nil && t.card && !strings.Contains(m.selKey, ">"):
+			switch {
+			case m.nextIsChild():
+				m.move(1)
+			case !m.expanded[m.selKey]:
+				m.setExpanded(m.selKey, true)
+			default:
+				m.enter(t, lay)
+			}
+		default:
+			m.enter(t, lay)
 		}
 	case "h", "left":
 		switch {
@@ -150,24 +158,16 @@ func (m *Model) key(k string) []Effect {
 		case m.drill != "":
 			m.selKey, m.drill = m.drill, ""
 		case lay == "a" && m.tab == TabEpics && t != nil:
+			// A child goes up to its card and leaves it unfolded; the
+			// card's own h folds it.
 			if parent, _, ok := strings.Cut(m.selKey, ">"); ok {
 				m.selKey = parent
-				m.setExpanded(parent, false)
 			} else if t.card {
 				m.setExpanded(m.selKey, false)
 			}
 		}
 	case "enter":
-		switch {
-		case t != nil && m.open && m.openKids:
-			m.openKidChild(t)
-		case t == nil || m.open:
-		case lay == "c" && m.drill == "" && t.card && t.row != nil:
-			m.drill = t.key
-			m.resetSel()
-		default:
-			m.openTarget(t)
-		}
+		m.enter(t, lay)
 	case "esc", "backspace":
 		switch {
 		case m.open && m.openKids:
@@ -226,6 +226,29 @@ func (m *Model) key(k string) []Effect {
 		return []Effect{Refresh{}}
 	}
 	return nil
+}
+
+// enter opens the target: a child selected in an open card's detail, a
+// card on the All page as a drill, anything else as its detail.
+func (m *Model) enter(t *target, lay Layout) {
+	switch {
+	case t != nil && m.open && m.openKids:
+		m.openKidChild(t)
+	case t == nil || m.open:
+	case lay == "c" && m.drill == "" && t.card && t.row != nil:
+		m.drill = t.key
+		m.resetSel()
+	default:
+		m.openTarget(t)
+	}
+}
+
+// nextIsChild says the row after the selection is a child of the selected
+// card in layout A's tree.
+func (m *Model) nextIsChild() bool {
+	rows := m.rows()
+	sel := selectable(rows)
+	return m.selIdx+1 < len(sel) && strings.HasPrefix(rows[sel[m.selIdx+1]].id, m.selKey+">")
 }
 
 // toggleScope switches between the project the viewer was started in and
@@ -301,8 +324,10 @@ func (m *Model) tabTo(t Tab) {
 	if t == m.tab && !m.open && m.drill == "" {
 		return
 	}
+	m.tabSel[m.tab] = m.selKey
 	m.tab, m.open, m.drill = t, false, ""
 	m.resetSel()
+	m.selKey = m.tabSel[t] // fix finds it again, or the nearest row
 }
 
 // readOnlyNote says an epic row cannot change here, naming its repo.
@@ -402,7 +427,7 @@ func (m *Model) openSnooze(t *target) {
 	case !repoCan(m.d.repoOf(t.item.Bridge, t.item.Repo), api.KindSnooze):
 		m.notOffered(t.item, "snooze")
 	default:
-		m.snoozeKey = t.item.Key
+		m.snoozeKey, m.snoozeIdx = t.item.Key, 0
 	}
 }
 
@@ -411,6 +436,17 @@ func (m *Model) snoozeMenuKey(k string) []Effect {
 	case "esc", "backspace", "s", "q":
 		m.snoozeKey = ""
 		return nil
+	}
+	opts := snoozeOptions(m.now)
+	switch k {
+	case "up", "k":
+		m.snoozeIdx = max(0, m.snoozeIdx-1)
+		return nil
+	case "down", "j":
+		m.snoozeIdx = min(len(opts)-1, m.snoozeIdx+1)
+		return nil
+	case "enter":
+		k = string(rune('1' + min(max(m.snoozeIdx, 0), len(opts)-1)))
 	}
 	it := m.d.items[m.snoozeKey]
 	if k == "0" && it != nil && isSnoozed(it, m.now) {
@@ -421,7 +457,6 @@ func (m *Model) snoozeMenuKey(k string) []Effect {
 	if len(k) != 1 || k[0] < '1' || k[0] > '6' {
 		return nil
 	}
-	opts := snoozeOptions(m.now)
 	n := int(k[0] - '1')
 	if n >= len(opts) || it == nil {
 		return nil

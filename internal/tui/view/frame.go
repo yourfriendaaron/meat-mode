@@ -14,15 +14,15 @@ var helpKeys = []hint{
 	{"Space", "a page down; PgUp PgDn too"},
 	{"^d ^u", "half a page down, up"},
 	{"Enter", "open full screen"},
-	{"l", "into an epic, or unfold it"},
-	{"h Esc", "back (h also folds)"},
+	{"l", "unfold, step in, or open"},
+	{"h Esc", "back; h on an epic folds it"},
 	{"Tab 1 2 3", "switch tab"},
 	{"/", "filter by title or id"},
 	{"y", "copy id and title"},
 	{"Y", "copy with details"},
 	{"x", "done, or reopen"},
 	{"d", "won't do, or delete a to-do"},
-	{"s", "snooze; 0 clears one"},
+	{"s", "snooze: j k Enter or 1-6; 0 clears"},
 	{"u", "undo the last done, d or snooze"},
 	{"o", "show the item's app link"},
 	{"p", "this project, or every list"},
@@ -155,7 +155,7 @@ func (m *Model) hints() []hint {
 	case m.help:
 		return []hint{{"any key", "close"}}
 	case m.snoozeKey != "":
-		return []hint{{"1-" + itoa(len(snoozeOptions(m.now))), "snooze"}, {"Esc", "cancel"}}
+		return []hint{{"Enter", "snooze"}, {"1-" + itoa(len(snoozeOptions(m.now))), "pick"}, {"Esc", "cancel"}}
 	case m.filtering:
 		return []hint{{"Enter", "keep"}, {"Esc", "clear"}}
 	case m.d == nil:
@@ -458,8 +458,12 @@ func (m *Model) snoozePanel(w int) panel {
 	}
 	var c []line
 	for n, o := range snoozeOptions(m.now) {
-		c = append(c, lr(line{sg(itoa(n+1)+"  ", style{fg: cPurple, bg: cRaise, bold: true}), sg(o.label, style{fg: cFg, bg: cRaise})},
-			line{sg(o.hint+" ", style{fg: cSoft, bg: cRaise})}, bw-1))
+		bg := cRaise
+		if n == m.snoozeIdx {
+			bg = cLine
+		}
+		c = append(c, withBg(lr(line{sg(itoa(n+1)+"  ", style{fg: cPurple, bg: bg, bold: true}), sg(o.label, style{fg: cFg, bg: bg})},
+			line{sg(o.hint+" ", style{fg: cSoft, bg: bg})}, bw-1), bg))
 	}
 	c = append(c, nil, line{sg("Esc", style{fg: cPurple, bg: cRaise, bold: true}), sg("  cancel", style{fg: cSoft, bg: cRaise})})
 	return box(title, c, bw)
