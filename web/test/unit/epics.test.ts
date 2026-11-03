@@ -128,37 +128,65 @@ test("a card's children sort the same way, closed ones last", () => {
   assert.equal(o.entries[0].open, false);
 });
 
-test("a nested card is a row of its parent and a card of its own; a row whose parent is no card is top-level", () => {
+test("a nested card follows its parent one level in, shown once; a row whose parent is no card is top-level", () => {
   const o = outline(
     shownRows(
       repo([
-        row("gd-1", { epic: true }),
-        row("gd-1.1", { epic: true, parent: "gd-1", priority: 3 }),
+        row("gd-1", { epic: true, priority: 3, status: "deferred" }),
+        row("gd-1.1", { epic: true, parent: "gd-1", priority: 0 }),
         row("gd-1.1.1", { parent: "gd-1.1", status: "closed" }),
         row("gd-1.2", { parent: "gd-1", status: "closed" }),
-        row("gd-5", { parent: "gd-9" }),
-        row("gd-6", { parent: "gd-6" }),
+        row("gd-5", { parent: "gd-9", priority: 1 }),
+        row("gd-6", { parent: "gd-6", priority: 2 }),
       ]),
       none,
     ),
-    ui(),
+    ui({ expanded: new Set(["home/projects/garden/gd-1"]) }),
   );
+  // Sorting alone would put the urgent gd-1.1 first, away from its parent.
   assert.deepEqual(
-    o.entries.map((e) => [e.row.id, e.card]),
+    o.entries.map((e) => [e.row.id, e.card, e.depth]),
     [
-      ["gd-1", true],
-      ["gd-5", false],
-      ["gd-6", false],
-      ["gd-1.1", true],
+      ["gd-5", false, 0],
+      ["gd-6", false, 0],
+      ["gd-1", true, 0],
+      ["gd-1.1", true, 1],
     ],
   );
+  assert.equal(o.epics, 2);
+  // Progress counts every direct child; the open parent lists only its tasks.
   assert.deepEqual(
-    o.entries[0].children.map((c) => c.id),
+    o.entries[2].children.map((c) => c.id),
     ["gd-1.1", "gd-1.2"],
   );
-  // Progress counts direct children only.
-  assert.equal(progressText(o.entries[0].progress), "50% 1/2 done");
+  assert.deepEqual(
+    o.entries[2].shown.map((c) => c.id),
+    ["gd-1.2"],
+  );
+  assert.equal(progressText(o.entries[2].progress), "50% 1/2 done");
   assert.equal(progressText(o.entries[3].progress), "100% 1/1 done");
+});
+
+test("a search inside a nested card keeps its parent above it", () => {
+  const o = outline(
+    shownRows(
+      repo([
+        row("gd-1", { epic: true, title: "Spring planting" }),
+        row("gd-1.1", { epic: true, parent: "gd-1", title: "Water the plants" }),
+        row("gd-1.1.1", { parent: "gd-1.1", title: "Fix the hose" }),
+        row("gd-2", { epic: true, title: "Paint the fence" }),
+      ]),
+      none,
+    ),
+    ui({ q: "hose" }),
+  );
+  assert.deepEqual(
+    o.entries.map((e) => [e.row.id, e.depth, e.shown.map((k) => k.id)]),
+    [
+      ["gd-1", 0, []],
+      ["gd-1.1", 1, ["gd-1.1.1"]],
+    ],
+  );
 });
 
 test("search and filters: OR within a group, AND across; a card shows with only its matching children, opened", () => {

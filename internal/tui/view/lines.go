@@ -321,15 +321,16 @@ func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, fol
 }
 
 // cardLine is one row of layout B's left list and of All's epics: the
-// list mark, id and title, and a card's bar or a task's status.
-func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, w int) line {
+// list mark, id and title, and a card's bar or a task's status. A card
+// nested in another is indented two spaces a level.
+func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, depth int, w int) line {
 	d := m.d
 	t := d.epicTarget(re, r)
 	ts := sPlain
 	if t.card {
 		ts = sBold
 	}
-	left := line{sg(" ", sPlain), d.mark(re.Bridge, re.Repo), sg(" ", sPlain), sg(padRight(clean(r.ID), 9)+" ", sDim), sg(clean(d.rowTitle(re, r)), ts)}
+	left := line{sg(" ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+strings.Repeat("  ", depth), sPlain), sg(padRight(clean(r.ID), 9)+" ", sDim), sg(clean(d.rowTitle(re, r)), ts)}
 	state := d.rowState(re, r)
 	short := w < 70
 	if !t.card {

@@ -424,9 +424,20 @@
   background: var(--role-pane);
   overflow: hidden;
 }
+/* A card nested in another sits under it, one step in a level. */
 .ep-item {
-  padding: 2px 4px 2px 12px;
+  --ep-in: 12px;
+  padding: 2px 4px 2px var(--ep-in);
   border-top: 1px solid var(--role-line);
+}
+.ep-item[data-depth="1"] {
+  --ep-in: 36px;
+}
+.ep-item[data-depth="2"] {
+  --ep-in: 60px;
+}
+.ep-item[data-depth="3"] {
+  --ep-in: 84px;
 }
 .ep-item:first-child {
   border-top: 0;
@@ -609,27 +620,36 @@
 }
 .ep-kids {
   list-style: none;
-  margin: 0 -4px 0 -12px;
+  margin: 0 -4px 0 calc(-1 * var(--ep-in));
   padding: 0;
   border-top: 1px solid var(--role-line);
   background: var(--role-bg);
 }
 p.ep-kids {
-  padding: 10px 36px;
+  padding: 10px 36px 10px calc(var(--ep-in) + 24px);
 }
 .ep-row {
-  padding: 0 4px 0 36px;
+  padding: 0 4px 0 calc(var(--ep-in) + 24px);
   border-top: 1px solid var(--role-line);
 }
 .ep-row:first-child {
   border-top: 0;
 }
 @container app (max-width: 879.98px) {
+  .ep-item[data-depth="1"] {
+    --ep-in: 28px;
+  }
+  .ep-item[data-depth="2"] {
+    --ep-in: 44px;
+  }
+  .ep-item[data-depth="3"] {
+    --ep-in: 60px;
+  }
   .ep-row {
-    padding-left: 20px;
+    padding-left: calc(var(--ep-in) + 8px);
   }
   p.ep-kids {
-    padding: 10px 20px;
+    padding: 10px 20px 10px calc(var(--ep-in) + 8px);
   }
 }
 

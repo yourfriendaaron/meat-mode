@@ -2,12 +2,11 @@
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  API acme/api  synced 4m ago                            |
 › ▾ api-h3k   Rate limiting v2 ◒ 1 waiting ▰▰▱▱▱▱ 2/5   |
-      api-h3k.3    Limits per plan       ◒ ▰▰▰▱▱▱ 1/2   |
       api-h3k.4    Load test at 5k rps           ◦ Open |
       api-h3k.5    Docs for the new 429 body  ⊘ Waiting |
       api-h3k.1    Token bucket store          ✓ Closed |
       api-h3k.2    Middleware and headers      ✓ Closed |
-  ▸ api-h3k.3 Limits per plan            ◒ ▰▰▰▱▱▱ 1/2   |
+    ▸ api-h3k.3    Limits per plan       ◒ ▰▰▰▱▱▱ 1/2   |
   ▸ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                     |
   ▸ sf-c1x    Checkout redesign  1 blocked ▰▰▱▱▱▱ 2/6   |
@@ -18,18 +17,18 @@
     sf-q1w    Bump image CDN timeout             ◦ Open |
  DOT dotfiles  synced 12m ago                           |
    No epic                                              |
- Enter open  l h fold  y copy  / filter  ? keys 1-18/20 |
+    dot-7aa   Move shell config to XDG paths     ◦ Open |
+ Enter open  l h fold  y copy  / filter  ? keys 1-18/19 |
 
 == 89 x 20, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  API acme/api  synced 4m ago                                                             |
 › ▾ api-h3k   Rate limiting v2                  ◒ In progress 1 waiting ▰▰▰▰▱▱▱▱▱▱ 2/5   |
-      api-h3k.3    Limits per plan                        ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
       api-h3k.4    Load test at 5k rps                                            ◦ Open |
       api-h3k.5    Docs for the new 429 body             2 notes  ⊘ Waiting on api-h3k.4 |
       api-h3k.1    Token bucket store                                           ✓ Closed |
       api-h3k.2    Middleware and headers                                       ✓ Closed |
-  ▸ api-h3k.3 Limits per plan                             ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
+    ▸ api-h3k.3    Limits per plan                        ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
   ▸ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                                                      |
   ▸ sf-c1x    Checkout redesign                     1 blocked 1 waiting ▰▰▰▱▱▱▱▱▱▱ 2/6   |
@@ -40,12 +39,13 @@
     sf-q1w    Bump image CDN timeout                                              ◦ Open |
  DOT dotfiles  synced 12m ago                                                            |
    No epic                                                                               |
- Enter open  l h fold  y copy  / filter  ? keys                                  1-18/20 |
+    dot-7aa   Move shell config to XDG paths                                      ◦ Open |
+ Enter open  l h fold  y copy  / filter  ? keys                                  1-18/19 |
 
 == 90 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
 ›API api-h3k   Rate lim⋯ ◒ 1 waiting ▰▰▱▱▱   2/5 ╎ Rate limiting v2                       |
- API api-h3k.3 Limits per plan     ◒ ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
+ API   api-h3k.3 Limits per plan   ◒ ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
  API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis,       |
  STO sf-c1x    Checkout r⋯ 1 blocked ▰▰▱▱▱   2/6 ╎  replacing the per-IP limiter.         |
  STO sf-a8m    Accessibility pass  ◒ ▰▱▱▱▱   2/8 ╎                                        |
@@ -67,7 +67,7 @@
 == 140 x 20, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
 ›API api-h3k   Rate limiting v2       ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 ╎ Rate limiting v2                                             |
- API api-h3k.3 Limits per plan                  ◒ In progress ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
+ API   api-h3k.3 Limits per plan                ◒ In progress ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
  API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis, replacing the per-IP        |
  STO sf-c1x    Checkout redesign          1 blocked 1 waiting ▰▰▰▱▱▱▱▱   2/6 ╎  limiter.                                                    |
  STO sf-a8m    Accessibility pass               ◒ In progress ▰▰▱▱▱▱▱▱   2/8 ╎                                                              |
@@ -90,12 +90,11 @@
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  API acme/api  synced 4m ago                            |
 › ▾ api-h3k   Rate limiting v2 ◒ 1 waiting ▰▰▱▱▱▱ 2/5   |
-      api-h3k.3    Limits per plan       ◒ ▰▰▰▱▱▱ 1/2   |
       api-h3k.4    Load test at 5k rps           ◦ Open |
       api-h3k.5    Docs for the new 429 body  ⊘ Waiting |
       api-h3k.1    Token bucket store          ✓ Closed |
       api-h3k.2    Middleware and headers      ✓ Closed |
-  ▸ api-h3k.3 Limits per plan            ◒ ▰▰▰▱▱▱ 1/2   |
+    ▸ api-h3k.3    Limits per plan       ◒ ▰▰▰▱▱▱ 1/2   |
   ▸ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                     |
   ▸ sf-c1x    Checkout redesign  1 blocked ▰▰▱▱▱▱ 2/6   |
@@ -116,18 +115,18 @@
                                                         |
                                                         |
                                                         |
+                                                        |
  Enter open  l h fold  y copy  / filter  ? keys         |
 
 == 89 x 30, layout a
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  API acme/api  synced 4m ago                                                             |
 › ▾ api-h3k   Rate limiting v2                  ◒ In progress 1 waiting ▰▰▰▰▱▱▱▱▱▱ 2/5   |
-      api-h3k.3    Limits per plan                        ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
       api-h3k.4    Load test at 5k rps                                            ◦ Open |
       api-h3k.5    Docs for the new 429 body             2 notes  ⊘ Waiting on api-h3k.4 |
       api-h3k.1    Token bucket store                                           ✓ Closed |
       api-h3k.2    Middleware and headers                                       ✓ Closed |
-  ▸ api-h3k.3 Limits per plan                             ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
+    ▸ api-h3k.3    Limits per plan                        ◒ In progress ▰▰▰▰▰▱▱▱▱▱ 1/2   |
   ▸ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
  STO acme/storefront  synced 1m ago                                                      |
   ▸ sf-c1x    Checkout redesign                     1 blocked 1 waiting ▰▰▰▱▱▱▱▱▱▱ 2/6   |
@@ -148,12 +147,13 @@
                                                                                          |
                                                                                          |
                                                                                          |
+                                                                                         |
  Enter open  l h fold  y copy  / filter  ? keys                                          |
 
 == 90 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
 ›API api-h3k   Rate lim⋯ ◒ 1 waiting ▰▰▱▱▱   2/5 ╎ Rate limiting v2                       |
- API api-h3k.3 Limits per plan     ◒ ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
+ API   api-h3k.3 Limits per plan   ◒ ▰▰▰▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5    |
  API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis,       |
  STO sf-c1x    Checkout r⋯ 1 blocked ▰▰▱▱▱   2/6 ╎  replacing the per-IP limiter.         |
  STO sf-a8m    Accessibility pass  ◒ ▰▱▱▱▱   2/8 ╎                                        |
@@ -185,7 +185,7 @@
 == 140 x 30, layout b
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
 ›API api-h3k   Rate limiting v2       ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 ╎ Rate limiting v2                                             |
- API api-h3k.3 Limits per plan                  ◒ In progress ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
+ API   api-h3k.3 Limits per plan                ◒ In progress ▰▰▰▰▱▱▱▱   1/2 ╎ api-h3k  API acme/api  ▰▰▰▱▱▱▱▱ 2/5                          |
  API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎  Per-key token buckets in Redis, replacing the per-IP        |
  STO sf-c1x    Checkout redesign          1 blocked 1 waiting ▰▰▰▱▱▱▱▱   2/6 ╎  limiter.                                                    |
  STO sf-a8m    Accessibility pass               ◒ In progress ▰▰▱▱▱▱▱▱   2/8 ╎                                                              |

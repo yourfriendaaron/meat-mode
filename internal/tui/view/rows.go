@@ -196,6 +196,46 @@ func (d *data) cardsAndTasks(re *api.RepoEpics) (cards, tasks []*api.EpicRow) {
 	return cards, tasks
 }
 
+// cardAt is a card in a list, and how deep it sits under other cards.
+type cardAt struct {
+	row   *api.EpicRow
+	depth int
+}
+
+// cardTree is a repo's cards as the lists show them: each top-level card,
+// then the cards nested in it one level deeper, each level sorted. With a
+// filter, a card shows when it or one of its children matches, or when a
+// card nested in it shows.
+func (d *data) cardTree(q string, re *api.RepoEpics) []cardAt {
+	cards, _ := d.cardsAndTasks(re)
+	isCard := make(map[string]bool, len(cards))
+	for _, c := range cards {
+		isCard[c.ID] = true
+	}
+	var out []cardAt
+	var walk func(c *api.EpicRow, depth int)
+	walk = func(c *api.EpicRow, depth int) {
+		at := len(out)
+		out = append(out, cardAt{c, depth})
+		if depth < len(cards) {
+			for _, k := range cards {
+				if k.Parent == c.ID && k.ID != c.ID {
+					walk(k, depth+1)
+				}
+			}
+		}
+		if len(out) == at+1 && !d.rowMatches(q, re, c) {
+			out = out[:at]
+		}
+	}
+	for _, c := range cards {
+		if !isCard[c.Parent] || c.Parent == c.ID {
+			walk(c, 0)
+		}
+	}
+	return out
+}
+
 // cardCount is the number of epic cards across every repo, for the tab.
 func (d *data) cardCount() int {
 	n := 0
@@ -279,7 +319,7 @@ func (d *data) epicTreeRows(q string, expanded map[string]bool) []row {
 	var rows []row
 	for k := range d.epics.Repos {
 		re := &d.epics.Repos[k]
-		cards, tasks := d.cardsAndTasks(re)
+		_, tasks := d.cardsAndTasks(re)
 		if q != "" && !d.repoMatches(q, re) {
 			continue
 		}
@@ -292,9 +332,9 @@ func (d *data) epicTreeRows(q string, expanded map[string]bool) []row {
 			if parent != "" {
 				id = parent + ">" + t.key
 			}
-			// A child that is a card shows under its parent as a row, and
-			// as a card of its own in the repo's list.
-			foldable := t.card && depth == 0
+			// A card nested in another shows once, as a card of its own
+			// under its parent's tasks, one level deeper.
+			foldable := t.card && parent == ""
 			open := foldable && (expanded[id] || q != "")
 			rows = append(rows, row{id: id, t: t, draw: func(m *Model, w int) line {
 				return m.epicLine(re, r, depth, t.card, foldable, open, w)
@@ -302,16 +342,17 @@ func (d *data) epicTreeRows(q string, expanded map[string]bool) []row {
 			n++
 			if open {
 				for _, c := range d.children(re, r.ID) {
+					if d.epicTarget(re, c).card {
+						continue
+					}
 					if q == "" || matches(q, d.rowTitle(re, c), c.ID) {
 						add(id, c, depth+1)
 					}
 				}
 			}
 		}
-		for _, c := range cards {
-			if d.rowMatches(q, re, c) {
-				add("", c, 0)
-			}
+		for _, c := range d.cardTree(q, re) {
+			add("", c.row, c.depth)
 		}
 		shown := n
 		var top []*api.EpicRow
@@ -344,15 +385,13 @@ func (d *data) epicListRows(q string) []row {
 	var tops []row
 	for k := range d.epics.Repos {
 		re := &d.epics.Repos[k]
-		cards, tasks := d.cardsAndTasks(re)
-		for _, c := range cards {
-			if d.rowMatches(q, re, c) {
-				rows = append(rows, d.cardRow(re, c))
-			}
+		_, tasks := d.cardsAndTasks(re)
+		for _, c := range d.cardTree(q, re) {
+			rows = append(rows, d.cardRow(re, c.row, c.depth))
 		}
 		for _, t := range tasks {
 			if matches(q, d.rowTitle(re, t), t.ID) {
-				tops = append(tops, d.cardRow(re, t))
+				tops = append(tops, d.cardRow(re, t, 0))
 			}
 		}
 	}
@@ -363,9 +402,9 @@ func (d *data) epicListRows(q string) []row {
 	return rows
 }
 
-func (d *data) cardRow(re *api.RepoEpics, r *api.EpicRow) row {
+func (d *data) cardRow(re *api.RepoEpics, r *api.EpicRow, depth int) row {
 	t := d.epicTarget(re, r)
-	return row{id: t.key, t: t, draw: func(m *Model, w int) line { return m.cardLine(re, r, w) }}
+	return row{id: t.key, t: t, draw: func(m *Model, w int) line { return m.cardLine(re, r, depth, w) }}
 }
 
 // ---- All, layout C
@@ -421,11 +460,8 @@ func (d *data) allRows(q string) (rows []row, hidden int) {
 	var cards []row
 	for k := range d.epics.Repos {
 		re := &d.epics.Repos[k]
-		cs, _ := d.cardsAndTasks(re)
-		for _, c := range cs {
-			if d.rowMatches(q, re, c) {
-				cards = append(cards, d.cardRow(re, c))
-			}
+		for _, c := range d.cardTree(q, re) {
+			cards = append(cards, d.cardRow(re, c.row, c.depth))
 		}
 	}
 	if len(cards) > 0 || d.epicsSwitchedOn() {

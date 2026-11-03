@@ -114,10 +114,14 @@ test.describe("desktop", () => {
     await expect(kids.first().locator(".ep-pri")).toHaveText("Medium");
     await expect(kids.nth(1)).toHaveClass(/is-done/);
 
-    // A nested card is a row of its parent, and a card of its own.
+    // A nested card shows once, after its parent and one level in; the
+    // parent's bar counts it and its toggle lists only the tasks.
     const beds = entry(page, "ga-20");
-    await beds.getByRole("button", { name: "3 tasks of ga-20" }).click();
-    await expect(beds.locator(".ep-row .ep-id")).toHaveText(["ga-20.2", "ga-1", "ga-20.1"]);
+    await expect(beds.locator(".ep-ptext")).toHaveText("0% 0/3 done");
+    await beds.getByRole("button", { name: "2 tasks of ga-20" }).click();
+    await expect(beds.locator(".ep-row .ep-id")).toHaveText(["ga-20.2", "ga-1"]);
+    await expect(entry(page, "ga-20.1")).toHaveAttribute("data-depth", "1");
+    await expect(beds).not.toHaveAttribute("data-depth");
     await expect(beds.locator(".ep-row").first().locator(".ep-pri")).toHaveClass(/ep-p0/);
     await expect(entry(page, "ga-20.1").locator(".ep-ptext")).toHaveText("100% 1/1 done");
     await axe(page);
@@ -166,7 +170,7 @@ test.describe("desktop", () => {
     withEpics(hub);
     await openApp(page);
     await openEpics(page);
-    await entry(page, "ga-20").getByRole("button", { name: "3 tasks of ga-20" }).click();
+    await entry(page, "ga-20").getByRole("button", { name: "2 tasks of ga-20" }).click();
     await page.locator("#epics .ep-row").getByRole("button", { name: /Fence post leans/ }).click();
     const sheet = page.locator("#detail");
     await expect(sheet.locator(".d-title")).toHaveText("Fence post leans");
@@ -205,7 +209,7 @@ test.describe("desktop", () => {
     await openApp(page);
     await openEpics(page);
     const beds = entry(page, "ga-20");
-    await beds.getByRole("button", { name: "3 tasks of ga-20" }).click();
+    await beds.getByRole("button", { name: "2 tasks of ga-20" }).click();
     // The State item's title wins over the row's.
     const human = beds.locator(".ep-row", { has: page.locator(".ep-id", { hasText: /^ga-1$/ }) });
     await expect(human.locator(".ep-title")).toHaveText("Order compost for the beds");
@@ -289,8 +293,8 @@ test.describe("desktop", () => {
     await page.locator("#ep-mb-view").click();
     await page.getByRole("menuitemradio", { name: "Progress" }).click();
     await expect(page.getByRole("menu")).toHaveCount(0);
-    // Least done first; tasks after the cards.
-    await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["ga-20", "ga-10", "ga-20.1", "ga-31", "ga-30"]);
+    // Least done first, a nested card after its parent; tasks after the cards.
+    await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["ga-20", "ga-20.1", "ga-10", "ga-31", "ga-30"]);
 
     // The keyboard moves through a menu.
     await page.locator("#ep-mb-view").focus();
@@ -529,7 +533,7 @@ test.describe("phone", () => {
     hub.showEpics("website", websiteEpics());
     await openApp(page);
     await page.locator("#tabs").getByRole("button", { name: "Epics" }).click();
-    await entry(page, "ga-20").getByRole("button", { name: "3 tasks of ga-20" }).click();
+    await entry(page, "ga-20").getByRole("button", { name: "2 tasks of ga-20" }).click();
     await page.locator("#ep-q").fill("");
     await axe(page);
     await page.evaluate(() => {

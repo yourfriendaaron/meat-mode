@@ -242,9 +242,15 @@ export function sorter(sort: EpicsSort, percent: (r: EpicRow) => number | undefi
 export interface Entry {
   row: ShownRow;
   card: boolean;
-  /** Every direct child of a card, sorted, closed ones last. */
+  /** How many cards it sits under: 0 at the top, 1 for a card nested in a top-level card. */
+  depth: number;
+  /** Every direct child of a card, sorted, closed ones last, nested cards included. */
   children: ShownRow[];
-  /** The children that show: all of them, or those a search or filter leaves. */
+  /**
+   * The children that show when it opens: those that are no card (a nested
+   * card is an entry of its own), all of them or those a search or filter
+   * leaves.
+   */
   shown: ShownRow[];
   progress: Progress;
   /** Whether its children show. */
@@ -262,11 +268,12 @@ export interface Outline {
 
 /**
  * Lays out a repo's rows as one list of epic cards and top-level tasks,
- * peers sorted together. Every card is in the list, a nested one too, which
- * is also a row of its parent. A row whose parent names no card is a
+ * peers sorted together. A card nested in another follows its parent, one
+ * level deeper, whether or not the parent is open; it shows once, never
+ * also among its parent's tasks. A row whose parent names no card is a
  * top-level task, as the hub would have cleared that parent. While a search
- * or filter is on, a card shows when it or any child matches, with only the
- * matching children, opened.
+ * or filter is on, a card shows when it or any child matches, or when a
+ * card nested in it shows, with only the matching children, opened.
  */
 export function outline(rows: ShownRow[], ui: EpicsUI): Outline {
   const cardIds = new Set(rows.filter((r) => r.epic).map((r) => r.id));
@@ -282,17 +289,21 @@ export function outline(rows: ShownRow[], ui: EpicsUI): Outline {
   };
   const order = sorter(ui.sort, percent);
   const childOrder = (a: EpicRow, b: EpicRow) => Number(a.status === "closed") - Number(b.status === "closed") || order(a, b);
-  const top = rows.filter((r) => r.epic || !r.parent || !cardIds.has(r.parent) || r.parent === r.id).sort(order);
+  const top = rows.filter((r) => !r.parent || !cardIds.has(r.parent) || r.parent === r.id).sort(order);
   const narrowed = filtering(ui);
   const entries: Entry[] = [];
-  for (const row of top) {
+  const add = (row: ShownRow, depth: number) => {
+    const at = entries.length;
     const card = !!row.epic;
     const children = card ? [...(kids.get(row.id) ?? [])].sort(childOrder) : [];
-    const shown = narrowed ? children.filter((c) => matches(c, ui)) : children;
-    if (narrowed && !matches(row, ui) && !shown.length) continue;
+    const tasks = children.filter((c) => !c.epic);
+    const shown = narrowed ? tasks.filter((c) => matches(c, ui)) : tasks;
     const open = narrowed && shown.length ? !ui.shut.has(row.key) : ui.expanded.has(row.key);
-    entries.push({ row, card, children, shown, progress: prog.get(row.id) ?? progress([]), open });
-  }
+    entries.push({ row, card, depth, children, shown, progress: prog.get(row.id) ?? progress([]), open });
+    if (depth < cardIds.size) for (const c of [...children].filter((c) => c.epic).sort(order)) add(c, depth + 1);
+    if (narrowed && !matches(row, ui) && !shown.length && entries.length === at + 1) entries.pop();
+  };
+  for (const row of top) add(row, 0);
   const epics = entries.filter((e) => e.card).length;
   return { entries, epics, tasks: entries.length - epics, open: rows.filter((r) => r.status !== "closed").length };
 }
@@ -438,7 +449,7 @@ function entryHTML(e: Entry, v: EpicsView, n: string): string {
   let extra = "";
   if (e.card) {
     const kidsId = `ep-kids-${n}`;
-    const total = e.children.length;
+    const total = e.children.filter((c) => !c.epic).length;
     const part = e.shown.length < total ? ` <span class="ep-part">(${e.shown.length} shown)</span>` : "";
     const toggle = `<button class="ep-kids-btn" data-act="ep-toggle" data-key="${esc(r.key)}" aria-expanded="${e.open}"${e.open ? ` aria-controls="${kidsId}"` : ""}>${total} ${total === 1 ? "task" : "tasks"}${part}<span class="sr"> of ${esc(r.id)}</span>${ICON.right}</button>`;
     const kids = e.shown.length
@@ -446,7 +457,8 @@ function entryHTML(e: Entry, v: EpicsView, n: string): string {
       : `<p class="muted small ep-none ep-kids" id="${kidsId}">${total ? "No tasks match the filters." : "No tasks yet."}</p>`;
     extra = `<div class="ep-progress">${bar(e.progress)}<span class="ep-ptext">${esc(progressText(e.progress))}</span>${holdsHTML(e.children)}${toggle}</div>${e.open ? kids : ""}`;
   }
-  return `<li class="ep-item${e.card ? " is-card" : ""}${rowClass(r, v.open)}" data-ep="${esc(r.key)}">${lineHTML(r, v.now, e.card)}${extra}</li>`;
+  const depth = e.depth ? ` data-depth="${Math.min(e.depth, 3)}"` : "";
+  return `<li class="ep-item${e.card ? " is-card" : ""}${rowClass(r, v.open)}" data-ep="${esc(r.key)}"${depth}>${lineHTML(r, v.now, e.card)}${extra}</li>`;
 }
 
 /** A repo's name, with its path and machine where the name repeats. */
