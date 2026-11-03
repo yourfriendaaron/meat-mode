@@ -185,6 +185,7 @@ func TestEpicRowsWaitsDatesAndComments(t *testing.T) {
 	beadstest.Run(t, dir, "bd", "update", "--defer=2099-06-01", "--json", "--", later)
 	beadstest.Run(t, dir, "bd", "comments", "add", beds, "Check the soil first.")
 	beadstest.Run(t, dir, "bd", "comments", "add", beds, "Use the long spade.")
+	beadstest.Run(t, dir, "bd", "update", "--notes=Compost goes in last.", "--json", "--", beds)
 
 	rows, err := tr.(tracker.Epics).EpicRows(context.Background(), dir)
 	if err != nil {
@@ -207,5 +208,8 @@ func TestEpicRowsWaitsDatesAndComments(t *testing.T) {
 	}
 	if got := byID[beds].CommentCount; got != 2 {
 		t.Errorf("beds commentCount = %d; want 2", got)
+	}
+	if got := byID[beds].Notes; got != "Compost goes in last." {
+		t.Errorf("beds notes = %q; want the bead's notes", got)
 	}
 }

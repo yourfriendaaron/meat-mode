@@ -7,44 +7,6 @@ import (
 // hint is one key and what it does, for the status line.
 type hint struct{ key, does string }
 
-// helpKeys are the keys overlay's lines.
-var helpKeys = []hint{
-	{"j k", "move (or up, down)"},
-	{"g G", "top, bottom"},
-	{"Space", "a page down; PgUp PgDn too"},
-	{"^d ^u", "half a page down, up"},
-	{"Enter", "open full screen"},
-	{"l", "unfold, step in, or open"},
-	{"h Esc", "back; h on an epic folds it"},
-	{"Tab 1 2 3", "switch tab"},
-	{"/", "filter by title or id"},
-	{"y", "copy id and title"},
-	{"Y", "copy with details"},
-	{"x", "done, or reopen"},
-	{"d", "won't do, or delete a to-do"},
-	{"s", "snooze: j k Enter or 1-6; 0 clears"},
-	{"u", "undo the last done, d or snooze"},
-	{"o", "show the item's app link"},
-	{"p", "this project, or every list"},
-	{"r", "refresh"},
-	{"q", "quit"},
-}
-
-// legend explains the marks the rows carry.
-var legend = []hint{
-	{" " + gClosed + " ", "badge of your personal list"},
-	{"GAR", "badge of a project: its colour, its name"},
-	{gHuman, "a task an agent left for you"},
-	{gOpen, "Open: ready to start"},
-	{gProgress, "In progress (cyan)"},
-	{gBlocked, "Blocked (red), or Waiting on another bead"},
-	{gDeferred, "Deferred: put off, to a date when it has one"},
-	{gClosed, "done or Closed (green)"},
-	{gSnoozed, "snoozed"},
-	{gBarFull + gBarEmpty, "an epic's closed tasks over all of them"},
-	{gRepeat, "repeats"},
-}
-
 // frame is the whole screen as lines, each exactly width cells.
 func (m *Model) frame() []line {
 	w, h := m.width, m.height
@@ -70,8 +32,6 @@ func (m *Model) frame() []line {
 	switch {
 	case m.pw:
 		m.overlay(out, m.passwordPanel(w))
-	case m.help:
-		m.overlay(out, m.helpPanel(w))
 	case m.snoozeKey != "":
 		m.overlay(out, m.snoozePanel(w))
 	}
@@ -156,6 +116,8 @@ func (m *Model) hints() []hint {
 	switch {
 	case m.pw:
 		return []hint{{"Enter", "sign in"}, {"Esc", "quit"}}
+	case m.help && m.helpMax() > 0:
+		return []hint{{"j k", "scroll"}, {"any other key", "close"}}
 	case m.help:
 		return []hint{{"any key", "close"}}
 	case m.snoozeKey != "":
@@ -189,6 +151,9 @@ func (m *Model) hints() []hint {
 func (m *Model) body(w, h int) ([]line, string) {
 	if h <= 0 {
 		return nil, ""
+	}
+	if m.help {
+		return m.helpBody(w, h)
 	}
 	if m.d == nil {
 		return []line{fit(line{sg("  Loading", sDim)}, w, sPlain)}, ""
@@ -350,10 +315,13 @@ func (m *Model) cardPane(t *target, w, h int) []line {
 	out = append(out, line{sg(" "+clean(r.ID), sDim), sg("  ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+clean(re.Repo), sSoft)})
 	out = append(out, d.cardFacts(re, r, " ", w)...)
 	kids := d.children(re, r.ID)
+	var desc []line
 	if strings.TrimSpace(r.Description) != "" {
-		// A long description keeps room for the children below it, at
-		// least half the pane; Enter on the epic shows the rest.
-		desc := textLines(r.Description, w, sSoft)
+		desc = textLines(r.Description, w, sSoft)
+	}
+	if desc = append(desc, notesLines(r, w, sSoft)...); len(desc) > 0 {
+		// A long description and notes keep room for the children below
+		// them, at least half the pane; Enter on the epic shows the rest.
 		keep := min(len(kids), max(3, h/2))
 		if most := max(2, h-len(out)-1-keep); len(desc) > most {
 			desc = append(desc[:most-1], line{sg(" "+ellipsis+" Enter shows the rest", sDim)})
@@ -421,35 +389,6 @@ func (m *Model) overlay(lines []line, p panel) {
 }
 
 func panelWidth(w, want int) int { return max(1, min(want, w-4)) }
-
-// helpMax is the furthest the help scrolls: its keys, a gap and the
-// legend, in height-4 rows less the row that says it scrolls.
-func (m *Model) helpMax() int {
-	n, room := len(helpKeys)+1+len(legend), m.height-4
-	if room <= 2 || n <= room {
-		return 0
-	}
-	return n - (room - 1)
-}
-
-func (m *Model) helpPanel(w int) panel {
-	bw := panelWidth(w, 48)
-	var c []line
-	for _, k := range helpKeys {
-		c = append(c, line{sg(padRight(k.key, 11), style{fg: cPurple, bg: cRaise, bold: true}), sg(k.does, style{fg: cFg, bg: cRaise})})
-	}
-	c = append(c, nil)
-	for _, k := range legend {
-		c = append(c, line{sg(padRight(k.key, 11), style{fg: cSoft, bg: cRaise, bold: true}), sg(k.does, style{fg: cFg, bg: cRaise})})
-	}
-	// The panel's edges and the tab and status lines leave height-4 rows;
-	// past that, j and k scroll it and the last row says so.
-	if room := m.height - 4; room > 2 && len(c) > room {
-		top := min(m.helpScroll, m.helpMax())
-		c = append(c[top:top+room-1:top+room-1], line{sg("j k scroll, any other key closes", style{fg: cSoft, bg: cRaise})})
-	}
-	return box("Keys", c, bw)
-}
 
 func (m *Model) snoozePanel(w int) panel {
 	bw := panelWidth(w, 40)

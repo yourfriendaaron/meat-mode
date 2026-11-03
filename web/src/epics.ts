@@ -473,10 +473,10 @@ function statusPill(s: string, r?: EpicRow, now?: Date): string {
   return `<span class="ep-st ep-s-${k}"><span class="ep-sd" aria-hidden="true"></span>${esc(label)}</span>`;
 }
 
-/** "2 notes", or nothing. */
+/** "2 comments", or nothing. */
 function notesPill(r: EpicRow): string {
   const n = r.commentCount ?? 0;
-  return n > 0 ? `<span class="ep-notes">${n === 1 ? "1 note" : `${n} notes`}</span>` : "";
+  return n > 0 ? `<span class="ep-notes">${n === 1 ? "1 comment" : `${n} comments`}</span>` : "";
 }
 
 /** The order and words of a card's children by state, in its bar and counts. */
@@ -554,7 +554,7 @@ const ALSO_YOURS = '<span class="ep-human">Also your task</span>';
 
 /**
  * A row's one line: type, id and title as the button that opens its
- * Details, then notes, status, priority, assignee and Copy id. A card's
+ * Details, then its comment count, status, priority, assignee and Copy id. A card's
  * group says its status, so its line does not.
  */
 function lineHTML(r: ShownRow, now: Date, card = false): string {
@@ -848,7 +848,7 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
     const links = next.map((b) => `<button class="ep-link ep-wait" data-act="ep-open" data-key="${esc((b as ShownRow).key)}">${statusPill(b.status)}<span>${esc(b.title)}</span><code class="ep-id">${esc(b.id)}</code></button>`);
     facts.push(["Unlocks", `<span class="ep-waits">${links.join("")}</span>`]);
   }
-  if ((r.commentCount ?? 0) > 0) facts.push(["Notes", esc(String(r.commentCount))]);
+  if ((r.commentCount ?? 0) > 0) facts.push(["Comments", esc(String(r.commentCount))]);
   if (parent) facts.push(["Epic", `<button class="ep-link" data-act="ep-open" data-key="${esc(parent.key)}">${esc(parent.title)}</button>`]);
   const up = when(r.updatedAt, v.now);
   if (up) facts.push(["Updated", up]);
@@ -858,6 +858,9 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
     ? `<div class="why ep-yours"><div class="why-label">Also your task</div><p>This task is on your own list too, where you can mark it done, snooze it or add a note.</p><button class="btn btn-primary btn-small" data-act="open" data-key="${esc(r.key)}">Open task</button></div>`
     : "";
   const desc = r.description?.trim() ? `<div class="md">${renderMarkdown(r.description)}</div>` : '<p class="muted small">No description.</p>';
+  const notes = r.notes?.trim()
+    ? `<section class="d-section" aria-labelledby="ep-d-notes"><h3 id="ep-d-notes">Notes</h3><div class="md">${renderMarkdown(r.notes)}</div></section>\n`
+    : "";
   const kidsHTML = r.epic
     ? `<section class="d-section" aria-labelledby="ep-d-kids"><h3 id="ep-d-kids">Tasks <span class="group-count">${kids.length}</span></h3>${
         kids.length
@@ -871,6 +874,6 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
 ${human}
 <dl class="ep-facts">${facts.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>
 <section class="d-section" aria-labelledby="ep-d-desc"><h3 id="ep-d-desc">Description</h3>${desc}</section>
-${kidsHTML}
+${notes}${kidsHTML}
 </div>`;
 }

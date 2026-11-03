@@ -527,6 +527,9 @@ func (d *data) drillRows(q string, t *target, w int) []row {
 			rows = append(rows, headRow(sg("  "+l, sSoft)))
 		}
 	}
+	for _, l := range notesLines(card, w, sSoft) {
+		rows = append(rows, headRow(l...))
+	}
 	rows = append(rows, headRow())
 	kids := d.children(re, card.ID)
 	for _, st := range drillStatuses {

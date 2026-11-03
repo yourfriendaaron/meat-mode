@@ -14,7 +14,8 @@
      "updatedAt": "2026-11-01T14:00:00Z",
      "epic": true,
      "type": "epic",
-     "description": "Per-key token buckets in Redis, replacing the per-IP limiter."
+     "description": "Per-key token buckets in Redis, replacing the per-IP limiter.",
+     "notes": "Research: a sliding window costs one extra read per request; token buckets do not."
     },
     {
      "id": "api-h3k.1",

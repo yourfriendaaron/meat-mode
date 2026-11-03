@@ -159,7 +159,7 @@ test.describe("desktop", () => {
     await planting.locator("> .ep-progress .ep-kids-btn").click();
     const tulips = planting.locator(".ep-row", { hasText: "ga-10.7" });
     await expect(tulips.locator(".ep-st")).toHaveText("Waiting on ga-20.2");
-    await expect(tulips.locator(".ep-notes")).toHaveText("2 notes");
+    await expect(tulips.locator(".ep-notes")).toHaveText("2 comments");
     await page.locator("#epics").screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/epics.png` : undefined });
     await tulips.locator(".ep-main").click();
     const facts = page.locator(".ep-facts");
@@ -183,6 +183,9 @@ test.describe("desktop", () => {
     await expect(sheet).toContainText("No description.");
     await sheet.getByRole("button", { name: "Beds and paths" }).click();
     await expect(sheet.locator(".d-title")).toHaveText("Beds and paths");
+    // The bead's notes field is its own section, as Markdown.
+    await expect(sheet.locator('section[aria-labelledby="ep-d-notes"]')).toContainText("Gravel is cheaper in bulk.");
+    await expect(sheet.locator('section[aria-labelledby="ep-d-notes"] strong')).toHaveText("cheaper");
     await expect(sheet.locator(".ep-d-kid .ep-id")).toHaveText(["ga-20.2", "ga-1", "ga-20.1"]);
     await sheet.locator(".ep-d-kid", { hasText: "Paths" }).click();
     await expect(sheet.locator(".d-title")).toHaveText("Paths");

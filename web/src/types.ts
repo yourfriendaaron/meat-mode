@@ -366,8 +366,10 @@ export interface EpicRow {
   epic?: boolean;
   /** Also a task for the person: the State item with the same key, when there is one, stands in for it. */
   human?: boolean;
-  /** Cards only, for Details. */
+  /** The bead's own, for Details. */
   description?: string;
+  /** The bead's notes field (bd's notes), for Details; absent when it has none. */
+  notes?: string;
   updatedAt: string;
   closedAt?: string | null;
   /** The open beads this one waits on; absent when nothing holds it. */

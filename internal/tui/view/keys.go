@@ -81,6 +81,10 @@ func (m *Model) key(k string) []Effect {
 			m.helpScroll = min(m.helpScroll+1, m.helpMax())
 		case "k", "up":
 			m.helpScroll = max(0, m.helpScroll-1)
+		case "pgdown", "space", "ctrl+f":
+			m.helpScroll = min(m.helpScroll+max(1, m.bodyHeight()-1), m.helpMax())
+		case "pgup", "ctrl+b":
+			m.helpScroll = max(0, m.helpScroll-max(1, m.bodyHeight()-1))
 		default:
 			m.help, m.helpScroll = false, 0
 		}

@@ -8,16 +8,16 @@
   Per-key token buckets in Redis, replacing the per-IP  |
   limiter.                                              |
                                                         |
+ Notes                                                  |
+  Research: a sliding window costs one extra read per   |
+  request; token buckets do not.                        |
+                                                        |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                |
   api-h3k.3    Limits per plan            ◒ In progress |
   api-h3k.4    Load test at 5k rps               ◦ Open |
   api-h3k.5    Docs for the new 429 body      ⊘ Waiting |
   api-h3k.1    Token bucket store              ✓ Closed |
   api-h3k.2    Middleware and headers          ✓ Closed |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
  l into epic  y copy  Y copy all  Esc back  ? keys      |
 
 == 89 x 20, layout a
@@ -29,15 +29,15 @@
                                                                                          |
   Per-key token buckets in Redis, replacing the per-IP limiter.                          |
                                                                                          |
+ Notes                                                                                   |
+  Research: a sliding window costs one extra read per request; token buckets do not.     |
+                                                                                         |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                                                 |
   api-h3k.3    Limits per plan                                             ◒ In progress |
   api-h3k.4    Load test at 5k rps                                                ◦ Open |
-  api-h3k.5    Docs for the new 429 body                 2 notes  ⊘ Waiting on api-h3k.4 |
+  api-h3k.5    Docs for the new 429 body              2 comments  ⊘ Waiting on api-h3k.4 |
   api-h3k.1    Token bucket store                                               ✓ Closed |
   api-h3k.2    Middleware and headers                                           ✓ Closed |
-                                                                                         |
-                                                                                         |
-                                                                                         |
                                                                                          |
                                                                                          |
  l into epic  y copy  Y copy all  Esc back  ? keys                                       |
@@ -96,16 +96,16 @@
   Per-key token buckets in Redis, replacing the per-IP  |
   limiter.                                              |
                                                         |
+ Notes                                                  |
+  Research: a sliding window costs one extra read per   |
+  request; token buckets do not.                        |
+                                                        |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                |
   api-h3k.3    Limits per plan            ◒ In progress |
   api-h3k.4    Load test at 5k rps               ◦ Open |
   api-h3k.5    Docs for the new 429 body      ⊘ Waiting |
   api-h3k.1    Token bucket store              ✓ Closed |
   api-h3k.2    Middleware and headers          ✓ Closed |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
                                                         |
                                                         |
                                                         |
@@ -127,15 +127,15 @@
                                                                                          |
   Per-key token buckets in Redis, replacing the per-IP limiter.                          |
                                                                                          |
+ Notes                                                                                   |
+  Research: a sliding window costs one extra read per request; token buckets do not.     |
+                                                                                         |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                                                 |
   api-h3k.3    Limits per plan                                             ◒ In progress |
   api-h3k.4    Load test at 5k rps                                                ◦ Open |
-  api-h3k.5    Docs for the new 429 body                 2 notes  ⊘ Waiting on api-h3k.4 |
+  api-h3k.5    Docs for the new 429 body              2 comments  ⊘ Waiting on api-h3k.4 |
   api-h3k.1    Token bucket store                                               ✓ Closed |
   api-h3k.2    Middleware and headers                                           ✓ Closed |
-                                                                                         |
-                                                                                         |
-                                                                                         |
                                                                                          |
                                                                                          |
                                                                                          |

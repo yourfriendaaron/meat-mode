@@ -117,6 +117,36 @@ func TestOutlineSpendsDescriptionsCardsFirst(t *testing.T) {
 	}
 }
 
+// TestOutlineSpendsNotesAfterDescriptions: notes share the description
+// budget and come after every description, so a closed task keeps its
+// description over a card's notes.
+func TestOutlineSpendsNotesAfterDescriptions(t *testing.T) {
+	big := strings.Repeat("a", api.ItemDescriptionLimit)
+	n := api.MaxEpicDescriptions / api.ItemDescriptionLimit
+	var rows []api.EpicRow
+	for i := range n {
+		rows = append(rows, api.EpicRow{ID: fmt.Sprintf("ga-%04d", i), Status: StatusClosed, Parent: "gz-0000", Description: big})
+	}
+	rows = append(rows, api.EpicRow{ID: "gz-0000", Type: "epic", Status: StatusOpen, Description: "Beds.", Notes: big + big})
+	total := 0
+	for _, r := range Outline(rows) {
+		total += len(r.Description) + len(r.Notes)
+		switch {
+		case r.Description == "":
+			t.Errorf("%s lost its description to notes", r.ID)
+		case r.Epic && r.Notes != "":
+			t.Errorf("card kept %d bytes of notes past the budget", len(r.Notes))
+		}
+	}
+	if total > api.MaxEpicDescriptions {
+		t.Fatalf("descriptions and notes total %d bytes", total)
+	}
+	got := Outline([]api.EpicRow{{ID: "gd-1", Type: "epic", Status: StatusOpen, Notes: strings.Repeat("é", api.ItemDescriptionLimit+5)}})
+	if n := utf8.RuneCountInString(got[0].Notes); n != api.ItemDescriptionLimit+1 {
+		t.Fatalf("notes are %d runes", n)
+	}
+}
+
 func TestOutlineCapsRowsClosedFirst(t *testing.T) {
 	rows := []api.EpicRow{{ID: "e", Type: "epic", Status: StatusOpen}}
 	for i := range api.MaxEpicRows + 10 {

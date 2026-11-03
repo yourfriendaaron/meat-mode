@@ -72,6 +72,9 @@ func (d *data) refFull(t *target) string {
 	if desc := strings.TrimSpace(blockClean(r.Description)); desc != "" {
 		b.WriteString("\n\n" + desc)
 	}
+	if notes := strings.TrimSpace(blockClean(r.Notes)); notes != "" {
+		b.WriteString("\n\nNotes:\n" + notes)
+	}
 	if kids := d.children(re, r.ID); len(kids) > 0 {
 		b.WriteString("\n\nChildren:")
 		for _, k := range kids {

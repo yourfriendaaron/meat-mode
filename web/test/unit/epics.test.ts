@@ -487,7 +487,7 @@ test("a waiting row's Details list what it waits on, and a card counts what its 
   const html = epicDetailHTML(kid, { data, find: none, repos: [], now });
   assert.match(html, /Waiting on gd-1\.2/);
   assert.match(html, /<dt>Waiting on<\/dt>.*Task gd-1\.2/s);
-  assert.match(html, /<dt>Notes<\/dt><dd>2<\/dd>/);
+  assert.match(html, /<dt>Comments<\/dt><dd>2<\/dd>/);
   const list = epicsHTML({ data, error: "", ui: ui(), find: none, repos: [], open: null, now });
   assert.match(list, /title="1 blocked">.*1<span class="sr"> blocked<\/span><\/span><span class="ep-hold ep-s-waiting" title="1 waiting">/);
 });

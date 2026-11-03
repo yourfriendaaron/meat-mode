@@ -360,6 +360,7 @@ func (d *data) cardFacts(re *api.RepoEpics, r *api.EpicRow, indent string, w int
 	if r.Priority <= 1 {
 		misc = append(misc, sg(strings.TrimSpace(priority(r.Priority).text)+" ", priority(r.Priority).st))
 	}
+	misc = append(misc, commentsTag(r)...)
 	misc = append(misc, notesTag(r)...)
 	if len(misc) > 0 {
 		out = append(out, append(line{sg(indent, sPlain)}, misc...))
@@ -394,6 +395,7 @@ func (m *Model) openLines(re *api.RepoEpics, r *api.EpicRow, lead line, w int) (
 	if r.Human {
 		facts = append(facts, sg("  "+gHuman+" you", sOrange))
 	}
+	facts = append(facts, commentsTag(r)...)
 	facts = append(facts, notesTag(r)...)
 	return first, append(more, facts)
 }

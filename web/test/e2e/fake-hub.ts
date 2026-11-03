@@ -111,7 +111,7 @@ export function gardenEpics(): EpicRow[] {
     }),
     ...planting,
     epicRow("ga-10.7", "Plant the tulip bulbs", { parent: "ga-10", type: "task", assignee: "sam", blockedBy: ["ga-20.2"], commentCount: 2 }),
-    epicRow("ga-20", "Beds and paths", { epic: true, type: "epic", priority: 2 }),
+    epicRow("ga-20", "Beds and paths", { epic: true, type: "epic", priority: 2, notes: "Gravel is **cheaper** in bulk." }),
     epicRow("ga-20.1", "Paths", { epic: true, type: "epic", parent: "ga-20", priority: 3 }),
     epicRow("ga-20.1.1", "Lay the gravel", { parent: "ga-20.1", type: "chore", status: "closed", closedAt: at(11, 9) }),
     epicRow("ga-20.2", "Fence post leans", { parent: "ga-20", type: "bug", status: "blocked", priority: 0, assignee: "alex" }),

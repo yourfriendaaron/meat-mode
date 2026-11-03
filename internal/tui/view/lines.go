@@ -107,15 +107,37 @@ func statusTag(state string, r *api.EpicRow, short bool, now time.Time) line {
 	return line{statusGlyph(state), sg(" "+words, statusStyle(state))}
 }
 
-// notesTag is a bead's comment count, "2 notes", or nothing.
-func notesTag(r *api.EpicRow) line {
-	switch r.CommentCount {
-	case 0:
+// commentsTag is a bead's comment count, "2 comments", or nothing.
+func commentsTag(r *api.EpicRow) line {
+	if r.CommentCount == 0 {
 		return nil
-	case 1:
-		return line{sg(" 1 note", sDim)}
 	}
-	return line{sg(" "+itoa(r.CommentCount)+" notes", sDim)}
+	return line{sg(" "+comments(r.CommentCount), sDim)}
+}
+
+// comments is a comment count in words: "1 comment", "2 comments".
+func comments(n int) string {
+	if n == 1 {
+		return "1 comment"
+	}
+	return itoa(n) + " comments"
+}
+
+// notesTag marks a bead that has notes, in the views that open it in
+// place; Enter shows them.
+func notesTag(r *api.EpicRow) line {
+	if strings.TrimSpace(r.Notes) == "" {
+		return nil
+	}
+	return line{sg(" notes", sDim)}
+}
+
+// notesLines are a bead's notes under their heading, or nothing.
+func notesLines(r *api.EpicRow, w int, st style) []line {
+	if strings.TrimSpace(r.Notes) == "" {
+		return nil
+	}
+	return append([]line{nil, {sg(" Notes ", sHead)}}, textLines(r.Notes, w, st)...)
 }
 
 // mark is a list's badge, codeWidth cells: the personal list's check,
@@ -296,7 +318,7 @@ func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, fol
 		right = append(right, sg(" @"+clean(r.Assignee), sCyan))
 	}
 	if w >= 70 {
-		right = append(right, notesTag(r)...)
+		right = append(right, commentsTag(r)...)
 	}
 	right = append(right, sg("  ", sPlain))
 	right = append(right, statusTag(d.rowState(re, r), r, w < 70, d.now)...)
@@ -366,7 +388,7 @@ func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, depth int, w int) li
 		right = append(right, sg(" "+gHuman+" you", sOrange))
 	}
 	if w >= 70 {
-		right = append(right, notesTag(r)...)
+		right = append(right, commentsTag(r)...)
 	}
 	right = append(right, sg("  ", sPlain))
 	right = append(right, statusTag(d.rowState(re, r), r, w < 70, d.now)...)
@@ -506,12 +528,8 @@ func (m *Model) rowDetail(t *target, w int) []line {
 	if r.ClosedAt != nil {
 		facts = append(facts, "closed "+fmtAgo(*r.ClosedAt, d.now))
 	}
-	switch r.CommentCount {
-	case 0:
-	case 1:
-		facts = append(facts, "1 note")
-	default:
-		facts = append(facts, itoa(r.CommentCount)+" notes")
+	if r.CommentCount > 0 {
+		facts = append(facts, comments(r.CommentCount))
 	}
 	if len(facts) > 0 {
 		out = append(out, line{sg(" "+strings.Join(facts, " "+gDot+" "), sDim)})
@@ -543,6 +561,7 @@ func (m *Model) rowDetail(t *target, w int) []line {
 	} else {
 		out = append(out, line{sg("  No description", sDim)})
 	}
+	out = append(out, notesLines(r, w, sPlain)...)
 	if kids := d.children(re, r.ID); len(kids) > 0 {
 		done, total := d.progress(re, r.ID)
 		head := line{sg(" Children ", sHead)}
@@ -577,7 +596,7 @@ func (m *Model) childLine(re *api.RepoEpics, k *api.EpicRow, w int) line {
 		right = line{sg(" @"+clean(k.Assignee), sCyan)}
 	}
 	if w >= 70 {
-		right = append(right, notesTag(k)...)
+		right = append(right, commentsTag(k)...)
 	}
 	right = append(right, sg("  ", sPlain))
 	right = append(right, statusTag(d.rowState(re, k), k, w < 70, d.now)...)
