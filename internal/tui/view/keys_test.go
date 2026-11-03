@@ -77,7 +77,7 @@ func TestKeyTable(t *testing.T) {
 			want: []Effect{Copy{Ref: "api-9fq", Text: "api-9fq Rotate the staging API key in the vault\n" +
 				"api · due Sun, Nov 1 17:00\n\n" +
 				"The agent cannot reach the vault UI.\n\n1. Open the staging vault.\n2. Rotate `STAGING_API_KEY`.\n3. Run `bd close api-9fq` or tick it here.\n\n" +
-				"Notes:\n- agent: The deploy is blocked on this; everything else is ready."}}},
+				"Notes:\nThe old key expires on Friday.\n\nNotes and replies:\n- agent: The deploy is blocked on this; everything else is ready."}}},
 		{name: "Y on a to-do with sub-tasks", w: 56, sel: "hub/personal/mm-46", keys: []string{"Y"},
 			want: []Effect{Copy{Ref: "mm-46", Text: "mm-46 Buy birthday card for Alex\npersonal · due Thu, Nov 5 9:00 · #errands\n\n" +
 				"Sub-tasks:\n- [ ] mm-47 Choose a card\n- [x] mm-48 Write the card"}}},

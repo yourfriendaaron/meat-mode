@@ -12,6 +12,9 @@ type Item struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
+	// Notes are a tracker item's notes field (bd's notes), read-only in the
+	// app; a hub list's items have none.
+	Notes       string `json:"notes,omitempty"`
 	Status      string `json:"status"` // open, in_progress, blocked, deferred, closed
 	CloseReason string `json:"closeReason,omitempty"`
 	Priority    int    `json:"priority"`

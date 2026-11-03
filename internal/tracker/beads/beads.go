@@ -83,8 +83,9 @@ type Comment struct {
 }
 
 // Fingerprint hashes the listed fields that change when a bead changes. A
-// comment does not bump updated_at, so comment_count is part of it. It is
-// the task's tracker.Issue.Version.
+// comment does not bump updated_at, so comment_count is part of it, and
+// notes are, since an edit within the second leaves updated_at as it was.
+// It is the task's tracker.Issue.Version.
 func (b Bead) Fingerprint() string {
 	labels := slices.Clone(b.Labels)
 	slices.Sort(labels)
@@ -96,7 +97,8 @@ func (b Bead) Fingerprint() string {
 		Metadata          json.RawMessage
 		Updated           time.Time
 		Comments          int
-	}{b.ID, b.Title, b.Status, b.Parent, b.DueAt, b.DeferUntil, labels, b.Metadata, b.UpdatedAt, b.CommentCount})
+		Notes             string
+	}{b.ID, b.Title, b.Status, b.Parent, b.DueAt, b.DeferUntil, labels, b.Metadata, b.UpdatedAt, b.CommentCount, b.Notes})
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
@@ -108,6 +110,7 @@ func (b Bead) Issue() tracker.Issue {
 		ID:          b.ID,
 		Title:       b.Title,
 		Description: b.Description,
+		Notes:       b.Notes,
 		Status:      b.Status,
 		Priority:    b.Priority,
 		Labels:      b.Labels,

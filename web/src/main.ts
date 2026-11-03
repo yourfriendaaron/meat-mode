@@ -1769,7 +1769,10 @@ function writeDetail(el: HTMLElement, item: Item): boolean {
   const chips = editable
     ? att ? `<div class="chips d-chips"><span class="chip chip-new">${ATTENTION_TEXT[att]}</span></div>` : ""
     : `<div class="chips d-chips">${chipsFor(item, { list: true, detail: true })}<code class="bead-id">${esc(item.id)}</code></div>`;
-  const body = editable ? `${scheduleCardHTML(item)}${propsHTML(item)}${detailsHTML(item)}` : why;
+  const notes = !editable && item.notes?.trim()
+    ? `<section class="d-section" aria-labelledby="d-bnotes"><h3 id="d-bnotes">Notes</h3><div class="md">${renderMarkdown(item.notes)}</div></section>`
+    : "";
+  const body = editable ? `${scheduleCardHTML(item)}${propsHTML(item)}${detailsHTML(item)}` : why + notes;
   const html = `<div class="detail-inner" role="region" aria-labelledby="d-title">
 <div class="grip" aria-hidden="true"></div>
 <div class="d-head">${checkButton(item, agent)}${titleHTML(item, editable)}<button class="icon-btn" data-act="close-detail" aria-label="Close details">${ICON.close}</button></div>

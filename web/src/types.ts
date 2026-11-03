@@ -37,6 +37,8 @@ export interface Item {
   id: string;
   title: string;
   description?: string;
+  /** A tracker item's notes field (bd's notes), read-only; absent when it has none. */
+  notes?: string;
   status: string; // open, in_progress, blocked, deferred, closed
   closeReason?: string;
   priority: number;

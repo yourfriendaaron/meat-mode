@@ -149,6 +149,9 @@ type Issue struct {
 	ID          string
 	Title       string
 	Description string
+	// Notes are the tracker's free-text field beside the description
+	// (bd's notes); empty for a tracker without one.
+	Notes       string
 	Status      string // one of the Status constants
 	CloseReason string
 	Priority    int // 0 (highest) to 4, as beads; trackers map theirs
@@ -183,6 +186,7 @@ func (i Issue) Item() api.Item {
 		ID:          i.ID,
 		Title:       i.Title,
 		Description: i.Description,
+		Notes:       i.Notes,
 		Status:      i.Status,
 		CloseReason: i.CloseReason,
 		Priority:    i.Priority,

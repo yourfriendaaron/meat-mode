@@ -481,6 +481,10 @@ func (m *Model) itemDetail(t *target, w int) []line {
 	} else {
 		out = append(out, line{sg("  No description", sDim)})
 	}
+	if strings.TrimSpace(it.Notes) != "" {
+		out = append(out, nil, line{sg(" Notes ", sHead)})
+		out = append(out, textLines(it.Notes, w, sPlain)...)
+	}
 	if subs := subtasksOf(it, d.state.Items); len(subs) > 0 {
 		out = append(out, nil, line{sg(" Sub-tasks ", sHead), sg(subtaskChip(it, d.state.Items), sDim)})
 		for _, s := range subs {
@@ -492,7 +496,7 @@ func (m *Model) itemDetail(t *target, w int) []line {
 		}
 	}
 	if len(it.Comments) > 0 {
-		out = append(out, nil, line{sg(" Notes ", sHead), sg(itoa(len(it.Comments)), sDim)})
+		out = append(out, nil, line{sg(" Notes and replies ", sHead), sg(itoa(len(it.Comments)), sDim)})
 		for _, c := range it.Comments {
 			head := clean(c.Author) + " " + gDot + " " + fmtAgo(c.CreatedAt, d.now)
 			out = append(out, line{sg("  "+gBullet+" ", sAccent), sg(head, sDim)})

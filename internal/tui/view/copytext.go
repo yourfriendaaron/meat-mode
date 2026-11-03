@@ -53,6 +53,9 @@ func (d *data) refFull(t *target) string {
 		if desc := strings.TrimSpace(blockClean(it.Description)); desc != "" {
 			b.WriteString("\n\n" + desc)
 		}
+		if notes := strings.TrimSpace(blockClean(it.Notes)); notes != "" {
+			b.WriteString("\n\nNotes:\n" + notes)
+		}
 		if subs := subtasksOf(it, d.state.Items); len(subs) > 0 {
 			b.WriteString("\n\nSub-tasks:")
 			for _, s := range subs {
@@ -60,7 +63,7 @@ func (d *data) refFull(t *target) string {
 			}
 		}
 		if len(it.Comments) > 0 {
-			b.WriteString("\n\nNotes:")
+			b.WriteString("\n\nNotes and replies:")
 			for _, c := range it.Comments {
 				b.WriteString("\n- " + clean(c.Author) + ": " + strings.Join(paragraphs(c.Text), "\n  "))
 			}

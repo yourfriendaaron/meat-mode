@@ -75,6 +75,16 @@ test("an agent's description renders as Markdown in its run card", async ({ page
   expect(await page.evaluate(() => (window as unknown as { cspViolations: string[] }).cspViolations)).toEqual([]);
 });
 
+test("a tracker item's notes field shows read-only under its own heading, as Markdown", async ({ page, hub }) => {
+  hub.find("home/garden/ga-1")!.notes = "Ask for the **bulk** price.";
+  await openApp(page);
+  await row(page, "Order compost for the beds").locator(".row-body").click();
+  const notes = page.locator('#detail section[aria-labelledby="d-bnotes"]');
+  await expect(notes.locator("h3")).toHaveText("Notes");
+  await expect(notes.locator("strong")).toHaveText("bulk");
+  await expect(page.locator("#d-notes")).toHaveText("Notes and replies");
+});
+
 test("a plain-text description keeps its lines and blank lines", async ({ page, hub }) => {
   hub.find("hub/personal/pe-1")!.description = "Front pots\nBack pots\n\nNot the cactus.";
   await openApp(page);

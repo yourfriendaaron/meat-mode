@@ -11,13 +11,13 @@
   2. Rotate `STAGING_API_KEY`.                          |
   3. Run `bd close api-9fq` or tick it here.            |
                                                         |
- Notes 1                                                |
+ Notes                                                  |
+  The old key expires on Friday.                        |
+                                                        |
+ Notes and replies 1                                    |
   ‣ agent ∙ 1d ago                                      |
     The deploy is blocked on this; everything else is   |
     ready.                                              |
-                                                        |
-                                                        |
-                                                        |
  y copy  Y copy all  x done  s snooze  d won't do  Esc ⋯|
 
 == 89 x 20, layout a
@@ -33,12 +33,12 @@
   2. Rotate `STAGING_API_KEY`.                                                           |
   3. Run `bd close api-9fq` or tick it here.                                             |
                                                                                          |
- Notes 1                                                                                 |
+ Notes                                                                                   |
+  The old key expires on Friday.                                                         |
+                                                                                         |
+ Notes and replies 1                                                                     |
   ‣ agent ∙ 1d ago                                                                       |
     The deploy is blocked on this; everything else is ready.                             |
-                                                                                         |
-                                                                                         |
-                                                                                         |
                                                                                          |
  y copy  Y copy all  x done  s snooze  d won't do  Esc back  ? keys                      |
 
@@ -55,12 +55,12 @@
   2. Rotate `STAGING_API_KEY`.                                                            |
   3. Run `bd close api-9fq` or tick it here.                                              |
                                                                                           |
- Notes 1                                                                                  |
+ Notes                                                                                    |
+  The old key expires on Friday.                                                          |
+                                                                                          |
+ Notes and replies 1                                                                      |
   ‣ agent ∙ 1d ago                                                                        |
     The deploy is blocked on this; everything else is ready.                              |
-                                                                                          |
-                                                                                          |
-                                                                                          |
                                                                                           |
  y copy  Y copy all  x done  s snooze  d won't do  Esc back  ? keys                       |
 
@@ -77,12 +77,12 @@
   2. Rotate `STAGING_API_KEY`.                                                                                                              |
   3. Run `bd close api-9fq` or tick it here.                                                                                                |
                                                                                                                                             |
- Notes 1                                                                                                                                    |
+ Notes                                                                                                                                      |
+  The old key expires on Friday.                                                                                                            |
+                                                                                                                                            |
+ Notes and replies 1                                                                                                                        |
   ‣ agent ∙ 1d ago                                                                                                                          |
     The deploy is blocked on this; everything else is ready.                                                                                |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
                                                                                                                                             |
  y copy  Y copy all  x done  s snooze  d won't do  Esc back  ? keys                                                                         |
 
@@ -99,13 +99,13 @@
   2. Rotate `STAGING_API_KEY`.                          |
   3. Run `bd close api-9fq` or tick it here.            |
                                                         |
- Notes 1                                                |
+ Notes                                                  |
+  The old key expires on Friday.                        |
+                                                        |
+ Notes and replies 1                                    |
   ‣ agent ∙ 1d ago                                      |
     The deploy is blocked on this; everything else is   |
     ready.                                              |
-                                                        |
-                                                        |
-                                                        |
                                                         |
                                                         |
                                                         |
@@ -131,12 +131,12 @@
   2. Rotate `STAGING_API_KEY`.                                                           |
   3. Run `bd close api-9fq` or tick it here.                                             |
                                                                                          |
- Notes 1                                                                                 |
+ Notes                                                                                   |
+  The old key expires on Friday.                                                         |
+                                                                                         |
+ Notes and replies 1                                                                     |
   ‣ agent ∙ 1d ago                                                                       |
     The deploy is blocked on this; everything else is ready.                             |
-                                                                                         |
-                                                                                         |
-                                                                                         |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -163,12 +163,12 @@
   2. Rotate `STAGING_API_KEY`.                                                            |
   3. Run `bd close api-9fq` or tick it here.                                              |
                                                                                           |
- Notes 1                                                                                  |
+ Notes                                                                                    |
+  The old key expires on Friday.                                                          |
+                                                                                          |
+ Notes and replies 1                                                                      |
   ‣ agent ∙ 1d ago                                                                        |
     The deploy is blocked on this; everything else is ready.                              |
-                                                                                          |
-                                                                                          |
-                                                                                          |
                                                                                           |
                                                                                           |
                                                                                           |
@@ -195,12 +195,12 @@
   2. Rotate `STAGING_API_KEY`.                                                                                                              |
   3. Run `bd close api-9fq` or tick it here.                                                                                                |
                                                                                                                                             |
- Notes 1                                                                                                                                    |
+ Notes                                                                                                                                      |
+  The old key expires on Friday.                                                                                                            |
+                                                                                                                                            |
+ Notes and replies 1                                                                                                                        |
   ‣ agent ∙ 1d ago                                                                                                                          |
     The deploy is blocked on this; everything else is ready.                                                                                |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |

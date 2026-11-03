@@ -39,7 +39,8 @@
    "labels": [
     "human"
    ],
-   "description": "The agent cannot reach the vault UI.\n\n1. Open the staging vault.\n2. Rotate `STAGING_API_KEY`.\n3. Run `bd close api-9fq` or tick it here."
+   "description": "The agent cannot reach the vault UI.\n\n1. Open the staging vault.\n2. Rotate `STAGING_API_KEY`.\n3. Run `bd close api-9fq` or tick it here.",
+   "notes": "The old key expires on Friday."
   },
   {
    "key": "hub/personal/mm-44",

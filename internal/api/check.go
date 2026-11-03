@@ -155,6 +155,7 @@ func CheckItems(items []Item) error {
 		it.Title = TruncRunes(it.Title, ItemTitleLimit)
 		it.ParentTitle = TruncRunes(it.ParentTitle, ItemTitleLimit)
 		it.Description = TruncRunes(it.Description, ItemDescriptionLimit)
+		it.Notes = TruncRunes(it.Notes, ItemDescriptionLimit)
 		it.CreatedBy = TruncRunes(it.CreatedBy, CommentAuthorLimit)
 		it.CloseReason = TruncRunes(it.CloseReason, DetailLimit)
 		// A tracker's labels may be longer than an app tag (labels.go), so

@@ -173,6 +173,16 @@ func TestCLI(t *testing.T) {
 	if len(list) != 1 || list[0].Status != "deferred" || list[0].Version == fp {
 		t.Fatalf("after comment and defer: %+v", list)
 	}
+	// A bead's notes reach the item, and changing them changes its version.
+	fp = list[0].Version
+	beadstest.Run(t, dir, "bd", "update", "--notes=Use the rain barrel.", "--json", "--", id)
+	list, _ = c.List(ctx, dir)
+	if len(list) != 1 || list[0].Notes != "Use the rain barrel." || list[0].Version == fp {
+		t.Fatalf("after notes: %+v", list)
+	}
+	if got, err := c.Show(ctx, dir, id); err != nil || got.Notes != "Use the rain barrel." || got.Item().Notes != got.Notes {
+		t.Fatalf("Show notes = %q, %v", got.Notes, err)
+	}
 
 	got, err := c.Show(ctx, dir, id)
 	if err != nil {
