@@ -226,6 +226,12 @@
 .ep-s-deferred {
   font-weight: 500;
 }
+.ep-s-waiting {
+  color: var(--role-due);
+}
+.ep-s-deferred {
+  color: var(--role-dim);
+}
 .ep-s-deferred .ep-sd {
   border-style: dashed;
 }
@@ -245,12 +251,25 @@
   color: var(--role-dim);
   white-space: nowrap;
 }
+/* A card's children by state: each state's dot and count. */
 .ep-hold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.ep-hold.ep-s-waiting {
-  color: var(--role-soft);
+.ep-hold.ep-s-open {
+  color: var(--role-fg);
+}
+/* What a waiting card starts after. */
+.ep-after {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--role-due);
+  white-space: nowrap;
 }
 .ep-waits {
   display: flex;
@@ -439,8 +458,37 @@
 .ep-item[data-depth="3"] {
   --ep-in: 84px;
 }
-.ep-item:first-child {
+.ep-item:first-child,
+.ep-group:first-child {
   border-top: 0;
+}
+/* A group's heading inside a repo's list: what can be done about the cards under it. */
+.ep-group {
+  padding: 10px 12px 4px;
+  border-top: 1px solid var(--role-line);
+  background: var(--role-sunk);
+}
+.ep-group h3 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--role-soft);
+}
+.ep-g-blocked h3 {
+  color: var(--role-urgent);
+}
+.ep-g-moving h3 {
+  color: var(--role-you);
+}
+.ep-g-ready h3 {
+  color: var(--role-fg);
+}
+.ep-g-waiting h3 {
+  color: var(--role-due);
+}
+.ep-g-done h3 {
+  color: var(--role-done);
 }
 .ep-item.is-open,
 .ep-row.is-open {
@@ -572,7 +620,10 @@
 .ep-item > .ep-progress {
   padding: 0 4px 6px 24px;
 }
+/* A run for each state of a card's children; done is the only solid one. */
 .ep-bar {
+  display: flex;
+  gap: 1px;
   flex: 0 1 200px;
   min-width: 30px;
   height: 4px;
@@ -584,9 +635,15 @@
   display: block;
   width: 0;
   height: 100%;
-  border-radius: inherit;
-  background: var(--role-done);
-  opacity: 0.6;
+  background: currentColor;
+  opacity: 0.4;
+}
+.ep-fill.ep-s-closed {
+  opacity: 0.75;
+}
+.ep-fill.ep-s-open {
+  color: var(--role-soft);
+  opacity: 0.3;
 }
 .ep-ptext {
   flex: none;

@@ -51,7 +51,7 @@ To change what a meaning looks like, change the role's line in the token block. 
 | `--role-done` | Done, on, passed or synced. | Checked boxes, the done swipe, switches that are on, the synced dot, passed checks, the day meter under its load. | Show a good outcome with it. | Use it for a date. |
 | `--role-soon` | Due today. | The date chip of a task due today. | Mark a date that is today. | Mark a date that has passed. |
 | `--role-date` | A date with nothing pressing about it. | Date chips for later days, the due chip in quick add, the parsed time in the snooze picker. | Show a plain upcoming date. | Use it for a past or snoozed date. |
-| `--role-due` | Waiting on time, or about to need the user. | The snoozed chip, the snooze swipe and buttons, a day over its load, the sync dot while changes wait or the agent machine is offline. | Show "not now, but soon". | Use it for an error. |
+| `--role-due` | Waiting on time, on another bead, or about to need the user. | The snoozed chip, the snooze swipe and buttons, a day over its load, the sync dot while changes wait or the agent machine is offline, and on Epics a waiting bead, its "after" and its group. | Show "not now, but soon". | Use it for an error. |
 | `--role-overdue` | Past its due time. | The Past due heading, overdue date chips. | Mark what is late. | Use it for a destructive button. |
 | `--role-stopped` | An agent run stopped before it finished. | A stopped run's line of text. | Pair it with the stopped run surface. | Use it for an error the user caused. |
 | `--role-error` | Something failed or is not valid. | Error messages, failed actions, invalid input. | Explain what went wrong next to it. | Use it for overdue tasks. |

@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  directBlockers,
+  tier,
+  unlocks,
   attention,
   chipsHTML,
   clearFilters,
@@ -71,7 +74,7 @@ test("progress is closed direct children over all, rounded down", () => {
   assert.equal(progress([row("a", { status: "deferred" }), row("b", { status: "in_progress" })]).done, 0);
 });
 
-test("cards and top-level tasks are peers: by priority, then status, then most recently updated", () => {
+test("cards go under their groups, then the top-level tasks; each by priority, then status, then most recently updated", () => {
   const r = repo([
     row("gd-1", { epic: true, status: "open", priority: 1 }),
     row("gd-2", { priority: 1, status: "blocked" }),
@@ -82,8 +85,12 @@ test("cards and top-level tasks are peers: by priority, then status, then most r
     row("gd-10", { priority: 2, updatedAt: "2026-10-12T09:00:00Z" }),
     row("gd-7", { priority: 1, status: "closed", epic: true }),
   ]);
-  assert.deepEqual(ids(r), ["gd-4", "gd-2", "gd-3", "gd-1", "gd-7", "gd-6", "gd-5", "gd-10"]);
+  assert.deepEqual(ids(r), ["gd-3", "gd-1", "gd-6", "gd-7", "gd-4", "gd-2", "gd-5", "gd-10"]);
   const o = outline(shownRows(r, none), ui());
+  assert.deepEqual(
+    o.entries.map((e) => e.group),
+    ["moving", "ready", "ready", "done", "task", "task", "task", "task"],
+  );
   assert.deepEqual([o.epics, o.tasks, o.open], [4, 4, 7]);
 });
 
@@ -98,10 +105,10 @@ test("the View menu's sorts: status, progress (least done first) and last update
     row("gd-4", { priority: 1, status: "blocked", updatedAt: "2026-10-14T08:00:00Z" }),
     row("gd-5", { priority: 4, status: "in_progress", updatedAt: "2026-10-14T09:30:00Z" }),
   ]);
-  assert.deepEqual(ids(r, ui({ sort: "status" })), ["gd-4", "gd-5", "gd-3", "gd-1", "gd-2"]);
+  assert.deepEqual(ids(r, ui({ sort: "status" })), ["gd-3", "gd-1", "gd-2", "gd-4", "gd-5"]);
   // A card with no children, and a task, after the cards with some.
   assert.deepEqual(ids(r, ui({ sort: "progress" })), ["gd-2", "gd-1", "gd-3", "gd-4", "gd-5"]);
-  assert.deepEqual(ids(r, ui({ sort: "updated" })), ["gd-5", "gd-1", "gd-2", "gd-3", "gd-4"]);
+  assert.deepEqual(ids(r, ui({ sort: "updated" })), ["gd-1", "gd-2", "gd-3", "gd-5", "gd-4"]);
 });
 
 test("a card's children sort the same way, closed ones last", () => {
@@ -147,24 +154,32 @@ test("a nested card follows its parent one level in, shown once; a row whose par
   assert.deepEqual(
     o.entries.map((e) => [e.row.id, e.card, e.depth]),
     [
-      ["gd-5", false, 0],
-      ["gd-6", false, 0],
       ["gd-1", true, 0],
       ["gd-1.1", true, 1],
+      ["gd-5", false, 0],
+      ["gd-6", false, 0],
+    ],
+  );
+  // The nested card goes in its parent's group and says its own state.
+  assert.deepEqual(
+    o.entries.slice(0, 2).map((e) => [e.group, e.own]),
+    [
+      ["deferred", "deferred"],
+      ["deferred", "ready"],
     ],
   );
   assert.equal(o.epics, 2);
   // Progress counts every direct child; the open parent lists only its tasks.
   assert.deepEqual(
-    o.entries[2].children.map((c) => c.id),
+    o.entries[0].children.map((c) => c.id),
     ["gd-1.1", "gd-1.2"],
   );
   assert.deepEqual(
-    o.entries[2].shown.map((c) => c.id),
+    o.entries[0].shown.map((c) => c.id),
     ["gd-1.2"],
   );
-  assert.equal(progressText(o.entries[2].progress), "50% 1/2 done");
-  assert.equal(progressText(o.entries[3].progress), "100% 1/1 done");
+  assert.equal(progressText(o.entries[0].progress), "50% 1/2 done");
+  assert.equal(progressText(o.entries[1].progress), "100% 1/1 done");
 });
 
 test("a search inside a nested card keeps its parent above it", () => {
@@ -320,7 +335,10 @@ test("the view draws each repo's heading with its mark, counts and fold, its row
   assert.match(shut, /^<section class="ep-attn"[^]*Needs attention <span class="group-count">1<\/span>/);
 
   const open = view(data, { expanded: new Set(["home/projects/garden/gd-1"]) });
-  assert.match(open, /aria-expanded="true" aria-controls="ep-kids-0-1"/);
+  assert.match(open, /aria-expanded="true" aria-controls="ep-kids-0-0"/);
+  // A group heading leads its cards, and the tasks outside any epic come last.
+  assert.match(shut, /<li class="ep-group ep-g-ready"><h3>Ready to start <span class="group-count">1<\/span><\/h3><\/li><li class="ep-item is-card"/);
+  assert.match(shut, /<h3>No epic <span class="group-count">1<\/span><\/h3>[^]*Fix the &lt;gate&gt;/);
   assert.match(open, /<span class="ep-who">sam<\/span>/);
   // A folded repo keeps its heading only.
   const folded = view(data, { folded: new Set(["home/projects/garden"]) });
@@ -471,5 +489,45 @@ test("a waiting row's Details list what it waits on, and a card counts what its 
   assert.match(html, /<dt>Waiting on<\/dt>.*Task gd-1\.2/s);
   assert.match(html, /<dt>Notes<\/dt><dd>2<\/dd>/);
   const list = epicsHTML({ data, error: "", ui: ui(), find: none, repos: [], open: null, now });
-  assert.match(list, /1 blocked<\/span><span class="ep-hold ep-s-waiting">1 waiting/);
+  assert.match(list, /title="1 blocked">.*1<span class="sr"> blocked<\/span><\/span><span class="ep-hold ep-s-waiting" title="1 waiting">/);
+});
+
+test("waiting cards run in the order they can start, each after the one bead that holds it up", () => {
+  const r = repo([
+    row("gd-1", { epic: true, priority: 1, title: "Clear the beds" }),
+    row("gd-1.1", { parent: "gd-1", status: "in_progress" }),
+    row("gd-2", { epic: true, priority: 2, blockedBy: ["gd-1"], title: "Plant the bulbs" }),
+    row("gd-3", { epic: true, priority: 2, blockedBy: ["gd-1", "gd-2"], title: "Water the plants" }),
+    row("gd-4", { epic: true, priority: 0, blockedBy: ["gd-1", "gd-3", "gd-2"], title: "Paint the fence" }),
+  ]);
+  const rows = shownRows(r, none);
+  assert.deepEqual(directBlockers(rows, rows[4]), ["gd-3"]);
+  assert.deepEqual([1, 2, 3, 4].map((n) => tier(rows, `gd-${n}`)), [1, 2, 3, 4]);
+  assert.deepEqual(unlocks(rows, "gd-2").map((x) => x.id), ["gd-3"]);
+  // gd-4 is Critical, but waits on the others.
+  const o = outline(rows, ui());
+  assert.deepEqual(
+    o.entries.map((e) => [e.row.id, e.group]),
+    [
+      ["gd-1", "moving"],
+      ["gd-2", "waiting"],
+      ["gd-3", "waiting"],
+      ["gd-4", "waiting"],
+    ],
+  );
+  const data: Epics = { repos: [r] };
+  const list = epicsHTML({ data, error: "", ui: ui(), find: none, repos: [], open: null, now });
+  assert.match(list, /<h3>Waiting on another epic <span class="group-count">3<\/span>/);
+  assert.match(list, /<span class="ep-after">after gd-3<\/span>/);
+  // A card's own status is its group's heading, not a pill on its line.
+  assert.doesNotMatch(list, /data-ep="home\/projects\/garden\/gd-4"><div class="ep-line">[^]*?ep-st ep-s-waiting[^]*?<\/div>/);
+  const html = epicDetailHTML(findRow(data, "home/projects/garden/gd-3", none)!, { data, find: none, repos: [], now });
+  assert.match(html, /<dt>Starts after<\/dt><dd><code class="ep-id">gd-2<\/code><\/dd>/);
+  assert.match(html, /<dt>Unlocks<\/dt>.*Paint the fence/s);
+});
+
+test("a cycle of waits still names a blocker and ends its step count", () => {
+  const rows = [row("gd-1", { epic: true, blockedBy: ["gd-2", "gd-3"] }), row("gd-2", { epic: true, blockedBy: ["gd-3"] }), row("gd-3", { epic: true, blockedBy: ["gd-1"] })];
+  assert.ok(directBlockers(rows, rows[0]).length > 0);
+  assert.ok(tier(rows, "gd-1") <= rows.length + 1);
 });

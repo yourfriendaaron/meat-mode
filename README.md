@@ -80,7 +80,9 @@ Agents work only where you let them. They start off in every repo, and you switc
 
 ### See where your agents' epics stand
 
-If you plan agent work as epics with tasks under them, the **Epics** view shows each repo's open epics as cards, with how many of their tasks are done ("85% 6/7 done"). Open a card to list its tasks, with each one's type, priority and assignee, or tap **Details** to read the epic. The repo's open tasks outside any epic sit under **Other tasks**. The view is read-only: it never adds to Today, your reminders or your notifications. A task in an epic that is also for you opens as that task, with all its buttons. You switch a repo's epics on and off in Settings, under the repo, beside its sync switch, or at the agent machine with `meat-mode bridge epics on <repo>`.
+If you plan agent work as epics with tasks under them, the **Epics** view shows each repo's open epics as cards, grouped by what you can do about them: **Blocked**, **Moving**, **Ready to start**, **Waiting on another epic** and **Deferred**. Each card's bar shows its tasks by state, done in green ("85% 6/7 done"). A card that waits on others names the one it starts after ("after gd-3"), and the waiting ones run in the order they can start.
+
+Open a card to list its tasks, with each one's type, priority and assignee, or tap **Details** to read the epic and see what it unlocks. The repo's open tasks outside any epic sit under **No epic**. The view is read-only: it never adds to Today, your reminders or your notifications. A task in an epic that is also for you opens as that task, with all its buttons. You switch a repo's epics on and off in Settings, under the repo, beside its sync switch, or at the agent machine with `meat-mode bridge epics on <repo>`.
 
 ### Watch it from a terminal
 

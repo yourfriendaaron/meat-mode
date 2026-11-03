@@ -238,12 +238,98 @@ export function sorter(sort: EpicsSort, percent: (r: EpicRow) => number | undefi
   }
 }
 
+/** The groups a repo's cards show under, in order, then its top-level tasks. */
+export const EPIC_GROUPS = [
+  ["blocked", "Blocked"],
+  ["moving", "Moving"],
+  ["ready", "Ready to start"],
+  ["waiting", "Waiting on another epic"],
+  ["deferred", "Deferred"],
+  ["done", "Done"],
+  ["task", "No epic"],
+] as const;
+export type EpicGroup = (typeof EPIC_GROUPS)[number][0];
+const GROUP_RANK = new Map<string, number>(EPIC_GROUPS.map(([g], i) => [g, i]));
+
+/**
+ * The group a card shows under: its own state, and for an open card Moving
+ * when a child is in progress, else Ready to start (the terminal viewer's
+ * cardGroup).
+ */
+export function cardGroup(r: EpicRow, kids: EpicRow[]): EpicGroup {
+  switch (r.status) {
+    case "blocked":
+      return "blocked";
+    case "in_progress":
+      return "moving";
+    case "waiting":
+      return "waiting";
+    case "deferred":
+      return "deferred";
+    case "closed":
+      return "done";
+  }
+  return kids.some((k) => k.status === "in_progress") ? "moving" : "ready";
+}
+
+function blockerMap(rows: EpicRow[]): Map<string, string[]> {
+  return new Map(rows.filter((r) => r.blockedBy?.length).map((r) => [r.id, r.blockedBy ?? []]));
+}
+
+/**
+ * The beads a row waits on that are not also waited on through another of
+ * them: a bead waiting on gd-1, gd-2 and gd-3, where gd-3 waits on the
+ * other two, starts "after gd-3". A cycle names them all.
+ */
+export function directBlockers(rows: EpicRow[], r: EpicRow, by = blockerMap(rows)): string[] {
+  const on = r.blockedBy ?? [];
+  if (on.length < 2) return on;
+  const reach = (from: string): Set<string> => {
+    const seen = new Set<string>();
+    const stack = [...(by.get(from) ?? [])];
+    while (stack.length) {
+      const id = stack.pop() as string;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      stack.push(...(by.get(id) ?? []));
+    }
+    return seen;
+  };
+  const out = on.filter((b) => !on.some((o) => o !== b && reach(o).has(b)));
+  return out.length ? out : on;
+}
+
+/** A row's step in the order of work: 1 when it waits on nothing, else one more than the latest step it waits on. */
+export function tier(rows: EpicRow[], id: string, by = blockerMap(rows)): number {
+  const memo = new Map<string, number>();
+  const walk = (id: string, depth: number): number => {
+    const known = memo.get(id);
+    if (known !== undefined) return known;
+    memo.set(id, 1);
+    let t = 1;
+    if (depth < rows.length) for (const b of by.get(id) ?? []) t = Math.max(t, walk(b, depth + 1) + 1);
+    memo.set(id, t);
+    return t;
+  };
+  return walk(id, 0);
+}
+
+/** The cards not closed that wait directly on id. */
+export function unlocks(rows: EpicRow[], id: string): EpicRow[] {
+  const by = blockerMap(rows);
+  return rows.filter((r) => r.epic && r.id !== id && r.status !== "closed" && directBlockers(rows, r, by).includes(id));
+}
+
 /** One entry of a repo's list: an epic card or a top-level task. */
 export interface Entry {
   row: ShownRow;
   card: boolean;
   /** How many cards it sits under: 0 at the top, 1 for a card nested in a top-level card. */
   depth: number;
+  /** The group it shows under: its top-level card's, or "task" for a top-level task. */
+  group: EpicGroup;
+  /** Its own group, which a nested card shows as a status when it differs. */
+  own: EpicGroup;
   /** Every direct child of a card, sorted, closed ones last, nested cards included. */
   children: ShownRow[];
   /**
@@ -267,13 +353,15 @@ export interface Outline {
 }
 
 /**
- * Lays out a repo's rows as one list of epic cards and top-level tasks,
- * peers sorted together. A card nested in another follows its parent, one
- * level deeper, whether or not the parent is open; it shows once, never
- * also among its parent's tasks. A row whose parent names no card is a
- * top-level task, as the hub would have cleared that parent. While a search
- * or filter is on, a card shows when it or any child matches, or when a
- * card nested in it shows, with only the matching children, opened.
+ * Lays out a repo's rows as epic cards under their groups (EPIC_GROUPS),
+ * sorted within each, then the top-level tasks. Waiting cards go in the
+ * order they can start. A card nested in another follows its parent, one
+ * level deeper and in its group, whether or not the parent is open; it
+ * shows once, never also among its parent's tasks. A row whose parent
+ * names no card is a top-level task, as the hub would have cleared that
+ * parent. While a search or filter is on, a card shows when it or any child
+ * matches, or when a card nested in it shows, with only the matching
+ * children, opened.
  */
 export function outline(rows: ShownRow[], ui: EpicsUI): Outline {
   const cardIds = new Set(rows.filter((r) => r.epic).map((r) => r.id));
@@ -292,18 +380,22 @@ export function outline(rows: ShownRow[], ui: EpicsUI): Outline {
   const top = rows.filter((r) => !r.parent || !cardIds.has(r.parent) || r.parent === r.id).sort(order);
   const narrowed = filtering(ui);
   const entries: Entry[] = [];
-  const add = (row: ShownRow, depth: number) => {
+  const groupOf = (r: ShownRow): EpicGroup => (r.epic ? cardGroup(r, kids.get(r.id) ?? []) : "task");
+  const add = (row: ShownRow, depth: number, group: EpicGroup) => {
     const at = entries.length;
     const card = !!row.epic;
     const children = card ? [...(kids.get(row.id) ?? [])].sort(childOrder) : [];
     const tasks = children.filter((c) => !c.epic);
     const shown = narrowed ? tasks.filter((c) => matches(c, ui)) : tasks;
     const open = narrowed && shown.length ? !ui.shut.has(row.key) : ui.expanded.has(row.key);
-    entries.push({ row, card, depth, children, shown, progress: prog.get(row.id) ?? progress([]), open });
-    if (depth < cardIds.size) for (const c of [...children].filter((c) => c.epic).sort(order)) add(c, depth + 1);
+    entries.push({ row, card, depth, group, own: groupOf(row), children, shown, progress: prog.get(row.id) ?? progress([]), open });
+    if (depth < cardIds.size) for (const c of [...children].filter((c) => c.epic).sort(order)) add(c, depth + 1, group);
     if (narrowed && !matches(row, ui) && !shown.length && entries.length === at + 1) entries.pop();
   };
-  for (const row of top) add(row, 0);
+  const by = blockerMap(rows);
+  const rank = (r: ShownRow) => GROUP_RANK.get(groupOf(r)) ?? 0;
+  const step = (r: ShownRow) => (groupOf(r) === "waiting" ? tier(rows, r.id, by) : 0);
+  for (const row of [...top].sort((a, b) => rank(a) - rank(b) || step(a) - step(b))) add(row, 0, groupOf(row));
   const epics = entries.filter((e) => e.card).length;
   return { entries, epics, tasks: entries.length - epics, open: rows.filter((r) => r.status !== "closed").length };
 }
@@ -362,7 +454,7 @@ export interface EpicsView {
 }
 
 /**
- * A row's state as the terminal viewer writes it: "Waiting on as-7om +2"
+ * A row's state as the terminal viewer writes it: "Waiting on gd-3 +2"
  * names the first bead it waits on, "Deferred to Nov 24" its wake date.
  */
 export function statusLabel(r: Pick<EpicRow, "status" | "blockedBy" | "deferUntil">, now: Date): string {
@@ -387,14 +479,33 @@ function notesPill(r: EpicRow): string {
   return n > 0 ? `<span class="ep-notes">${n === 1 ? "1 note" : `${n} notes`}</span>` : "";
 }
 
-/** What a card's tasks hold up: "1 blocked" and "3 waiting", or nothing. */
+/** The order and words of a card's children by state, in its bar and counts. */
+const CHILD_STATES = [
+  ["closed", "done"],
+  ["in_progress", "in progress"],
+  ["blocked", "blocked"],
+  ["waiting", "waiting"],
+  ["open", "open"],
+  ["deferred", "deferred"],
+] as const;
+
+function countStates(children: EpicRow[]): Map<string, number> {
+  const n = new Map<string, number>();
+  for (const c of children) {
+    const k = knownStatus(c.status);
+    n.set(k, (n.get(k) ?? 0) + 1);
+  }
+  return n;
+}
+
+/** A card's children by state, each its dot and count, done last: the terminal viewer's "◒2 ⊘1 ✓4". */
 function holdsHTML(children: EpicRow[]): string {
-  const blocked = children.filter((c) => c.status === "blocked").length;
-  const waiting = children.filter((c) => c.status === "waiting").length;
-  return (
-    (blocked ? `<span class="ep-hold ep-s-blocked">${blocked} blocked</span>` : "") +
-    (waiting ? `<span class="ep-hold ep-s-waiting">${waiting} waiting</span>` : "")
-  );
+  const n = countStates(children);
+  const order = [...CHILD_STATES.slice(1), CHILD_STATES[0]];
+  return order
+    .filter(([s]) => n.get(s))
+    .map(([s, words]) => `<span class="ep-hold ep-s-${s}" title="${n.get(s)} ${words}"><span class="ep-sd" aria-hidden="true"></span>${n.get(s)}<span class="sr"> ${words}</span></span>`)
+    .join("");
 }
 
 /** A priority in words: Critical red and High yellow, the rest plain. */
@@ -423,19 +534,31 @@ function copyButton(id: string): string {
   return `<button class="icon-btn ep-copy" data-act="epic-copy" data-id="${esc(id)}" aria-label="Copy id ${esc(id)}" title="Copy id">${ICON.copy}</button>`;
 }
 
-function bar(p: Progress): string {
-  return `<span class="ep-bar" aria-hidden="true"><span class="ep-fill" data-pct="${p.percent}"></span></span>`;
+/** A card's bar: a run for each state of its children, done first in green, then in progress, blocked, waiting, open and deferred. */
+function bar(children: EpicRow[]): string {
+  const n = countStates(children);
+  const total = children.length;
+  const runs = total
+    ? CHILD_STATES.filter(([s]) => n.get(s)).map(([s]) => `<span class="ep-fill ep-s-${s}" data-pct="${(((n.get(s) ?? 0) * 100) / total).toFixed(2)}"></span>`)
+    : [];
+  return `<span class="ep-bar" aria-hidden="true">${runs.join("")}</span>`;
+}
+
+/** "after gd-3": the bead a waiting card starts after. */
+function afterHTML(rows: EpicRow[], r: EpicRow): string {
+  if (r.status !== "waiting") return "";
+  return `<span class="ep-after">after ${esc(directBlockers(rows, r).join(", "))}</span>`;
 }
 
 const ALSO_YOURS = '<span class="ep-human">Also your task</span>';
 
 /**
  * A row's one line: type, id and title as the button that opens its
- * Details, then notes, status, priority, assignee and Copy id. A card shows
- * its status only when it is not open, as the terminal viewer does.
+ * Details, then notes, status, priority, assignee and Copy id. A card's
+ * group says its status, so its line does not.
  */
 function lineHTML(r: ShownRow, now: Date, card = false): string {
-  const status = card && r.status === "open" ? "" : statusPill(r.status, r, now);
+  const status = card ? "" : statusPill(r.status, r, now);
   const meta = `${r.item ? ALSO_YOURS : ""}${notesPill(r)}${status}${priorityPill(r.priority)}${r.assignee ? `<span class="ep-who">${esc(r.assignee)}</span>` : ""}`;
   return `<div class="ep-line"><button class="ep-main" data-act="ep-open" data-key="${esc(r.key)}">${typeIcon(r)}<code class="ep-id">${esc(r.id)}</code><span class="ep-title">${esc(r.title)}</span></button><span class="ep-meta">${meta}</span>${copyButton(r.id)}</div>`;
 }
@@ -444,7 +567,7 @@ function rowClass(r: ShownRow, open: string | null): string {
   return `${r.status === "closed" ? " is-done" : ""}${open === r.key ? " is-open" : ""}`;
 }
 
-function entryHTML(e: Entry, v: EpicsView, n: string): string {
+function entryHTML(e: Entry, v: EpicsView, n: string, rows: EpicRow[]): string {
   const r = e.row;
   let extra = "";
   if (e.card) {
@@ -455,7 +578,8 @@ function entryHTML(e: Entry, v: EpicsView, n: string): string {
     const kids = e.shown.length
       ? `<ul class="ep-kids" id="${kidsId}" aria-label="Tasks of ${esc(r.id)}">${e.shown.map((k) => `<li class="ep-row${rowClass(k, v.open)}">${lineHTML(k, v.now)}</li>`).join("")}</ul>`
       : `<p class="muted small ep-none ep-kids" id="${kidsId}">${total ? "No tasks match the filters." : "No tasks yet."}</p>`;
-    extra = `<div class="ep-progress">${bar(e.progress)}<span class="ep-ptext">${esc(progressText(e.progress))}</span>${holdsHTML(e.children)}${toggle}</div>${e.open ? kids : ""}`;
+    const own = e.own !== e.group ? statusPill(r.status, r, v.now) : "";
+    extra = `<div class="ep-progress">${bar(e.children)}<span class="ep-ptext">${esc(progressText(e.progress))}</span>${own}${afterHTML(rows, r)}${holdsHTML(e.children)}${toggle}</div>${e.open ? kids : ""}`;
   }
   const depth = e.depth ? ` data-depth="${Math.min(e.depth, 3)}"` : "";
   return `<li class="ep-item${e.card ? " is-card" : ""}${rowClass(r, v.open)}" data-ep="${esc(r.key)}"${depth}>${lineHTML(r, v.now, e.card)}${extra}</li>`;
@@ -490,8 +614,17 @@ function repoHTML(r: RepoEpics, i: number, v: EpicsView, all: RepoEpics[]): stri
     .join(" · ");
   let body = "";
   if (!folded) {
+    const rows = shownRows(r, v.find);
+    const groupLabel = new Map<string, string>(EPIC_GROUPS);
+    const items = o.entries.map((e, j) => {
+      const head =
+        j === 0 || o.entries[j - 1].group !== e.group
+          ? `<li class="ep-group ep-g-${e.group}"><h3>${esc(groupLabel.get(e.group) ?? "")} <span class="group-count">${o.entries.filter((x) => x.group === e.group).length}</span></h3></li>`
+          : "";
+      return head + entryHTML(e, v, `${i}-${j}`, rows);
+    });
     body = o.entries.length
-      ? `<ul class="ep-list" id="${bodyId}">${o.entries.map((e, j) => entryHTML(e, v, `${i}-${j}`)).join("")}</ul>`
+      ? `<ul class="ep-list" id="${bodyId}">${items.join("")}</ul>`
       : `<p class="muted ep-none" id="${bodyId}">${filtering(v.ui) ? "Nothing here matches." : "Nothing open."}</p>`;
   }
   const fold = `<button class="icon-btn ep-fold" data-act="ep-fold" data-v="${esc(key)}" aria-expanded="${!folded}"${folded ? "" : ` aria-controls="${bodyId}"`} aria-label="${folded ? "Show" : "Hide"} ${esc(label)}">${ICON.right}</button>`;
@@ -696,7 +829,7 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
   ];
   if (r.epic) {
     const p = progress(kids);
-    facts.push(["Progress", `<span class="ep-progress">${bar(p)}<span class="ep-ptext">${esc(progressText(p))}</span></span>`]);
+    facts.push(["Progress", `<span class="ep-progress">${bar(kids)}<span class="ep-ptext">${esc(progressText(p))}</span>${holdsHTML(kids)}</span>`]);
   }
   const waits = r.status === "waiting" ? (r.blockedBy ?? []) : [];
   if (waits.length) {
@@ -707,6 +840,13 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
         : `<code class="ep-id">${esc(id)}</code>`;
     });
     facts.push(["Waiting on", `<span class="ep-waits">${links.join("")}</span>`]);
+    const after = directBlockers(rows, r);
+    if (after.length < waits.length) facts.push(["Starts after", after.map((id) => `<code class="ep-id">${esc(id)}</code>`).join(" ")]);
+  }
+  const next = r.epic && r.status !== "closed" ? unlocks(rows, r.id) : [];
+  if (next.length) {
+    const links = next.map((b) => `<button class="ep-link ep-wait" data-act="ep-open" data-key="${esc((b as ShownRow).key)}">${statusPill(b.status)}<span>${esc(b.title)}</span><code class="ep-id">${esc(b.id)}</code></button>`);
+    facts.push(["Unlocks", `<span class="ep-waits">${links.join("")}</span>`]);
   }
   if ((r.commentCount ?? 0) > 0) facts.push(["Notes", esc(String(r.commentCount))]);
   if (parent) facts.push(["Epic", `<button class="ep-link" data-act="ep-open" data-key="${esc(parent.key)}">${esc(parent.title)}</button>`]);

@@ -84,7 +84,7 @@ test.describe("desktop", () => {
     await expect(page.locator("#ep-chips")).toBeHidden();
   });
 
-  test("cards and tasks are peer rows; a card shows its progress, expands, and opens its Details", async ({ page, hub }) => {
+  test("cards sit under their groups, then the tasks; a card shows its progress, expands, and opens its Details", async ({ page, hub }) => {
     withEpics(hub);
     await openApp(page);
     await openEpics(page);
@@ -92,11 +92,13 @@ test.describe("desktop", () => {
     const repo = page.locator("#epics .ep-repo");
     await expect(repo.getByRole("heading", { level: 2, name: "garden" })).toBeVisible();
     await expect(repo.locator(".ep-sum")).toHaveText("3 epics, 2 tasks, 8 open · Synced 5m ago");
-    // By priority, then status, then most recently updated; cards and tasks together.
-    await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["ga-10", "ga-31", "ga-20", "ga-20.1", "ga-30"]);
+    // Cards under their groups, a nested card with its parent, then the tasks by priority.
+    await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["ga-10", "ga-20", "ga-20.1", "ga-31", "ga-30"]);
+    await expect(page.locator("#epics .ep-group h3")).toHaveText(["Moving 1", "Ready to start 2", "No epic 2"]);
 
     const planting = entry(page, "ga-10");
-    await expect(planting.locator("> .ep-line .ep-st")).toHaveText("In progress");
+    // The group says the card's state, so its line does not.
+    await expect(planting.locator("> .ep-line .ep-st")).toHaveCount(0);
     await expect(planting.locator("> .ep-line .ep-pri")).toHaveText("High");
     await expect(planting.locator("> .ep-line .ep-pri")).toHaveClass(/ep-p1/);
     await expect(planting.locator(".ep-ptext")).toHaveText("85% 6/7 done");
@@ -153,7 +155,7 @@ test.describe("desktop", () => {
     await openApp(page);
     await openEpics(page);
     const planting = entry(page, "ga-10");
-    await expect(planting.locator("> .ep-progress .ep-hold")).toHaveText(["1 waiting"]);
+    await expect(planting.locator("> .ep-progress .ep-hold")).toHaveText(["1 waiting", "6 done"]);
     await planting.locator("> .ep-progress .ep-kids-btn").click();
     const tulips = planting.locator(".ep-row", { hasText: "ga-10.7" });
     await expect(tulips.locator(".ep-st")).toHaveText("Waiting on ga-20.2");
@@ -293,8 +295,8 @@ test.describe("desktop", () => {
     await page.locator("#ep-mb-view").click();
     await page.getByRole("menuitemradio", { name: "Progress" }).click();
     await expect(page.getByRole("menu")).toHaveCount(0);
-    // Least done first, a nested card after its parent; tasks after the cards.
-    await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["ga-20", "ga-20.1", "ga-10", "ga-31", "ga-30"]);
+    // Least done first within a group, a nested card after its parent; tasks after the cards.
+    await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["ga-10", "ga-20", "ga-20.1", "ga-31", "ga-30"]);
 
     // The keyboard moves through a menu.
     await page.locator("#ep-mb-view").focus();
