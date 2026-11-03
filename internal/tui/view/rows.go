@@ -99,7 +99,8 @@ func (d *data) children(re *api.RepoEpics, id string) []*api.EpicRow {
 	return out
 }
 
-// statusRank orders statuses: blocked, in progress, open, deferred, then closed.
+// statusRank orders row states by what needs a hand first, as the web's
+// NEED_RANK: blocked, in progress, open, waiting, deferred, then closed.
 func statusRank(s string) int {
 	switch s {
 	case "blocked":
@@ -108,10 +109,22 @@ func statusRank(s string) int {
 		return 1
 	case "open":
 		return 2
-	case "deferred":
+	case "waiting":
 		return 3
+	case "deferred":
+		return 4
 	}
-	return 4
+	return 5
+}
+
+// rowState is the state a row shows: its status, or "waiting" for an open
+// bead that waits on another.
+func (d *data) rowState(re *api.RepoEpics, r *api.EpicRow) string {
+	s := d.rowStatus(re, r)
+	if s == "open" && len(r.BlockedBy) > 0 {
+		return "waiting"
+	}
+	return s
 }
 
 // rowStatus is the status a row shows: its item's when it acts as one.
@@ -137,7 +150,7 @@ func (d *data) rowTitle(re *api.RepoEpics, r *api.EpicRow) string {
 // status, then the most recently updated.
 func (d *data) sortRows(re *api.RepoEpics, rows []*api.EpicRow) {
 	slices.SortStableFunc(rows, func(a, b *api.EpicRow) int {
-		sa, sb := d.rowStatus(re, a), d.rowStatus(re, b)
+		sa, sb := d.rowState(re, a), d.rowState(re, b)
 		return cmp.Or(
 			cmp.Compare(boolInt(sa == "closed"), boolInt(sb == "closed")),
 			cmp.Compare(a.Priority, b.Priority),
@@ -424,7 +437,7 @@ func (d *data) allRows(q string) (rows []row, hidden int) {
 
 // drillStatuses are the groups of a drilled card's children.
 var drillStatuses = []struct{ status, label string }{
-	{"blocked", "Blocked"}, {"in_progress", "In progress"}, {"open", "Open"}, {"deferred", "Deferred"}, {"closed", "Done"},
+	{"blocked", "Blocked"}, {"in_progress", "In progress"}, {"open", "Open"}, {"waiting", "Waiting"}, {"deferred", "Deferred"}, {"closed", "Closed"},
 }
 
 // drillRows are a card's children grouped by status, under its bar and
@@ -444,7 +457,7 @@ func (d *data) drillRows(q string, t *target, w int) []row {
 	for _, st := range drillStatuses {
 		var g []*api.EpicRow
 		for _, k := range kids {
-			if d.rowStatus(re, k) == st.status && matches(q, d.rowTitle(re, k), k.ID) {
+			if d.rowState(re, k) == st.status && matches(q, d.rowTitle(re, k), k.ID) {
 				g = append(g, k)
 			}
 		}

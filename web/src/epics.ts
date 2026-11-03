@@ -5,7 +5,7 @@
 // is Critical or Blocked, and Details show any row. The filtering, ordering,
 // progress and HTML are pure; main.ts holds the state and wires the events.
 
-import { fmtAgo, fmtWhenAt } from "./dates.ts";
+import { fmtAgo, fmtDate, fmtWhenAt } from "./dates.ts";
 import { esc } from "./html.ts";
 import { ICON } from "./icons.ts";
 import { listBadge, listColourClass } from "./identity.ts";
@@ -16,19 +16,23 @@ import type { EpicRow, Epics, Item, Repo, RepoEpics } from "./types.ts";
 /** P0 to P4 by name. */
 export const PRIORITY_NAMES = ["Critical", "High", "Medium", "Low", "Backlog"];
 
-/** The five statuses, in the order the Filter menu lists them. */
-export const STATUSES = ["open", "in_progress", "blocked", "deferred", "closed"] as const;
+/**
+ * The states a row shows, in the order the Filter menu lists them: the
+ * tracker's five, and waiting, an open bead that waits on another.
+ */
+export const STATUSES = ["open", "in_progress", "blocked", "waiting", "deferred", "closed"] as const;
 
 const STATUS_NAMES: Record<string, string> = {
   open: "Open",
   in_progress: "In progress",
   blocked: "Blocked",
+  waiting: "Waiting",
   deferred: "Deferred",
   closed: "Closed",
 };
 
-/** What needs a hand first: blocked, in progress, open, deferred, then closed. */
-const NEED_RANK: Record<string, number> = { blocked: 0, in_progress: 1, open: 2, deferred: 3, closed: 4 };
+/** What needs a hand first: blocked, in progress, open, waiting, deferred, then closed. */
+const NEED_RANK: Record<string, number> = { blocked: 0, in_progress: 1, open: 2, waiting: 3, deferred: 4, closed: 5 };
 
 export function priorityName(p: number): string {
   return PRIORITY_NAMES[clampPriority(p)] ?? "Medium";
@@ -99,13 +103,18 @@ export interface ShownRow extends EpicRow {
   item: boolean;
 }
 
-/** The repo's rows, each with its key and, for a human row, its State item's title and status. */
+/**
+ * The repo's rows, each with its key and, for a human row, its State item's
+ * title and status. An open row that waits on another bead shows as waiting.
+ */
 export function shownRows(r: RepoEpics, find: (key: string) => Item | undefined): ShownRow[] {
   const repoKey = `${r.bridge}/${r.repo}`;
   return r.rows.map((row) => {
     const key = `${repoKey}/${row.id}`;
     const it = row.human ? find(key) : undefined;
-    return it ? { ...row, key, repoKey, title: it.title, status: it.status, item: true } : { ...row, key, repoKey, item: false };
+    const shown: ShownRow = it ? { ...row, key, repoKey, title: it.title, status: it.status, item: true } : { ...row, key, repoKey, item: false };
+    if (shown.status === "open" && (row.blockedBy?.length ?? 0) > 0) shown.status = "waiting";
+    return shown;
   });
 }
 
@@ -341,10 +350,40 @@ export interface EpicsView {
   now: Date;
 }
 
-/** A status with its dot, in words. */
-function statusPill(s: string): string {
+/**
+ * A row's state as the terminal viewer writes it: "Waiting on as-7om +2"
+ * names the first bead it waits on, "Deferred to Nov 24" its wake date.
+ */
+export function statusLabel(r: Pick<EpicRow, "status" | "blockedBy" | "deferUntil">, now: Date): string {
+  const name = statusName(r.status);
+  const on = r.blockedBy ?? [];
+  if (r.status === "waiting" && on.length) return `${name} on ${on[0]}${on.length > 1 ? ` +${on.length - 1}` : ""}`;
+  const wake = r.deferUntil ? new Date(r.deferUntil) : null;
+  if (r.status === "deferred" && wake && !Number.isNaN(wake.getTime())) return `${name} to ${fmtDate(wake, now)}`;
+  return name;
+}
+
+/** A status with its dot, in words; with a row, its wait or wake date too. */
+function statusPill(s: string, r?: EpicRow, now?: Date): string {
   const k = knownStatus(s);
-  return `<span class="ep-st ep-s-${k}"><span class="ep-sd" aria-hidden="true"></span>${esc(statusName(s))}</span>`;
+  const label = r && now ? statusLabel({ ...r, status: s }, now) : statusName(s);
+  return `<span class="ep-st ep-s-${k}"><span class="ep-sd" aria-hidden="true"></span>${esc(label)}</span>`;
+}
+
+/** "2 notes", or nothing. */
+function notesPill(r: EpicRow): string {
+  const n = r.commentCount ?? 0;
+  return n > 0 ? `<span class="ep-notes">${n === 1 ? "1 note" : `${n} notes`}</span>` : "";
+}
+
+/** What a card's tasks hold up: "1 blocked" and "3 waiting", or nothing. */
+function holdsHTML(children: EpicRow[]): string {
+  const blocked = children.filter((c) => c.status === "blocked").length;
+  const waiting = children.filter((c) => c.status === "waiting").length;
+  return (
+    (blocked ? `<span class="ep-hold ep-s-blocked">${blocked} blocked</span>` : "") +
+    (waiting ? `<span class="ep-hold ep-s-waiting">${waiting} waiting</span>` : "")
+  );
 }
 
 /** A priority in words: Critical red and High yellow, the rest plain. */
@@ -379,9 +418,14 @@ function bar(p: Progress): string {
 
 const ALSO_YOURS = '<span class="ep-human">Also your task</span>';
 
-/** A row's one line: type, id and title as the button that opens its Details, then status, priority, assignee and Copy id. */
-function lineHTML(r: ShownRow): string {
-  const meta = `${r.item ? ALSO_YOURS : ""}${statusPill(r.status)}${priorityPill(r.priority)}${r.assignee ? `<span class="ep-who">${esc(r.assignee)}</span>` : ""}`;
+/**
+ * A row's one line: type, id and title as the button that opens its
+ * Details, then notes, status, priority, assignee and Copy id. A card shows
+ * its status only when it is not open, as the terminal viewer does.
+ */
+function lineHTML(r: ShownRow, now: Date, card = false): string {
+  const status = card && r.status === "open" ? "" : statusPill(r.status, r, now);
+  const meta = `${r.item ? ALSO_YOURS : ""}${notesPill(r)}${status}${priorityPill(r.priority)}${r.assignee ? `<span class="ep-who">${esc(r.assignee)}</span>` : ""}`;
   return `<div class="ep-line"><button class="ep-main" data-act="ep-open" data-key="${esc(r.key)}">${typeIcon(r)}<code class="ep-id">${esc(r.id)}</code><span class="ep-title">${esc(r.title)}</span></button><span class="ep-meta">${meta}</span>${copyButton(r.id)}</div>`;
 }
 
@@ -398,11 +442,11 @@ function entryHTML(e: Entry, v: EpicsView, n: string): string {
     const part = e.shown.length < total ? ` <span class="ep-part">(${e.shown.length} shown)</span>` : "";
     const toggle = `<button class="ep-kids-btn" data-act="ep-toggle" data-key="${esc(r.key)}" aria-expanded="${e.open}"${e.open ? ` aria-controls="${kidsId}"` : ""}>${total} ${total === 1 ? "task" : "tasks"}${part}<span class="sr"> of ${esc(r.id)}</span>${ICON.right}</button>`;
     const kids = e.shown.length
-      ? `<ul class="ep-kids" id="${kidsId}" aria-label="Tasks of ${esc(r.id)}">${e.shown.map((k) => `<li class="ep-row${rowClass(k, v.open)}">${lineHTML(k)}</li>`).join("")}</ul>`
+      ? `<ul class="ep-kids" id="${kidsId}" aria-label="Tasks of ${esc(r.id)}">${e.shown.map((k) => `<li class="ep-row${rowClass(k, v.open)}">${lineHTML(k, v.now)}</li>`).join("")}</ul>`
       : `<p class="muted small ep-none ep-kids" id="${kidsId}">${total ? "No tasks match the filters." : "No tasks yet."}</p>`;
-    extra = `<div class="ep-progress">${bar(e.progress)}<span class="ep-ptext">${esc(progressText(e.progress))}</span>${toggle}</div>${e.open ? kids : ""}`;
+    extra = `<div class="ep-progress">${bar(e.progress)}<span class="ep-ptext">${esc(progressText(e.progress))}</span>${holdsHTML(e.children)}${toggle}</div>${e.open ? kids : ""}`;
   }
-  return `<li class="ep-item${e.card ? " is-card" : ""}${rowClass(r, v.open)}" data-ep="${esc(r.key)}">${lineHTML(r)}${extra}</li>`;
+  return `<li class="ep-item${e.card ? " is-card" : ""}${rowClass(r, v.open)}" data-ep="${esc(r.key)}">${lineHTML(r, v.now, e.card)}${extra}</li>`;
 }
 
 /** A repo's name, with its path and machine where the name repeats. */
@@ -633,7 +677,7 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
   const facts: [string, string][] = [
     ["List", `${listBadge(state, v.repos)}<span>${esc(name.label)}</span>${name.where ? `<span class="muted small">${esc(name.where)}</span>` : ""}`],
     ["Id", `<code class="bead-id">${esc(r.id)}</code>${copyButton(r.id)}`],
-    ["Status", statusPill(r.status)],
+    ["Status", statusPill(r.status, r, v.now)],
     ["Priority", `${priorityPill(r.priority)} <span class="muted small">P${clampPriority(r.priority)}</span>`],
     ["Type", `${typeIcon(r)}<span>${esc(typeName(r))}</span>`],
     ["Assignee", r.assignee ? esc(r.assignee) : '<span class="muted">Nobody</span>'],
@@ -642,6 +686,17 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
     const p = progress(kids);
     facts.push(["Progress", `<span class="ep-progress">${bar(p)}<span class="ep-ptext">${esc(progressText(p))}</span></span>`]);
   }
+  const waits = r.status === "waiting" ? (r.blockedBy ?? []) : [];
+  if (waits.length) {
+    const links = waits.map((id) => {
+      const b = rows.find((x) => x.id === id);
+      return b
+        ? `<button class="ep-link ep-wait" data-act="ep-open" data-key="${esc(b.key)}">${statusPill(b.status)}<span>${esc(b.title)}</span><code class="ep-id">${esc(id)}</code></button>`
+        : `<code class="ep-id">${esc(id)}</code>`;
+    });
+    facts.push(["Waiting on", `<span class="ep-waits">${links.join("")}</span>`]);
+  }
+  if ((r.commentCount ?? 0) > 0) facts.push(["Notes", esc(String(r.commentCount))]);
   if (parent) facts.push(["Epic", `<button class="ep-link" data-act="ep-open" data-key="${esc(parent.key)}">${esc(parent.title)}</button>`]);
   const up = when(r.updatedAt, v.now);
   if (up) facts.push(["Updated", up]);
@@ -654,7 +709,7 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
   const kidsHTML = r.epic
     ? `<section class="d-section" aria-labelledby="ep-d-kids"><h3 id="ep-d-kids">Tasks <span class="group-count">${kids.length}</span></h3>${
         kids.length
-          ? `<ul class="ep-d-kids">${kids.map((k) => `<li><button class="ep-d-kid${k.status === "closed" ? " is-done" : ""}" data-act="ep-open" data-key="${esc(k.key)}">${statusPill(k.status)}<span class="ep-title">${esc(k.title)}</span><code class="ep-id">${esc(k.id)}</code></button></li>`).join("")}</ul>`
+          ? `<ul class="ep-d-kids">${kids.map((k) => `<li><button class="ep-d-kid${k.status === "closed" ? " is-done" : ""}" data-act="ep-open" data-key="${esc(k.key)}">${statusPill(k.status, k, v.now)}<span class="ep-title">${esc(k.title)}</span><code class="ep-id">${esc(k.id)}</code></button></li>`).join("")}</ul>`
           : '<p class="muted small">No tasks yet.</p>'
       }</section>`
     : "";

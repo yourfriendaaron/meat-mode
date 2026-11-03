@@ -6,8 +6,8 @@
  Later 0                                                |
                                                         |
  Epics 3                                                |
- API api-h3k   Rate limiting v2          ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan           ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limitin⋯ ◒ 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan         ◒ ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpo⋯ ▰▰▰▰▰▰▰▰   4/4 |
                                                         |
                                                         |
@@ -28,8 +28,8 @@
  Later 0                                                                                 |
                                                                                          |
  Epics 3                                                                                 |
- API api-h3k   Rate limiting v2                                           ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan                                            ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limiting v2                   ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan                              ◒ In progress ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpoints                               ▰▰▰▰▰▰▰▰   4/4 |
                                                                                          |
                                                                                          |
@@ -50,8 +50,8 @@
  Later 0                                                                                  |
                                                                                           |
  Epics 3                                                                                  |
- API api-h3k   Rate limiting v2                                            ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan                                             ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limiting v2                    ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan                               ◒ In progress ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpoints                                ▰▰▰▰▰▰▰▰   4/4 |
                                                                                           |
                                                                                           |
@@ -72,8 +72,8 @@
  Later 0                                                                                                                                    |
                                                                                                                                             |
  Epics 3                                                                                                                                    |
- API api-h3k   Rate limiting v2                                                                                              ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan                                                                                               ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limiting v2                                                                      ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan                                                                                 ◒ In progress ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpoints                                                                                  ▰▰▰▰▰▰▰▰   4/4 |
                                                                                                                                             |
                                                                                                                                             |
@@ -94,8 +94,8 @@
  Later 0                                                |
                                                         |
  Epics 3                                                |
- API api-h3k   Rate limiting v2          ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan           ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limitin⋯ ◒ 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan         ◒ ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpo⋯ ▰▰▰▰▰▰▰▰   4/4 |
                                                         |
                                                         |
@@ -126,8 +126,8 @@
  Later 0                                                                                 |
                                                                                          |
  Epics 3                                                                                 |
- API api-h3k   Rate limiting v2                                           ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan                                            ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limiting v2                   ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan                              ◒ In progress ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpoints                               ▰▰▰▰▰▰▰▰   4/4 |
                                                                                          |
                                                                                          |
@@ -158,8 +158,8 @@
  Later 0                                                                                  |
                                                                                           |
  Epics 3                                                                                  |
- API api-h3k   Rate limiting v2                                            ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan                                             ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limiting v2                    ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan                               ◒ In progress ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpoints                                ▰▰▰▰▰▰▰▰   4/4 |
                                                                                           |
                                                                                           |
@@ -190,8 +190,8 @@
  Later 0                                                                                                                                    |
                                                                                                                                             |
  Epics 3                                                                                                                                    |
- API api-h3k   Rate limiting v2                                                                                              ▰▰▰▱▱▱▱▱   2/5 |
- API api-h3k.3 Limits per plan                                                                                               ▰▰▰▰▱▱▱▱   1/2 |
+ API api-h3k   Rate limiting v2                                                                      ◒ In progress 1 waiting ▰▰▰▱▱▱▱▱   2/5 |
+ API api-h3k.3 Limits per plan                                                                                 ◒ In progress ▰▰▰▰▱▱▱▱   1/2 |
  API api-z9p   Remove legacy auth endpoints                                                                                  ▰▰▰▰▰▰▰▰   4/4 |
                                                                                                                                             |
                                                                                                                                             |

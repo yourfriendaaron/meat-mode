@@ -3,8 +3,8 @@
  / log   Esc clear                                      |
  API acme/api  synced 4m ago                            |
 › ▾ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
-    ✓ api-z9p.1    Log callers of /v1/login             |
-    ✓ api-z9p.3    Delete /v1/login                     |
+      api-z9p.1    Log callers of /v1/login    ✓ Closed |
+      api-z9p.3    Delete /v1/login            ✓ Closed |
                                                         |
                                                         |
                                                         |
@@ -25,8 +25,8 @@
  / log   Esc clear                                                                       |
  API acme/api  synced 4m ago                                                             |
 › ▾ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
-    ✓ api-z9p.1    Log callers of /v1/login                                              |
-    ✓ api-z9p.3    Delete /v1/login                                                      |
+      api-z9p.1    Log callers of /v1/login                                     ✓ Closed |
+      api-z9p.3    Delete /v1/login                                             ✓ Closed |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -48,10 +48,10 @@
 ›API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
                                                  ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4    |
                                                  ╎                                        |
-                                                 ╎  ✓ api-z9p.1    Log callers of /v1/log⋯|
-                                                 ╎  ✓ api-z9p.2    Email the two remainin⋯|
-                                                 ╎  ✓ api-z9p.3    Delete /v1/login       |
-                                                 ╎  ✓ api-z9p.4    Delete /v1/token       |
+                                                 ╎  api-z9p.1    Log callers o⋯  ✓ Closed |
+                                                 ╎  api-z9p.2    Email the two⋯  ✓ Closed |
+                                                 ╎  api-z9p.3    Delete /v1/lo⋯  ✓ Closed |
+                                                 ╎  api-z9p.4    Delete /v1/to⋯  ✓ Closed |
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
@@ -70,10 +70,10 @@
 ›API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
                                                                              ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4                          |
                                                                              ╎                                                              |
-                                                                             ╎  ✓ api-z9p.1    Log callers of /v1/login                     |
-                                                                             ╎  ✓ api-z9p.2    Email the two remaining callers              |
-                                                                             ╎  ✓ api-z9p.3    Delete /v1/login                             |
-                                                                             ╎  ✓ api-z9p.4    Delete /v1/token                             |
+                                                                             ╎  api-z9p.1    Log callers of /v1/login              ✓ Closed |
+                                                                             ╎  api-z9p.2    Email the two remaining callers       ✓ Closed |
+                                                                             ╎  api-z9p.3    Delete /v1/login                      ✓ Closed |
+                                                                             ╎  api-z9p.4    Delete /v1/token                      ✓ Closed |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
@@ -91,8 +91,8 @@
  / log   Esc clear                                      |
  API acme/api  synced 4m ago                            |
 › ▾ api-z9p   Remove legacy auth endpoints ▰▰▰▰▰▰ 4/4   |
-    ✓ api-z9p.1    Log callers of /v1/login             |
-    ✓ api-z9p.3    Delete /v1/login                     |
+      api-z9p.1    Log callers of /v1/login    ✓ Closed |
+      api-z9p.3    Delete /v1/login            ✓ Closed |
                                                         |
                                                         |
                                                         |
@@ -123,8 +123,8 @@
  / log   Esc clear                                                                       |
  API acme/api  synced 4m ago                                                             |
 › ▾ api-z9p   Remove legacy auth endpoints                              ▰▰▰▰▰▰▰▰▰▰ 4/4   |
-    ✓ api-z9p.1    Log callers of /v1/login                                              |
-    ✓ api-z9p.3    Delete /v1/login                                                      |
+      api-z9p.1    Log callers of /v1/login                                     ✓ Closed |
+      api-z9p.3    Delete /v1/login                                             ✓ Closed |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -156,10 +156,10 @@
 ›API api-z9p   Remove legacy auth e⋯ ▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints           |
                                                  ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4    |
                                                  ╎                                        |
-                                                 ╎  ✓ api-z9p.1    Log callers of /v1/log⋯|
-                                                 ╎  ✓ api-z9p.2    Email the two remainin⋯|
-                                                 ╎  ✓ api-z9p.3    Delete /v1/login       |
-                                                 ╎  ✓ api-z9p.4    Delete /v1/token       |
+                                                 ╎  api-z9p.1    Log callers o⋯  ✓ Closed |
+                                                 ╎  api-z9p.2    Email the two⋯  ✓ Closed |
+                                                 ╎  api-z9p.3    Delete /v1/lo⋯  ✓ Closed |
+                                                 ╎  api-z9p.4    Delete /v1/to⋯  ✓ Closed |
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
@@ -188,10 +188,10 @@
 ›API api-z9p   Remove legacy auth endpoints                   ▰▰▰▰▰▰▰▰   4/4 ╎ Remove legacy auth endpoints                                 |
                                                                              ╎ api-z9p  API acme/api  ▰▰▰▰▰▰▰▰ 4/4                          |
                                                                              ╎                                                              |
-                                                                             ╎  ✓ api-z9p.1    Log callers of /v1/login                     |
-                                                                             ╎  ✓ api-z9p.2    Email the two remaining callers              |
-                                                                             ╎  ✓ api-z9p.3    Delete /v1/login                             |
-                                                                             ╎  ✓ api-z9p.4    Delete /v1/token                             |
+                                                                             ╎  api-z9p.1    Log callers of /v1/login              ✓ Closed |
+                                                                             ╎  api-z9p.2    Email the two remaining callers       ✓ Closed |
+                                                                             ╎  api-z9p.3    Delete /v1/login                      ✓ Closed |
+                                                                             ╎  api-z9p.4    Delete /v1/token                      ✓ Closed |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |

@@ -35,9 +35,13 @@ var legend = []hint{
 	{" " + gClosed + " ", "badge of your personal list"},
 	{"GAR", "badge of a project: its colour, its name"},
 	{gHuman, "a task an agent left for you"},
-	{gOpen + " " + gProgress + " " + gBlocked, "open, in progress, blocked"},
-	{gClosed, "done (green)"},
-	{gDeferred, "snoozed"},
+	{gOpen, "Open: ready to start"},
+	{gProgress, "In progress (cyan)"},
+	{gBlocked, "Blocked (red), or Waiting on another bead"},
+	{gDeferred, "Deferred: put off, to a date when it has one"},
+	{gClosed, "done or Closed (green)"},
+	{gSnoozed, "snoozed"},
+	{gBarFull + gBarEmpty, "an epic's closed tasks over all of them"},
 	{gRepeat, "repeats"},
 }
 

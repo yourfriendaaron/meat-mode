@@ -84,6 +84,12 @@ var scenarios = []scenario{
 		m, _ = keys(t, m, "l", "enter")
 		return m
 	}},
+	{"waiting-detail", func(t *testing.T, w, h int) Model {
+		m, _ := keys(t, selectKey(t, pressing("3")(t, w, h), "laptop/acme/storefront/sf-c1x"), "enter")
+		m = selectKey(t, m, "laptop/acme/storefront/sf-c1x.6")
+		m, _ = keys(t, m, "enter")
+		return m
+	}},
 	{"help", pressing("?")},
 	{"snooze", func(t *testing.T, w, h int) Model {
 		m, _ := keys(t, selectKey(t, model(t, w, h), "hub/personal/mm-44"), "s")

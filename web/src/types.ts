@@ -357,7 +357,7 @@ export interface EpicRow {
   title: string;
   /** The tracker's own type, such as "epic", "task" or "bug"; may be absent. */
   type?: string;
-  status: string; // open, in_progress, blocked, deferred, closed
+  status: string; // open, in_progress, blocked, deferred, closed; the view adds waiting
   priority: number; // 0 (highest) to 4
   assignee?: string;
   /** The card this row is a direct child of; absent for a top-level bead. */
@@ -370,6 +370,12 @@ export interface EpicRow {
   description?: string;
   updatedAt: string;
   closedAt?: string | null;
+  /** The open beads this one waits on; absent when nothing holds it. */
+  blockedBy?: string[];
+  /** When a deferred bead wakes, when it has a date. */
+  deferUntil?: string;
+  /** How many comments the bead has; absent for none. */
+  commentCount?: number;
 }
 
 /** One repo's rows in GET /api/epics. */

@@ -6,16 +6,16 @@
   in `docs/checkout.md`.                                |
                                                         |
  Blocked 1                                              |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox acco⋯ ✦ you |
+›   sf-c1x.5  Set up the wallet-pay s⋯ ✦ you  ⊘ Blocked |
  In progress 1                                          |
-  ◒ sf-c1x.3  Payment step layout              @builder |
- Open 2                                                 |
-  ◦ sf-c1x.4  Order confirmation email                  |
-  ◦ sf-c1x.6  Remove the old checkout routes and every⋯ |
- Done 2                                                 |
-  ✓ sf-c1x.1  Cart summary component                    |
-  ✓ sf-c1x.2  Address form validation                   |
-                                                        |
+    sf-c1x.3  Payment step lay⋯ @builder  ◒ In progress |
+ Open 1                                                 |
+    sf-c1x.4  Order confirmation email           ◦ Open |
+ Waiting 1                                              |
+    sf-c1x.6  Remove the old checkout route⋯  ⊘ Waiting |
+ Closed 2                                               |
+    sf-c1x.1  Cart summary component           ✓ Closed |
+    sf-c1x.2  Address form validation          ✓ Closed |
                                                         |
                                                         |
  Enter open  y copy  Esc back  ? keys                   |
@@ -27,16 +27,16 @@
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.           |
                                                                                          |
  Blocked 1                                                                               |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                ✦ you |
+›   sf-c1x.5  Set up the wallet-pay sandbox account                     ✦ you  ⊘ Blocked |
  In progress 1                                                                           |
-  ◒ sf-c1x.3  Payment step layout                                               @builder |
- Open 2                                                                                  |
-  ◦ sf-c1x.4  Order confirmation email                                                   |
-  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at th⋯ |
- Done 2                                                                                  |
-  ✓ sf-c1x.1  Cart summary component                                                     |
-  ✓ sf-c1x.2  Address form validation                                                    |
-                                                                                         |
+    sf-c1x.3  Payment step layout                                @builder  ◒ In progress |
+ Open 1                                                                                  |
+    sf-c1x.4  Order confirmation email                                            ◦ Open |
+ Waiting 1                                                                               |
+    sf-c1x.6  Remove the old checkout routes and every redire⋯  ⊘ Waiting on sf-c1x.4 +1 |
+ Closed 2                                                                                |
+    sf-c1x.1  Cart summary component                                            ✓ Closed |
+    sf-c1x.2  Address form validation                                           ✓ Closed |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -49,16 +49,16 @@
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.            |
                                                                                           |
  Blocked 1                                                                                |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                 ✦ you |
+›   sf-c1x.5  Set up the wallet-pay sandbox account                      ✦ you  ⊘ Blocked |
  In progress 1                                                                            |
-  ◒ sf-c1x.3  Payment step layout                                                @builder |
- Open 2                                                                                   |
-  ◦ sf-c1x.4  Order confirmation email                                                    |
-  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at the⋯ |
- Done 2                                                                                   |
-  ✓ sf-c1x.1  Cart summary component                                                      |
-  ✓ sf-c1x.2  Address form validation                                                     |
-                                                                                          |
+    sf-c1x.3  Payment step layout                                 @builder  ◒ In progress |
+ Open 1                                                                                   |
+    sf-c1x.4  Order confirmation email                                             ◦ Open |
+ Waiting 1                                                                                |
+    sf-c1x.6  Remove the old checkout routes and every redirec⋯  ⊘ Waiting on sf-c1x.4 +1 |
+ Closed 2                                                                                 |
+    sf-c1x.1  Cart summary component                                             ✓ Closed |
+    sf-c1x.2  Address form validation                                            ✓ Closed |
                                                                                           |
                                                                                           |
                                                                                           |
@@ -71,16 +71,16 @@
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.                                                              |
                                                                                                                                             |
  Blocked 1                                                                                                                                  |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                                                                   ✦ you |
+›   sf-c1x.5  Set up the wallet-pay sandbox account                                                                        ✦ you  ⊘ Blocked |
  In progress 1                                                                                                                              |
-  ◒ sf-c1x.3  Payment step layout                                                                                                  @builder |
- Open 2                                                                                                                                     |
-  ◦ sf-c1x.4  Order confirmation email                                                                                                      |
-  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at them from marketing pages                              |
- Done 2                                                                                                                                     |
-  ✓ sf-c1x.1  Cart summary component                                                                                                        |
-  ✓ sf-c1x.2  Address form validation                                                                                                       |
-                                                                                                                                            |
+    sf-c1x.3  Payment step layout                                                                                   @builder  ◒ In progress |
+ Open 1                                                                                                                                     |
+    sf-c1x.4  Order confirmation email                                                                                               ◦ Open |
+ Waiting 1                                                                                                                                  |
+    sf-c1x.6  Remove the old checkout routes and every redirect that still points at them from marketing pages     ⊘ Waiting on sf-c1x.4 +1 |
+ Closed 2                                                                                                                                   |
+    sf-c1x.1  Cart summary component                                                                                               ✓ Closed |
+    sf-c1x.2  Address form validation                                                                                              ✓ Closed |
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
@@ -94,16 +94,16 @@
   in `docs/checkout.md`.                                |
                                                         |
  Blocked 1                                              |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox acco⋯ ✦ you |
+›   sf-c1x.5  Set up the wallet-pay s⋯ ✦ you  ⊘ Blocked |
  In progress 1                                          |
-  ◒ sf-c1x.3  Payment step layout              @builder |
- Open 2                                                 |
-  ◦ sf-c1x.4  Order confirmation email                  |
-  ◦ sf-c1x.6  Remove the old checkout routes and every⋯ |
- Done 2                                                 |
-  ✓ sf-c1x.1  Cart summary component                    |
-  ✓ sf-c1x.2  Address form validation                   |
-                                                        |
+    sf-c1x.3  Payment step lay⋯ @builder  ◒ In progress |
+ Open 1                                                 |
+    sf-c1x.4  Order confirmation email           ◦ Open |
+ Waiting 1                                              |
+    sf-c1x.6  Remove the old checkout route⋯  ⊘ Waiting |
+ Closed 2                                               |
+    sf-c1x.1  Cart summary component           ✓ Closed |
+    sf-c1x.2  Address form validation          ✓ Closed |
                                                         |
                                                         |
                                                         |
@@ -125,16 +125,16 @@
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.           |
                                                                                          |
  Blocked 1                                                                               |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                ✦ you |
+›   sf-c1x.5  Set up the wallet-pay sandbox account                     ✦ you  ⊘ Blocked |
  In progress 1                                                                           |
-  ◒ sf-c1x.3  Payment step layout                                               @builder |
- Open 2                                                                                  |
-  ◦ sf-c1x.4  Order confirmation email                                                   |
-  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at th⋯ |
- Done 2                                                                                  |
-  ✓ sf-c1x.1  Cart summary component                                                     |
-  ✓ sf-c1x.2  Address form validation                                                    |
-                                                                                         |
+    sf-c1x.3  Payment step layout                                @builder  ◒ In progress |
+ Open 1                                                                                  |
+    sf-c1x.4  Order confirmation email                                            ◦ Open |
+ Waiting 1                                                                               |
+    sf-c1x.6  Remove the old checkout routes and every redire⋯  ⊘ Waiting on sf-c1x.4 +1 |
+ Closed 2                                                                                |
+    sf-c1x.1  Cart summary component                                            ✓ Closed |
+    sf-c1x.2  Address form validation                                           ✓ Closed |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -157,16 +157,16 @@
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.            |
                                                                                           |
  Blocked 1                                                                                |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                 ✦ you |
+›   sf-c1x.5  Set up the wallet-pay sandbox account                      ✦ you  ⊘ Blocked |
  In progress 1                                                                            |
-  ◒ sf-c1x.3  Payment step layout                                                @builder |
- Open 2                                                                                   |
-  ◦ sf-c1x.4  Order confirmation email                                                    |
-  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at the⋯ |
- Done 2                                                                                   |
-  ✓ sf-c1x.1  Cart summary component                                                      |
-  ✓ sf-c1x.2  Address form validation                                                     |
-                                                                                          |
+    sf-c1x.3  Payment step layout                                 @builder  ◒ In progress |
+ Open 1                                                                                   |
+    sf-c1x.4  Order confirmation email                                             ◦ Open |
+ Waiting 1                                                                                |
+    sf-c1x.6  Remove the old checkout routes and every redirec⋯  ⊘ Waiting on sf-c1x.4 +1 |
+ Closed 2                                                                                 |
+    sf-c1x.1  Cart summary component                                             ✓ Closed |
+    sf-c1x.2  Address form validation                                            ✓ Closed |
                                                                                           |
                                                                                           |
                                                                                           |
@@ -189,16 +189,16 @@
   Replace the three-page checkout with one page. Design in `docs/checkout.md`.                                                              |
                                                                                                                                             |
  Blocked 1                                                                                                                                  |
-› ⊘ sf-c1x.5  Set up the wallet-pay sandbox account                                                                                   ✦ you |
+›   sf-c1x.5  Set up the wallet-pay sandbox account                                                                        ✦ you  ⊘ Blocked |
  In progress 1                                                                                                                              |
-  ◒ sf-c1x.3  Payment step layout                                                                                                  @builder |
- Open 2                                                                                                                                     |
-  ◦ sf-c1x.4  Order confirmation email                                                                                                      |
-  ◦ sf-c1x.6  Remove the old checkout routes and every redirect that still points at them from marketing pages                              |
- Done 2                                                                                                                                     |
-  ✓ sf-c1x.1  Cart summary component                                                                                                        |
-  ✓ sf-c1x.2  Address form validation                                                                                                       |
-                                                                                                                                            |
+    sf-c1x.3  Payment step layout                                                                                   @builder  ◒ In progress |
+ Open 1                                                                                                                                     |
+    sf-c1x.4  Order confirmation email                                                                                               ◦ Open |
+ Waiting 1                                                                                                                                  |
+    sf-c1x.6  Remove the old checkout routes and every redirect that still points at them from marketing pages     ⊘ Waiting on sf-c1x.4 +1 |
+ Closed 2                                                                                                                                   |
+    sf-c1x.1  Cart summary component                                                                                               ✓ Closed |
+    sf-c1x.2  Address form validation                                                                                              ✓ Closed |
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |

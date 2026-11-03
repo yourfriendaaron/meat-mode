@@ -134,17 +134,21 @@ func (b Bead) Issue() tracker.Issue {
 // open by the hub.
 func (b Bead) EpicRow() api.EpicRow {
 	r := api.EpicRow{
-		ID:          b.ID,
-		Title:       b.Title,
-		Type:        b.IssueType,
-		Status:      b.Status,
-		Priority:    b.Priority,
-		Assignee:    b.Assignee,
-		Parent:      b.Parent,
-		Human:       slices.Contains(b.Labels, tracker.HumanLabel),
-		Description: b.Description,
-		UpdatedAt:   b.UpdatedAt,
-		ClosedAt:    b.ClosedAt,
+		ID:           b.ID,
+		Title:        b.Title,
+		Type:         b.IssueType,
+		Status:       b.Status,
+		Priority:     b.Priority,
+		Assignee:     b.Assignee,
+		Parent:       b.Parent,
+		Human:        slices.Contains(b.Labels, tracker.HumanLabel),
+		Description:  b.Description,
+		UpdatedAt:    b.UpdatedAt,
+		ClosedAt:     b.ClosedAt,
+		CommentCount: b.CommentCount,
+	}
+	if b.Status == "deferred" {
+		r.DeferUntil = b.DeferUntil
 	}
 	if r.UpdatedAt.IsZero() {
 		r.UpdatedAt = b.CreatedAt

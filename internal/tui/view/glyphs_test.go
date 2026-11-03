@@ -47,7 +47,7 @@ func isAmbiguous(r rune) bool {
 }
 
 // glyphs are every non-ASCII character the view draws of its own.
-var glyphs = []string{gOpen, gProgress, gBlocked, gClosed, gDeferred, gHuman, gRepeat, gFolded, gUnfolded,
+var glyphs = []string{gOpen, gProgress, gBlocked, gClosed, gDeferred, gSnoozed, gHuman, gRepeat, gFolded, gUnfolded,
 	gBarFull, gBarEmpty, gSplit, gEdge, gBullet, gDot, gBack, gCrumb, gLive, gSelected, ellipsis}
 
 // TestGlyphsOneCell checks the view's own glyphs: one rune each, one cell

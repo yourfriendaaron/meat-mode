@@ -212,13 +212,17 @@
 .ep-s-in_progress .ep-sd {
   background: conic-gradient(currentColor 0 50%, transparent 0);
 }
+/* The dots share their shapes with the terminal viewer's marks: a ring for
+   open, half for in progress, a struck ring for blocked and waiting, a
+   dashed ring for deferred, a check for closed. */
 .ep-s-blocked {
   color: var(--role-urgent);
 }
 .ep-s-blocked .ep-sd,
-.ep-s-closed .ep-sd {
-  background: currentColor;
+.ep-s-waiting .ep-sd {
+  background: linear-gradient(135deg, transparent calc(50% - 1px), currentColor calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px));
 }
+.ep-s-waiting,
 .ep-s-deferred {
   font-weight: 500;
 }
@@ -227,6 +231,37 @@
 }
 .ep-s-closed {
   color: var(--role-done);
+}
+.ep-s-closed .ep-sd {
+  width: 5px;
+  height: 10px;
+  border-width: 0 2px 2px 0;
+  border-radius: 0;
+  transform: translateY(-2px) rotate(45deg);
+  margin: 0 2px;
+}
+.ep-notes {
+  font-size: 12.5px;
+  color: var(--role-dim);
+  white-space: nowrap;
+}
+.ep-hold {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.ep-hold.ep-s-waiting {
+  color: var(--role-soft);
+}
+.ep-waits {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.ep-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .ep-pri {
   font-size: 12.5px;

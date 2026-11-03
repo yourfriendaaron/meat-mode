@@ -82,7 +82,7 @@ func TestKeyTable(t *testing.T) {
 			want: []Effect{Copy{Ref: "mm-46", Text: "mm-46 Buy birthday card for Alex\npersonal · due Thu, Nov 5 9:00 · #errands\n\n" +
 				"Sub-tasks:\n- [ ] mm-47 Choose a card\n- [x] mm-48 Write the card"}}},
 		{name: "Y on an epic lists its children", w: 140, setup: []string{"2"}, sel: "laptop/acme/api/api-z9p", keys: []string{"Y"},
-			want: []Effect{Copy{Ref: "api-z9p", Text: "api-z9p Remove legacy auth endpoints\nacme/api · open · P2\n\nChildren:\n" +
+			want: []Effect{Copy{Ref: "api-z9p", Text: "api-z9p Remove legacy auth endpoints\nacme/api · Open · P2\n\nChildren:\n" +
 				"- [x] api-z9p.1 Log callers of /v1/login\n- [x] api-z9p.2 Email the two remaining callers\n- [x] api-z9p.3 Delete /v1/login\n- [x] api-z9p.4 Delete /v1/token"}}},
 		{name: "x marks done", w: 56, keys: []string{"x"},
 			want: []Effect{Act{Action: api.NewAction{Kind: "done", Key: "hub/personal/mm-28"}, Done: "Done: Book the boiler service"}}},

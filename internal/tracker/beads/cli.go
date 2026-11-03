@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -216,7 +217,7 @@ func (c *CLI) listHuman(ctx context.Context, dir string) ([]Bead, error) {
 }
 
 // EpicRows implements tracker.Epics: every bead, closed ones included, from
-// one bd list. A bd tombstone (a deleted bead) is not a task and is left out.
+// one bd list, with what each waits on from one bd blocked. A bd tombstone (a deleted bead) is not a task and is left out.
 func (c *CLI) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, error) {
 	out, err := c.run(ctx, dir, "list", "--all", "-n", "0", "--json")
 	if err != nil {
@@ -226,14 +227,43 @@ func (c *CLI) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, error) {
 	if err := decode(out, &all); err != nil {
 		return nil, err
 	}
+	waits, err := c.blockedBy(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
 	rows := make([]api.EpicRow, 0, len(all))
 	for _, b := range all {
 		if b.Status == "tombstone" {
 			continue
 		}
-		rows = append(rows, b.EpicRow())
+		r := b.EpicRow()
+		r.BlockedBy = waits[b.ID]
+		rows = append(rows, r)
 	}
 	return rows, nil
+}
+
+// blockedBy maps each bead bd counts as blocked to the open beads it waits
+// on, from bd blocked, so the rule is bd's own.
+func (c *CLI) blockedBy(ctx context.Context, dir string) (map[string][]string, error) {
+	out, err := c.run(ctx, dir, "blocked", "--json")
+	if err != nil {
+		return nil, err
+	}
+	var list []struct {
+		ID        string   `json:"id"`
+		BlockedBy []string `json:"blocked_by"`
+	}
+	if err := decode(out, &list); err != nil {
+		return nil, err
+	}
+	m := make(map[string][]string, len(list))
+	for _, b := range list {
+		if len(b.BlockedBy) > 0 {
+			m[b.ID] = slices.Sorted(slices.Values(b.BlockedBy))
+		}
+	}
+	return m, nil
 }
 
 // Show implements tracker.Tracker.

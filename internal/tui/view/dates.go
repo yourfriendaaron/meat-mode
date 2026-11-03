@@ -49,6 +49,15 @@ func fmtDay(t time.Time) string {
 	return fmt.Sprintf("%s, %s %d", dayNames[t.Weekday()], monthNames[t.Month()-1], t.Day())
 }
 
+// fmtShortDay is "Nov 24", with the year when it is not now's: "Nov 24,
+// 2027", as the web's fmtDate.
+func fmtShortDay(t, now time.Time) string {
+	if t.Year() != now.Year() {
+		return fmt.Sprintf("%s %d, %d", monthNames[t.Month()-1], t.Day(), t.Year())
+	}
+	return fmt.Sprintf("%s %d", monthNames[t.Month()-1], t.Day())
+}
+
 // fmtWhen is a short label for a moment near now: "14:30", "Tomorrow 9:00",
 // "Yesterday 9:00", "Fri, Oct 23".
 func fmtWhen(t, now time.Time) string {

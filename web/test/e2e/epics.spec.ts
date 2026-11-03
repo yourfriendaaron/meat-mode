@@ -144,6 +144,24 @@ test.describe("desktop", () => {
     await expect(page.locator("#list")).not.toContainText("Sharpen the shears");
   });
 
+  test("a waiting task names what it waits on; its card counts what its tasks hold up", async ({ page, hub }) => {
+    withEpics(hub);
+    await openApp(page);
+    await openEpics(page);
+    const planting = entry(page, "ga-10");
+    await expect(planting.locator("> .ep-progress .ep-hold")).toHaveText(["1 waiting"]);
+    await planting.locator("> .ep-progress .ep-kids-btn").click();
+    const tulips = planting.locator(".ep-row", { hasText: "ga-10.7" });
+    await expect(tulips.locator(".ep-st")).toHaveText("Waiting on ga-20.2");
+    await expect(tulips.locator(".ep-notes")).toHaveText("2 notes");
+    await page.locator("#epics").screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/epics.png` : undefined });
+    await tulips.locator(".ep-main").click();
+    const facts = page.locator(".ep-facts");
+    await expect(facts.locator(".ep-wait")).toContainText("Fence post leans");
+    await facts.locator(".ep-wait").click();
+    await expect(page.locator("#d-title")).toHaveText("Fence post leans");
+  });
+
   test("any row opens Details; a child links to its card, and a card lists its children", async ({ page, hub }) => {
     withEpics(hub);
     await openApp(page);

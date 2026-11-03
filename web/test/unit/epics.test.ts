@@ -19,6 +19,7 @@ import {
   progress,
   progressText,
   shownRows,
+  statusLabel,
   statusName,
   typeIconSVG,
   type EpicsUI,
@@ -407,4 +408,40 @@ test("a status or type that is an inherited object key reads as an unknown one",
     assert.equal(statusName(k), "Open");
     assert.equal(typeIconSVG(k), typeIconSVG("task"));
   }
+});
+
+test("an open row that waits on another shows as waiting, named as the terminal names it", () => {
+  const r = repo([
+    row("gd-1", { blockedBy: ["gd-2", "gd-3"] }),
+    row("gd-2"),
+    row("gd-3", { status: "in_progress" }),
+    row("gd-4", { status: "deferred", blockedBy: ["gd-2"], deferUntil: "2026-11-24T12:00:00Z" }),
+    row("gd-5", { status: "deferred" }),
+  ]);
+  const shown = shownRows(r, none);
+  assert.deepEqual(
+    shown.map((x) => x.status),
+    ["waiting", "open", "in_progress", "deferred", "deferred"],
+  );
+  assert.deepEqual(
+    shown.map((x) => statusLabel(x, now)),
+    ["Waiting on gd-2 +1", "Open", "In progress", "Deferred to Nov 24", "Deferred"],
+  );
+  assert.deepEqual(ids(r), ["gd-3", "gd-2", "gd-1", "gd-4", "gd-5"]);
+});
+
+test("a waiting row's Details list what it waits on, and a card counts what its tasks hold up", () => {
+  const r = repo([
+    row("gd-1", { epic: true }),
+    row("gd-1.1", { parent: "gd-1", blockedBy: ["gd-1.2"], commentCount: 2 }),
+    row("gd-1.2", { parent: "gd-1", status: "blocked" }),
+  ]);
+  const data: Epics = { repos: [r] };
+  const kid = findRow(data, "home/projects/garden/gd-1.1", none)!;
+  const html = epicDetailHTML(kid, { data, find: none, repos: [], now });
+  assert.match(html, /Waiting on gd-1\.2/);
+  assert.match(html, /<dt>Waiting on<\/dt>.*Task gd-1\.2/s);
+  assert.match(html, /<dt>Notes<\/dt><dd>2<\/dd>/);
+  const list = epicsHTML({ data, error: "", ui: ui(), find: none, repos: [], open: null, now });
+  assert.match(list, /1 blocked<\/span><span class="ep-hold ep-s-waiting">1 waiting/);
 });

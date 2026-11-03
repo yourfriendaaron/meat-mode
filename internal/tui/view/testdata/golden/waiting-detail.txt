@@ -1,0 +1,216 @@
+== 56 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ ‹ Esc All › Checkout redesign                          |
+ Remove the old checkout routes and every redirect that |
+ still points at them from marketing pages              |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1|
+ task ∙ updated 7h ago                                  |
+ Epic: Checkout redesign                                |
+                                                        |
+ Waiting on 2                                           |
+  sf-c1x.4     Order confirmation email          ◦ Open |
+  sf-c1x.3     Payment step layout        ◒ In progress |
+                                                        |
+  No description                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ y copy  Y copy all  Esc back  ? keys                   |
+
+== 89 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ ‹ Esc All › Checkout redesign                                                           |
+ Remove the old checkout routes and every redirect that still points at them from        |
+ marketing pages                                                                         |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1  P2                             |
+ task ∙ updated 7h ago                                                                   |
+ Epic: Checkout redesign                                                                 |
+                                                                                         |
+ Waiting on 2                                                                            |
+  sf-c1x.4     Order confirmation email                                           ◦ Open |
+  sf-c1x.3     Payment step layout                                         ◒ In progress |
+                                                                                         |
+  No description                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ y copy  Y copy all  Esc back  ? keys                                                    |
+
+== 90 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ ‹ Esc All › Checkout redesign                                                            |
+ Remove the old checkout routes and every redirect that still points at them from         |
+ marketing pages                                                                          |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1  P2                              |
+ task ∙ updated 7h ago                                                                    |
+ Epic: Checkout redesign                                                                  |
+                                                                                          |
+ Waiting on 2                                                                             |
+  sf-c1x.4     Order confirmation email                                            ◦ Open |
+  sf-c1x.3     Payment step layout                                          ◒ In progress |
+                                                                                          |
+  No description                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ y copy  Y copy all  Esc back  ? keys                                                     |
+
+== 140 x 20, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ ‹ Esc All › Checkout redesign                                                                                                              |
+ Remove the old checkout routes and every redirect that still points at them from marketing pages                                           |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1  P2                                                                                |
+ task ∙ updated 7h ago                                                                                                                      |
+ Epic: Checkout redesign                                                                                                                    |
+                                                                                                                                            |
+ Waiting on 2                                                                                                                               |
+  sf-c1x.4     Order confirmation email                                                                                              ◦ Open |
+  sf-c1x.3     Payment step layout                                                                                            ◒ In progress |
+                                                                                                                                            |
+  No description                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ y copy  Y copy all  Esc back  ? keys                                                                                                       |
+
+== 56 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+ ‹ Esc All › Checkout redesign                          |
+ Remove the old checkout routes and every redirect that |
+ still points at them from marketing pages              |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1|
+ task ∙ updated 7h ago                                  |
+ Epic: Checkout redesign                                |
+                                                        |
+ Waiting on 2                                           |
+  sf-c1x.4     Order confirmation email          ◦ Open |
+  sf-c1x.3     Payment step layout        ◒ In progress |
+                                                        |
+  No description                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+ y copy  Y copy all  Esc back  ? keys                   |
+
+== 89 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+ ‹ Esc All › Checkout redesign                                                           |
+ Remove the old checkout routes and every redirect that still points at them from        |
+ marketing pages                                                                         |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1  P2                             |
+ task ∙ updated 7h ago                                                                   |
+ Epic: Checkout redesign                                                                 |
+                                                                                         |
+ Waiting on 2                                                                            |
+  sf-c1x.4     Order confirmation email                                           ◦ Open |
+  sf-c1x.3     Payment step layout                                         ◒ In progress |
+                                                                                         |
+  No description                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+                                                                                         |
+ y copy  Y copy all  Esc back  ? keys                                                    |
+
+== 90 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+ ‹ Esc All › Checkout redesign                                                            |
+ Remove the old checkout routes and every redirect that still points at them from         |
+ marketing pages                                                                          |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1  P2                              |
+ task ∙ updated 7h ago                                                                    |
+ Epic: Checkout redesign                                                                  |
+                                                                                          |
+ Waiting on 2                                                                             |
+  sf-c1x.4     Order confirmation email                                            ◦ Open |
+  sf-c1x.3     Payment step layout                                          ◒ In progress |
+                                                                                          |
+  No description                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+                                                                                          |
+ y copy  Y copy all  Esc back  ? keys                                                     |
+
+== 140 x 30, layout c
+  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+ ‹ Esc All › Checkout redesign                                                                                                              |
+ Remove the old checkout routes and every redirect that still points at them from marketing pages                                           |
+ sf-c1x.6  STO acme/storefront  ⊘ Waiting on sf-c1x.4 +1  P2                                                                                |
+ task ∙ updated 7h ago                                                                                                                      |
+ Epic: Checkout redesign                                                                                                                    |
+                                                                                                                                            |
+ Waiting on 2                                                                                                                               |
+  sf-c1x.4     Order confirmation email                                                                                              ◦ Open |
+  sf-c1x.3     Payment step layout                                                                                            ◒ In progress |
+                                                                                                                                            |
+  No description                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+                                                                                                                                            |
+ y copy  Y copy all  Esc back  ? keys                                                                                                       |
+

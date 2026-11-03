@@ -321,6 +321,7 @@ func (m *Model) move(delta int) {
 }
 
 func (m *Model) tabTo(t Tab) {
+	m.started = true
 	if t == m.tab && !m.open && m.drill == "" {
 		return
 	}

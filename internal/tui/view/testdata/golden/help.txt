@@ -112,8 +112,8 @@
       ✓         badge of your personal list             |
      GAR        badge of a project: its colour, its⋯    |
      ✦          a task an agent left for you            |
-     ◦ ◒ ⊘      open, in progress, blocked              |
-     ✓          done (green)                            |
+     ◦          Open: ready to start                    |
+     ◒          In progress (cyan)                      |
      j k scroll, any other key closes                   |
     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌    |
  any key close                                          |
@@ -144,8 +144,8 @@
                       ✓         badge of your personal list                              |
                      GAR        badge of a project: its colour, its⋯                     |
                      ✦          a task an agent left for you                             |
-                     ◦ ◒ ⊘      open, in progress, blocked                               |
-                     ✓          done (green)                                             |
+                     ◦          Open: ready to start                                     |
+                     ◒          In progress (cyan)                                       |
                      j k scroll, any other key closes                                    |
                     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                           |
@@ -176,8 +176,8 @@
                        ✓         badge of your personal list                              |
                       GAR        badge of a project: its colour, its⋯                     |
                       ✦          a task an agent left for you                             |
-                      ◦ ◒ ⊘      open, in progress, blocked                               |
-                      ✓          done (green)                                             |
+                      ◦          Open: ready to start                                     |
+                      ◒          In progress (cyan)                                       |
                       j k scroll, any other key closes                                    |
                      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                     |
  any key close                                                                            |
@@ -208,8 +208,8 @@
                                                 ✓         badge of your personal list                                                       |
                                                GAR        badge of a project: its colour, its⋯                                              |
                                                ✦          a task an agent left for you                                                      |
-                                               ◦ ◒ ⊘      open, in progress, blocked                                                        |
-                                               ✓          done (green)                                                                      |
+                                               ◦          Open: ready to start                                                              |
+                                               ◒          In progress (cyan)                                                                |
                                                j k scroll, any other key closes                                                             |
                                               ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌                                              |
  any key close                                                                                                                              |

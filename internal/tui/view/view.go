@@ -141,6 +141,10 @@ type Model struct {
 	hereAt Here            // where the viewer was started
 	here   map[string]bool // the lists hereAt is in, by listKey; nil for none
 	every  bool            // p: show every list, not just here's
+	// started is set once the first tab is settled: by the first epics
+	// shown for here's project, or by any tab key. Until then the viewer
+	// opens on Epics as soon as here's project has epic rows.
+	started bool
 
 	d      *data // state and epics, indexed; nil before SetData
 	selKey string
@@ -186,11 +190,12 @@ func New(hubURL string) Model { return Model{hub: hubURL} }
 
 // SetHere sets where the viewer was started. While that folder is in a
 // project the hub knows, the viewer shows that project's lists alone
-// until p switches to every list.
+// until p switches to every list, and opens on Epics when it has some.
 func (m Model) SetHere(h Here) Model {
 	m.hereAt = h
 	if m.d != nil {
 		m.reindex(m.now)
+		m.openOnEpics()
 		m.fix()
 	}
 	return m
@@ -216,8 +221,24 @@ func (m *Model) inScope() bool { return len(m.here) > 0 && !m.every }
 func (m Model) SetData(s api.State, e api.Epics, now time.Time) Model {
 	m.state, m.epics, m.now = s, e, now
 	m.reindex(now)
+	m.openOnEpics()
 	m.fix()
 	return m
+}
+
+// openOnEpics starts the viewer on Epics when it was started in a project
+// whose epics it shows, before any tab key.
+func (m *Model) openOnEpics() {
+	if m.started || !m.inScope() {
+		return
+	}
+	for _, re := range m.d.epics.Repos {
+		if len(re.Rows) > 0 {
+			m.started = true
+			m.tabTo(TabEpics)
+			return
+		}
+	}
 }
 
 // SetNow moves the clock without new data (due labels, groups).

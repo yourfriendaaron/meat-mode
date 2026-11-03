@@ -2,18 +2,18 @@
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  ‹ Esc Epics                                            |
  Rate limiting v2                                       |
- api-h3k  API acme/api  ◒ in progress  P1               |
+ api-h3k  API acme/api  ◒ In progress  P1               |
  epic ∙ updated 20h ago                                 |
                                                         |
   Per-key token buckets in Redis, replacing the per-IP  |
   limiter.                                              |
                                                         |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                |
-  ◒ api-h3k.3    Limits per plan                        |
-  ◦ api-h3k.4    Load test at 5k rps                    |
-  ◦ api-h3k.5    Docs for the new 429 body              |
-  ✓ api-h3k.1    Token bucket store                     |
-  ✓ api-h3k.2    Middleware and headers                 |
+  api-h3k.3    Limits per plan            ◒ In progress |
+  api-h3k.4    Load test at 5k rps               ◦ Open |
+  api-h3k.5    Docs for the new 429 body      ⊘ Waiting |
+  api-h3k.1    Token bucket store              ✓ Closed |
+  api-h3k.2    Middleware and headers          ✓ Closed |
                                                         |
                                                         |
                                                         |
@@ -24,17 +24,17 @@
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  ‹ Esc Epics                                                                             |
  Rate limiting v2                                                                        |
- api-h3k  API acme/api  ◒ in progress  P1                                                |
+ api-h3k  API acme/api  ◒ In progress  P1                                                |
  epic ∙ updated 20h ago                                                                  |
                                                                                          |
   Per-key token buckets in Redis, replacing the per-IP limiter.                          |
                                                                                          |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                                                 |
-  ◒ api-h3k.3    Limits per plan                                                         |
-  ◦ api-h3k.4    Load test at 5k rps                                                     |
-  ◦ api-h3k.5    Docs for the new 429 body                                               |
-  ✓ api-h3k.1    Token bucket store                                                      |
-  ✓ api-h3k.2    Middleware and headers                                                  |
+  api-h3k.3    Limits per plan                                             ◒ In progress |
+  api-h3k.4    Load test at 5k rps                                                ◦ Open |
+  api-h3k.5    Docs for the new 429 body                 2 notes  ⊘ Waiting on api-h3k.4 |
+  api-h3k.1    Token bucket store                                               ✓ Closed |
+  api-h3k.2    Middleware and headers                                           ✓ Closed |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -46,15 +46,15 @@
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
  ‹ Esc Epics                                                                              |
  Limits per plan                                                                          |
- api-h3k.3  API acme/api  ◒ in progress  P2                                               |
+ api-h3k.3  API acme/api  ◒ In progress  P2                                               |
  epic ∙ updated 23h ago                                                                   |
  Epic: Rate limiting v2                                                                   |
                                                                                           |
   No description                                                                          |
                                                                                           |
  Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                  |
-  ◦ api-h3k.3.2  Admin override                                                           |
-  ✓ api-h3k.3.1  Plan table migration                                                     |
+  api-h3k.3.2  Admin override                                                      ◦ Open |
+  api-h3k.3.1  Plan table migration                                              ✓ Closed |
                                                                                           |
                                                                                           |
                                                                                           |
@@ -68,15 +68,15 @@
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
  ‹ Esc Epics                                                                                                                                |
  Limits per plan                                                                                                                            |
- api-h3k.3  API acme/api  ◒ in progress  P2                                                                                                 |
+ api-h3k.3  API acme/api  ◒ In progress  P2                                                                                                 |
  epic ∙ updated 23h ago                                                                                                                     |
  Epic: Rate limiting v2                                                                                                                     |
                                                                                                                                             |
   No description                                                                                                                            |
                                                                                                                                             |
  Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                                                                    |
-  ◦ api-h3k.3.2  Admin override                                                                                                             |
-  ✓ api-h3k.3.1  Plan table migration                                                                                                       |
+  api-h3k.3.2  Admin override                                                                                                        ◦ Open |
+  api-h3k.3.1  Plan table migration                                                                                                ✓ Closed |
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |
@@ -90,18 +90,18 @@
   1 To-dos 4   2 Epics 6   3 All                 ◉ live |
  ‹ Esc Epics                                            |
  Rate limiting v2                                       |
- api-h3k  API acme/api  ◒ in progress  P1               |
+ api-h3k  API acme/api  ◒ In progress  P1               |
  epic ∙ updated 20h ago                                 |
                                                         |
   Per-key token buckets in Redis, replacing the per-IP  |
   limiter.                                              |
                                                         |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                |
-  ◒ api-h3k.3    Limits per plan                        |
-  ◦ api-h3k.4    Load test at 5k rps                    |
-  ◦ api-h3k.5    Docs for the new 429 body              |
-  ✓ api-h3k.1    Token bucket store                     |
-  ✓ api-h3k.2    Middleware and headers                 |
+  api-h3k.3    Limits per plan            ◒ In progress |
+  api-h3k.4    Load test at 5k rps               ◦ Open |
+  api-h3k.5    Docs for the new 429 body      ⊘ Waiting |
+  api-h3k.1    Token bucket store              ✓ Closed |
+  api-h3k.2    Middleware and headers          ✓ Closed |
                                                         |
                                                         |
                                                         |
@@ -122,17 +122,17 @@
   1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
  ‹ Esc Epics                                                                             |
  Rate limiting v2                                                                        |
- api-h3k  API acme/api  ◒ in progress  P1                                                |
+ api-h3k  API acme/api  ◒ In progress  P1                                                |
  epic ∙ updated 20h ago                                                                  |
                                                                                          |
   Per-key token buckets in Redis, replacing the per-IP limiter.                          |
                                                                                          |
  Children ▰▰▰▰▱▱▱▱▱▱ 2/5                                                                 |
-  ◒ api-h3k.3    Limits per plan                                                         |
-  ◦ api-h3k.4    Load test at 5k rps                                                     |
-  ◦ api-h3k.5    Docs for the new 429 body                                               |
-  ✓ api-h3k.1    Token bucket store                                                      |
-  ✓ api-h3k.2    Middleware and headers                                                  |
+  api-h3k.3    Limits per plan                                             ◒ In progress |
+  api-h3k.4    Load test at 5k rps                                                ◦ Open |
+  api-h3k.5    Docs for the new 429 body                 2 notes  ⊘ Waiting on api-h3k.4 |
+  api-h3k.1    Token bucket store                                               ✓ Closed |
+  api-h3k.2    Middleware and headers                                           ✓ Closed |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -154,15 +154,15 @@
   1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
  ‹ Esc Epics                                                                              |
  Limits per plan                                                                          |
- api-h3k.3  API acme/api  ◒ in progress  P2                                               |
+ api-h3k.3  API acme/api  ◒ In progress  P2                                               |
  epic ∙ updated 23h ago                                                                   |
  Epic: Rate limiting v2                                                                   |
                                                                                           |
   No description                                                                          |
                                                                                           |
  Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                  |
-  ◦ api-h3k.3.2  Admin override                                                           |
-  ✓ api-h3k.3.1  Plan table migration                                                     |
+  api-h3k.3.2  Admin override                                                      ◦ Open |
+  api-h3k.3.1  Plan table migration                                              ✓ Closed |
                                                                                           |
                                                                                           |
                                                                                           |
@@ -186,15 +186,15 @@
   1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
  ‹ Esc Epics                                                                                                                                |
  Limits per plan                                                                                                                            |
- api-h3k.3  API acme/api  ◒ in progress  P2                                                                                                 |
+ api-h3k.3  API acme/api  ◒ In progress  P2                                                                                                 |
  epic ∙ updated 23h ago                                                                                                                     |
  Epic: Rate limiting v2                                                                                                                     |
                                                                                                                                             |
   No description                                                                                                                            |
                                                                                                                                             |
  Children ▰▰▰▰▰▱▱▱▱▱ 1/2                                                                                                                    |
-  ◦ api-h3k.3.2  Admin override                                                                                                             |
-  ✓ api-h3k.3.1  Plan table migration                                                                                                       |
+  api-h3k.3.2  Admin override                                                                                                        ◦ Open |
+  api-h3k.3.1  Plan table migration                                                                                                ✓ Closed |
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |

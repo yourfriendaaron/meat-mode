@@ -164,3 +164,29 @@ func TestHereScope(t *testing.T) {
 		t.Fatalf("p outside a project gave notice %q", m.notice)
 	}
 }
+
+// TestOpensOnEpicsInAProject checks that the viewer started in a project
+// with epic rows opens on Epics, that a tab key then sticks through new
+// data, and that it opens on To-dos anywhere else.
+func TestOpensOnEpicsInAProject(t *testing.T) {
+	s, e := load(t)
+	here := Here{Home: "/srv/sam", Dir: "/srv/sam/acme/api/internal"}
+	m := New(hub).SetHere(here).Resize(100, 30).SetData(s, e, now)
+	if m.tab != TabEpics {
+		t.Fatalf("in a project with epics: tab %v, want Epics", m.tab)
+	}
+	m, _ = m.Key("1")
+	if m = m.SetData(s, e, now); m.tab != TabTodos {
+		t.Errorf("after 1 and new data: tab %v, want To-dos", m.tab)
+	}
+	if m := New(hub).Resize(100, 30).SetData(s, e, now); m.tab != TabTodos {
+		t.Errorf("outside a project: tab %v, want To-dos", m.tab)
+	}
+	late := New(hub).SetHere(here).Resize(100, 30).SetData(s, api.Epics{}, now)
+	if late.tab != TabTodos {
+		t.Fatalf("before epics arrive: tab %v, want To-dos", late.tab)
+	}
+	if late = late.SetData(s, e, now); late.tab != TabEpics {
+		t.Errorf("when epics arrive: tab %v, want Epics", late.tab)
+	}
+}

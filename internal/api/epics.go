@@ -1,6 +1,9 @@
 package api
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // EpicRow is one bead of a repo's epics projection: an epic card, a direct
 // child of one, or an open top-level task (docs/api.md, Epics). It is a
@@ -32,6 +35,14 @@ type EpicRow struct {
 	Description string     `json:"description,omitempty"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	ClosedAt    *time.Time `json:"closedAt,omitempty"`
+	// BlockedBy are the ids of the open beads this one waits on, as the
+	// tracker reports them; empty when nothing holds it. A closed row
+	// waits on nothing.
+	BlockedBy []string `json:"blockedBy,omitempty"`
+	// DeferUntil is when a deferred bead wakes, when it has a date.
+	DeferUntil *time.Time `json:"deferUntil,omitempty"`
+	// CommentCount is how many comments the bead has.
+	CommentCount int `json:"commentCount,omitempty"`
 }
 
 // RepoEpics is one repo's projection in GET /api/epics.
@@ -59,6 +70,7 @@ const EpicsEvent = "epics"
 const (
 	MaxEpicRows         = 2000
 	MaxEpicDescriptions = 4 << 20 // bytes of description over the whole set
+	MaxEpicBlockedBy    = 20      // blocker ids kept on one row
 )
 
 // CheckEpicRows checks and cleans a repo's epic set in place, as the hub
@@ -105,6 +117,11 @@ func CheckEpicRows(rows []EpicRow) error {
 		}
 		r.Description = TruncRunes(r.Description, ItemDescriptionLimit)
 		total += len(r.Description)
+		r.BlockedBy = cleanBlockedBy(r)
+		r.CommentCount = max(r.CommentCount, 0)
+		if r.Status != "deferred" {
+			r.DeferUntil = nil
+		}
 	}
 	// A card may sit under another card, but a chain of parents must end:
 	// a row whose chain comes back to it loses its parent, which breaks the
@@ -129,4 +146,21 @@ func CheckEpicRows(rows []EpicRow) error {
 		return Invalidf("an epic set holds at most %d bytes of description, not %d", MaxEpicDescriptions, total)
 	}
 	return nil
+}
+
+// cleanBlockedBy is a row's blocker ids as CheckEpicRows keeps them.
+func cleanBlockedBy(r *EpicRow) []string {
+	if r.Status == "closed" {
+		return nil
+	}
+	var out []string
+	for _, id := range r.BlockedBy {
+		if len(out) == MaxEpicBlockedBy {
+			break
+		}
+		if ValidBeadID(id) && id != r.ID && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	return out
 }

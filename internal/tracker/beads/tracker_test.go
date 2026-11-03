@@ -1,13 +1,16 @@
 package beads_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads/beadstest"
@@ -155,4 +158,54 @@ func TestEpicsConformance(t *testing.T) {
 			Close: func(id string) { beadstest.Run(t, dir, "bd", "close", "--reason=done", "--json", "--", id) },
 		}
 	})
+}
+
+// TestEpicRowsWaitsDatesAndComments checks, against real bd, that a bead
+// held by an open one names it, that a closed blocker frees it, and that a
+// deferred bead brings its date and a commented one its count.
+func TestEpicRowsWaitsDatesAndComments(t *testing.T) {
+	dir := beadstest.NewRepo(t, "", "garden")
+	tr, err := beads.New(tracker.Env{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	add := func(title string) string {
+		out := beadstest.Run(t, dir, "bd", "create", "--title="+title, "-t", "task", "--json")
+		var b beads.Bead
+		if err := json.Unmarshal([]byte(out[strings.Index(out, "{"):]), &b); err != nil || b.ID == "" {
+			t.Fatalf("bd create printed %q: %v", out, err)
+		}
+		return b.ID
+	}
+	seeds, beds, done, fence, later := add("Buy the seeds"), add("Dig the beds"), add("Rake the soil"), add("Paint the fence"), add("Prune the roses")
+	beadstest.Run(t, dir, "bd", "dep", "add", fence, seeds)
+	beadstest.Run(t, dir, "bd", "dep", "add", fence, beds)
+	beadstest.Run(t, dir, "bd", "dep", "add", seeds, done)
+	beadstest.Run(t, dir, "bd", "close", "--reason=done", "--json", "--", done)
+	beadstest.Run(t, dir, "bd", "update", "--defer=2099-06-01", "--json", "--", later)
+	beadstest.Run(t, dir, "bd", "comments", "add", beds, "Check the soil first.")
+	beadstest.Run(t, dir, "bd", "comments", "add", beds, "Use the long spade.")
+
+	rows, err := tr.(tracker.Epics).EpicRows(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]api.EpicRow{}
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+	want := []string{seeds, beds}
+	slices.Sort(want)
+	if got := byID[fence].BlockedBy; !slices.Equal(got, want) {
+		t.Errorf("fence blockedBy = %v; want %v", got, want)
+	}
+	if got := byID[seeds].BlockedBy; len(got) != 0 {
+		t.Errorf("seeds waits on %v after its blocker closed", got)
+	}
+	if r := byID[later]; r.Status != "deferred" || r.DeferUntil == nil || r.DeferUntil.Year() != 2099 {
+		t.Errorf("deferred row = status %q, deferUntil %v", r.Status, r.DeferUntil)
+	}
+	if got := byID[beds].CommentCount; got != 2 {
+		t.Errorf("beds commentCount = %d; want 2", got)
+	}
 }

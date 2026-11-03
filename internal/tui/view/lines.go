@@ -3,6 +3,7 @@ package view
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
@@ -14,7 +15,8 @@ const (
 	gProgress = "◒" // U+25D2
 	gBlocked  = "⊘" // U+2298
 	gClosed   = "✓" // U+2713
-	gDeferred = "☾" // U+263E, also the mark of a snoozed date
+	gDeferred = "◌" // U+25CC, a deferred bead: the web's dashed ring
+	gSnoozed  = "☾" // U+263E, the mark of a snoozed date
 	gHuman    = "✦" // U+2726, a task for the person
 	gRepeat   = "↻" // U+21BB
 	gFolded   = "▸" // U+25B8
@@ -32,27 +34,105 @@ const (
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
-// statusGlyph is a status's glyph and colour.
-func statusGlyph(status string) seg {
-	switch status {
+// statusStyle is a row state's colour, the web's role for it (epics.css):
+// in progress is you (cyan), blocked urgent (red), closed done (green), and
+// open, waiting and deferred soft.
+func statusStyle(state string) style {
+	switch state {
 	case "in_progress":
-		return sg(gProgress, sYellow)
+		return sCyan
 	case "blocked":
-		return sg(gBlocked, sRed)
+		return sRed
 	case "closed":
-		return sg(gClosed, sGreen)
-	case "deferred":
-		return sg(gDeferred, sDim)
+		return sGreen
 	}
-	return sg(gOpen, sSoft)
+	return sSoft
 }
 
-// statusWords is a status in words.
-func statusWords(status string) string {
-	if status == "in_progress" {
-		return "in progress"
+// statusGlyph is a row state's mark, the shape of the web's status dot:
+// a ring for open, half for in progress, a struck ring for blocked and
+// waiting, a dashed ring for deferred, a check for closed.
+func statusGlyph(state string) seg {
+	g := gOpen
+	switch state {
+	case "in_progress":
+		g = gProgress
+	case "blocked", "waiting":
+		g = gBlocked
+	case "closed":
+		g = gClosed
+	case "deferred":
+		g = gDeferred
 	}
-	return status
+	return sg(g, statusStyle(state))
+}
+
+// statusWords is a status in the web's words (epics.ts, STATUS_NAMES).
+func statusWords(status string) string {
+	switch status {
+	case "in_progress":
+		return "In progress"
+	case "blocked":
+		return "Blocked"
+	case "deferred":
+		return "Deferred"
+	case "closed":
+		return "Closed"
+	case "waiting":
+		return "Waiting"
+	}
+	return "Open"
+}
+
+// statusTag is a bead row's state as its mark and words: "Waiting on
+// as-7om +2" names the first bead it waits on, "Deferred to Nov 24" its
+// wake date, in now's zone. Short drops both, for narrow rows.
+func statusTag(state string, r *api.EpicRow, short bool, now time.Time) line {
+	words := statusWords(state)
+	switch {
+	case short:
+	case state == "waiting" && len(r.BlockedBy) > 0:
+		words += " on " + clean(r.BlockedBy[0])
+		if n := len(r.BlockedBy) - 1; n > 0 {
+			words += " +" + itoa(n)
+		}
+	case state == "deferred" && r.DeferUntil != nil:
+		words += " to " + fmtShortDay(r.DeferUntil.In(now.Location()), now)
+	}
+	return line{statusGlyph(state), sg(" "+words, statusStyle(state))}
+}
+
+// notesTag is a bead's comment count, "2 notes", or nothing.
+func notesTag(r *api.EpicRow) line {
+	switch r.CommentCount {
+	case 0:
+		return nil
+	case 1:
+		return line{sg(" 1 note", sDim)}
+	}
+	return line{sg(" "+itoa(r.CommentCount)+" notes", sDim)}
+}
+
+// cardCounts is what a card's direct children hold up: "1 blocked" in red
+// and "3 waiting" soft, or nothing. Short keeps only the first of them.
+func (d *data) cardCounts(re *api.RepoEpics, id string, short bool) line {
+	blocked, waiting := 0, 0
+	for _, k := range d.children(re, id) {
+		switch d.rowState(re, k) {
+		case "blocked":
+			blocked++
+		case "waiting":
+			waiting++
+		}
+	}
+	var out line
+	if blocked > 0 {
+		out = append(out, sg(" "+itoa(blocked)+" blocked", sRed))
+	}
+	if waiting > 0 && (!short || blocked == 0) {
+		out = append(out, sg(" "+itoa(waiting)+" waiting", sSoft))
+	}
+	return out
 }
 
 // mark is a list's badge, codeWidth cells: the personal list's check,
@@ -138,7 +218,7 @@ func chipStyle(t chipTone) style {
 // chipText is the date chip with the snoozed mark.
 func chipText(text string, t chipTone) string {
 	if t == toneSnoozed {
-		return gDeferred + " " + text
+		return gSnoozed + " " + text
 	}
 	return text
 }
@@ -185,6 +265,7 @@ func (m *Model) itemLine(it *api.Item, w int, nested bool) line {
 func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, foldable, open bool, w int) line {
 	d := m.d
 	status := d.rowStatus(re, r)
+	state := d.rowState(re, r)
 	left := line{sg("  "+strings.Repeat("  ", depth), sPlain)}
 	switch {
 	case foldable && open:
@@ -192,7 +273,7 @@ func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, fol
 	case foldable:
 		left = append(left, sg(gFolded, sAccent))
 	default:
-		left = append(left, statusGlyph(status))
+		left = append(left, sg(" ", sPlain))
 	}
 	idw := 9
 	if depth > 0 {
@@ -214,12 +295,23 @@ func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, fol
 	if r.Assignee != "" {
 		right = append(right, sg(" @"+clean(r.Assignee), sCyan))
 	}
+	if w >= 70 {
+		right = append(right, notesTag(r)...)
+	}
+	switch {
+	case card && state != "open" && w < 70:
+		right = append(right, sg(" ", sPlain), statusGlyph(state))
+	case !card || state != "open":
+		right = append(right, sg("  ", sPlain))
+		right = append(right, statusTag(state, r, w < 70, d.now)...)
+	}
 	if card {
 		done, total := d.progress(re, r.ID)
 		bw := 10
 		if w < 70 {
 			bw = 6
 		}
+		right = append(right, d.cardCounts(re, r.ID, w < 70)...)
 		right = append(right, sg(" ", sPlain))
 		right = append(right, bar(done, total, bw)...)
 		right = append(right, sg(padRight(" "+itoa(done)+"/"+itoa(total), 6), sSoft))
@@ -238,12 +330,19 @@ func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, w int) line {
 		ts = sBold
 	}
 	left := line{sg(" ", sPlain), d.mark(re.Bridge, re.Repo), sg(" ", sPlain), sg(padRight(clean(r.ID), 9)+" ", sDim), sg(clean(d.rowTitle(re, r)), ts)}
+	state := d.rowState(re, r)
+	short := w < 70
 	if !t.card {
 		right := line{}
 		if r.Human {
-			right = append(right, sg(" "+gHuman, sOrange))
+			right = append(right, sg(" "+gHuman+" you", sOrange))
 		}
-		right = append(right, sg(" ", sPlain), statusGlyph(d.rowStatus(re, r)), sg(" ", sPlain))
+		if !short {
+			right = append(right, notesTag(r)...)
+		}
+		right = append(right, sg("  ", sPlain))
+		right = append(right, statusTag(state, r, short, d.now)...)
+		right = append(right, sg(" ", sPlain))
 		return lr(left, right, w)
 	}
 	done, total := d.progress(re, r.ID)
@@ -251,7 +350,17 @@ func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, w int) line {
 	if w < 50 {
 		bw = 5
 	}
-	right := append(line{sg(" ", sPlain)}, bar(done, total, bw)...)
+	right := line{}
+	switch {
+	case state != "open" && short:
+		right = append(right, sg(" ", sPlain), statusGlyph(state))
+	case state != "open":
+		right = append(right, sg("  ", sPlain))
+		right = append(right, statusTag(state, r, false, d.now)...)
+	}
+	right = append(right, d.cardCounts(re, r.ID, short)...)
+	right = append(right, sg(" ", sPlain))
+	right = append(right, bar(done, total, bw)...)
 	right = append(right, sg(padLeft(" "+itoa(done)+"/"+itoa(total)+" ", 7), sSoft))
 	return lr(left, right, w)
 }
@@ -290,7 +399,7 @@ func (m *Model) itemDetail(t *target, w int) []line {
 		idl = append(idl, sg("  "+gHuman+" for you", sOrange))
 	}
 	if it.Status != "open" && it.Status != "closed" {
-		idl = append(idl, sg("  ", sPlain), statusGlyph(it.Status), sg(" "+clean(statusWords(it.Status)), sSoft))
+		idl = append(idl, sg("  ", sPlain), statusGlyph(it.Status), sg(" "+statusWords(it.Status), statusStyle(it.Status)))
 	}
 	out = append(out, idl)
 	var meta line
@@ -368,7 +477,9 @@ func (m *Model) rowDetail(t *target, w int) []line {
 	d, re, r := m.d, t.repo, t.row
 	out := titleLines(r.Title, w)
 	idl := line{sg(" "+clean(r.ID), sDim), sg("  ", sPlain), d.mark(re.Bridge, re.Repo), sg(" "+clean(re.Repo), sSoft),
-		sg("  ", sPlain), statusGlyph(r.Status), sg(" "+clean(statusWords(r.Status)), sSoft), priority(r.Priority)}
+		sg("  ", sPlain)}
+	idl = append(idl, statusTag(d.rowState(re, r), r, false, d.now)...)
+	idl = append(idl, priority(r.Priority))
 	if r.Human {
 		idl = append(idl, sg("  "+gHuman+" needs you", sOrange))
 	}
@@ -386,6 +497,13 @@ func (m *Model) rowDetail(t *target, w int) []line {
 	if r.ClosedAt != nil {
 		facts = append(facts, "closed "+fmtAgo(*r.ClosedAt, d.now))
 	}
+	switch r.CommentCount {
+	case 0:
+	case 1:
+		facts = append(facts, "1 note")
+	default:
+		facts = append(facts, itoa(r.CommentCount)+" notes")
+	}
 	if len(facts) > 0 {
 		out = append(out, line{sg(" "+strings.Join(facts, " "+gDot+" "), sDim)})
 	}
@@ -394,6 +512,20 @@ func (m *Model) rowDetail(t *target, w int) []line {
 			if re.Rows[k].ID == r.Parent {
 				out = append(out, line{sg(" Epic: ", sDim), sg(clean(re.Rows[k].Title), sSoft)})
 			}
+		}
+	}
+	if d.rowState(re, r) == "waiting" {
+		out = append(out, nil, line{sg(" Waiting on ", sHead), sg(itoa(len(r.BlockedBy)), sDim)})
+		for _, id := range r.BlockedBy {
+			l := line{sg("  "+padRight(clean(id), 12)+" ", sDim)}
+			for k := range re.Rows {
+				if re.Rows[k].ID == id {
+					l = lr(append(l, sg(clean(d.rowTitle(re, &re.Rows[k])), sPlain)),
+						append(append(line{sg("  ", sPlain)}, statusTag(d.rowState(re, &re.Rows[k]), &re.Rows[k], w < 70, d.now)...), sg(" ", sPlain)), w)
+					break
+				}
+			}
+			out = append(out, l)
 		}
 	}
 	out = append(out, nil)
@@ -427,14 +559,20 @@ func (m *Model) childLine(re *api.RepoEpics, k *api.EpicRow, w int) line {
 	if status == "closed" {
 		ts = sDim
 	}
-	left := line{sg("  ", sPlain), statusGlyph(status), sg(" "+padRight(clean(k.ID), 12)+" ", sDim), sg(clean(d.rowTitle(re, k)), ts)}
+	left := line{sg("  "+padRight(clean(k.ID), 12)+" ", sDim), sg(clean(d.rowTitle(re, k)), ts)}
 	var right line
 	switch {
 	case k.Human:
-		right = line{sg(" "+gHuman+" you ", sOrange)}
+		right = line{sg(" "+gHuman+" you", sOrange)}
 	case k.Assignee != "":
-		right = line{sg(" @"+clean(k.Assignee)+" ", sCyan)}
+		right = line{sg(" @"+clean(k.Assignee), sCyan)}
 	}
+	if w >= 70 {
+		right = append(right, notesTag(k)...)
+	}
+	right = append(right, sg("  ", sPlain))
+	right = append(right, statusTag(d.rowState(re, k), k, w < 70, d.now)...)
+	right = append(right, sg(" ", sPlain))
 	return lr(left, right, w)
 }
 
