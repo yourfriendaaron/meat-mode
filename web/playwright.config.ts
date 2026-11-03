@@ -15,8 +15,9 @@ export default defineConfig({
     locale: "en-US",
     trace: "retain-on-failure",
   },
+  // The server builds the bundle first, so a run never tests a stale one.
   webServer: {
-    command: "node test/serve.mjs",
+    command: "node scripts/build.mjs && node test/serve.mjs",
     url: `http://127.0.0.1:${PORT}/`,
     env: { PORT: String(PORT) },
     reuseExistingServer: false,
