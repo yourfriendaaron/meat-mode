@@ -61,9 +61,17 @@ function knownStatus(s: string): string {
   return Object.hasOwn(STATUS_NAMES, s) ? s : "open";
 }
 
-/** Whether any repo shows its epics, which is when the view is offered. */
+/** Whether any repo shows its epics. */
 export function epicsOn(repos: Repo[]): boolean {
   return repos.some((r) => r.epicsOn === true);
+}
+
+/**
+ * Whether any repo's tracker can show epics, which is when the view is
+ * offered: its Repos menu is where a repo's epics switch on and off.
+ */
+export function epicsOffered(repos: Repo[]): boolean {
+  return repos.some((r) => r.epics === true);
 }
 
 /**
@@ -153,8 +161,6 @@ export const SORTS: [EpicsSort, string][] = [
 export interface EpicsUI {
   /** The search box: title or id, across repos. */
   q: string;
-  /** Repos picked in the Repo menu, by `<bridge>/<repo>`; none picked shows every repo. */
-  repos: Set<string>;
   statuses: Set<string>;
   priorities: Set<number>;
   sort: EpicsSort;
@@ -174,7 +180,6 @@ export interface EpicsUI {
 export function newEpicsUI(): EpicsUI {
   return {
     q: "",
-    repos: new Set(),
     statuses: new Set(),
     priorities: new Set(),
     sort: "priority",
@@ -187,7 +192,7 @@ export function newEpicsUI(): EpicsUI {
   };
 }
 
-/** Whether a search, status or priority filter narrows the rows. The Repo menu picks sections instead. */
+/** Whether a search, status or priority filter narrows the rows. */
 export function filtering(ui: EpicsUI): boolean {
   return ui.q.trim() !== "" || ui.statuses.size > 0 || ui.priorities.size > 0;
 }
@@ -199,10 +204,6 @@ export function matches(r: EpicRow, ui: EpicsUI): boolean {
   if (ui.statuses.size && !ui.statuses.has(knownStatus(r.status))) return false;
   if (ui.priorities.size && !ui.priorities.has(clampPriority(r.priority))) return false;
   return true;
-}
-
-function repoInScope(repoKey: string, ui: EpicsUI): boolean {
-  return !ui.repos.size || ui.repos.has(repoKey);
 }
 
 function updated(r: EpicRow): number {
@@ -406,11 +407,10 @@ export interface AttentionRow {
   repo: RepoEpics;
 }
 
-/** Every row not closed that is Critical or Blocked, across the repos the filters leave, by priority. */
+/** Every row not closed that is Critical or Blocked, across the repos, by priority. */
 export function attention(data: Epics, ui: EpicsUI, find: (key: string) => Item | undefined): AttentionRow[] {
   const out: AttentionRow[] = [];
   for (const repo of data.repos ?? []) {
-    if (!repoInScope(`${repo.bridge}/${repo.repo}`, ui)) continue;
     for (const row of shownRows(repo, find)) {
       if (row.status !== "closed" && (row.priority <= 0 || row.status === "blocked") && matches(row, ui)) out.push({ row, repo });
     }
@@ -656,10 +656,12 @@ export function epicsHTML(v: EpicsView): string {
   if (!v.data) return `<p class="empty">${v.error ? `Could not load epics: ${esc(v.error)}` : "Loading"}</p>`;
   const all = v.data.repos ?? [];
   const failed = v.error ? `<p class="ep-error" role="status">Could not load epics again: ${esc(v.error)}</p>` : "";
-  if (!all.length) return `${failed}<p class="empty">No epics yet. They show here once the machine sends them.</p>`;
+  if (!all.length) {
+    const none = epicsOn(v.repos) ? "No epics yet. They show here once the machine sends them." : "No repo shows its epics yet. Pick the repos to show in the Repos menu.";
+    return `${failed}<p class="empty">${none}</p>`;
+  }
   const sections: string[] = [];
   all.forEach((r, i) => {
-    if (!repoInScope(`${r.bridge}/${r.repo}`, v.ui)) return;
     // While a search or filter is on, a repo with nothing that matches drops out.
     if (filtering(v.ui) && !outline(shownRows(r, v.find), v.ui).entries.length) return;
     sections.push(repoHTML(r, i, v, all));
@@ -690,27 +692,29 @@ export interface ToolbarView {
   repos: Repo[];
 }
 
-/** The Repo, Filter and View menus, which sit in the header after the search box. */
+/**
+ * The Repos, Filter and View menus, which sit in the header after the search
+ * box. The Repos menu lists every repo whose tracker can show epics, checked
+ * where they show: a pick switches the repo's epics on or off at its machine
+ * and reaches main.ts as "ep-show-repo".
+ */
 export function menusHTML(v: ToolbarView): string {
   const ui = v.ui;
-  const all = v.data?.repos ?? [];
-  const picked = all.filter((r) => ui.repos.has(`${r.bridge}/${r.repo}`));
-  const first = picked[0];
-  const repoBtn = !first
-    ? "<span>Repo</span>"
-    : `${listBadge(stateRepo(first, v.repos), v.repos, "s")}<span>${esc(picked.length === 1 ? repoName(first, all).label : `${picked.length} repos`)}</span>`;
+  const can = v.repos.filter((r) => r.epics === true).sort((a, b) => a.bridge.localeCompare(b.bridge) || a.name.localeCompare(b.name));
+  const shown = can.filter((r) => r.epicsOn === true).length;
+  const repoBtn = `<span>Repos${shown ? ` <span class="ep-n">${shown}</span>` : ""}</span>`;
   let i = 0;
-  const repoItems =
-    menuItem("repo", i++, "ep-f-repo-all", "", '<span class="ep-grow">All repos</span>', !ui.repos.size, "menuitemradio") +
-    '<div class="more-sep" role="separator"></div>' +
-    all
-      .map((r) => {
-        const key = `${r.bridge}/${r.repo}`;
-        const { label, where } = repoName(r, all);
-        const open = r.rows.filter((x) => shownStatus(r, x, v.find) !== "closed").length;
-        return menuItem("repo", i++, "ep-f-repo", key, `${listBadge(stateRepo(r, v.repos), v.repos)}<span class="ep-grow">${esc(where ? `${label} (${where})` : label)}</span>`, ui.repos.has(key), "menuitemcheckbox", `<span class="ep-n">${open}</span>`);
-      })
-      .join("");
+  const repoItems = can.length
+    ? `<div role="group" aria-label="Show epics from"><div class="more-h" aria-hidden="true">Show epics from</div>${can
+        .map((r) => {
+          const key = `${r.bridge}/${r.name}`;
+          const label = repoLabel(r);
+          const same = can.filter((x) => repoLabel(x) === label).length > 1;
+          const waiting = r.epicsPending ? `<span class="ep-n" role="status">Waiting for ${esc(r.bridge)}</span>` : "";
+          return menuItem("repo", i++, "ep-show-repo", key, `${listBadge(r, v.repos)}<span class="ep-grow">${esc(same ? `${label} (${r.name} on ${r.bridge})` : label)}</span>`, r.epicsOn === true, "menuitemcheckbox", waiting);
+        })
+        .join("")}</div>`
+    : '<p class="more-h">No repo here can show epics.</p>';
   i = 0;
   const nf = ui.statuses.size + ui.priorities.size;
   const filterItems =
@@ -724,30 +728,17 @@ export function menusHTML(v: ToolbarView): string {
     `<button class="more-item" id="ep-mi-view-${i++}" role="menuitem" data-act="ep-expand-all" tabindex="-1"><span class="ep-ck"></span>Expand all</button>` +
     `<button class="more-item" id="ep-mi-view-${i++}" role="menuitem" data-act="ep-collapse-all" tabindex="-1"><span class="ep-ck"></span>Collapse all</button>`;
   return (
-    menuWrap(ui, "repo", "Repo", repoBtn, repoItems) +
+    menuWrap(ui, "repo", "Repos", repoBtn, repoItems) +
     menuWrap(ui, "filter", "Filter", `<span>Filter${nf ? ` <span class="ep-n">${nf}</span>` : ""}</span>`, filterItems) +
     menuWrap(ui, "view", "View", "<span>View</span>", viewItems)
   );
 }
 
-/** A row's status as the view shows it, a State item's winning. */
-function shownStatus(r: RepoEpics, row: EpicRow, find: (key: string) => Item | undefined): string {
-  const it = row.human ? find(`${r.bridge}/${r.repo}/${row.id}`) : undefined;
-  return it ? it.status : row.status;
-}
-
 /** The active filters, one chip each with its own remove button, then Clear; "" with none. */
 export function chipsHTML(v: ToolbarView): string {
   const ui = v.ui;
-  const all = v.data?.repos ?? [];
   const x = ICON.close;
   const chips = [
-    ...all
-      .filter((r) => ui.repos.has(`${r.bridge}/${r.repo}`))
-      .map((r) => {
-        const { label } = repoName(r, all);
-        return `<button class="ep-achip" data-act="ep-f-repo" data-v="${esc(`${r.bridge}/${r.repo}`)}"><span class="sr">Remove filter: </span>${listBadge(stateRepo(r, v.repos), v.repos, "s")}${esc(label)}${x}</button>`;
-      }),
     ...STATUSES.filter((s) => ui.statuses.has(s)).map(
       (s) => `<button class="ep-achip" data-act="ep-f-status" data-v="${s}"><span class="sr">Remove filter: </span><span class="ep-st ep-s-${s}"><span class="ep-sd" aria-hidden="true"></span></span>${esc(statusName(s))}${x}</button>`,
     ),
@@ -768,7 +759,6 @@ export function toggle<T>(set: Set<T>, v: T): void {
 /** Clears the search and every filter. */
 export function clearFilters(ui: EpicsUI): void {
   ui.q = "";
-  ui.repos.clear();
   ui.statuses.clear();
   ui.priorities.clear();
   ui.shut.clear();

@@ -264,36 +264,40 @@ test.describe("desktop", () => {
     await expect(page.locator("#qa-agent")).toBeHidden();
   });
 
-  test("Settings: agents off shows the command for the machine; agents on can be switched off", async ({ page, hub }) => {
+  test("Settings: agents off opens the command for the machine; agents allowed can be revoked", async ({ page, hub }) => {
     await openApp(page);
     await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
     const website = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync website (website)" }) });
-    await expect(website).toContainText("Agents are off here");
+    // Agents are a status, not a switch: the repo's only switch is sync.
+    await expect(website.getByRole("switch")).toHaveCount(1);
+    const how = website.getByRole("button", { name: "Agents off in website (website): how to allow them" });
+    await expect(how).toHaveAttribute("aria-expanded", "false");
+    await expect(website.locator("code")).toHaveCount(0);
+    await how.click();
+    await expect(how).toHaveAttribute("aria-expanded", "true");
+    await expect(how).toBeFocused();
     await expect(website.locator("code")).toHaveText("meat-mode bridge agents on website");
-    await expect(website.getByRole("switch", { name: /Agents can work/ })).toHaveCount(0);
     await expect(page.locator("[data-section=runs]")).toContainText(
       "Agents start only from your pink taps, one per task, and each run keeps the limits its machine sets.",
     );
     await expect(page.locator("[data-section=runs]")).toContainText("No agent is working now.");
     await axe(page);
 
-    // Switched on at the machine, the repo shows a switch that turns agents off.
+    // Allowed at the machine, the repo says so, with Revoke, which turns agents off.
     hub.allowAgents("website");
     await poke(page);
-    const sw = page.getByRole("switch", { name: "Agents can work in website (website)" });
-    await expect(sw).toHaveAttribute("aria-checked", "true");
+    await expect(website).toContainText("Agents allowed");
     await expect(website.locator("code")).toHaveCount(0);
-    await sw.click();
+    await website.getByRole("button", { name: "Revoke agents in website (website)" }).click();
     await expect.poll(() => hub.posted.at(-1)).toMatchObject({ kind: "agents", bridge: "home", repo: "website", payload: { on: false } });
-    await expect(website).toContainText("Agents are off here");
-    await expect(website.getByRole("status")).toHaveText("Waiting for home");
+    await expect(website.getByRole("status")).toHaveText("Agents: waiting for home");
     expect(hub.posted.filter((a) => a.kind === "agents" && a.payload.on)).toEqual([]);
 
-    // A repo that does not sync says agents are off, with no command.
+    // A repo that does not sync says nothing about agents.
     hub.repos.find((r) => r.name === "garden")!.optedIn = false;
     await poke(page);
     const garden = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync garden (garden)" }) });
-    await expect(garden).toContainText("Agents are off here");
+    await expect(garden).not.toContainText("Agents");
     await expect(garden.locator("code")).toHaveCount(0);
   });
 

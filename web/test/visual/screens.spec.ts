@@ -350,7 +350,7 @@ for (const size of Object.keys(SIZES) as Size[]) {
           await shot(page, "runs-new-task");
         });
 
-        test("settings with the agents switch", async ({ page, hub }) => {
+        test("settings with agents allowed", async ({ page, hub }) => {
           hub.allowAgents("website");
           hub.setRun("home/website/we-1", { state: "working", activity: "Shortening the second line" });
           // A harness with every limits phrase, so the baseline holds the longest line.

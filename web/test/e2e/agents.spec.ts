@@ -82,14 +82,14 @@ test.describe("desktop", () => {
     expect(hub.posted.find((a) => a.kind === "sync")).toMatchObject({ bridge: "laptop", repo: "projects/garden", payload: { on: true } });
     await axe(page);
 
-    // Agents switch on at the machine: the step shows the command, with no switch for it.
+    // Agents are allowed at the machine: the step shows the command at once, with no switch for it.
     hub.applyAll();
     hub.repos.find((r) => r.name === "projects/garden")!.pending = false;
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     const gardenRow = w.region.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync garden (projects/garden)" }) });
-    await expect(gardenRow).toContainText("Agents are off here");
+    await expect(gardenRow).toContainText("Agents off");
     await expect(gardenRow.locator("code")).toHaveText("meat-mode bridge agents on projects/garden");
-    await expect(gardenRow.getByRole("switch", { name: /Agents can work/ })).toHaveCount(0);
+    await expect(gardenRow.getByRole("switch")).toHaveCount(1);
     await gardenRow.getByRole("button", { name: "Copy the command for projects/garden" }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("meat-mode bridge agents on projects/garden");
     await axe(page);

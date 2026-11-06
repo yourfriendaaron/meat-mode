@@ -53,16 +53,23 @@ async function middle(page: Page, sel: string) {
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 }, permissions: ["clipboard-read", "clipboard-write"] });
 
-  test("Epics shows in the sidebar only while a repo has its epics on", async ({ page, hub }) => {
+  test("Epics shows in the sidebar once a repo's tracker can show epics, switched on or not", async ({ page, hub }) => {
     await openApp(page);
     const nav = page.locator("#nav");
     await expect(nav.getByRole("button", { name: "Everything" })).toBeVisible();
     await expect(nav.getByRole("button", { name: "Epics" })).toHaveCount(0);
     expect(hub.requests).not.toContain("GET /api/epics");
 
+    // A tracker that can show epics offers the view, which points at its Repos menu.
+    hub.repos.find((r) => r.name === "garden")!.epics = true;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await nav.getByRole("button", { name: "Epics" }).click();
+    await expect(page.locator("#epics")).toContainText("No repo shows its epics yet. Pick the repos to show in the Repos menu.");
+    await axe(page);
+
     hub.showEpics("garden", gardenEpics());
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await expect(nav.getByRole("button", { name: "Epics" })).toBeVisible();
+    await expect(page.locator("#epics .ep-repo")).toHaveCount(1);
   });
 
   test("the title, search box and menus share one line; the task views keep their own search", async ({ page, hub }) => {
@@ -272,19 +279,6 @@ test.describe("desktop", () => {
     await expect(chips.getByRole("button", { name: "Remove filter: Critical" })).toHaveCount(0);
     await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["ga-20", "wb-3", "wb-7"]);
 
-    // Repo picks sections, with each repo's mark and open count.
-    await page.locator("#ep-mb-repo").click();
-    const website = page.getByRole("menuitemcheckbox", { name: /website/ });
-    await expect(website.locator(".ep-n")).toHaveText("7");
-    await expect(page.getByRole("menuitemcheckbox", { name: /garden/ }).locator(".ep-n")).toHaveText("8");
-    await website.click();
-    await page.locator("#view-title").click();
-    await expect(page.getByRole("menu")).toHaveCount(0);
-    await expect(page.locator("#ep-mb-repo")).toContainText("website");
-    await expect(page.locator("#epics .ep-repo")).toHaveCount(1);
-    await expect(page.locator("#epics .ep-list > .ep-item > .ep-line .ep-id")).toHaveText(["wb-3", "wb-7"]);
-    await axe(page);
-
     await chips.getByRole("button", { name: "Clear" }).click();
     await expect(chips).toBeHidden();
     await expect(page.locator("#epics .ep-repo")).toHaveCount(2);
@@ -442,39 +436,49 @@ test.describe("desktop", () => {
     await expect(entry(page, "ga-10").locator(".ep-ptext")).toHaveText("85% 6/7 done");
   });
 
-  test("the last repo's epics switched off at its machine takes the view back to Today", async ({ page, hub }) => {
+  test("the last repo's epics switched off at its machine keep the view, which points at the Repos menu", async ({ page, hub }) => {
     withEpics(hub);
     hub.eventRetryMs = 200; // the hub's change events reach the app
     await openApp(page);
     await openEpics(page);
     // The machine reports the repo without epics on, and the hub tells the app.
     hub.repos.find((r) => r.epicsOn)!.epicsOn = false;
+    await expect(page.locator("#epics")).toContainText("Pick the repos to show in the Repos menu.");
+    await expect(page.locator("#view-title")).toHaveText("Epics");
+    await expect(page.locator("#ep-menus")).toBeVisible();
+    // No tracker left that can show epics takes the view back to Today.
+    for (const r of hub.repos) r.epics = false;
     await expect(page.locator("#view-title")).toHaveText("Today");
     await expect(page.locator("#nav").getByRole("button", { name: "Epics" })).toHaveCount(0);
     await expect(page.locator("#ep-menus")).toBeHidden();
   });
 
-  test("Settings switches a repo's epics on and off, as it does sync", async ({ page, hub }) => {
+  test("the Repos menu switches a repo's epics on and off at its machine; Settings has no epics switch", async ({ page, hub }) => {
     withEpics(hub);
     await openApp(page);
     await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
-    const sw = page.getByRole("switch", { name: "Show the epics of garden (garden)" });
-    await expect(sw).toHaveAttribute("aria-checked", "true");
-    const web = page.getByRole("switch", { name: "Show the epics of website (website)" });
-    await expect(web).toHaveAttribute("aria-checked", "false");
+    await expect(page.locator(".m-repos")).not.toContainText("epics");
+    await openEpics(page);
+    await expect(page.locator("#ep-mb-repo")).toHaveText(/Repos\s*1/);
+    await page.locator("#ep-mb-repo").click();
+    const garden = page.getByRole("menuitemcheckbox", { name: /garden/ });
+    const website = page.getByRole("menuitemcheckbox", { name: /website/ });
+    await expect(garden).toHaveAttribute("aria-checked", "true");
+    await expect(website).toHaveAttribute("aria-checked", "false");
     await axe(page);
 
-    await web.click();
+    // A pick keeps the menu open, and waits until the machine applies it.
+    await website.click();
     expect(hub.posted.find((a) => a.kind === "epics")).toMatchObject({ bridge: "home", repo: "website", payload: { on: true } });
-    const website = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync website (website)" }) });
-    await expect(web).toHaveAttribute("aria-checked", "true");
+    await expect(website).toHaveAttribute("aria-checked", "true");
     await expect(website).toContainText("Waiting for home");
 
-    await sw.click();
+    await garden.click();
     expect(hub.posted.filter((a) => a.kind === "epics").at(-1)).toMatchObject({ bridge: "home", repo: "garden", payload: { on: false } });
-    const garden = page.locator(".m-repo", { has: page.getByRole("switch", { name: "Sync garden (garden)" }) });
-    await expect(sw).toHaveAttribute("aria-checked", "false");
-    await expect(garden).toContainText("Waiting for home");
+    await expect(garden).toHaveAttribute("aria-checked", "false");
+    // Switched off, its section leaves at once.
+    await expect(page.locator("#epics .ep-repo")).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await page.locator(".sidebar .sync-pill").click();
     await expect(page.locator("#syncpop")).toContainText("Epics off: garden on home");
     await expect(page.locator("#syncpop")).toContainText("Epics on: website on home");

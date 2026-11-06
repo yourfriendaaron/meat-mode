@@ -72,9 +72,9 @@ import { applyTheme, getTheme, setTheme } from "./theme.ts";
 import { gate, loginErrorText } from "./login.ts";
 import { claimHTML, claimScreen } from "./password.ts";
 import { esc } from "./html.ts";
-import { agentsOnHTML } from "./agents.ts";
+import { agentsHowOpen, agentsOnHTML } from "./agents.ts";
 import { copyText, copyValue } from "./clipboard.ts";
-import { chipsHTML, clearFilters, collapseAll, epicDetailHTML, epicsHTML, epicsOn, expandAll, findRow, menusHTML, newEpicsUI, toggle, type EpicsMenu, type EpicsSort } from "./epics.ts";
+import { chipsHTML, clearFilters, collapseAll, epicDetailHTML, epicsHTML, epicsOffered, expandAll, findRow, menusHTML, newEpicsUI, toggle, type EpicsMenu, type EpicsSort } from "./epics.ts";
 import { listBadge, onIconError, retryIcons } from "./identity.ts";
 import { ICON } from "./icons.ts";
 import { remote, type Remote } from "./remote.ts";
@@ -379,7 +379,7 @@ function renderNav() {
       entry("month", "Calendar", ICON.upcoming, plain(upcoming)) +
       entry("agents", "From agents", agentsIcon, agentsWorking + (agentNew ? `<span class="badge-new">${agentNew} new</span>` : "")) +
       entry("all", "Everything", ICON.all, plain(everything)) +
-      (epicsOn(repos()) ? entry("epics", "Epics", ICON.epic, "") : "") +
+      (epicsOffered(repos()) ? entry("epics", "Epics", ICON.epic, "") : "") +
       entry("completed", "Completed", ICON.check, "") +
       entry("deleted", "Deleted", ICON.trash, ""),
   );
@@ -401,7 +401,7 @@ function renderNav() {
       ["today", "Today", ICON.today, ""],
       ["month", "Calendar", ICON.upcoming, ""],
       ["agents", "Agents", agentsIcon, agentsWorking + (agentNew ? `<span class="tab-badge" aria-label="${agentNew} new">${agentNew}</span>` : "")],
-      ...(epicsOn(repos()) ? [["epics", "Epics", ICON.epic, ""]] : []),
+      ...(epicsOffered(repos()) ? [["epics", "Epics", ICON.epic, ""]] : []),
     ]
       .map(([v, label, icon, badge]) => {
         return `<button class="tab" data-act="view" data-view="${v}"${current === v ? ' aria-current="page"' : ""}>${icon}<span>${label}</span>${badge}</button>`;
@@ -2013,16 +2013,19 @@ async function refresh(): Promise<void> {
     try {
       const st = await api.state();
       noteRunEnds(st.items ?? []);
+      const shownBefore = epicsShown(S.state?.repos ?? []);
       S.state = st;
       S.loadError = "";
       const server = new Date(st.serverTime).getTime();
       if (!Number.isNaN(server)) S.offset = server - Date.now();
       if (S.selected && !byKey(S.selected)) S.selected = null;
-      // Epics switched off for every repo take the view with them.
-      if (S.view === "epics" && !epicsOn(st.repos ?? [])) {
+      // No repo left that can show epics takes the view with it.
+      if (S.view === "epics" && !epicsOffered(st.repos ?? [])) {
         S.view = "today";
         S.epic = null;
       }
+      // A repo's epics switched on or off, here or at its machine, change what GET /api/epics holds.
+      if (epicsShown(st.repos ?? []) !== shownBefore) loadEpics();
       if (S.syncOpen) void syncActions.reload(renderSync);
       // The open item's History follows every change.
       if (S.open && S.open === historyKey) void itemHistory.reload(renderHistory);
@@ -2051,6 +2054,15 @@ const syncActions = remote(() => api.actions(30));
 
 /** The epics GET /api/epics last gave, loaded when the view opens and again on each epics event while it shows. */
 const epicsData = remote(() => api.epics());
+
+/** The repos whose epics show, with any switch still waiting, as one string to compare. */
+function epicsShown(rs: Repo[]): string {
+  return rs
+    .filter((r) => r.epicsOn === true)
+    .map((r) => `${r.bridge}/${r.name}${r.epicsPending ? "~" : ""}`)
+    .sort()
+    .join("\n");
+}
 
 function loadEpics() {
   if (S.view !== "epics" || !shellUp) return;
@@ -2454,7 +2466,7 @@ async function switchEpics(bridge: string, repo: string) {
   await refresh();
 }
 
-async function switchAgents(bridge: string, repo: string) {
+async function revokeAgents(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
   // The app can only switch agents off; they switch on at the machine (docs/api.md, Agents).
   if (!r?.agentsAllowed) return;
@@ -2861,7 +2873,6 @@ function openEpic(key: string, reveal = false) {
   if (!row) return;
   if (reveal) {
     S.ep.folded.delete(row.repoKey);
-    if (S.ep.repos.size && !S.ep.repos.has(row.repoKey)) S.ep.repos.add(row.repoKey);
   }
   if (S.open) {
     S.open = null;
@@ -2929,13 +2940,11 @@ function epicsAct(btn: HTMLElement): boolean {
       epicsMenu(null);
       return true;
     // A pick in a multi-select menu keeps it open; the rest close it.
-    case "ep-f-repo":
-      toggle(ui.repos, v);
+    case "ep-show-repo": {
+      const r = repos().find((x) => `${x.bridge}/${x.name}` === v);
+      if (r) void switchEpics(r.bridge, r.name);
       break;
-    case "ep-f-repo-all":
-      ui.repos.clear();
-      epicsMenu(null);
-      return true;
+    }
     case "ep-f-status":
       toggle(ui.statuses, v);
       ui.shut.clear();
@@ -3333,14 +3342,18 @@ function onClick(e: MouseEvent) {
     case "agents-settings":
       ctx.openSettings("s-mach");
       break;
-    case "agents-switch":
-      void switchAgents(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
+    case "agents-revoke":
+      void revokeAgents(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
       break;
+    case "agents-how": {
+      const k = `${btn.dataset.bridge ?? ""}/${btn.dataset.repo ?? ""}`;
+      toggle(agentsHowOpen, k);
+      render();
+      document.querySelector<HTMLElement>(`[data-act="agents-how"][data-bridge="${CSS.escape(btn.dataset.bridge ?? "")}"][data-repo="${CSS.escape(btn.dataset.repo ?? "")}"]`)?.focus();
+      break;
+    }
     case "agents-on-copy":
       void copyText(btn.dataset.copy ?? "").then(() => showToast("Copied"));
-      break;
-    case "epics-switch":
-      void switchEpics(btn.dataset.bridge ?? "", btn.dataset.repo ?? "");
       break;
     case "epic-copy": {
       const id = btn.dataset.id ?? "";

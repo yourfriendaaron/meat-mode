@@ -67,6 +67,6 @@ test("Settings names each repo's tracker and each machine's trackers with versio
   await expect(machine.locator(".m-trackers")).toHaveText("beads 1.3.0 · ticket 0.3.2");
   await expect(machine.locator(".m-repo", { hasText: "garden · ticket" })).toBeVisible();
   // The tracker without agents has no agents line; one from an older bridge keeps it.
-  await expect(machine.locator(".m-repo", { hasText: "garden · ticket" }).locator(".m-repo-agents")).toHaveCount(0);
-  await expect(machine.locator(".m-repo", { hasText: "website" }).locator(".m-repo-agents")).toHaveCount(1);
+  await expect(machine.locator(".m-repo", { hasText: "garden · ticket" }).locator(".m-agents")).toHaveCount(0);
+  await expect(machine.locator(".m-repo", { hasText: "website" }).locator(".m-agents")).toHaveCount(1);
 });

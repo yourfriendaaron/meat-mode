@@ -10,6 +10,7 @@ import {
   collapseAll,
   epicDetailHTML,
   epicsHTML,
+  epicsOffered,
   epicsOn,
   expandAll,
   findRow,
@@ -252,10 +253,6 @@ test("Needs attention: rows not closed that are Critical or Blocked, after the f
     ["gd-2", "wb-1", "gd-1"],
   );
   assert.deepEqual(
-    attention(data, ui({ repos: new Set(["home/website"]) }), none).map((a) => a.row.id),
-    ["wb-1"],
-  );
-  assert.deepEqual(
     attention(data, ui({ q: "gate" }), none).map((a) => a.row.id),
     ["wb-1"],
   );
@@ -296,14 +293,17 @@ test("a human row with its State item shows the item's title and status", () => 
   assert.equal(findRow({ repos: [repo(rows)] }, "home/projects/other/gd-1.1", find), undefined);
 });
 
-test("the view is offered only while some repo has its epics on", () => {
+test("epics show where switched on, and the view is offered wherever a tracker can show them", () => {
   assert.equal(epicsOn([{ bridge: "home", name: "garden", personal: false, optedIn: true, epics: true }]), false);
   assert.equal(epicsOn([{ bridge: "home", name: "garden", personal: false, optedIn: false, epics: true, epicsOn: true }]), true);
+  // The view is offered wherever a tracker can show epics, switched on or not.
+  assert.equal(epicsOffered([{ bridge: "home", name: "garden", personal: false, optedIn: true, epics: true }]), true);
+  assert.equal(epicsOffered([{ bridge: "home", name: "shed", personal: false, optedIn: true }]), false);
 });
 
 const stateRepos: Repo[] = [
-  { bridge: "home", name: "projects/garden", personal: false, optedIn: true, colour: 4 },
-  { bridge: "home", name: "website", personal: false, optedIn: true, colour: 1 },
+  { bridge: "home", name: "projects/garden", personal: false, optedIn: true, colour: 4, epics: true, epicsOn: true },
+  { bridge: "home", name: "website", personal: false, optedIn: true, colour: 1, epics: true, epicsOn: true },
 ];
 
 function view(data: Epics | null, over: Partial<EpicsUI> = {}, error = "") {
@@ -344,13 +344,15 @@ test("the view draws each repo's heading with its mark, counts and fold, its row
   const folded = view(data, { folded: new Set(["home/projects/garden"]) });
   assert.match(folded, /aria-expanded="false" aria-label="Show garden"/);
   assert.doesNotMatch(folded, /Spring planting/);
-  // The Repo menu picks sections; a filter drops a repo with nothing that matches.
-  assert.doesNotMatch(view(data, { repos: new Set(["home/website"]) }), /Spring planting/);
+  // A filter drops a repo with nothing that matches.
   assert.doesNotMatch(view(data, { q: "spring" }), /website/);
   assert.match(view(data, { q: "nothing like it" }), /No epics or tasks match the filters\./);
 
   assert.match(view(null), /Loading/);
   assert.match(view({ repos: [] }), /No epics yet/);
+  // With no repo switched on, the view points at the Repos menu.
+  const off = stateRepos.map((r) => ({ ...r, epicsOn: false }));
+  assert.match(epicsHTML({ data: { repos: [] }, error: "", ui: ui(), find: none, repos: off, open: null, now }), /Pick the repos to show in the Repos menu/);
   assert.match(view(null, {}, "hub down"), /Could not load epics: hub down/);
 });
 
@@ -369,15 +371,24 @@ test("Needs attention shows five, then Show N more, and folds", () => {
   assert.doesNotMatch(view({ repos: [repo([row("gd-1")])] }), /Needs attention/);
 });
 
-test("the menus: repos with their marks and open counts, statuses and priorities, sorts; the chips and Clear", () => {
+test("the menus: every repo that can show epics, checked where they show; statuses and priorities, sorts; the chips and Clear", () => {
   const data = { repos: [repo([row("gd-1"), row("gd-2", { status: "closed" })]), repo([row("wb-1")], "website")] };
-  const tv = (over: Partial<EpicsUI> = {}) => ({ data, ui: ui(over), find: none, repos: stateRepos });
+  const states: Repo[] = [
+    { ...stateRepos[0], epicsOn: false },
+    { ...stateRepos[1], epicsPending: true },
+    { bridge: "home", name: "shed", personal: false, optedIn: true, tracker: "ticket" },
+  ];
+  const tv = (over: Partial<EpicsUI> = {}, repos = states) => ({ data, ui: ui(over), find: none, repos });
   const shut = menusHTML(tv());
-  assert.match(shut, /id="ep-mb-repo" data-act="ep-menu" data-v="repo" aria-haspopup="menu" aria-expanded="false"><span>Repo<\/span>/);
+  assert.match(shut, /id="ep-mb-repo" data-act="ep-menu" data-v="repo" aria-haspopup="menu" aria-expanded="false"><span>Repos <span class="ep-n">1<\/span><\/span>/);
   assert.doesNotMatch(shut, /role="menu"/);
   const repoMenu = menusHTML(tv({ menu: "repo" }));
-  assert.match(repoMenu, /role="menuitemradio" aria-checked="true" data-act="ep-f-repo-all"/);
-  assert.match(repoMenu, /aria-checked="false" data-act="ep-f-repo" data-v="home\/projects\/garden"[^]*?lc4[^]*?garden<\/span><span class="ep-n">1<\/span>/);
+  // A repo switched off is listed, unchecked; the one that cannot show epics is not.
+  assert.match(repoMenu, /role="menuitemcheckbox" aria-checked="false" data-act="ep-show-repo" data-v="home\/projects\/garden"[^]*?lc4[^]*?garden<\/span><\/button>/);
+  assert.match(repoMenu, /aria-checked="true" data-act="ep-show-repo" data-v="home\/website"[^]*?website<\/span><span class="ep-n" role="status">Waiting for home<\/span>/);
+  assert.doesNotMatch(repoMenu, /shed/);
+  assert.doesNotMatch(repoMenu, /ep-f-repo/);
+  assert.match(menusHTML(tv({ menu: "repo" }, [states[2]])), /No repo here can show epics/);
   const filter = menusHTML(tv({ menu: "filter", statuses: new Set(["blocked"]), priorities: new Set([0]) }));
   assert.match(filter, /Filter <span class="ep-n">2<\/span>/);
   assert.match(filter, /aria-checked="true" data-act="ep-f-status" data-v="blocked"/);
@@ -385,12 +396,10 @@ test("the menus: repos with their marks and open counts, statuses and priorities
   const v = menusHTML(tv({ menu: "view", sort: "progress" }));
   assert.match(v, /aria-checked="true" data-act="ep-sort" data-v="progress"/);
   assert.match(v, /Expand all[^]*Collapse all/);
-  // One repo picked names it on the button.
-  assert.match(menusHTML(tv({ repos: new Set(["home/website"]) })), /<span>website<\/span>/);
 
   assert.equal(chipsHTML(tv()), "");
-  const chips = chipsHTML(tv({ repos: new Set(["home/website"]), statuses: new Set(["in_progress"]), priorities: new Set([1]) }));
-  assert.match(chips, /Remove filter: <\/span><span class="rb rb-s lc1" aria-hidden="true">W<\/span>website/);
+  const chips = chipsHTML(tv({ statuses: new Set(["in_progress"]), priorities: new Set([1]) }));
+  assert.doesNotMatch(chips, /website/);
   assert.match(chips, /Remove filter: <\/span><span class="ep-st ep-s-in_progress">[^]*?In progress/);
   assert.match(chips, /Remove filter: <\/span>High/);
   assert.match(chips, /data-act="ep-clear">Clear</);
@@ -398,9 +407,9 @@ test("the menus: repos with their marks and open counts, statuses and priorities
 
 test("Clear, Expand all and Collapse all", () => {
   const data = { repos: [repo([row("gd-1", { epic: true }), row("gd-2")])] };
-  const u = ui({ q: "x", repos: new Set(["a"]), statuses: new Set(["open"]), priorities: new Set([1]), folded: new Set(["home/projects/garden"]) });
+  const u = ui({ q: "x", statuses: new Set(["open"]), priorities: new Set([1]), folded: new Set(["home/projects/garden"]) });
   clearFilters(u);
-  assert.deepEqual([u.q, u.repos.size, u.statuses.size, u.priorities.size, u.folded.size], ["", 0, 0, 0, 1]);
+  assert.deepEqual([u.q, u.statuses.size, u.priorities.size, u.folded.size], ["", 0, 0, 1]);
   expandAll(u, data);
   assert.deepEqual([...u.expanded], ["home/projects/garden/gd-1"]);
   assert.equal(u.folded.size, 0);

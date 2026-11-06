@@ -43,7 +43,7 @@ test("a machine's repos name their tracker, and one without agents has no agents
   const [g, s] = html.split('<li class="m-repo">').slice(1);
   assert.match(s, /shed · ticket/);
   assert.doesNotMatch(s, /Agents/);
-  assert.match(g, /Agents can work here/);
+  assert.match(g, /Agents allowed/);
   assert.doesNotMatch(g, / · /);
 });
 

@@ -1,6 +1,6 @@
 // Agents, part two: which of a machine's repos sync, and where agents
-// may work. The switches are the ones in Settings; main.ts handles their
-// "sync-switch" and "agents-switch" clicks.
+// may work. The list is the one in Settings, with each command shown at
+// once; main.ts handles its clicks.
 
 import { agentMachines, machineReposHTML } from "../../agents.ts";
 import { esc } from "../../html.ts";
@@ -20,14 +20,14 @@ registerStep({
     const machines = agentMachines(ctx.state?.bridges)
       .map((b) => {
         const body = b.lastSeen
-          ? machineReposHTML(repos, b.name, "wiz-sync-")
+          ? machineReposHTML(repos, b.name, { idPrefix: "wiz-sync-", howAlwaysOpen: true })
           : `<p class="muted small m-repos">Waiting for ${esc(b.name)} to connect. Its repos appear here when it does.</p>`;
         return `<li class="machine"><h3 class="m-name">${esc(b.name)}</h3>${body}</li>`;
       })
       .join("");
     return `<p>Switch on the repos whose tasks you want here. Each machine lists the repos with a task tracker it found in its home folder.</p>
 <p class="muted">Only tasks labelled <code>human</code> appear, so your agents' own work stays out of your list.</p>
-<p class="muted">An agent can start on a repo's tasks when you tap a pink button, once Agents are switched on for it at its machine. Each synced repo shows the command to run there.</p>
+<p class="muted">An agent can start on a repo's tasks when you tap a pink button, once agents are allowed in it at its machine. Each synced repo shows the command to run there.</p>
 <ul class="machines">${machines}</ul>`;
   },
 });

@@ -16,6 +16,7 @@ import {
   limitsBoxHTML,
   limitsChange,
   limitsText,
+  agentsHowOpen,
   machineReposHTML,
   pickMachine,
   PLATFORMS,
@@ -121,43 +122,42 @@ test("agents switch on at the machine, by the repo's name, quoted for the shell 
   assert.equal(agentsOnCommand("Sam's notes"), "meat-mode bridge agents on 'Sam'\\''s notes'");
 });
 
-test("a repo with agents off shows the command and no switch; one with agents on shows only a switch that turns them off", () => {
+test("agents show as a status, not a switch: allowed with Revoke, or off with a line that opens the command", () => {
   const repo = (name: string, over: Partial<Repo>): Repo => ({ bridge: "desk", name, personal: false, optedIn: true, ...over });
-  const html = machineReposHTML([repo("garden", { agentsAllowed: false }), repo("website", { agentsAllowed: true }), repo("notes", { optedIn: false })], "desk");
-  const rows = html.split('<li class="m-repo">').slice(1);
-  const [garden, notes, website] = rows;
-  assert.match(garden, /meat-mode bridge agents on garden/);
-  assert.match(garden, /data-act="agents-on-copy"/);
-  assert.doesNotMatch(garden, /data-act="agents-switch"/);
-  assert.match(website, /aria-checked="true" aria-label="Agents can work in [^"]*" data-act="agents-switch"/);
+  const list = [repo("garden", { agentsAllowed: false }), repo("website", { agentsAllowed: true }), repo("notes", { optedIn: false }), repo("plots", { agentsAllowed: true, agentsPending: true })];
+  const rows = (html: string) => html.split('<li class="m-repo">').slice(1);
+  const [garden, notes, plots, website] = rows(machineReposHTML(list, "desk"));
+  assert.doesNotMatch(machineReposHTML(list, "desk"), /role="switch"[^>]*data-act="agents/);
+  assert.match(website, /Agents allowed/);
+  assert.match(website, /data-act="agents-revoke" data-bridge="desk" data-repo="website" aria-label="Revoke agents in website \(website\)"/);
   assert.doesNotMatch(website, /bridge agents on/);
-  // A repo that does not sync says agents are off, without the command.
-  assert.match(notes, /Agents are off here/);
-  assert.doesNotMatch(notes, /bridge agents on/);
+  // Off: a closed line that opens the command, and no command yet.
+  assert.match(garden, /data-act="agents-how"[^>]*aria-expanded="false"[^>]*>Agents off/);
+  assert.doesNotMatch(garden, /bridge agents on/);
+  agentsHowOpen.add("desk/garden");
+  try {
+    const [open] = rows(machineReposHTML(list, "desk"));
+    assert.match(open, /aria-expanded="true" aria-controls="sync-agents-how-desk\/garden"/);
+    assert.match(open, /meat-mode bridge agents on garden/);
+    assert.match(open, /data-act="agents-on-copy"/);
+  } finally {
+    agentsHowOpen.delete("desk/garden");
+  }
+  // A repo that does not sync and has agents off says nothing about them.
+  assert.doesNotMatch(notes, /Agents/);
+  // A revoke the machine has not applied yet waits.
+  assert.match(plots, /Agents: waiting for desk/);
+  assert.doesNotMatch(plots, /agents-revoke/);
+  // The wizard shows every command at once, with no line to open.
+  const [wgarden] = rows(machineReposHTML(list, "desk", { idPrefix: "wiz-sync-", howAlwaysOpen: true }));
+  assert.match(wgarden, /Agents off/);
+  assert.match(wgarden, /meat-mode bridge agents on garden/);
+  assert.doesNotMatch(wgarden, /data-act="agents-how"/);
 });
 
-test("a repo whose tracker shows epics has an epics switch that works either way, waiting while it applies", () => {
-  const repo = (name: string, over: Partial<Repo>): Repo => ({ bridge: "desk", name, personal: false, optedIn: true, ...over });
-  const html = machineReposHTML(
-    [
-      repo("garden", { epics: true }),
-      repo("website", { epics: true, epicsOn: true }),
-      repo("notes", { epics: true, epicsOn: true, epicsPending: true }),
-      repo("plain", {}),
-      repo("shed", { epics: true, optedIn: false }),
-    ],
-    "desk",
-  );
-  const [garden, notes, plain, shed, website] = html.split('<li class="m-repo">').slice(1);
-  assert.match(garden, /aria-checked="false" aria-label="Show the epics of [^"]*" data-act="epics-switch"/);
-  assert.match(website, /aria-checked="true" aria-label="Show the epics of [^"]*" data-act="epics-switch"/);
-  assert.doesNotMatch(html, /bridge epics on/);
-  // Switched on in the app: on, and waiting until the machine applies it.
-  assert.match(notes, /Show epics<\/div><div class="muted small" role="status">Waiting for desk/);
-  assert.match(notes, /aria-checked="true"[^>]*data-act="epics-switch"/);
-  assert.doesNotMatch(plain, /epics/i);
-  // Apart from sync: a repo that does not sync still has the switch.
-  assert.match(shed, /data-act="epics-switch"/);
+test("Settings has no epics switch: a repo's epics switch in the Epics view", () => {
+  const html = machineReposHTML([{ bridge: "desk", name: "garden", personal: false, optedIn: true, epics: true, epicsOn: true }], "desk");
+  assert.doesNotMatch(html, /epics/i);
 });
 
 test("adding a machine asks for the password again on the hub's word, and says why it failed", () => {

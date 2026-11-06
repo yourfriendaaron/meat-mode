@@ -249,18 +249,36 @@
 
 /* ---------- Settings ---------- */
 
-.m-repo-agents {
+.m-agents {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--role-soft);
+}
+.m-agents-on {
+  color: var(--role-agent);
+}
+.m-agents-act {
+  padding: 0;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.m-agents-act svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--motion-quick) var(--ease-move);
+}
+.m-agents-act[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.m-agents-how {
   padding-left: 12px;
   color: var(--role-soft);
 }
-.m-repo-agents-off .m-repo-name {
-  flex: 1;
-}
-.m-repo-agents-off .m-repo-name > p {
+.m-agents-how > p {
   margin: 4px 0;
 }
 .cmd-row {

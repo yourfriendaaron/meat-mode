@@ -5,6 +5,7 @@
 
 import { ApiError, errorText } from "./api.ts";
 import { esc } from "./html.ts";
+import { ICON } from "./icons.ts";
 import { listBadge } from "./identity.ts";
 import { HUB_BRIDGE, repoCan, repoLabel } from "./model.ts";
 import type { AgentLimits, Bridge, LimitName, LimitsChange, Repo, RunLimits } from "./types.ts";
@@ -61,53 +62,60 @@ export function agentsOnHTML(bridge: string, repo: string, id: string): string {
 }
 
 /**
- * The repos a machine found, each with its sync switch and, under it,
- * whether agents may work there and, where its tracker can show them,
- * whether its epics show. Agents switch on only at the machine, so a repo
- * with agents off shows that command (on a repo that syncs) and one with
- * them on shows a switch that turns them off. Epics switch either way, as
- * sync does. A click on a
- * switch reaches main.ts as "sync-switch", "agents-switch" or
- * "epics-switch". idPrefix keeps the ids apart where Settings and the
- * wizard are both in the page.
+ * The repos whose agents-off line is opened to show the command that lets
+ * agents in, by `<bridge>/<repo>`. It lives in memory while the app is open.
  */
-export function machineReposHTML(repos: Repo[], bridge: string, idPrefix = "sync-"): string {
+export const agentsHowOpen = new Set<string>();
+
+export interface MachineReposOptions {
+  /** Keeps the ids apart where Settings and the wizard are both in the page. */
+  idPrefix?: string;
+  /** Show every command at once, with no line to open, as the wizard does. */
+  howAlwaysOpen?: boolean;
+}
+
+/**
+ * The repos a machine found, each with its sync switch and, under its name,
+ * where its tracker runs agents, whether they may work there. Agents switch
+ * on only at the machine, so the line is a status, not a switch: "Agents
+ * allowed" with Revoke, which turns them off, or "Agents off", which opens
+ * the command to run on the machine. A repo that does not sync and has
+ * agents off shows no line. A click reaches main.ts as "sync-switch",
+ * "agents-revoke", "agents-how" or "agents-on-copy". A repo's epics switch
+ * on in the Epics view's Repos menu, not here.
+ */
+export function machineReposHTML(repos: Repo[], bridge: string, opts: MachineReposOptions = {}): string {
+  const idPrefix = opts.idPrefix ?? "sync-";
   const list = repos.filter((r) => r.bridge === bridge).sort((a, b) => a.name.localeCompare(b.name));
   if (!list.length) return '<p class="muted small m-repos">No repos found on this machine yet.</p>';
   return `<ul class="m-repos" aria-label="Repos on ${esc(bridge)}">${list
     .map((r) => {
       const control = `<button class="switch" role="switch" id="${esc(`${idPrefix}${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
       const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      const agentsNote = r.agentsPending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-      let agents: string;
-      if (!repoCan(r, "ask")) {
-        // Its tracker runs no agents, so there is no switch to show.
-        agents = "";
-      } else if (r.agentsAllowed === true) {
-        const agentsId = `${idPrefix}agents-${bridge}/${r.name}`;
-        const off = `<button class="switch" role="switch" id="${esc(agentsId)}" aria-checked="true" aria-label="Agents can work in ${esc(repoLabel(r))} (${esc(r.name)})" data-act="agents-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
-        agents = `<div class="m-repo-agents"><div class="m-repo-name"><div class="small">Agents can work here</div>${agentsNote}</div>${off}</div>`;
-      } else {
-        const how = r.optedIn && !r.agentsPending ? agentsOnHTML(bridge, r.name, `${idPrefix}agents-cmd-${bridge}/${r.name}`) : "";
-        agents = `<div class="m-repo-agents m-repo-agents-off"><div class="m-repo-name"><div class="small">Agents are off here</div>${agentsNote}${how}</div></div>`;
-      }
-      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div class="m-repo-title">${listBadge(r, repos)}<span>${esc(repoLabel(r))}</span></div><div class="muted small">${esc(r.tracker ? `${r.name} · ${r.tracker}` : r.name)}</div>${note}</div>${control}</div>${agents}${epicsSwitchHTML(r, bridge, idPrefix)}</li>`;
+      const { line, how } = agentsLineHTML(r, bridge, idPrefix, opts.howAlwaysOpen === true);
+      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div class="m-repo-title">${listBadge(r, repos)}<span>${esc(repoLabel(r))}</span></div><div class="muted small">${esc(r.tracker ? `${r.name} · ${r.tracker}` : r.name)}</div>${line}${note}</div>${control}</div>${how}</li>`;
     })
     .join("")}</ul>`;
 }
 
-/**
- * A repo's epics switch, for a tracker that can show epics: a switch that
- * works either way, as the sync switch does, with "Waiting" until the
- * machine applies it. It is apart from the sync switch, so it shows on a
- * repo that does not sync too.
- */
-function epicsSwitchHTML(r: Repo, bridge: string, idPrefix: string): string {
-  if (!r.epics) return "";
-  const on = r.epicsOn === true;
-  const waiting = r.epicsPending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
-  const sw = `<button class="switch" role="switch" id="${esc(`${idPrefix}epics-${bridge}/${r.name}`)}" aria-checked="${on}" aria-label="Show the epics of ${esc(repoLabel(r))} (${esc(r.name)})" data-act="epics-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
-  return `<div class="m-repo-agents m-repo-epics"><div class="m-repo-name"><div class="small">Show epics</div>${waiting}</div>${sw}</div>`;
+/** A repo's agents line under its name, and the command box it opens, both "" where there is nothing to say. */
+function agentsLineHTML(r: Repo, bridge: string, idPrefix: string, howAlwaysOpen: boolean): { line: string; how: string } {
+  // Its tracker runs no agents, so there is nothing to allow.
+  if (!repoCan(r, "ask")) return { line: "", how: "" };
+  const label = `${repoLabel(r)} (${r.name})`;
+  if (r.agentsPending) return { line: `<div class="muted small m-agents" role="status">Agents: waiting for ${esc(bridge)}</div>`, how: "" };
+  if (r.agentsAllowed === true) {
+    const revoke = `<button class="link-btn m-agents-act" data-act="agents-revoke" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}" aria-label="Revoke agents in ${esc(label)}">Revoke</button>`;
+    return { line: `<div class="small m-agents"><span class="m-agents-on">Agents allowed</span><span aria-hidden="true">·</span>${revoke}</div>`, how: "" };
+  }
+  if (!r.optedIn) return { line: "", how: "" };
+  const key = `${bridge}/${r.name}`;
+  const boxId = `${idPrefix}agents-how-${key}`;
+  const cmd = agentsOnHTML(bridge, r.name, `${idPrefix}agents-cmd-${key}`);
+  if (howAlwaysOpen) return { line: '<div class="muted small m-agents">Agents off</div>', how: `<div class="m-agents-how">${cmd}</div>` };
+  const open = agentsHowOpen.has(key);
+  const btn = `<button class="link-btn m-agents-act" data-act="agents-how" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}" aria-expanded="${open}"${open ? ` aria-controls="${esc(boxId)}"` : ""} aria-label="Agents off in ${esc(label)}: how to allow them">Agents off${ICON.right}</button>`;
+  return { line: `<div class="small m-agents">${btn}</div>`, how: open ? `<div class="m-agents-how" id="${esc(boxId)}">${cmd}</div>` : "" };
 }
 
 /**

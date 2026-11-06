@@ -148,7 +148,7 @@ export interface Repo {
   actions?: string[];
   /** The repo's tracker can show epics; absent from an older bridge and on the hub's own lists. */
   epics?: boolean;
-  /** The repo's epics show in the app, switched in Settings or at its machine (meat-mode bridge epics on). */
+  /** The repo's epics show in the app, switched in the Epics view's Repos menu or at its machine (meat-mode bridge epics on). */
   epicsOn?: boolean;
   /** An epics switch the machine has not applied yet; epicsOn shows where it was switched to. */
   epicsPending?: boolean;
