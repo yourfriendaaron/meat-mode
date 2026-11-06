@@ -1,16 +1,15 @@
-== 56 x 20, layout c
-  1 To-dos 1   2 Epics 3   3 All            api  ◉ live |
- Waiting on you 1                                       |
+== 56 x 20, layout a
+  To-dos 1   Epics 3                        api  ◉ live |
+ Past due 1                                             |
 › ✦ API Rotate the staging API key in the ⋯ 17h overdue |
                                                         |
- Later 0                                                |
-                                                        |
  Epics 3                                                |
-  ◒ Moving 2                                            |
- api-h3k   Rate limiting v2                ▰▰▰▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan               ▰▰▰▱▱▱ 1/2   |
-  ◦ Ready to start 1                                    |
- api-z9p   Remove legacy auth endpoints    ▰▰▰▰▰▰ 4/4   |
+ API acme/api  synced 4m ago                            |
+   ◒ Moving 2                                           |
+  ▸ api-h3k   Rate limiting v2             ▰▰▰▱▱▱ 2/5   |
+    ▸ api-h3k.3    Limits per plan         ▰▰▰▱▱▱ 1/2   |
+   ◦ Ready to start 1                                   |
+  ▸ api-z9p   Remove legacy auth endpoin⋯  ▰▰▰▰▰▰ 4/4   |
                                                         |
                                                         |
                                                         |
@@ -18,21 +17,21 @@
                                                         |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  d won't do  / fi⋯|
+                                                        |
+ Enter open  y copy  x done  s snooze  d won't do  Tab ⋯|
 
-== 89 x 20, layout c
-  1 To-dos 1   2 Epics 3   3 All                                             api  ◉ live |
- Waiting on you 1                                                                        |
+== 89 x 20, layout a
+  To-dos 1   Epics 3                                                         api  ◉ live |
+ Past due 1                                                                              |
 › ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
                                                                                          |
- Later 0                                                                                 |
-                                                                                         |
  Epics 3                                                                                 |
-  ◒ Moving 2                                                                             |
- api-h3k   Rate limiting v2                                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan                                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
-  ◦ Ready to start 1                                                                     |
- api-z9p   Remove legacy auth endpoints                               ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
+ API acme/api  synced 4m ago                                                             |
+   ◒ Moving 2                                                                            |
+  ▸ api-h3k   Rate limiting v2                               ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
+    ▸ api-h3k.3    Limits per plan                                 ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
+   ◦ Ready to start 1                                                                    |
+  ▸ api-z9p   Remove legacy auth endpoints                            ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -40,65 +39,65 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                      |
+                                                                                         |
+ Enter open  y copy  x done  s snooze  d won't do  Tab epics  / filter  ? keys           |
 
-== 90 x 20, layout c
-  1 To-dos 1   2 Epics 3   3 All                                              api  ◉ live |
- Waiting on you 1                                                                         |
-› ✦ API api-9fq   Rotate the staging API key in the vault                     17h overdue |
-                                                                                          |
- Later 0                                                                                  |
-                                                                                          |
- Epics 3                                                                                  |
-  ◒ Moving 2                                                                              |
- api-h3k   Rate limiting v2                                   ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan                                        ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
-  ◦ Ready to start 1                                                                      |
- api-z9p   Remove legacy auth endpoints                                ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
- Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                       |
+== 90 x 20, layout b
+  To-dos 1   Epics 3                                                          api  ◉ live |
+ Past due 1                                      ╎ Rotate the staging API key in the      |
+› ✦ API Rotate the staging API key ⋯ 17h overdue ╎ vault                                  |
+                                                 ╎ api-9fq  API api  ✦ for you            |
+ Epics 3                                         ╎ 17h overdue                            |
+ ◒ Moving 2                                      ╎                                        |
+ api-h3k   Rate limiting v2         ▰▰▰▱▱▱ 2/5   ╎  The agent cannot reach the vault UI.  |
+ api-h3k.3 ↳ Limits per plan        ▰▰▰▱▱▱ 1/2   ╎                                        |
+ ◦ Ready to start 1                              ╎  1. Open the staging vault.            |
+ api-z9p   Remove legacy auth end⋯  ▰▰▰▰▰▰ 4/4   ╎  2. Rotate `STAGING_API_KEY`.          |
+                                                 ╎  3. Run `bd close api-9fq` or tick it  |
+                                                 ╎  here.                                 |
+                                                 ╎                                        |
+                                                 ╎ Notes                                  |
+                                                 ╎  The old key expires on Friday.        |
+                                                 ╎                                        |
+                                                 ╎ Notes and replies 1                    |
+                                                 ╎  ‣ agent ∙ 1d ago                      |
+                                                 ╎    The deploy is blocked on this;      |
+ Enter open  y copy  x done  s snooze  d won't do  Tab epics  / filter  ? keys            |
 
-== 140 x 20, layout c
-  1 To-dos 1   2 Epics 3   3 All                                                                                                api  ◉ live |
- Waiting on you 1                                                                                                                           |
-› ✦ API api-9fq   Rotate the staging API key in the vault                                                                       17h overdue |
-                                                                                                                                            |
- Later 0                                                                                                                                    |
-                                                                                                                                            |
- Epics 3                                                                                                                                    |
-  ◒ Moving 2                                                                                                                                |
- api-h3k   Rate limiting v2                                                                                     ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan                                                                                          ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
-  ◦ Ready to start 1                                                                                                                        |
- api-z9p   Remove legacy auth endpoints                                                                                  ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
- Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                                                                         |
+== 140 x 20, layout b
+  To-dos 1   Epics 3                                                                                                            api  ◉ live |
+ Past due 1                                                                  ╎ Rotate the staging API key in the vault                      |
+› ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ api-9fq  API api  ✦ for you                                  |
+                                                                             ╎ 17h overdue                                                  |
+ Epics 3                                                                     ╎                                                              |
+ ◒ Moving 2                                                                  ╎  The agent cannot reach the vault UI.                        |
+ api-h3k   Rate limiting v2                      ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎                                                              |
+ api-h3k.3 ↳ Limits per plan                           ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎  1. Open the staging vault.                                  |
+ ◦ Ready to start 1                                                          ╎  2. Rotate `STAGING_API_KEY`.                                |
+ api-z9p   Remove legacy auth endpoints                   ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎  3. Run `bd close api-9fq` or tick it here.                  |
+                                                                             ╎                                                              |
+                                                                             ╎ Notes                                                        |
+                                                                             ╎  The old key expires on Friday.                              |
+                                                                             ╎                                                              |
+                                                                             ╎ Notes and replies 1                                          |
+                                                                             ╎  ‣ agent ∙ 1d ago                                            |
+                                                                             ╎    The deploy is blocked on this; everything else is ready.  |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ Enter open  y copy  x done  s snooze  d won't do  Tab epics  / filter  ? keys                                                              |
 
-== 56 x 30, layout c
-  1 To-dos 1   2 Epics 3   3 All            api  ◉ live |
- Waiting on you 1                                       |
+== 56 x 30, layout a
+  To-dos 1   Epics 3                        api  ◉ live |
+ Past due 1                                             |
 › ✦ API Rotate the staging API key in the ⋯ 17h overdue |
                                                         |
- Later 0                                                |
-                                                        |
  Epics 3                                                |
-  ◒ Moving 2                                            |
- api-h3k   Rate limiting v2                ▰▰▰▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan               ▰▰▰▱▱▱ 1/2   |
-  ◦ Ready to start 1                                    |
- api-z9p   Remove legacy auth endpoints    ▰▰▰▰▰▰ 4/4   |
+ API acme/api  synced 4m ago                            |
+   ◒ Moving 2                                           |
+  ▸ api-h3k   Rate limiting v2             ▰▰▰▱▱▱ 2/5   |
+    ▸ api-h3k.3    Limits per plan         ▰▰▰▱▱▱ 1/2   |
+   ◦ Ready to start 1                                   |
+  ▸ api-z9p   Remove legacy auth endpoin⋯  ▰▰▰▰▰▰ 4/4   |
                                                         |
                                                         |
                                                         |
@@ -116,21 +115,21 @@
                                                         |
                                                         |
                                                         |
- Enter open  y copy  x done  s snooze  d won't do  / fi⋯|
+                                                        |
+ Enter open  y copy  x done  s snooze  d won't do  Tab ⋯|
 
-== 89 x 30, layout c
-  1 To-dos 1   2 Epics 3   3 All                                             api  ◉ live |
- Waiting on you 1                                                                        |
+== 89 x 30, layout a
+  To-dos 1   Epics 3                                                         api  ◉ live |
+ Past due 1                                                                              |
 › ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
                                                                                          |
- Later 0                                                                                 |
-                                                                                         |
  Epics 3                                                                                 |
-  ◒ Moving 2                                                                             |
- api-h3k   Rate limiting v2                                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan                                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
-  ◦ Ready to start 1                                                                     |
- api-z9p   Remove legacy auth endpoints                               ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
+ API acme/api  synced 4m ago                                                             |
+   ◒ Moving 2                                                                            |
+  ▸ api-h3k   Rate limiting v2                               ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
+    ▸ api-h3k.3    Limits per plan                                 ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
+   ◦ Ready to start 1                                                                    |
+  ▸ api-z9p   Remove legacy auth endpoints                            ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -148,69 +147,70 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                      |
+                                                                                         |
+ Enter open  y copy  x done  s snooze  d won't do  Tab epics  / filter  ? keys           |
 
-== 90 x 30, layout c
-  1 To-dos 1   2 Epics 3   3 All                                              api  ◉ live |
- Waiting on you 1                                                                         |
-› ✦ API api-9fq   Rotate the staging API key in the vault                     17h overdue |
-                                                                                          |
- Later 0                                                                                  |
-                                                                                          |
- Epics 3                                                                                  |
-  ◒ Moving 2                                                                              |
- api-h3k   Rate limiting v2                                   ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan                                        ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
-  ◦ Ready to start 1                                                                      |
- api-z9p   Remove legacy auth endpoints                                ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
- Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                       |
+== 90 x 30, layout b
+  To-dos 1   Epics 3                                                          api  ◉ live |
+ Past due 1                                      ╎ Rotate the staging API key in the      |
+› ✦ API Rotate the staging API key ⋯ 17h overdue ╎ vault                                  |
+                                                 ╎ api-9fq  API api  ✦ for you            |
+ Epics 3                                         ╎ 17h overdue                            |
+ ◒ Moving 2                                      ╎                                        |
+ api-h3k   Rate limiting v2         ▰▰▰▱▱▱ 2/5   ╎  The agent cannot reach the vault UI.  |
+ api-h3k.3 ↳ Limits per plan        ▰▰▰▱▱▱ 1/2   ╎                                        |
+ ◦ Ready to start 1                              ╎  1. Open the staging vault.            |
+ api-z9p   Remove legacy auth end⋯  ▰▰▰▰▰▰ 4/4   ╎  2. Rotate `STAGING_API_KEY`.          |
+                                                 ╎  3. Run `bd close api-9fq` or tick it  |
+                                                 ╎  here.                                 |
+                                                 ╎                                        |
+                                                 ╎ Notes                                  |
+                                                 ╎  The old key expires on Friday.        |
+                                                 ╎                                        |
+                                                 ╎ Notes and replies 1                    |
+                                                 ╎  ‣ agent ∙ 1d ago                      |
+                                                 ╎    The deploy is blocked on this;      |
+                                                 ╎    everything else is ready.           |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ Enter open  y copy  x done  s snooze  d won't do  Tab epics  / filter  ? keys            |
 
-== 140 x 30, layout c
-  1 To-dos 1   2 Epics 3   3 All                                                                                                api  ◉ live |
- Waiting on you 1                                                                                                                           |
-› ✦ API api-9fq   Rotate the staging API key in the vault                                                                       17h overdue |
-                                                                                                                                            |
- Later 0                                                                                                                                    |
-                                                                                                                                            |
- Epics 3                                                                                                                                    |
-  ◒ Moving 2                                                                                                                                |
- api-h3k   Rate limiting v2                                                                                     ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   |
- api-h3k.3 ↳ Limits per plan                                                                                          ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   |
-  ◦ Ready to start 1                                                                                                                        |
- api-z9p   Remove legacy auth endpoints                                                                                  ✓4  ▰▰▰▰▰▰▰▰ 4/4   |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
- Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                                                                         |
+== 140 x 30, layout b
+  To-dos 1   Epics 3                                                                                                            api  ◉ live |
+ Past due 1                                                                  ╎ Rotate the staging API key in the vault                      |
+› ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ api-9fq  API api  ✦ for you                                  |
+                                                                             ╎ 17h overdue                                                  |
+ Epics 3                                                                     ╎                                                              |
+ ◒ Moving 2                                                                  ╎  The agent cannot reach the vault UI.                        |
+ api-h3k   Rate limiting v2                      ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎                                                              |
+ api-h3k.3 ↳ Limits per plan                           ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎  1. Open the staging vault.                                  |
+ ◦ Ready to start 1                                                          ╎  2. Rotate `STAGING_API_KEY`.                                |
+ api-z9p   Remove legacy auth endpoints                   ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎  3. Run `bd close api-9fq` or tick it here.                  |
+                                                                             ╎                                                              |
+                                                                             ╎ Notes                                                        |
+                                                                             ╎  The old key expires on Friday.                              |
+                                                                             ╎                                                              |
+                                                                             ╎ Notes and replies 1                                          |
+                                                                             ╎  ‣ agent ∙ 1d ago                                            |
+                                                                             ╎    The deploy is blocked on this; everything else is ready.  |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ Enter open  y copy  x done  s snooze  d won't do  Tab epics  / filter  ? keys                                                              |
 

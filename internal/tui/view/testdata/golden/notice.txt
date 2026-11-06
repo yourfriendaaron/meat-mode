@@ -1,5 +1,5 @@
 == 56 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
  Past due 2                                             |
 › ◦  ✓  Book the boiler service              1d overdue |
   ✦ API Rotate the staging API key in the ⋯ 17h overdue |
@@ -12,16 +12,16 @@
   ◦  ✓  Buy birthday card for Alex       1/2 Thu, Nov 5 |
     ◦  ✓  Choose a card                      Thu, Nov 5 |
   ◦ GAR Fix the gate latch                   Sun, Nov 8 |
- Any time 4                                             |
+ Any time 7                                             |
+  ✦ STO Approve the footer text                         |
   ◦  ✓  Call Sam about the weekend                      |
   ◦ GAR Label the seed packets 🌱 種                    |
   ◦ GAR Order bark mulch                                |
   ◦  ✓  Read through the lease renewal and write down ⋯ |
- Later 1                                                |
  Sent mm-28 to the terminal's clipboard                 |
 
 == 89 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
  Past due 2                                                                              |
 › ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
   ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
@@ -34,16 +34,16 @@
   ◦  ✓  mm-46     Buy birthday card for Alex                    #errands 1/2  Thu, Nov 5 |
     ◦  ✓  mm-47     Choose a card                                             Thu, Nov 5 |
   ◦ GAR mm-6      Fix the gate latch                                          Sun, Nov 8 |
- Any time 4                                                                              |
+ Any time 7                                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                                |
   ◦  ✓  mm-12     Call Sam about the weekend                                             |
   ◦ GAR mm-52     Label the seed packets 🌱 種                                           |
   ◦ GAR mm-4      Order bark mulch                                               #garden |
   ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
- Later 1                                                                                 |
  Sent mm-28 to the terminal's clipboard                                                  |
 
 == 90 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+  To-dos 4   Epics 6                                                               ◉ live |
  Past due 2                                      ╎ Book the boiler service                |
 › ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
   ✦ API Rotate the staging API key ⋯ 17h overdue ╎ 1d overdue  #home                      |
@@ -56,16 +56,16 @@
   ◦  ✓  Buy birthday card for Al⋯ 1/2 Thu, Nov 5 ╎                                        |
     ◦  ✓  Choose a card               Thu, Nov 5 ╎                                        |
   ◦ GAR Fix the gate latch            Sun, Nov 8 ╎                                        |
- Any time 4                                      ╎                                        |
+ Any time 7                                      ╎                                        |
+  ✦ STO Approve the footer text                  ╎                                        |
   ◦  ✓  Call Sam about the weekend               ╎                                        |
   ◦ GAR Label the seed packets 🌱 種             ╎                                        |
   ◦ GAR Order bark mulch                         ╎                                        |
   ◦  ✓  Read through the lease renewal and writ⋯ ╎                                        |
- Later 1                                         ╎                                        |
  Sent mm-28 to the terminal's clipboard                                                   |
 
 == 140 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
  Past due 2                                                                  ╎ Book the boiler service                                      |
 › ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
   ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ 1d overdue  #home                                            |
@@ -78,16 +78,16 @@
   ◦  ✓  mm-46     Buy birthday card for Alex        #errands 1/2  Thu, Nov 5 ╎                                                              |
     ◦  ✓  mm-47     Choose a card                                 Thu, Nov 5 ╎                                                              |
   ◦ GAR mm-6      Fix the gate latch                              Sun, Nov 8 ╎                                                              |
- Any time 4                                                                  ╎                                                              |
+ Any time 7                                                                  ╎                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                    ╎                                                              |
   ◦  ✓  mm-12     Call Sam about the weekend                                 ╎                                                              |
   ◦ GAR mm-52     Label the seed packets 🌱 種                               ╎                                                              |
   ◦ GAR mm-4      Order bark mulch                                   #garden ╎                                                              |
   ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎                                                              |
- Later 1                                                                     ╎                                                              |
  Sent mm-28 to the terminal's clipboard                                                                                                     |
 
 == 56 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
  Past due 2                                             |
 › ◦  ✓  Book the boiler service              1d overdue |
   ✦ API Rotate the staging API key in the ⋯ 17h overdue |
@@ -100,26 +100,26 @@
   ◦  ✓  Buy birthday card for Alex       1/2 Thu, Nov 5 |
     ◦  ✓  Choose a card                      Thu, Nov 5 |
   ◦ GAR Fix the gate latch                   Sun, Nov 8 |
- Any time 4                                             |
+ Any time 7                                             |
+  ✦ STO Approve the footer text                         |
   ◦  ✓  Call Sam about the weekend                      |
   ◦ GAR Label the seed packets 🌱 種                    |
   ◦ GAR Order bark mulch                                |
   ◦  ✓  Read through the lease renewal and write down ⋯ |
+  ✦ STO Set up the wallet-pay sandbox account           |
+  ✦ DOT Sign in to the package registry once so the ag⋯ |
  Later 1                                                |
   ◦  ✓  Renew passport                      Sat, Nov 14 |
  Done today 1                                           |
   ✓  ✓  Take out recycling                              |
                                                         |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
+ Epics 6                                                |
+ API acme/api  synced 4m ago                            |
+   ◒ Moving 2                                           |
  Sent mm-28 to the terminal's clipboard                 |
 
 == 89 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
  Past due 2                                                                              |
 › ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
   ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
@@ -132,26 +132,26 @@
   ◦  ✓  mm-46     Buy birthday card for Alex                    #errands 1/2  Thu, Nov 5 |
     ◦  ✓  mm-47     Choose a card                                             Thu, Nov 5 |
   ◦ GAR mm-6      Fix the gate latch                                          Sun, Nov 8 |
- Any time 4                                                                              |
+ Any time 7                                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                                |
   ◦  ✓  mm-12     Call Sam about the weekend                                             |
   ◦ GAR mm-52     Label the seed packets 🌱 種                                           |
   ◦ GAR mm-4      Order bark mulch                                               #garden |
   ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
+  ✦ STO sf-c1x.5  Set up the wallet-pay sandbox account                                  |
+  ✦ DOT dot-3mm   Sign in to the package registry once so the agent can publish          |
  Later 1                                                                                 |
   ◦  ✓  mm-40     Renew passport                                      #admin Sat, Nov 14 |
  Done today 1                                                                            |
   ✓  ✓  mm-30     Take out recycling                                                     |
                                                                                          |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
+ Epics 6                                                                                 |
+ API acme/api  synced 4m ago                                                             |
+   ◒ Moving 2                                                                            |
  Sent mm-28 to the terminal's clipboard                                                  |
 
 == 90 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+  To-dos 4   Epics 6                                                               ◉ live |
  Past due 2                                      ╎ Book the boiler service                |
 › ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
   ✦ API Rotate the staging API key ⋯ 17h overdue ╎ 1d overdue  #home                      |
@@ -164,26 +164,26 @@
   ◦  ✓  Buy birthday card for Al⋯ 1/2 Thu, Nov 5 ╎                                        |
     ◦  ✓  Choose a card               Thu, Nov 5 ╎                                        |
   ◦ GAR Fix the gate latch            Sun, Nov 8 ╎                                        |
- Any time 4                                      ╎                                        |
+ Any time 7                                      ╎                                        |
+  ✦ STO Approve the footer text                  ╎                                        |
   ◦  ✓  Call Sam about the weekend               ╎                                        |
   ◦ GAR Label the seed packets 🌱 種             ╎                                        |
   ◦ GAR Order bark mulch                         ╎                                        |
   ◦  ✓  Read through the lease renewal and writ⋯ ╎                                        |
+  ✦ STO Set up the wallet-pay sandbox account    ╎                                        |
+  ✦ DOT Sign in to the package registry once so⋯ ╎                                        |
  Later 1                                         ╎                                        |
   ◦  ✓  Renew passport               Sat, Nov 14 ╎                                        |
  Done today 1                                    ╎                                        |
   ✓  ✓  Take out recycling                       ╎                                        |
                                                  ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
+ Epics 6                                         ╎                                        |
+ ◒ Moving 4                                      ╎                                        |
+ API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎                                        |
  Sent mm-28 to the terminal's clipboard                                                   |
 
 == 140 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
  Past due 2                                                                  ╎ Book the boiler service                                      |
 › ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
   ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ 1d overdue  #home                                            |
@@ -196,21 +196,21 @@
   ◦  ✓  mm-46     Buy birthday card for Alex        #errands 1/2  Thu, Nov 5 ╎                                                              |
     ◦  ✓  mm-47     Choose a card                                 Thu, Nov 5 ╎                                                              |
   ◦ GAR mm-6      Fix the gate latch                              Sun, Nov 8 ╎                                                              |
- Any time 4                                                                  ╎                                                              |
+ Any time 7                                                                  ╎                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                    ╎                                                              |
   ◦  ✓  mm-12     Call Sam about the weekend                                 ╎                                                              |
   ◦ GAR mm-52     Label the seed packets 🌱 種                               ╎                                                              |
   ◦ GAR mm-4      Order bark mulch                                   #garden ╎                                                              |
   ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎                                                              |
+  ✦ STO sf-c1x.5  Set up the wallet-pay sandbox account                      ╎                                                              |
+  ✦ DOT dot-3mm   Sign in to the package registry once so the agent can pub⋯ ╎                                                              |
  Later 1                                                                     ╎                                                              |
   ◦  ✓  mm-40     Renew passport                          #admin Sat, Nov 14 ╎                                                              |
  Done today 1                                                                ╎                                                              |
   ✓  ✓  mm-30     Take out recycling                                         ╎                                                              |
                                                                              ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
+ Epics 6                                                                     ╎                                                              |
+ ◒ Moving 4                                                                  ╎                                                              |
+ API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎                                                              |
  Sent mm-28 to the terminal's clipboard                                                                                                     |
 

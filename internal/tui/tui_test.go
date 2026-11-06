@@ -173,13 +173,9 @@ func TestProgram(t *testing.T) {
 	}
 	h := newHarness(t, Options{Client: c, Clipboard: noNative()})
 
-	// The to-dos.
+	// The to-dos, and the agents' task for the person among them.
 	h.shows(hubtest.PersonalTitle)
-	// The agents' task for the person waits in All; it has no date, so the
-	// Today groups leave it out, as the app does.
-	h.keys(typed("3")...)
 	h.shows(hubtest.HumanTitle)
-	h.keys(typed("1")...)
 	h.shows("Any time")
 
 	// y: the OSC 52 sequence goes through Bubble Tea's output.

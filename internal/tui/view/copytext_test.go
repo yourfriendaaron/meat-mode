@@ -47,7 +47,7 @@ func TestRefFullCleansBlocks(t *testing.T) {
 		t.Errorf("item refFull lost the indented line: %q", item)
 	}
 
-	r, _ := New(hub).Resize(90, 30).SetConn(ConnLive).SetData(s, e, now).Key("3")
+	r, _ := New(hub).Resize(90, 30).SetConn(ConnLive).SetData(s, e, now).Key("2")
 	r = selectKey(t, r, "laptop/acme/storefront/sf-c1x")
 	row := r.d.refFull(r.target())
 	checkNoBadRunes(t, "row refFull", row)

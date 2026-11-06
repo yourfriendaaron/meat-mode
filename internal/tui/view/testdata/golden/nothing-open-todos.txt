@@ -1,7 +1,7 @@
 == 56 x 20, layout a
-  1 To-dos 0   2 Epics 0   3 All                 ◉ live |
+  To-dos 0                                       ◉ live |
+ Nothing due today.                                     |
                                                         |
-  Nothing due today.                                    |
                                                         |
                                                         |
                                                         |
@@ -21,9 +21,9 @@
  Enter open  y copy  x done  s snooze  d won't do  / fi⋯|
 
 == 89 x 20, layout a
-  1 To-dos 0   2 Epics 0   3 All                                                  ◉ live |
+  To-dos 0                                                                        ◉ live |
+ Nothing due today.                                                                      |
                                                                                          |
-  Nothing due today.                                                                     |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -43,9 +43,9 @@
  Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                      |
 
 == 90 x 20, layout b
-  1 To-dos 0   2 Epics 0   3 All                                                   ◉ live |
+  To-dos 0                                                                         ◉ live |
+ Nothing due today.                              ╎                                        |
                                                  ╎                                        |
-  Nothing due today.                             ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
@@ -65,9 +65,9 @@
  Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                       |
 
 == 140 x 20, layout b
-  1 To-dos 0   2 Epics 0   3 All                                                                                                     ◉ live |
+  To-dos 0                                                                                                                           ◉ live |
+ Nothing due today.                                                          ╎                                                              |
                                                                              ╎                                                              |
-  Nothing due today.                                                         ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
@@ -87,9 +87,9 @@
  Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                                                                         |
 
 == 56 x 30, layout a
-  1 To-dos 0   2 Epics 0   3 All                 ◉ live |
+  To-dos 0                                       ◉ live |
+ Nothing due today.                                     |
                                                         |
-  Nothing due today.                                    |
                                                         |
                                                         |
                                                         |
@@ -119,9 +119,9 @@
  Enter open  y copy  x done  s snooze  d won't do  / fi⋯|
 
 == 89 x 30, layout a
-  1 To-dos 0   2 Epics 0   3 All                                                  ◉ live |
+  To-dos 0                                                                        ◉ live |
+ Nothing due today.                                                                      |
                                                                                          |
-  Nothing due today.                                                                     |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -151,9 +151,9 @@
  Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                      |
 
 == 90 x 30, layout b
-  1 To-dos 0   2 Epics 0   3 All                                                   ◉ live |
+  To-dos 0                                                                         ◉ live |
+ Nothing due today.                              ╎                                        |
                                                  ╎                                        |
-  Nothing due today.                             ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
@@ -183,9 +183,9 @@
  Enter open  y copy  x done  s snooze  d won't do  / filter  ? keys                       |
 
 == 140 x 30, layout b
-  1 To-dos 0   2 Epics 0   3 All                                                                                                     ◉ live |
+  To-dos 0                                                                                                                           ◉ live |
+ Nothing due today.                                                          ╎                                                              |
                                                                              ╎                                                              |
-  Nothing due today.                                                         ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |

@@ -19,11 +19,13 @@ var (
 func selectKey(t *testing.T, m Model, id string) Model {
 	t.Helper()
 	rows := m.rows()
-	for n, i := range selectable(rows) {
-		if rows[i].id == id {
-			m.setSel(n)
-			m.fix()
-			return m
+	for _, want := range []string{id, epicMark + id} {
+		for n, i := range selectable(rows) {
+			if rows[i].id == want {
+				m.setSel(n)
+				m.fix()
+				return m
+			}
 		}
 	}
 	t.Fatalf("no row %q", id)
@@ -70,24 +72,13 @@ func only(t *testing.T, w, h int, keep func(bridge, repo string) bool, withEpics
 }
 
 var scenarios = []scenario{
-	{"todos", pressing()},
+	{"page", pressing()},
 	{"epics", pressing("2", "l")},
-	{"all", pressing("3")},
 	{"detail", pressing("j", "enter")},
-	{"drill", func(t *testing.T, w, h int) Model {
-		m, _ := keys(t, selectKey(t, pressing("3")(t, w, h), "laptop/acme/storefront/sf-c1x"), "enter")
-		return m
-	}},
 	{"epic-detail", func(t *testing.T, w, h int) Model {
 		m := pressing("2")(t, w, h)
 		m = selectKey(t, m, "laptop/acme/api/api-h3k")
 		m, _ = keys(t, m, "l", "enter")
-		return m
-	}},
-	{"waiting-detail", func(t *testing.T, w, h int) Model {
-		m, _ := keys(t, selectKey(t, pressing("3")(t, w, h), "laptop/acme/storefront/sf-c1x"), "enter")
-		m = selectKey(t, m, "laptop/acme/storefront/sf-c1x.6")
-		m, _ = keys(t, m, "enter")
 		return m
 	}},
 	{"help", pressing("?")},
@@ -127,13 +118,11 @@ var scenarios = []scenario{
 		return m
 	}},
 	{"personal-only", func(t *testing.T, w, h int) Model {
-		return only(t, w, h, func(b, r string) bool { return b == "hub" && r == "personal" }, false, "3")
+		return only(t, w, h, func(b, r string) bool { return b == "hub" && r == "personal" }, false, "1")
 	}},
 	{"here", func(t *testing.T, w, h int) Model {
 		s, e := load(t)
-		m := New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam/acme/api/internal"}).Resize(w, h).SetConn(ConnLive).SetData(s, e, now)
-		m, _ = m.Key("3")
-		return m
+		return New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam/acme/api/internal"}).Resize(w, h).SetConn(ConnLive).SetData(s, e, now)
 	}},
 	{"loading", func(t *testing.T, w, h int) Model { return New(hub).Resize(w, h) }},
 }
@@ -191,8 +180,8 @@ func TestTinySizes(t *testing.T) {
 
 // TestFramesHostileText draws an item and an epic card whose id, title,
 // status and description carry ESC, U+009B, U+202E, U+2028 and BEL: none
-// of them may reach the frame, in All, in the drill and in the item
-// detail.
+// of them may reach the frame, on the page, in the card's detail and in
+// the item detail.
 func TestFramesHostileText(t *testing.T) {
 	s, e := load(t)
 	for i := range s.Items {
@@ -221,11 +210,11 @@ func TestFramesHostileText(t *testing.T) {
 		}
 	}
 	m := New(hub).Resize(90, 30).SetConn(ConnLive).SetData(s, e, now)
-	m, _ = m.Key("3")
-	checkFrame(t, "all hostile", m)
+	checkFrame(t, "page hostile", m)
 	m = selectKey(t, m, "laptop/acme/storefront/"+cardID)
+	checkFrame(t, "card pane hostile", m)
 	m, _ = m.Key("enter")
-	checkFrame(t, "drill hostile", m)
+	checkFrame(t, "card detail hostile", m)
 	d := New(hub).Resize(90, 30).SetConn(ConnLive).SetData(s, e, now)
 	d = selectKey(t, d, "hub/personal/mm-28")
 	d, _ = d.Key("enter")

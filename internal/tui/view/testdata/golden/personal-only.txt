@@ -1,104 +1,110 @@
-== 56 x 20, layout c
-  1 To-dos 3   2 Epics 0   3 All                 ◉ live |
- Waiting on you 3                                       |
+== 56 x 20, layout a
+  To-dos 3                                       ◉ live |
+ Past due 1                                             |
 › ◦  ✓  Book the boiler service              1d overdue |
+ Today 1                                                |
   ◦  ✓  Pick up dry cleaning                      12:30 |
+ This evening 1                                         |
   ◦  ✓  Water the plants                        ↻ 18:00 |
-                                                        |
- Later 4                                                |
+ This week 3                                            |
+  ◦  ✓  Cancel the trial subscription      ☾ Wed, Nov 4 |
   ◦  ✓  Buy birthday card for Alex       1/2 Thu, Nov 5 |
     ◦  ✓  Choose a card                      Thu, Nov 5 |
-  ◦  ✓  Renew passport                      Sat, Nov 14 |
+ Any time 2                                             |
   ◦  ✓  Call Sam about the weekend                      |
   ◦  ✓  Read through the lease renewal and write down ⋯ |
+ Later 1                                                |
+  ◦  ✓  Renew passport                      Sat, Nov 14 |
+ Done today 1                                           |
+  ✓  ✓  Take out recycling                              |
                                                         |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
- Enter open  y copy  x done  s snooze  d del⋯ +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filt⋯|
 
-== 89 x 20, layout c
-  1 To-dos 3   2 Epics 0   3 All                                                  ◉ live |
- Waiting on you 3                                                                        |
+== 89 x 20, layout a
+  To-dos 3                                                                        ◉ live |
+ Past due 1                                                                              |
 › ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
+ Today 1                                                                                 |
   ◦  ✓  mm-44     Pick up dry cleaning                              #errands       12:30 |
+ This evening 1                                                                          |
   ◦  ✓  mm-31     Water the plants                                   #home ↻       18:00 |
-                                                                                         |
- Later 4                                                                                 |
+ This week 3                                                                             |
+  ◦  ✓  mm-50     Cancel the trial subscription                             ☾ Wed, Nov 4 |
   ◦  ✓  mm-46     Buy birthday card for Alex                    #errands 1/2  Thu, Nov 5 |
     ◦  ✓  mm-47     Choose a card                                             Thu, Nov 5 |
-  ◦  ✓  mm-40     Renew passport                                      #admin Sat, Nov 14 |
+ Any time 2                                                                              |
   ◦  ✓  mm-12     Call Sam about the weekend                                             |
   ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
+ Later 1                                                                                 |
+  ◦  ✓  mm-40     Renew passport                                      #admin Sat, Nov 14 |
+ Done today 1                                                                            |
+  ✓  ✓  mm-30     Take out recycling                                                     |
                                                                                          |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
- Enter open  y copy  x done  s snooze  d delete  / filter  ? keys              +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                        |
 
-== 90 x 20, layout c
-  1 To-dos 3   2 Epics 0   3 All                                                   ◉ live |
- Waiting on you 3                                                                         |
-› ◦  ✓  mm-28     Book the boiler service                               #home  1d overdue |
-  ◦  ✓  mm-44     Pick up dry cleaning                               #errands       12:30 |
-  ◦  ✓  mm-31     Water the plants                                    #home ↻       18:00 |
-                                                                                          |
- Later 4                                                                                  |
-  ◦  ✓  mm-46     Buy birthday card for Alex                     #errands 1/2  Thu, Nov 5 |
-    ◦  ✓  mm-47     Choose a card                                              Thu, Nov 5 |
-  ◦  ✓  mm-40     Renew passport                                       #admin Sat, Nov 14 |
-  ◦  ✓  mm-12     Call Sam about the weekend                                              |
-  ◦  ✓  mm-45     Read through the lease renewal and write down every claus⋯ #admin #home |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
- Enter open  y copy  x done  s snooze  d delete  / filter  ? ke⋯ 2 snoozed or done hidden |
+== 90 x 20, layout b
+  To-dos 3                                                                         ◉ live |
+ Past due 1                                      ╎ Book the boiler service                |
+› ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
+ Today 1                                         ╎ 1d overdue  #home                      |
+  ◦  ✓  Pick up dry cleaning               12:30 ╎                                        |
+ This evening 1                                  ╎  Last one was in October. The          |
+  ◦  ✓  Water the plants                 ↻ 18:00 ╎  engineer's number is on the fridge.   |
+ This week 3                                     ╎                                        |
+  ◦  ✓  Cancel the trial subscript⋯ ☾ Wed, Nov 4 ╎                                        |
+  ◦  ✓  Buy birthday card for Al⋯ 1/2 Thu, Nov 5 ╎                                        |
+    ◦  ✓  Choose a card               Thu, Nov 5 ╎                                        |
+ Any time 2                                      ╎                                        |
+  ◦  ✓  Call Sam about the weekend               ╎                                        |
+  ◦  ✓  Read through the lease renewal and writ⋯ ╎                                        |
+ Later 1                                         ╎                                        |
+  ◦  ✓  Renew passport               Sat, Nov 14 ╎                                        |
+ Done today 1                                    ╎                                        |
+  ✓  ✓  Take out recycling                       ╎                                        |
+                                                 ╎                                        |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                         |
 
-== 140 x 20, layout c
-  1 To-dos 3   2 Epics 0   3 All                                                                                                     ◉ live |
- Waiting on you 3                                                                                                                           |
-› ◦  ✓  mm-28     Book the boiler service                                                                                 #home  1d overdue |
-  ◦  ✓  mm-44     Pick up dry cleaning                                                                                 #errands       12:30 |
-  ◦  ✓  mm-31     Water the plants                                                                                      #home ↻       18:00 |
-                                                                                                                                            |
- Later 4                                                                                                                                    |
-  ◦  ✓  mm-46     Buy birthday card for Alex                                                                       #errands 1/2  Thu, Nov 5 |
-    ◦  ✓  mm-47     Choose a card                                                                                                Thu, Nov 5 |
-  ◦  ✓  mm-40     Renew passport                                                                                         #admin Sat, Nov 14 |
-  ◦  ✓  mm-12     Call Sam about the weekend                                                                                                |
-  ◦  ✓  mm-45     Read through the lease renewal and write down every clause that changed since last year before replying to ⋯ #admin #home |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
- Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                  2 snoozed or done hidden |
+== 140 x 20, layout b
+  To-dos 3                                                                                                                           ◉ live |
+ Past due 1                                                                  ╎ Book the boiler service                                      |
+› ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
+ Today 1                                                                     ╎ 1d overdue  #home                                            |
+  ◦  ✓  mm-44     Pick up dry cleaning                  #errands       12:30 ╎                                                              |
+ This evening 1                                                              ╎  Last one was in October. The engineer's number is on the    |
+  ◦  ✓  mm-31     Water the plants                       #home ↻       18:00 ╎  fridge.                                                     |
+ This week 3                                                                 ╎                                                              |
+  ◦  ✓  mm-50     Cancel the trial subscription                 ☾ Wed, Nov 4 ╎                                                              |
+  ◦  ✓  mm-46     Buy birthday card for Alex        #errands 1/2  Thu, Nov 5 ╎                                                              |
+    ◦  ✓  mm-47     Choose a card                                 Thu, Nov 5 ╎                                                              |
+ Any time 2                                                                  ╎                                                              |
+  ◦  ✓  mm-12     Call Sam about the weekend                                 ╎                                                              |
+  ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎                                                              |
+ Later 1                                                                     ╎                                                              |
+  ◦  ✓  mm-40     Renew passport                          #admin Sat, Nov 14 ╎                                                              |
+ Done today 1                                                                ╎                                                              |
+  ✓  ✓  mm-30     Take out recycling                                         ╎                                                              |
+                                                                             ╎                                                              |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                                           |
 
-== 56 x 30, layout c
-  1 To-dos 3   2 Epics 0   3 All                 ◉ live |
- Waiting on you 3                                       |
+== 56 x 30, layout a
+  To-dos 3                                       ◉ live |
+ Past due 1                                             |
 › ◦  ✓  Book the boiler service              1d overdue |
+ Today 1                                                |
   ◦  ✓  Pick up dry cleaning                      12:30 |
+ This evening 1                                         |
   ◦  ✓  Water the plants                        ↻ 18:00 |
-                                                        |
- Later 4                                                |
+ This week 3                                            |
+  ◦  ✓  Cancel the trial subscription      ☾ Wed, Nov 4 |
   ◦  ✓  Buy birthday card for Alex       1/2 Thu, Nov 5 |
     ◦  ✓  Choose a card                      Thu, Nov 5 |
-  ◦  ✓  Renew passport                      Sat, Nov 14 |
+ Any time 2                                             |
   ◦  ✓  Call Sam about the weekend                      |
   ◦  ✓  Read through the lease renewal and write down ⋯ |
+ Later 1                                                |
+  ◦  ✓  Renew passport                      Sat, Nov 14 |
+ Done today 1                                           |
+  ✓  ✓  Take out recycling                              |
                                                         |
                                                         |
                                                         |
@@ -110,27 +116,27 @@
                                                         |
                                                         |
                                                         |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        |
- Enter open  y copy  x done  s snooze  d del⋯ +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filt⋯|
 
-== 89 x 30, layout c
-  1 To-dos 3   2 Epics 0   3 All                                                  ◉ live |
- Waiting on you 3                                                                        |
+== 89 x 30, layout a
+  To-dos 3                                                                        ◉ live |
+ Past due 1                                                                              |
 › ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
+ Today 1                                                                                 |
   ◦  ✓  mm-44     Pick up dry cleaning                              #errands       12:30 |
+ This evening 1                                                                          |
   ◦  ✓  mm-31     Water the plants                                   #home ↻       18:00 |
-                                                                                         |
- Later 4                                                                                 |
+ This week 3                                                                             |
+  ◦  ✓  mm-50     Cancel the trial subscription                             ☾ Wed, Nov 4 |
   ◦  ✓  mm-46     Buy birthday card for Alex                    #errands 1/2  Thu, Nov 5 |
     ◦  ✓  mm-47     Choose a card                                             Thu, Nov 5 |
-  ◦  ✓  mm-40     Renew passport                                      #admin Sat, Nov 14 |
+ Any time 2                                                                              |
   ◦  ✓  mm-12     Call Sam about the weekend                                             |
   ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
+ Later 1                                                                                 |
+  ◦  ✓  mm-40     Renew passport                                      #admin Sat, Nov 14 |
+ Done today 1                                                                            |
+  ✓  ✓  mm-30     Take out recycling                                                     |
                                                                                          |
                                                                                          |
                                                                                          |
@@ -142,75 +148,69 @@
                                                                                          |
                                                                                          |
                                                                                          |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
-                                                                                         |
- Enter open  y copy  x done  s snooze  d delete  / filter  ? keys              +2 hidden |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                        |
 
-== 90 x 30, layout c
-  1 To-dos 3   2 Epics 0   3 All                                                   ◉ live |
- Waiting on you 3                                                                         |
-› ◦  ✓  mm-28     Book the boiler service                               #home  1d overdue |
-  ◦  ✓  mm-44     Pick up dry cleaning                               #errands       12:30 |
-  ◦  ✓  mm-31     Water the plants                                    #home ↻       18:00 |
-                                                                                          |
- Later 4                                                                                  |
-  ◦  ✓  mm-46     Buy birthday card for Alex                     #errands 1/2  Thu, Nov 5 |
-    ◦  ✓  mm-47     Choose a card                                              Thu, Nov 5 |
-  ◦  ✓  mm-40     Renew passport                                       #admin Sat, Nov 14 |
-  ◦  ✓  mm-12     Call Sam about the weekend                                              |
-  ◦  ✓  mm-45     Read through the lease renewal and write down every claus⋯ #admin #home |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
-                                                                                          |
- Enter open  y copy  x done  s snooze  d delete  / filter  ? ke⋯ 2 snoozed or done hidden |
+== 90 x 30, layout b
+  To-dos 3                                                                         ◉ live |
+ Past due 1                                      ╎ Book the boiler service                |
+› ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
+ Today 1                                         ╎ 1d overdue  #home                      |
+  ◦  ✓  Pick up dry cleaning               12:30 ╎                                        |
+ This evening 1                                  ╎  Last one was in October. The          |
+  ◦  ✓  Water the plants                 ↻ 18:00 ╎  engineer's number is on the fridge.   |
+ This week 3                                     ╎                                        |
+  ◦  ✓  Cancel the trial subscript⋯ ☾ Wed, Nov 4 ╎                                        |
+  ◦  ✓  Buy birthday card for Al⋯ 1/2 Thu, Nov 5 ╎                                        |
+    ◦  ✓  Choose a card               Thu, Nov 5 ╎                                        |
+ Any time 2                                      ╎                                        |
+  ◦  ✓  Call Sam about the weekend               ╎                                        |
+  ◦  ✓  Read through the lease renewal and writ⋯ ╎                                        |
+ Later 1                                         ╎                                        |
+  ◦  ✓  Renew passport               Sat, Nov 14 ╎                                        |
+ Done today 1                                    ╎                                        |
+  ✓  ✓  Take out recycling                       ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+                                                 ╎                                        |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                         |
 
-== 140 x 30, layout c
-  1 To-dos 3   2 Epics 0   3 All                                                                                                     ◉ live |
- Waiting on you 3                                                                                                                           |
-› ◦  ✓  mm-28     Book the boiler service                                                                                 #home  1d overdue |
-  ◦  ✓  mm-44     Pick up dry cleaning                                                                                 #errands       12:30 |
-  ◦  ✓  mm-31     Water the plants                                                                                      #home ↻       18:00 |
-                                                                                                                                            |
- Later 4                                                                                                                                    |
-  ◦  ✓  mm-46     Buy birthday card for Alex                                                                       #errands 1/2  Thu, Nov 5 |
-    ◦  ✓  mm-47     Choose a card                                                                                                Thu, Nov 5 |
-  ◦  ✓  mm-40     Renew passport                                                                                         #admin Sat, Nov 14 |
-  ◦  ✓  mm-12     Call Sam about the weekend                                                                                                |
-  ◦  ✓  mm-45     Read through the lease renewal and write down every clause that changed since last year before replying to ⋯ #admin #home |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
-                                                                                                                                            |
- Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                  2 snoozed or done hidden |
+== 140 x 30, layout b
+  To-dos 3                                                                                                                           ◉ live |
+ Past due 1                                                                  ╎ Book the boiler service                                      |
+› ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
+ Today 1                                                                     ╎ 1d overdue  #home                                            |
+  ◦  ✓  mm-44     Pick up dry cleaning                  #errands       12:30 ╎                                                              |
+ This evening 1                                                              ╎  Last one was in October. The engineer's number is on the    |
+  ◦  ✓  mm-31     Water the plants                       #home ↻       18:00 ╎  fridge.                                                     |
+ This week 3                                                                 ╎                                                              |
+  ◦  ✓  mm-50     Cancel the trial subscription                 ☾ Wed, Nov 4 ╎                                                              |
+  ◦  ✓  mm-46     Buy birthday card for Alex        #errands 1/2  Thu, Nov 5 ╎                                                              |
+    ◦  ✓  mm-47     Choose a card                                 Thu, Nov 5 ╎                                                              |
+ Any time 2                                                                  ╎                                                              |
+  ◦  ✓  mm-12     Call Sam about the weekend                                 ╎                                                              |
+  ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎                                                              |
+ Later 1                                                                     ╎                                                              |
+  ◦  ✓  mm-40     Renew passport                          #admin Sat, Nov 14 ╎                                                              |
+ Done today 1                                                                ╎                                                              |
+  ✓  ✓  mm-30     Take out recycling                                         ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+                                                                             ╎                                                              |
+ Enter open  y copy  x done  s snooze  d delete  / filter  ? keys                                                                           |
 

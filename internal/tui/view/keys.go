@@ -125,21 +125,21 @@ func (m *Model) key(k string) []Effect {
 		m.move(-1 << 30)
 	case "G", "end":
 		m.move(1 << 30)
-	case "tab":
-		m.tabTo((m.tab + 1) % 3)
-	case "shift+tab":
-		m.tabTo((m.tab + 2) % 3)
-	case "1", "2", "3":
-		m.tabTo(Tab(k[0] - '1'))
+	case "tab", "shift+tab":
+		m.jump(!inEpics(m.selKey))
+	case "1":
+		m.jump(false)
+	case "2":
+		m.jump(true)
 	case "l", "right":
 		// Forward: into what holds children, else as Enter.
 		switch {
 		case m.open && !m.openKids && len(m.openKidRows()) > 0:
 			m.openKids, m.openKid = true, 0
 			m.fixOpenKid()
-		case lay == "b" && m.tab == TabEpics && !m.open && !m.right && m.rightKids() > 0:
+		case lay == "b" && !m.open && !m.right && m.rightKids() > 0:
 			m.right, m.rightIdx = true, 0
-		case lay == "a" && m.tab == TabEpics && !m.open && t != nil && t.card && !strings.Contains(m.selKey, ">"):
+		case lay == "a" && inEpics(m.selKey) && !m.open && t != nil && t.card && !strings.Contains(m.selKey, ">"):
 			switch {
 			case m.nextIsChild():
 				m.move(1)
@@ -159,9 +159,7 @@ func (m *Model) key(k string) []Effect {
 			m.closeOpen()
 		case m.right:
 			m.right = false
-		case m.drill != "":
-			m.selKey, m.drill = m.drill, ""
-		case lay == "a" && m.tab == TabEpics && t != nil:
+		case lay == "a" && inEpics(m.selKey) && t != nil:
 			// A child goes up to its card and leaves it unfolded; the
 			// card's own h folds it.
 			if parent, _, ok := strings.Cut(m.selKey, ">"); ok {
@@ -180,8 +178,6 @@ func (m *Model) key(k string) []Effect {
 			m.closeOpen()
 		case m.right:
 			m.right = false
-		case m.drill != "":
-			m.selKey, m.drill = m.drill, ""
 		case m.filter != "":
 			m.filter = ""
 			m.resetSel()
@@ -232,16 +228,13 @@ func (m *Model) key(k string) []Effect {
 	return nil
 }
 
-// enter opens the target: a child selected in an open card's detail, a
-// card on the All page as a drill, anything else as its detail.
-func (m *Model) enter(t *target, lay Layout) {
+// enter opens the target: a child selected in an open card's detail, else
+// the target's own detail.
+func (m *Model) enter(t *target, _ Layout) {
 	switch {
 	case t != nil && m.open && m.openKids:
 		m.openKidChild(t)
 	case t == nil || m.open:
-	case lay == "c" && m.drill == "" && t.card && t.row != nil:
-		m.drill = t.key
-		m.resetSel()
 	default:
 		m.openTarget(t)
 	}
@@ -264,7 +257,7 @@ func (m *Model) toggleScope() {
 	}
 	m.every = !m.every
 	m.reindex(m.now)
-	m.open, m.drill, m.right = false, "", false
+	m.open, m.right = false, false
 	m.resetSel()
 	if m.every {
 		m.say("Showing every list.", NoticeInfo)
@@ -282,7 +275,7 @@ func (m *Model) stepPast(key string) {
 	}
 	rows := m.rows()
 	sel := selectable(rows)
-	if len(sel) < 2 || m.selIdx >= len(sel) || rows[sel[m.selIdx]].id != key {
+	if len(sel) < 2 || m.selIdx >= len(sel) || (rows[sel[m.selIdx]].id != key && rows[sel[m.selIdx]].id != epicMark+key) {
 		return
 	}
 	if m.selIdx+1 < len(sel) {
@@ -324,15 +317,31 @@ func (m *Model) move(delta int) {
 	}
 }
 
-func (m *Model) tabTo(t Tab) {
-	m.started = true
-	if t == m.tab && !m.open && m.drill == "" {
-		return
+// jump puts the selection on the first row of the epics section, or of
+// the to-dos, closing any open detail. With no epic row it stays put.
+func (m *Model) jump(epics bool) {
+	rows := m.rows()
+	for n, i := range selectable(rows) {
+		if inEpics(rows[i].id) == epics {
+			m.open, m.openKids, m.openBack = false, false, nil
+			m.setSel(n)
+			m.scroll = 0
+			if epics {
+				m.scroll = epicsHead(rows) // the section's heading at the top
+			}
+			return
+		}
 	}
-	m.tabSel[m.tab] = m.selKey
-	m.tab, m.open, m.drill = t, false, ""
-	m.resetSel()
-	m.selKey = m.tabSel[t] // fix finds it again, or the nearest row
+}
+
+// epicsHead is the index of the epics section's heading.
+func epicsHead(rows []row) int {
+	for i, r := range rows {
+		if r.epicsTop {
+			return i
+		}
+	}
+	return 0
 }
 
 // readOnlyNote says an epic row cannot change here, naming its repo.

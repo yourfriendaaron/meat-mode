@@ -46,12 +46,6 @@ var groupLabels = map[groupID]string{
 // todayGroups is VIEW_GROUPS.today: undated to-dos come before far-off ones.
 var todayGroups = []groupID{gPastDue, gToday, gEvening, gTomorrow, gWeek, gNoDate, gLater, gDone}
 
-// allGroups is VIEW_GROUPS.all, the order the All tab reads groups in.
-var allGroups = []groupID{gPastDue, gToday, gEvening, gTomorrow, gWeek, gLater, gNoDate, gDone}
-
-// agenda is the groups the Today view takes from every list.
-var agenda = []groupID{gPastDue, gToday, gEvening, gDone}
-
 // eveningHour is the hour from which a task counts as this evening.
 const eveningHour = 17
 
@@ -238,10 +232,11 @@ type group struct {
 	nested map[string]bool
 }
 
-// buildGroups is buildView: the Today view's groups when today is set (the
-// agenda of every list, then the rest of the hub's own lists), else every
-// group of every list as the All view orders them.
-func buildGroups(items []api.Item, now time.Time, today bool) []group {
+// buildGroups is buildView's Today groups, in their order, with every list
+// in every group: the viewer has no other page, so an agent's undated or
+// far-off ask shows here too, where the app's Today view leaves it to the
+// Agents and All views.
+func buildGroups(items []api.Item, now time.Time) []group {
 	var live []*api.Item
 	byKey := map[string]*api.Item{}
 	for k := range items {
@@ -270,19 +265,13 @@ func buildGroups(items []api.Item, now time.Time, today bool) []group {
 		}
 		return i
 	}
-	order := allGroups
-	if today {
-		order = todayGroups
-	}
+	order := todayGroups
 	buckets := map[groupID][]*api.Item{}
 	for _, i := range live {
 		if nestsUnder(i, byKey) != nil {
 			continue
 		}
 		g := groupOf(place(i), now)
-		if today && !isPersonal(i.Bridge) && !slices.Contains(agenda, cmp.Or(g, gNoDate)) {
-			continue
-		}
 		if g == "" || !slices.Contains(order, g) {
 			continue
 		}

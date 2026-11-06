@@ -1,6 +1,9 @@
 == 56 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
  / log   Esc clear                                      |
+ No to-dos match.                                       |
+                                                        |
+ Epics 6                                                |
  API acme/api  synced 4m ago                            |
    ◦ Ready to start 1                                   |
 › ▾ api-z9p   Remove legacy auth endpoints              |
@@ -15,14 +18,14 @@
                                                         |
                                                         |
                                                         |
-                                                        |
-                                                        |
-                                                        |
- Enter open  l h fold  y copy  / filter  ? keys         |
+ Enter open  l h fold  y copy  Tab to-dos  / filter  ? ⋯|
 
 == 89 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
  / log   Esc clear                                                                       |
+ No to-dos match.                                                                        |
+                                                                                         |
+ Epics 6                                                                                 |
  API acme/api  synced 4m ago                                                             |
    ◦ Ready to start 1                                                                    |
 › ▾ api-z9p   Remove legacy auth endpoints                                               |
@@ -37,19 +40,16 @@
                                                                                          |
                                                                                          |
                                                                                          |
-                                                                                         |
-                                                                                         |
-                                                                                         |
- Enter open  l h fold  y copy  / filter  ? keys                                          |
+ Enter open  l h fold  y copy  Tab to-dos  / filter  ? keys                              |
 
 == 90 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+  To-dos 4   Epics 6                                                               ◉ live |
  / log   Esc clear                                                                        |
- ◦ Ready to start 1                              ╎ Remove legacy auth endpoints           |
-›API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎ api-z9p  API acme/api                  |
-                                                 ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                   |
-                                                 ╎                                        |
-                                                 ╎  api-z9p.1    Log callers o⋯  ✓ Closed |
+ No to-dos match.                                ╎ Remove legacy auth endpoints           |
+                                                 ╎ api-z9p  API acme/api                  |
+ Epics 6                                         ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                   |
+ ◦ Ready to start 1                              ╎                                        |
+›API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎  api-z9p.1    Log callers o⋯  ✓ Closed |
                                                  ╎  api-z9p.2    Email the two⋯  ✓ Closed |
                                                  ╎  api-z9p.3    Delete /v1/lo⋯  ✓ Closed |
                                                  ╎  api-z9p.4    Delete /v1/to⋯  ✓ Closed |
@@ -62,16 +62,16 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- Enter open  l into epic  y copy  / filter  ? keys                                        |
+ Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                            |
 
 == 140 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
  / log   Esc clear                                                                                                                          |
- ◦ Ready to start 1                                                          ╎ Remove legacy auth endpoints                                 |
-›API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎ api-z9p  API acme/api                                        |
-                                                                             ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                                         |
-                                                                             ╎                                                              |
-                                                                             ╎  api-z9p.1    Log callers of /v1/login              ✓ Closed |
+ No to-dos match.                                                            ╎ Remove legacy auth endpoints                                 |
+                                                                             ╎ api-z9p  API acme/api                                        |
+ Epics 6                                                                     ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                                         |
+ ◦ Ready to start 1                                                          ╎                                                              |
+›API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎  api-z9p.1    Log callers of /v1/login              ✓ Closed |
                                                                              ╎  api-z9p.2    Email the two remaining callers       ✓ Closed |
                                                                              ╎  api-z9p.3    Delete /v1/login                      ✓ Closed |
                                                                              ╎  api-z9p.4    Delete /v1/token                      ✓ Closed |
@@ -84,11 +84,14 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- Enter open  l into epic  y copy  / filter  ? keys                                                                                          |
+ Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                                                                              |
 
 == 56 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
  / log   Esc clear                                      |
+ No to-dos match.                                       |
+                                                        |
+ Epics 6                                                |
  API acme/api  synced 4m ago                            |
    ◦ Ready to start 1                                   |
 › ▾ api-z9p   Remove legacy auth endpoints              |
@@ -113,14 +116,14 @@
                                                         |
                                                         |
                                                         |
-                                                        |
-                                                        |
-                                                        |
- Enter open  l h fold  y copy  / filter  ? keys         |
+ Enter open  l h fold  y copy  Tab to-dos  / filter  ? ⋯|
 
 == 89 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
  / log   Esc clear                                                                       |
+ No to-dos match.                                                                        |
+                                                                                         |
+ Epics 6                                                                                 |
  API acme/api  synced 4m ago                                                             |
    ◦ Ready to start 1                                                                    |
 › ▾ api-z9p   Remove legacy auth endpoints                                               |
@@ -145,19 +148,16 @@
                                                                                          |
                                                                                          |
                                                                                          |
-                                                                                         |
-                                                                                         |
-                                                                                         |
- Enter open  l h fold  y copy  / filter  ? keys                                          |
+ Enter open  l h fold  y copy  Tab to-dos  / filter  ? keys                              |
 
 == 90 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+  To-dos 4   Epics 6                                                               ◉ live |
  / log   Esc clear                                                                        |
- ◦ Ready to start 1                              ╎ Remove legacy auth endpoints           |
-›API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎ api-z9p  API acme/api                  |
-                                                 ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                   |
-                                                 ╎                                        |
-                                                 ╎  api-z9p.1    Log callers o⋯  ✓ Closed |
+ No to-dos match.                                ╎ Remove legacy auth endpoints           |
+                                                 ╎ api-z9p  API acme/api                  |
+ Epics 6                                         ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                   |
+ ◦ Ready to start 1                              ╎                                        |
+›API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎  api-z9p.1    Log callers o⋯  ✓ Closed |
                                                  ╎  api-z9p.2    Email the two⋯  ✓ Closed |
                                                  ╎  api-z9p.3    Delete /v1/lo⋯  ✓ Closed |
                                                  ╎  api-z9p.4    Delete /v1/to⋯  ✓ Closed |
@@ -180,16 +180,16 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- Enter open  l into epic  y copy  / filter  ? keys                                        |
+ Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                            |
 
 == 140 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
  / log   Esc clear                                                                                                                          |
- ◦ Ready to start 1                                                          ╎ Remove legacy auth endpoints                                 |
-›API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎ api-z9p  API acme/api                                        |
-                                                                             ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                                         |
-                                                                             ╎                                                              |
-                                                                             ╎  api-z9p.1    Log callers of /v1/login              ✓ Closed |
+ No to-dos match.                                                            ╎ Remove legacy auth endpoints                                 |
+                                                                             ╎ api-z9p  API acme/api                                        |
+ Epics 6                                                                     ╎ ▰▰▰▰▰▰▰▰▰▰▰▰ 4/4  ✓4                                         |
+ ◦ Ready to start 1                                                          ╎                                                              |
+›API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎  api-z9p.1    Log callers of /v1/login              ✓ Closed |
                                                                              ╎  api-z9p.2    Email the two remaining callers       ✓ Closed |
                                                                              ╎  api-z9p.3    Delete /v1/login                      ✓ Closed |
                                                                              ╎  api-z9p.4    Delete /v1/token                      ✓ Closed |
@@ -212,5 +212,5 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- Enter open  l into epic  y copy  / filter  ? keys                                                                                          |
+ Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                                                                              |
 

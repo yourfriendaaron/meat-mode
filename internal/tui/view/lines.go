@@ -29,7 +29,6 @@ const (
 	gBullet   = "‣" // U+2023
 	gDot      = "∙" // U+2219
 	gBack     = "‹" // U+2039
-	gCrumb    = "›" // U+203A
 	gLive     = "◉" // U+25C9
 )
 
@@ -293,7 +292,7 @@ func (d *data) nestedState(re *api.RepoEpics, r *api.EpicRow) line {
 	return line{statusGlyph(d.rowState(re, r)), sg(" ", sPlain)}
 }
 
-// epicLine is one row of the epics tree, or of a drilled card. A card's
+// epicLine is one row of the epics tree. A card's
 // group heading says its state, so the row shows what it starts after or
 // its children's counts, and its bar.
 func (m *Model) epicLine(re *api.RepoEpics, r *api.EpicRow, depth int, card, foldable, open bool, w int) line {

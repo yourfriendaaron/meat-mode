@@ -1,5 +1,6 @@
 == 56 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
+ Epics 6                                                |
  API acme/api  synced 4m ago                            |
    ◒ Moving 2                                           |
 › ▾ api-h3k   Rate limiting v2                          |
@@ -17,11 +18,11 @@
   ▸ sf-c1x    Checkout redesign            ▰▰▱▱▱▱ 2/6   |
   ▸ sf-a8m    Accessibility pass           ▰▱▱▱▱▱ 2/8   |
    ◌ Deferred 1                                         |
-  ▸ sf-r4t    Search relevance             ▱▱▱▱▱▱ 0/0   |
- Enter open  l h fold  y copy  / filter  ? keys 1-18/25 |
+ Enter open  l h fold  y copy  Tab to-dos  / ⋯ 26-43/51 |
 
 == 89 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
+ Epics 6                                                                                 |
  API acme/api  synced 4m ago                                                             |
    ◒ Moving 2                                                                            |
 › ▾ api-h3k   Rate limiting v2                                                           |
@@ -39,55 +40,61 @@
   ▸ sf-c1x    Checkout redesign                           ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   |
   ▸ sf-a8m    Accessibility pass                                ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   |
    ◌ Deferred 1                                                                          |
-  ▸ sf-r4t    Search relevance                                            ▱▱▱▱▱▱▱▱ 0/0   |
- Enter open  l h fold  y copy  / filter  ? keys                                  1-18/25 |
+ Enter open  l h fold  y copy  Tab to-dos  / filter  ? keys                     26-43/51 |
 
 == 90 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
- ◒ Moving 4                                      ╎ Rate limiting v2                       |
-›API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎ api-h3k  API acme/api                  |
- API api-h3k.3 ↳ Limits per plan    ▰▰▰▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2          |
- STO sf-c1x    Checkout redesign    ▰▰▱▱▱▱ 2/6   ╎ P1  notes                              |
- STO sf-a8m    Accessibility pass   ▰▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis,       |
- ◦ Ready to start 1                              ╎  replacing the per-IP limiter.         |
- API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎                                        |
- ◌ Deferred 1                                    ╎ Notes                                  |
- STO sf-r4t    Search relevance     ▱▱▱▱▱▱ 0/0   ╎  Research: a sliding window costs one  |
- No epic 4                                       ╎  extra read per request; token buckets |
- STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎  do not.                               |
- STO sf-q1w    Bump image CDN timeout     ◦ Open ╎                                        |
- DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎› api-h3k.3    Limits p⋯  ◒ In progress |
- DOT dot-7ab   Pin the editor plugi⋯  ◌ Deferred ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
-                                                 ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
-                                                 ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
-                                                 ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
-                                                 ╎                                        |
- Enter open  h back  y copy  Y copy all  ? keys                                           |
+  To-dos 4   Epics 6                                                               ◉ live |
+ Done today 1                                    ╎ Rate limiting v2                       |
+  ✓  ✓  Take out recycling                       ╎ api-h3k  API acme/api                  |
+                                                 ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2          |
+ Epics 6                                         ╎ P1  notes                              |
+ ◒ Moving 4                                      ╎  Per-key token buckets in Redis,       |
+›API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎  replacing the per-IP limiter.         |
+ API api-h3k.3 ↳ Limits per plan    ▰▰▰▱▱▱ 1/2   ╎                                        |
+ STO sf-c1x    Checkout redesign    ▰▰▱▱▱▱ 2/6   ╎ Notes                                  |
+ STO sf-a8m    Accessibility pass   ▰▱▱▱▱▱ 2/8   ╎  Research: a sliding window costs one  |
+ ◦ Ready to start 1                              ╎  extra read per request; token buckets |
+ API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎  do not.                               |
+ ◌ Deferred 1                                    ╎                                        |
+ STO sf-r4t    Search relevance     ▱▱▱▱▱▱ 0/0   ╎› api-h3k.3    Limits p⋯  ◒ In progress |
+ No epic 4                                       ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
+ STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
+ STO sf-q1w    Bump image CDN timeout     ◦ Open ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
+ DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
+ DOT dot-7ab   Pin the editor plugi⋯  ◌ Deferred ╎                                        |
+ Enter open  h back  y copy  Y copy all  ? keys                                  23-40/40 |
 
 == 140 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
- ◒ Moving 4                                                                  ╎ Rate limiting v2                                             |
-›API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎ api-h3k  API acme/api                                        |
- API api-h3k.3 ↳ Limits per plan                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2                                |
- STO sf-c1x    Checkout redesign              ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   ╎ P1  notes                                                    |
- STO sf-a8m    Accessibility pass                   ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis, replacing the per-IP        |
- ◦ Ready to start 1                                                          ╎  limiter.                                                    |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
+ Done today 1                                                                ╎ Rate limiting v2                                             |
+  ✓  ✓  mm-30     Take out recycling                                         ╎ api-h3k  API acme/api                                        |
+                                                                             ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2                                |
+ Epics 6                                                                     ╎ P1  notes                                                    |
+ ◒ Moving 4                                                                  ╎  Per-key token buckets in Redis, replacing the per-IP        |
+›API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎  limiter.                                                    |
+ API api-h3k.3 ↳ Limits per plan                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎                                                              |
+ STO sf-c1x    Checkout redesign              ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   ╎ Notes                                                        |
+ STO sf-a8m    Accessibility pass                   ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   ╎  Research: a sliding window costs one extra read per         |
+ ◦ Ready to start 1                                                          ╎  request; token buckets do not.                              |
  API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎                                                              |
- ◌ Deferred 1                                                                ╎ Notes                                                        |
- STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱ 0/0   ╎  Research: a sliding window costs one extra read per         |
- No epic 4                                                                   ╎  request; token buckets do not.                              |
- STO sf-q2e    Flaky test in cart.spec                    3 comments  ◦ Open ╎                                                              |
- STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎› api-h3k.3    Limits per plan                  ◒ In progress |
- DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
- DOT dot-7ab   Pin the editor plugins                             ◌ Deferred ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
-                                                                             ╎  api-h3k.1    Token bucket store                    ✓ Closed |
-                                                                             ╎  api-h3k.2    Middleware and headers                ✓ Closed |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
- Enter open  h back  y copy  Y copy all  ? keys                                                                                             |
+ ◌ Deferred 1                                                                ╎› api-h3k.3    Limits per plan                  ◒ In progress |
+ STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱ 0/0   ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
+ No epic 4                                                                   ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
+ STO sf-q2e    Flaky test in cart.spec                    3 comments  ◦ Open ╎  api-h3k.1    Token bucket store                    ✓ Closed |
+ STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎  api-h3k.2    Middleware and headers                ✓ Closed |
+ DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎                                                              |
+ DOT dot-7ab   Pin the editor plugins                             ◌ Deferred ╎                                                              |
+ Enter open  h back  y copy  Y copy all  ? keys                                                                                    23-40/40 |
 
 == 56 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
+  ✦ DOT Sign in to the package registry once so the ag⋯ |
+ Later 1                                                |
+  ◦  ✓  Renew passport                      Sat, Nov 14 |
+ Done today 1                                           |
+  ✓  ✓  Take out recycling                              |
+                                                        |
+ Epics 6                                                |
  API acme/api  synced 4m ago                            |
    ◒ Moving 2                                           |
 › ▾ api-h3k   Rate limiting v2                          |
@@ -109,17 +116,17 @@
    No epic                                              |
     sf-q2e    Flaky test in cart.spec            ◦ Open |
     sf-q1w    Bump image CDN timeout             ◦ Open |
- DOT dotfiles  synced 12m ago                           |
-   No epic                                              |
-    dot-7aa   Move shell config to XDG paths     ◦ Open |
-    dot-7ab   Pin the editor plugins         ◌ Deferred |
-                                                        |
-                                                        |
-                                                        |
- Enter open  l h fold  y copy  / filter  ? keys         |
+ Enter open  l h fold  y copy  Tab to-dos  / ⋯ 20-47/51 |
 
 == 89 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
+  ✦ DOT dot-3mm   Sign in to the package registry once so the agent can publish          |
+ Later 1                                                                                 |
+  ◦  ✓  mm-40     Renew passport                                      #admin Sat, Nov 14 |
+ Done today 1                                                                            |
+  ✓  ✓  mm-30     Take out recycling                                                     |
+                                                                                         |
+ Epics 6                                                                                 |
  API acme/api  synced 4m ago                                                             |
    ◒ Moving 2                                                                            |
 › ▾ api-h3k   Rate limiting v2                                                           |
@@ -141,76 +148,69 @@
    No epic                                                                               |
     sf-q2e    Flaky test in cart.spec                                 3 comments  ◦ Open |
     sf-q1w    Bump image CDN timeout                                              ◦ Open |
- DOT dotfiles  synced 12m ago                                                            |
-   No epic                                                                               |
-    dot-7aa   Move shell config to XDG paths                                      ◦ Open |
-    dot-7ab   Pin the editor plugins                                          ◌ Deferred |
-                                                                                         |
-                                                                                         |
-                                                                                         |
- Enter open  l h fold  y copy  / filter  ? keys                                          |
+ Enter open  l h fold  y copy  Tab to-dos  / filter  ? keys                     20-47/51 |
 
 == 90 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
- ◒ Moving 4                                      ╎ Rate limiting v2                       |
-›API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎ api-h3k  API acme/api                  |
- API api-h3k.3 ↳ Limits per plan    ▰▰▰▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2          |
- STO sf-c1x    Checkout redesign    ▰▰▱▱▱▱ 2/6   ╎ P1  notes                              |
- STO sf-a8m    Accessibility pass   ▰▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis,       |
- ◦ Ready to start 1                              ╎  replacing the per-IP limiter.         |
+  To-dos 4   Epics 6                                                               ◉ live |
+ Any time 7                                      ╎ Rate limiting v2                       |
+  ✦ STO Approve the footer text                  ╎ api-h3k  API acme/api                  |
+  ◦  ✓  Call Sam about the weekend               ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2          |
+  ◦ GAR Label the seed packets 🌱 種             ╎ P1  notes                              |
+  ◦ GAR Order bark mulch                         ╎  Per-key token buckets in Redis,       |
+  ◦  ✓  Read through the lease renewal and writ⋯ ╎  replacing the per-IP limiter.         |
+  ✦ STO Set up the wallet-pay sandbox account    ╎                                        |
+  ✦ DOT Sign in to the package registry once so⋯ ╎ Notes                                  |
+ Later 1                                         ╎  Research: a sliding window costs one  |
+  ◦  ✓  Renew passport               Sat, Nov 14 ╎  extra read per request; token buckets |
+ Done today 1                                    ╎  do not.                               |
+  ✓  ✓  Take out recycling                       ╎                                        |
+                                                 ╎› api-h3k.3    Limits p⋯  ◒ In progress |
+ Epics 6                                         ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
+ ◒ Moving 4                                      ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
+›API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
+ API api-h3k.3 ↳ Limits per plan    ▰▰▰▱▱▱ 1/2   ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
+ STO sf-c1x    Checkout redesign    ▰▰▱▱▱▱ 2/6   ╎                                        |
+ STO sf-a8m    Accessibility pass   ▰▱▱▱▱▱ 2/8   ╎                                        |
+ ◦ Ready to start 1                              ╎                                        |
  API api-z9p   Remove legacy auth⋯  ▰▰▰▰▰▰ 4/4   ╎                                        |
- ◌ Deferred 1                                    ╎ Notes                                  |
- STO sf-r4t    Search relevance     ▱▱▱▱▱▱ 0/0   ╎  Research: a sliding window costs one  |
- No epic 4                                       ╎  extra read per request; token buckets |
- STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎  do not.                               |
+ ◌ Deferred 1                                    ╎                                        |
+ STO sf-r4t    Search relevance     ▱▱▱▱▱▱ 0/0   ╎                                        |
+ No epic 4                                       ╎                                        |
+ STO sf-q2e    Flaky test in cart.spec    ◦ Open ╎                                        |
  STO sf-q1w    Bump image CDN timeout     ◦ Open ╎                                        |
- DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎› api-h3k.3    Limits p⋯  ◒ In progress |
- DOT dot-7ab   Pin the editor plugi⋯  ◌ Deferred ╎  api-h3k.4    Load test at 5k⋯  ◦ Open |
-                                                 ╎  api-h3k.5    Docs for the⋯  ⊘ Waiting |
-                                                 ╎  api-h3k.1    Token bucket ⋯  ✓ Closed |
-                                                 ╎  api-h3k.2    Middleware an⋯  ✓ Closed |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
-                                                 ╎                                        |
- Enter open  h back  y copy  Y copy all  ? keys                                           |
+ DOT dot-7aa   Move shell config to XDG⋯  ◦ Open ╎                                        |
+ DOT dot-7ab   Pin the editor plugi⋯  ◌ Deferred ╎                                        |
+ Enter open  h back  y copy  Y copy all  ? keys                                  13-40/40 |
 
 == 140 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
- ◒ Moving 4                                                                  ╎ Rate limiting v2                                             |
-›API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎ api-h3k  API acme/api                                        |
- API api-h3k.3 ↳ Limits per plan                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2                                |
- STO sf-c1x    Checkout redesign              ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   ╎ P1  notes                                                    |
- STO sf-a8m    Accessibility pass                   ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   ╎  Per-key token buckets in Redis, replacing the per-IP        |
- ◦ Ready to start 1                                                          ╎  limiter.                                                    |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
+ Any time 7                                                                  ╎ Rate limiting v2                                             |
+  ✦ STO sf-k2a    Approve the footer text                                    ╎ api-h3k  API acme/api                                        |
+  ◦  ✓  mm-12     Call Sam about the weekend                                 ╎ ▰▰▰▰▰▱▱▱▱▱▱▱ 2/5  ◒1 ⊘1 ◦1 ✓2                                |
+  ◦ GAR mm-52     Label the seed packets 🌱 種                               ╎ P1  notes                                                    |
+  ◦ GAR mm-4      Order bark mulch                                   #garden ╎  Per-key token buckets in Redis, replacing the per-IP        |
+  ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎  limiter.                                                    |
+  ✦ STO sf-c1x.5  Set up the wallet-pay sandbox account                      ╎                                                              |
+  ✦ DOT dot-3mm   Sign in to the package registry once so the agent can pub⋯ ╎ Notes                                                        |
+ Later 1                                                                     ╎  Research: a sliding window costs one extra read per         |
+  ◦  ✓  mm-40     Renew passport                          #admin Sat, Nov 14 ╎  request; token buckets do not.                              |
+ Done today 1                                                                ╎                                                              |
+  ✓  ✓  mm-30     Take out recycling                                         ╎› api-h3k.3    Limits per plan                  ◒ In progress |
+                                                                             ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
+ Epics 6                                                                     ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
+ ◒ Moving 4                                                                  ╎  api-h3k.1    Token bucket store                    ✓ Closed |
+›API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎  api-h3k.2    Middleware and headers                ✓ Closed |
+ API api-h3k.3 ↳ Limits per plan                       ◦1 ✓1  ▰▰▰▰▱▱▱▱ 1/2   ╎                                                              |
+ STO sf-c1x    Checkout redesign              ◒1 ⊘1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/6   ╎                                                              |
+ STO sf-a8m    Accessibility pass                   ◒1 ◦5 ✓2  ▰▰▱▱▱▱▱▱ 2/8   ╎                                                              |
+ ◦ Ready to start 1                                                          ╎                                                              |
  API api-z9p   Remove legacy auth endpoints               ✓4  ▰▰▰▰▰▰▰▰ 4/4   ╎                                                              |
- ◌ Deferred 1                                                                ╎ Notes                                                        |
- STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱ 0/0   ╎  Research: a sliding window costs one extra read per         |
- No epic 4                                                                   ╎  request; token buckets do not.                              |
+ ◌ Deferred 1                                                                ╎                                                              |
+ STO sf-r4t    Search relevance                               ▱▱▱▱▱▱▱▱ 0/0   ╎                                                              |
+ No epic 4                                                                   ╎                                                              |
  STO sf-q2e    Flaky test in cart.spec                    3 comments  ◦ Open ╎                                                              |
- STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎› api-h3k.3    Limits per plan                  ◒ In progress |
- DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎  api-h3k.4    Load test at 5k rps                     ◦ Open |
- DOT dot-7ab   Pin the editor plugins                             ◌ Deferred ╎  api-h3k.5    Docs for the new 429 body            ⊘ Waiting |
-                                                                             ╎  api-h3k.1    Token bucket store                    ✓ Closed |
-                                                                             ╎  api-h3k.2    Middleware and headers                ✓ Closed |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
-                                                                             ╎                                                              |
- Enter open  h back  y copy  Y copy all  ? keys                                                                                             |
+ STO sf-q1w    Bump image CDN timeout                                 ◦ Open ╎                                                              |
+ DOT dot-7aa   Move shell config to XDG paths                         ◦ Open ╎                                                              |
+ DOT dot-7ab   Pin the editor plugins                             ◌ Deferred ╎                                                              |
+ Enter open  h back  y copy  Y copy all  ? keys                                                                                    13-40/40 |
 

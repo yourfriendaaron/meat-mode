@@ -46,14 +46,14 @@ func TestCardTreeNestsUnderParent(t *testing.T) {
 
 func TestTreeShowsASubEpicOnce(t *testing.T) {
 	d := index(api.State{}, nestedEpics(), now)
-	rows := d.epicTreeRows("", map[string]bool{"desk/garden/gd-1": true})
+	rows := d.epicTreeRows("", map[string]bool{epicMark + "desk/garden/gd-1": true})
 	var ids []string
 	for _, r := range rows {
 		if r.t != nil {
 			ids = append(ids, r.id)
 		}
 	}
-	want := []string{"desk/garden/gd-3", "desk/garden/gd-1", "desk/garden/gd-1>desk/garden/gd-1.1", "desk/garden/gd-2"}
+	want := []string{epicMark + "desk/garden/gd-3", epicMark + "desk/garden/gd-1", epicMark + "desk/garden/gd-1>desk/garden/gd-1.1", epicMark + "desk/garden/gd-2"}
 	if !slices.Equal(ids, want) {
 		t.Errorf("rows %v, want %v", ids, want)
 	}

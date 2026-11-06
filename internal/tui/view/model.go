@@ -26,7 +26,7 @@ type openFrom struct {
 	scroll int
 }
 
-func (m *Model) layout() Layout { return LayoutFor(m.tab, m.width) }
+func (m *Model) layout() Layout { return LayoutFor(m.width) }
 
 // say sets the status line's message.
 func (m *Model) say(text string, kind NoticeKind) {
@@ -34,7 +34,7 @@ func (m *Model) say(text string, kind NoticeKind) {
 	m.notice, m.noticeKind, m.noticeSeq = text, kind, m.seq
 }
 
-// topLines is the lines above the body: the tabs, and the filter while one
+// topLines is the lines above the body: the counts, and the filter while one
 // is typed or kept.
 func (m *Model) topLines() int {
 	if m.filtering || m.filter != "" {
@@ -46,20 +46,14 @@ func (m *Model) topLines() int {
 // bodyHeight is the lines between the top lines and the status line.
 func (m *Model) bodyHeight() int { return max(0, m.height-m.topLines()-1) }
 
-// listHeight is the lines the list's rows get: the body, less the crumb of
-// a drilled card.
-func (m *Model) listHeight() int {
-	if m.layout() == "c" && m.drill != "" {
-		return max(0, m.bodyHeight()-1)
-	}
-	return m.bodyHeight()
-}
+// listHeight is the lines the list's rows get.
+func (m *Model) listHeight() int { return m.bodyHeight() }
 
 // rows are the current list's rows, with the selected epic row opened in
-// place where no pane beside the list shows it (layouts A and C).
+// place where no pane beside the list shows it (layout A).
 func (m *Model) rows() []row {
 	rows := m.listRows()
-	if m.tab == TabTodos || m.layout() == "b" {
+	if m.layout() == "b" {
 		return rows
 	}
 	return m.openSelected(rows)
@@ -99,27 +93,7 @@ func (m *Model) listRows() []row {
 	if m.d == nil {
 		return nil
 	}
-	switch m.tab {
-	case TabTodos:
-		return m.d.todoRows(m.filter)
-	case TabEpics:
-		if m.layout() == "a" {
-			return m.d.epicTreeRows(m.filter, m.expanded)
-		}
-		return m.d.epicListRows(m.filter)
-	}
-	if t := m.drillTarget(); t != nil {
-		return m.d.drillRows(m.filter, t, m.width)
-	}
-	rows, _ := m.d.allRows(m.filter)
-	return rows
-}
-
-func (m *Model) drillTarget() *target {
-	if m.drill == "" || m.d == nil {
-		return nil
-	}
-	return m.d.resolve(m.drill, true)
+	return m.d.pageRows(m.filter, m.layout(), m.expanded)
 }
 
 // selectable are the indexes of the rows that can hold the selection.
@@ -168,7 +142,7 @@ func (m *Model) target() *target {
 
 // rightKids are the children of the card selected in layout B, or nil.
 func (m *Model) rightKids() int {
-	if m.tab != TabEpics || m.layout() != "b" {
+	if !inEpics(m.selKey) || m.layout() != "b" {
 		return 0
 	}
 	t := m.listTarget()
@@ -246,7 +220,7 @@ func (m *Model) fixOpenKid() {
 // toSplit carries a selection from layout A's tree into layout B: a child
 // of a card becomes that card with its child selected on the right.
 func (m *Model) toSplit() {
-	if m.tab != TabEpics || m.d == nil {
+	if !inEpics(m.selKey) || m.d == nil {
 		return
 	}
 	parent, child, ok := strings.Cut(m.selKey, ">")
@@ -257,7 +231,7 @@ func (m *Model) toSplit() {
 		child = child[i+1:]
 	}
 	m.selKey = parent
-	if re, r := m.d.findRow(parent); r != nil {
+	if re, r := m.d.findRow(strings.TrimPrefix(parent, epicMark)); r != nil {
 		for n, k := range m.d.children(re, r.ID) {
 			if rowKey(re, k) == child {
 				m.right, m.rightIdx = true, n
@@ -285,7 +259,7 @@ func (m *Model) setSel(n int) {
 
 // fix makes the model consistent after a change: the selection on its
 // key, or the nearest row when the key has gone; the selected row in
-// view; and an open detail, drill or menu closed when its target has gone.
+// view; and an open detail or menu closed when its target has gone.
 func (m *Model) fix() {
 	if m.d == nil {
 		return
@@ -294,10 +268,6 @@ func (m *Model) fix() {
 		m.open, m.openKids, m.openBack = false, false, nil
 	}
 	m.fixOpenKid()
-	if m.drill != "" && m.drillTarget() == nil {
-		m.drill = ""
-		m.resetSel()
-	}
 	if m.snoozeKey != "" {
 		if it := m.d.items[m.snoozeKey]; it == nil || !isOpen(it) {
 			m.snoozeKey = ""

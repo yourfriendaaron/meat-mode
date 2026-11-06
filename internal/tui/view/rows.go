@@ -48,6 +48,8 @@ type row struct {
 	lead func(w int) line
 	// facts marks a line of the selected row opened in place.
 	facts bool
+	// epicsTop marks the epics section's heading, which jumping there scrolls to.
+	epicsTop bool
 }
 
 func headRow(segs ...seg) row { return row{head: line(segs)} }
@@ -243,7 +245,7 @@ func (d *data) cardTree(q string, re *api.RepoEpics) []cardAt {
 	return out
 }
 
-// cardCount is the number of epic cards across every repo, for the tab.
+// cardCount is the number of epic cards across every repo, for the top line.
 func (d *data) cardCount() int {
 	n := 0
 	for k := range d.epics.Repos {
@@ -288,12 +290,56 @@ func (d *data) rowMatches(q string, re *api.RepoEpics, r *api.EpicRow) bool {
 	return false
 }
 
-// ---- To-dos
+// ---- The page: the to-dos, then the epics
+
+// epicMark starts the id of every row in the epics section, so a row there
+// never shares an id with a to-do row for the same item.
+const epicMark = "epic:"
+
+// inEpics reports whether a row id is in the epics section.
+func inEpics(id string) bool { return strings.HasPrefix(id, epicMark) }
+
+// pageRows are the to-dos in the Today groups, then the epics under their
+// heading: as a tree under each repo in layout A, as cards in layout B.
+// The epics section shows while any repo sends epics or has them on.
+func (d *data) pageRows(q string, lay Layout, expanded map[string]bool) []row {
+	rows := d.todoRows(q)
+	if len(rows) == 0 {
+		text := "Nothing due today."
+		if q != "" {
+			text = "No to-dos match."
+		}
+		rows = append(rows, headRow(sg(" "+text, sDim)))
+	}
+	if !d.hasEpics() {
+		return rows
+	}
+	head := headRow(sg(" Epics ", sHead), sg(itoa(d.cardCount()), sDim))
+	head.epicsTop = true
+	rows = append(rows, headRow(), head)
+	var epics []row
+	if lay == "a" {
+		epics = d.epicTreeRows(q, expanded)
+	} else {
+		epics = d.epicListRows(q)
+	}
+	switch {
+	case len(epics) > 0:
+	case q != "":
+		epics = []row{headRow(sg("   No epics or tasks match.", sDim))}
+	default:
+		epics = []row{headRow(sg("   No epics yet.", sDim))}
+	}
+	return append(rows, epics...)
+}
+
+// hasEpics reports whether the page has its epics section.
+func (d *data) hasEpics() bool { return len(d.epics.Repos) > 0 || d.epicsSwitchedOn() }
 
 // todoRows are the Today view's groups, as rows.
 func (d *data) todoRows(q string) []row {
 	var rows []row
-	for _, g := range buildGroups(d.state.Items, d.now, true) {
+	for _, g := range buildGroups(d.state.Items, d.now) {
 		var its []*api.Item
 		for _, it := range g.items {
 			if matches(q, it.Title, it.ID) {
@@ -335,7 +381,7 @@ func (d *data) epicTreeRows(q string, expanded map[string]bool) []row {
 		var add func(parent string, r *api.EpicRow, depth int)
 		add = func(parent string, r *api.EpicRow, depth int) {
 			t := d.epicTarget(re, r)
-			id := t.key
+			id := epicMark + t.key
 			if parent != "" {
 				id = parent + ">" + t.key
 			}
@@ -418,7 +464,7 @@ func (d *data) epicListRows(q string) []row {
 
 func (d *data) cardRow(re *api.RepoEpics, r *api.EpicRow, depth int) row {
 	t := d.epicTarget(re, r)
-	return row{id: t.key, t: t, draw: func(m *Model, w int) line { return m.cardLine(re, r, depth, w) },
+	return row{id: epicMark + t.key, t: t, draw: func(m *Model, w int) line { return m.cardLine(re, r, depth, w) },
 		lead: func(int) line { return d.cardLead(re, r, depth) }}
 }
 
@@ -447,113 +493,6 @@ func blockCards(bs []cardBlock) int {
 		n += len(b.cards)
 	}
 	return n
-}
-
-// ---- All, layout C
-
-// allRows are Waiting on you, Later and the epics; hidden counts the
-// snoozed and done items left out.
-func (d *data) allRows(q string) (rows []row, hidden int) {
-	var waiting, later []row
-	nw, nl := 0, 0
-	for _, g := range buildGroups(d.state.Items, d.now, false) {
-		// A nested sub-task goes where its parent went.
-		dest := ""
-		for _, it := range g.items {
-			nested := g.nested[it.Key]
-			if !nested {
-				switch {
-				case g.id == gDone || isSnoozed(it, d.now):
-					dest = "hidden"
-				case g.id == gPastDue || g.id == gToday || g.id == gEvening || (g.id == gNoDate && !isPersonal(it.Bridge)):
-					dest = "waiting"
-				default:
-					dest = "later"
-				}
-			}
-			if dest == "hidden" {
-				hidden++
-				continue
-			}
-			if !matches(q, it.Title, it.ID) {
-				continue
-			}
-			r := d.itemRow(it, nested)
-			if dest == "waiting" {
-				waiting = append(waiting, r)
-				if !nested {
-					nw++
-				}
-			} else {
-				later = append(later, r)
-				if !nested {
-					nl++
-				}
-			}
-		}
-	}
-	rows = append(rows, headRow(sg(" Waiting on you ", style{fg: cOrange, bold: true}), sg(itoa(nw), sDim)))
-	if len(waiting) == 0 {
-		rows = append(rows, headRow(sg("   Nothing waiting on you.", sDim)))
-	}
-	rows = append(rows, waiting...)
-	rows = append(rows, headRow(), headRow(sg(" Later ", sHead), sg(itoa(nl), sDim)))
-	rows = append(rows, later...)
-	var blocks []cardBlock
-	for k := range d.epics.Repos {
-		blocks = append(blocks, d.cardBlocks(q, &d.epics.Repos[k])...)
-	}
-	if len(blocks) > 0 || d.epicsSwitchedOn() {
-		rows = append(rows, headRow(), headRow(sg(" Epics ", sHead), sg(itoa(blockCards(blocks)), sDim)))
-		rows = append(rows, d.groupedRows(blocks, "  ")...)
-	}
-	return rows, hidden
-}
-
-// drillStatuses are the groups of a drilled card's children.
-var drillStatuses = []struct{ status, label string }{
-	{"blocked", "Blocked"}, {"in_progress", "In progress"}, {"open", "Open"}, {"waiting", "Waiting"}, {"deferred", "Deferred"}, {"closed", "Closed"},
-}
-
-// drillRows are a card's children grouped by status, under its bar and
-// description.
-func (d *data) drillRows(q string, t *target, w int) []row {
-	re, card := t.repo, t.row
-	done, total := d.progress(re, card.ID)
-	rows := []row{headRow(append(append(line{sg(" ", sPlain)}, d.stateBar(re, card.ID, 16)...),
-		sg(" "+itoa(done)+"/"+itoa(total)+" done", sSoft), sg("  "+clean(card.ID)+" ∙ "+clean(re.Repo), sDim))...)}
-	if card.Description != "" {
-		for _, l := range wrap(card.Description, w-3) {
-			rows = append(rows, headRow(sg("  "+l, sSoft)))
-		}
-	}
-	for _, l := range notesLines(card, w, sSoft) {
-		rows = append(rows, headRow(l...))
-	}
-	rows = append(rows, headRow())
-	kids := d.children(re, card.ID)
-	for _, st := range drillStatuses {
-		var g []*api.EpicRow
-		for _, k := range kids {
-			if d.rowState(re, k) == st.status && matches(q, d.rowTitle(re, k), k.ID) {
-				g = append(g, k)
-			}
-		}
-		if len(g) == 0 {
-			continue
-		}
-		rows = append(rows, headRow(sg(" "+st.label+" ", sHead), sg(itoa(len(g)), sDim)))
-		for _, k := range g {
-			kt := d.epicTarget(re, k)
-			rows = append(rows, row{id: kt.key, t: kt, draw: func(m *Model, w int) line {
-				return m.epicLine(re, k, 0, kt.card, false, false, w)
-			}, lead: func(int) line { return d.epicLead(re, k, 0, false, false) }})
-		}
-	}
-	if len(kids) == 0 {
-		rows = append(rows, headRow(sg("  No children yet.", sDim)))
-	}
-	return rows
 }
 
 // findRow is the epic row with key, and its repo.

@@ -73,7 +73,7 @@ func scoped(s api.State, e api.Epics, keep map[string]bool) (api.State, api.Epic
 	return s, e
 }
 
-// scopeName is the name the tab bar gives the project in scope.
+// scopeName is the name the top line gives the project in scope.
 func (m *Model) scopeName() string {
 	for k := range m.state.Repos {
 		r := &m.state.Repos[k]

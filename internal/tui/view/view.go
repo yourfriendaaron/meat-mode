@@ -1,7 +1,7 @@
 // Package view is the terminal viewer's screen, as a pure package: the
 // model, what each key does and the frame it draws. It does no I/O and
 // imports no terminal library beyond Lip Gloss for styles, so every layout
-// is tested as text. The design is the epic's (layouts A, B and C, the
+// is tested as text. The design is the epic's (layouts A and B, the
 // 90-column switch, keys, copy text); the prototype it ports is tag
 // prototype/tui-viewer.
 package view
@@ -13,32 +13,19 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// SplitAt is the width from which To-dos and Epics draw as layout B.
+// SplitAt is the width from which the page draws as layout B.
 const SplitAt = 90
 
-// Tab is one of the viewer's three tabs.
-type Tab int
-
-const (
-	TabTodos Tab = iota // 1 To-dos
-	TabEpics            // 2 Epics
-	TabAll              // 3 All
-)
-
-// Layout is how a tab draws: "a" one list with a full-screen detail, "b" a
-// list with the detail beside it, "c" the All page.
+// Layout is how the page draws: "a" one list with a full-screen detail, "b"
+// a list with the detail beside it.
 type Layout string
 
-// LayoutFor is the layout a tab draws in at width.
-func LayoutFor(t Tab, width int) Layout {
-	switch {
-	case t == TabAll:
-		return "c"
-	case width < SplitAt:
+// LayoutFor is the layout the page draws in at width.
+func LayoutFor(width int) Layout {
+	if width < SplitAt {
 		return "a"
-	default:
-		return "b"
 	}
+	return "b"
 }
 
 // Conn is the state of the link to the hub, shown at the top right.
@@ -101,7 +88,8 @@ func (Quit) effect()    {}
 
 // Identity, colour, links and time:
 //   - An item is known by api.Item.Key. An epic row by "<bridge>/<repo>/<id>",
-//     the same form. A row with human set whose key is an item in the state
+//     the same form; its row in the list has an id that starts with
+//     epicMark, so an agent's ask shown in both sections is two rows. A row with human set whose key is an item in the state
 //     acts as that item; otherwise it is read-only (x, s and u say so and
 //     name its repo).
 //   - A list's mark: the personal list (api.Repo.Personal) its own mark;
@@ -135,16 +123,11 @@ type Model struct {
 	now    time.Time
 	width  int
 	height int
-	tab    Tab
 	conn   Conn
 
 	hereAt Here            // where the viewer was started
 	here   map[string]bool // the lists hereAt is in, by listKey; nil for none
 	every  bool            // p: show every list, not just here's
-	// started is set once the first tab is settled: by the first epics
-	// shown for here's project, or by any tab key. Until then the viewer
-	// opens on Epics as soon as here's project has epic rows.
-	started bool
 
 	d      *data // state and epics, indexed; nil before SetData
 	selKey string
@@ -159,18 +142,16 @@ type Model struct {
 	openKid      int       // the child selected while openKids
 	openBack     *openFrom // the card a child was opened from, which Esc goes back to
 
-	drill    string          // All: the card drilled into
-	expanded map[string]bool // Epics in layout A: unfolded cards, by row id; shared between copies, so copied before a change
-	right    bool            // Epics in layout B: the keys move in the selected card's children
+	expanded map[string]bool // epics in layout A: unfolded cards, by row id; shared between copies, so copied before a change
+	right    bool            // epics in layout B: the keys move in the selected card's children
 	rightIdx int
 
 	filter     string
 	filtering  bool
 	help       bool
 	helpScroll int
-	snoozeKey  string    // the item the snooze menu is open for
-	snoozeIdx  int       // the option the arrows have picked in it
-	tabSel     [3]string // each tab's selected row, kept while another tab shows
+	snoozeKey  string // the item the snooze menu is open for
+	snoozeIdx  int    // the option the arrows have picked in it
 
 	pw       bool // the password prompt
 	pwReason string
@@ -190,12 +171,11 @@ func New(hubURL string) Model { return Model{hub: hubURL} }
 
 // SetHere sets where the viewer was started. While that folder is in a
 // project the hub knows, the viewer shows that project's lists alone
-// until p switches to every list, and opens on Epics when it has some.
+// until p switches to every list.
 func (m Model) SetHere(h Here) Model {
 	m.hereAt = h
 	if m.d != nil {
 		m.reindex(m.now)
-		m.openOnEpics()
 		m.fix()
 	}
 	return m
@@ -221,24 +201,8 @@ func (m *Model) inScope() bool { return len(m.here) > 0 && !m.every }
 func (m Model) SetData(s api.State, e api.Epics, now time.Time) Model {
 	m.state, m.epics, m.now = s, e, now
 	m.reindex(now)
-	m.openOnEpics()
 	m.fix()
 	return m
-}
-
-// openOnEpics starts the viewer on Epics when it was started in a project
-// whose epics it shows, before any tab key.
-func (m *Model) openOnEpics() {
-	if m.started || !m.inScope() {
-		return
-	}
-	for _, re := range m.d.epics.Repos {
-		if len(re.Rows) > 0 {
-			m.started = true
-			m.tabTo(TabEpics)
-			return
-		}
-	}
 }
 
 // SetNow moves the clock without new data (due labels, groups).
@@ -254,13 +218,13 @@ func (m Model) SetNow(now time.Time) Model {
 // Resize sets the pane size. Crossing below SplitAt with a row selected in
 // layout B opens that row's detail in layout A.
 func (m Model) Resize(width, height int) Model {
-	was := LayoutFor(m.tab, m.width)
+	was := LayoutFor(m.width)
 	var t *target
 	if was == "b" && m.width > 0 {
 		t = m.target()
 	}
 	m.width, m.height = max(width, 0), max(height, 0)
-	now := LayoutFor(m.tab, m.width)
+	now := LayoutFor(m.width)
 	switch {
 	case was == "b" && now == "a":
 		if t != nil {

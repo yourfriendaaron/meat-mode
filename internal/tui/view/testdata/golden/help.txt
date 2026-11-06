@@ -1,5 +1,5 @@
 == 56 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
  Keys and marks                                         |
                                                         |
  Move                                                   |
@@ -7,7 +7,8 @@
   g G        top, bottom                                |
   Space      a page down; PgUp PgDn too                 |
   ^d ^u      half a page down, up                       |
-  Tab 1 2 3  switch tab                                 |
+  Tab        to the epics, or back to the to-dos        |
+  1 2        to the to-dos, to the epics                |
   /          filter by title or id                      |
   p          this project, or every list                |
                                                         |
@@ -17,11 +18,10 @@
   h Esc      back; h on an epic folds it                |
   o          show the item's app link                   |
                                                         |
- Act                                                    |
- j k scroll  any other key close                1-18/43 |
+ j k scroll  any other key close                1-18/44 |
 
 == 89 x 20, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
  Keys and marks                                                                          |
                                                                                          |
  Move                                        App                                         |
@@ -29,21 +29,21 @@
   g G        top, bottom                      ?          these keys                      |
   Space      a page down; PgUp PgDn too       q          quit                            |
   ^d ^u      half a page down, up                                                        |
-  Tab 1 2 3  switch tab                      Marks                                       |
-  /          filter by title or id             ✓   your personal list                    |
-  p          this project, or every list      ABC  a project, in its colour              |
-                                              ✦    a task an agent left for you          |
- Open                                         ◦    Open: ready to start                  |
-  Enter      open full screen                 ◒    In progress                           |
-  l          unfold, step in, or open         ⊘    Blocked                               |
-  h Esc      back; h on an epic folds it      ⊘    Waiting on another bead               |
-  o          show the item's app link         ◌    Deferred, to a date when it has one   |
-                                              ✓    Done, or Closed                       |
- Act                                          ☾    snoozed                               |
- j k scroll  any other key close                                                 1-18/24 |
+  Tab        to the epics, or back to the    Marks                                       |
+             to-dos                            ✓   your personal list                    |
+  1 2        to the to-dos, to the epics      ABC  a project, in its colour              |
+  /          filter by title or id            ✦    a task an agent left for you          |
+  p          this project, or every list      ◦    Open: ready to start                  |
+                                              ◒    In progress                           |
+ Open                                         ⊘    Blocked                               |
+  Enter      open full screen                 ⊘    Waiting on another bead               |
+  l          unfold, step in, or open         ◌    Deferred, to a date when it has one   |
+  h Esc      back; h on an epic folds it      ✓    Done, or Closed                       |
+  o          show the item's app link         ☾    snoozed                               |
+ j k scroll  any other key close                                                 1-18/26 |
 
 == 90 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+  To-dos 4   Epics 6                                                               ◉ live |
  Keys and marks                                                                           |
                                                                                           |
  Move                                         App                                         |
@@ -51,21 +51,21 @@
   g G        top, bottom                       ?          these keys                      |
   Space      a page down; PgUp PgDn too        q          quit                            |
   ^d ^u      half a page down, up                                                         |
-  Tab 1 2 3  switch tab                       Marks                                       |
-  /          filter by title or id              ✓   your personal list                    |
-  p          this project, or every list       ABC  a project, in its colour              |
-                                               ✦    a task an agent left for you          |
- Open                                          ◦    Open: ready to start                  |
-  Enter      open full screen                  ◒    In progress                           |
-  l          unfold, step in, or open          ⊘    Blocked                               |
-  h Esc      back; h on an epic folds it       ⊘    Waiting on another bead               |
-  o          show the item's app link          ◌    Deferred, to a date when it has one   |
-                                               ✓    Done, or Closed                       |
- Act                                           ☾    snoozed                               |
- j k scroll  any other key close                                                  1-18/24 |
+  Tab        to the epics, or back to the     Marks                                       |
+             to-dos                             ✓   your personal list                    |
+  1 2        to the to-dos, to the epics       ABC  a project, in its colour              |
+  /          filter by title or id             ✦    a task an agent left for you          |
+  p          this project, or every list       ◦    Open: ready to start                  |
+                                               ◒    In progress                           |
+ Open                                          ⊘    Blocked                               |
+  Enter      open full screen                  ⊘    Waiting on another bead               |
+  l          unfold, step in, or open          ◌    Deferred, to a date when it has one   |
+  h Esc      back; h on an epic folds it       ✓    Done, or Closed                       |
+  o          show the item's app link          ☾    snoozed                               |
+ j k scroll  any other key close                                                  1-18/26 |
 
 == 140 x 20, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
  Keys and marks                                                                                                                             |
                                                                                                                                             |
  Move                                          Act                                           Marks                                          |
@@ -73,21 +73,21 @@
   g G        top, bottom                        d          won't do, or delete a to-do        ABC  a project, in its colour                 |
   Space      a page down; PgUp PgDn too         s          snooze, then pick a time           ✦    a task an agent left for you             |
   ^d ^u      half a page down, up               u          undo the last change               ◦    Open: ready to start                     |
-  Tab 1 2 3  switch tab                         y          copy id and title                  ◒    In progress                              |
-  /          filter by title or id              Y          copy with details                  ⊘    Blocked                                  |
-  p          this project, or every list                                                      ⊘    Waiting on another bead                  |
-                                               App                                            ◌    Deferred, to a date when it has one      |
- Open                                           r          refresh                            ✓    Done, or Closed                          |
-  Enter      open full screen                   ?          these keys                         ☾    snoozed                                  |
-  l          unfold, step in, or open           q          quit                               ↻    repeats                                  |
-  h Esc      back; h on an epic folds it                                                      ▰▰▱▱ an epic's closed tasks over all of       |
-  o          show the item's app link                                                              them                                     |
-                                                                                                                                            |
-                                                                                                                                            |
+  Tab        to the epics, or back to the       y          copy id and title                  ◒    In progress                              |
+             to-dos                             Y          copy with details                  ⊘    Blocked                                  |
+  1 2        to the to-dos, to the epics                                                      ⊘    Waiting on another bead                  |
+  /          filter by title or id             App                                            ◌    Deferred, to a date when it has one      |
+  p          this project, or every list        r          refresh                            ✓    Done, or Closed                          |
+                                                ?          these keys                         ☾    snoozed                                  |
+ Open                                           q          quit                               ↻    repeats                                  |
+  Enter      open full screen                                                                 ▰▰▱▱ an epic's closed tasks over all of       |
+  l          unfold, step in, or open                                                              them                                     |
+  h Esc      back; h on an epic folds it                                                                                                    |
+  o          show the item's app link                                                                                                       |
  any key close                                                                                                                              |
 
 == 56 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                 ◉ live |
+  To-dos 4   Epics 6                             ◉ live |
  Keys and marks                                         |
                                                         |
  Move                                                   |
@@ -95,7 +95,8 @@
   g G        top, bottom                                |
   Space      a page down; PgUp PgDn too                 |
   ^d ^u      half a page down, up                       |
-  Tab 1 2 3  switch tab                                 |
+  Tab        to the epics, or back to the to-dos        |
+  1 2        to the to-dos, to the epics                |
   /          filter by title or id                      |
   p          this project, or every list                |
                                                         |
@@ -115,11 +116,10 @@
                                                         |
  App                                                    |
   r          refresh                                    |
-  ?          these keys                                 |
- j k scroll  any other key close                1-28/43 |
+ j k scroll  any other key close                1-28/44 |
 
 == 89 x 30, layout a
-  1 To-dos 4   2 Epics 6   3 All                                                  ◉ live |
+  To-dos 4   Epics 6                                                              ◉ live |
  Keys and marks                                                                          |
                                                                                          |
  Move                                        App                                         |
@@ -127,31 +127,31 @@
   g G        top, bottom                      ?          these keys                      |
   Space      a page down; PgUp PgDn too       q          quit                            |
   ^d ^u      half a page down, up                                                        |
-  Tab 1 2 3  switch tab                      Marks                                       |
-  /          filter by title or id             ✓   your personal list                    |
-  p          this project, or every list      ABC  a project, in its colour              |
-                                              ✦    a task an agent left for you          |
- Open                                         ◦    Open: ready to start                  |
-  Enter      open full screen                 ◒    In progress                           |
-  l          unfold, step in, or open         ⊘    Blocked                               |
-  h Esc      back; h on an epic folds it      ⊘    Waiting on another bead               |
-  o          show the item's app link         ◌    Deferred, to a date when it has one   |
-                                              ✓    Done, or Closed                       |
- Act                                          ☾    snoozed                               |
-  x          done, or reopen                  ↻    repeats                               |
-  d          won't do, or delete a to-do      ▰▰▱▱ an epic's closed tasks over all of    |
-  s          snooze, then pick a time              them                                  |
+  Tab        to the epics, or back to the    Marks                                       |
+             to-dos                            ✓   your personal list                    |
+  1 2        to the to-dos, to the epics      ABC  a project, in its colour              |
+  /          filter by title or id            ✦    a task an agent left for you          |
+  p          this project, or every list      ◦    Open: ready to start                  |
+                                              ◒    In progress                           |
+ Open                                         ⊘    Blocked                               |
+  Enter      open full screen                 ⊘    Waiting on another bead               |
+  l          unfold, step in, or open         ◌    Deferred, to a date when it has one   |
+  h Esc      back; h on an epic folds it      ✓    Done, or Closed                       |
+  o          show the item's app link         ☾    snoozed                               |
+                                              ↻    repeats                               |
+ Act                                          ▰▰▱▱ an epic's closed tasks over all of    |
+  x          done, or reopen                       them                                  |
+  d          won't do, or delete a to-do                                                 |
+  s          snooze, then pick a time                                                    |
   u          undo the last change                                                        |
   y          copy id and title                                                           |
   Y          copy with details                                                           |
                                                                                          |
                                                                                          |
-                                                                                         |
-                                                                                         |
  any key close                                                                           |
 
 == 90 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                   ◉ live |
+  To-dos 4   Epics 6                                                               ◉ live |
  Keys and marks                                                                           |
                                                                                           |
  Move                                         App                                         |
@@ -159,31 +159,31 @@
   g G        top, bottom                       ?          these keys                      |
   Space      a page down; PgUp PgDn too        q          quit                            |
   ^d ^u      half a page down, up                                                         |
-  Tab 1 2 3  switch tab                       Marks                                       |
-  /          filter by title or id              ✓   your personal list                    |
-  p          this project, or every list       ABC  a project, in its colour              |
-                                               ✦    a task an agent left for you          |
- Open                                          ◦    Open: ready to start                  |
-  Enter      open full screen                  ◒    In progress                           |
-  l          unfold, step in, or open          ⊘    Blocked                               |
-  h Esc      back; h on an epic folds it       ⊘    Waiting on another bead               |
-  o          show the item's app link          ◌    Deferred, to a date when it has one   |
-                                               ✓    Done, or Closed                       |
- Act                                           ☾    snoozed                               |
-  x          done, or reopen                   ↻    repeats                               |
-  d          won't do, or delete a to-do       ▰▰▱▱ an epic's closed tasks over all of    |
-  s          snooze, then pick a time               them                                  |
+  Tab        to the epics, or back to the     Marks                                       |
+             to-dos                             ✓   your personal list                    |
+  1 2        to the to-dos, to the epics       ABC  a project, in its colour              |
+  /          filter by title or id             ✦    a task an agent left for you          |
+  p          this project, or every list       ◦    Open: ready to start                  |
+                                               ◒    In progress                           |
+ Open                                          ⊘    Blocked                               |
+  Enter      open full screen                  ⊘    Waiting on another bead               |
+  l          unfold, step in, or open          ◌    Deferred, to a date when it has one   |
+  h Esc      back; h on an epic folds it       ✓    Done, or Closed                       |
+  o          show the item's app link          ☾    snoozed                               |
+                                               ↻    repeats                               |
+ Act                                           ▰▰▱▱ an epic's closed tasks over all of    |
+  x          done, or reopen                        them                                  |
+  d          won't do, or delete a to-do                                                  |
+  s          snooze, then pick a time                                                     |
   u          undo the last change                                                         |
   y          copy id and title                                                            |
   Y          copy with details                                                            |
                                                                                           |
                                                                                           |
-                                                                                          |
-                                                                                          |
  any key close                                                                            |
 
 == 140 x 30, layout b
-  1 To-dos 4   2 Epics 6   3 All                                                                                                     ◉ live |
+  To-dos 4   Epics 6                                                                                                                 ◉ live |
  Keys and marks                                                                                                                             |
                                                                                                                                             |
  Move                                          Act                                           Marks                                          |
@@ -191,17 +191,17 @@
   g G        top, bottom                        d          won't do, or delete a to-do        ABC  a project, in its colour                 |
   Space      a page down; PgUp PgDn too         s          snooze, then pick a time           ✦    a task an agent left for you             |
   ^d ^u      half a page down, up               u          undo the last change               ◦    Open: ready to start                     |
-  Tab 1 2 3  switch tab                         y          copy id and title                  ◒    In progress                              |
-  /          filter by title or id              Y          copy with details                  ⊘    Blocked                                  |
-  p          this project, or every list                                                      ⊘    Waiting on another bead                  |
-                                               App                                            ◌    Deferred, to a date when it has one      |
- Open                                           r          refresh                            ✓    Done, or Closed                          |
-  Enter      open full screen                   ?          these keys                         ☾    snoozed                                  |
-  l          unfold, step in, or open           q          quit                               ↻    repeats                                  |
-  h Esc      back; h on an epic folds it                                                      ▰▰▱▱ an epic's closed tasks over all of       |
-  o          show the item's app link                                                              them                                     |
-                                                                                                                                            |
-                                                                                                                                            |
+  Tab        to the epics, or back to the       y          copy id and title                  ◒    In progress                              |
+             to-dos                             Y          copy with details                  ⊘    Blocked                                  |
+  1 2        to the to-dos, to the epics                                                      ⊘    Waiting on another bead                  |
+  /          filter by title or id             App                                            ◌    Deferred, to a date when it has one      |
+  p          this project, or every list        r          refresh                            ✓    Done, or Closed                          |
+                                                ?          these keys                         ☾    snoozed                                  |
+ Open                                           q          quit                               ↻    repeats                                  |
+  Enter      open full screen                                                                 ▰▰▱▱ an epic's closed tasks over all of       |
+  l          unfold, step in, or open                                                              them                                     |
+  h Esc      back; h on an epic folds it                                                                                                    |
+  o          show the item's app link                                                                                                       |
                                                                                                                                             |
                                                                                                                                             |
                                                                                                                                             |

@@ -25,7 +25,7 @@ func act(fx []Effect) (Act, bool) {
 	return Act{}, false
 }
 
-// TestEveryKeyEverywhere presses each contract key in each tab and layout,
+// TestEveryKeyEverywhere presses each contract key in each section and layout,
 // from the list and from an open detail, and checks the frame stays exact
 // and the effects are the ones that key can give.
 func TestEveryKeyEverywhere(t *testing.T) {
@@ -34,7 +34,7 @@ func TestEveryKeyEverywhere(t *testing.T) {
 		"y": {"view.Copy"}, "Y": {"view.Copy"}, "x": {"view.Act"}, "d": {"view.Act"}, "o": {"view.OpenURL"},
 	}
 	for _, w := range []int{56, 140} {
-		for _, tab := range []string{"1", "2", "3"} {
+		for _, tab := range []string{"1", "2"} {
 			for _, before := range [][]string{nil, {"enter"}, {"j", "j", "l"}} {
 				for _, k := range contractKeys {
 					m, _ := keys(t, model(t, w, 24), append([]string{tab}, before...)...)
@@ -116,7 +116,7 @@ func TestKeyTable(t *testing.T) {
 			want: []Effect{OpenURL{URL: "https://meat.example.com/?item=hub%2Fpersonal%2Fmm-28"}}},
 		{name: "q quits", w: 56, keys: []string{"q"}, want: []Effect{Quit{}}},
 		{name: "ctrl+c quits from the filter", w: 56, keys: []string{"/", "ctrl+c"}, want: []Effect{Quit{}}},
-		{name: "r refreshes", w: 140, setup: []string{"3"}, keys: []string{"r"}, want: []Effect{Refresh{}}},
+		{name: "r refreshes", w: 140, keys: []string{"r"}, want: []Effect{Refresh{}}},
 		{name: "q types into the filter", w: 56, keys: []string{"/", "q"}, check: func(t *testing.T, m Model) {
 			if m.filter != "q" || !m.filtering {
 				t.Fatalf("filter %q typing %v", m.filter, m.filtering)
@@ -134,9 +134,25 @@ func TestKeyTable(t *testing.T) {
 				t.Fatalf("esc left filter %q", m.filter)
 			}
 		}},
-		{name: "tab and shift+tab", w: 56, keys: []string{"tab", "tab", "tab", "shift+tab"}, check: func(t *testing.T, m Model) {
-			if m.tab != TabAll {
-				t.Fatalf("tab %d", m.tab)
+		{name: "tab goes to the epics and back", w: 56, keys: []string{"j", "tab"}, check: func(t *testing.T, m Model) {
+			if m.selKey != epicMark+"laptop/acme/api/api-h3k" {
+				t.Fatalf("tab selected %q, want the first epic", m.selKey)
+			}
+			if f := strings.Join(plain(m), "\n"); !strings.Contains(f, "\n Epics 6") {
+				t.Fatalf("tab did not scroll the epics heading into view:\n%s", f)
+			}
+			m, _ = m.Key("shift+tab")
+			if m.selKey != "hub/personal/mm-28" || m.scroll != 0 {
+				t.Fatalf("shift+tab selected %q scroll %d, want the first to-do", m.selKey, m.scroll)
+			}
+		}},
+		{name: "1 and 2 jump to each section", w: 140, keys: []string{"2", "j", "1"}, check: func(t *testing.T, m Model) {
+			if m.selKey != "hub/personal/mm-28" {
+				t.Fatalf("1 selected %q", m.selKey)
+			}
+			m, _ = m.Key("2")
+			if !inEpics(m.selKey) || m.selIdx == 0 {
+				t.Fatalf("2 selected %q at %d", m.selKey, m.selIdx)
 			}
 		}},
 		{name: "help closes on any key", w: 56, keys: []string{"?", "x"}, check: func(t *testing.T, m Model) {
@@ -151,7 +167,7 @@ func TestKeyTable(t *testing.T) {
 		{name: "epic row has no link", w: 56, setup: []string{"2"}, keys: []string{"o"}, note: "api-h3k has no page in the app."},
 		{name: "a child row in B is read-only too", w: 140, setup: []string{"2"}, sel: "laptop/acme/storefront/sf-c1x", keys: []string{"l", "j", "j", "x"},
 			note: "Change sf-c1x.4 in acme/storefront."},
-		{name: "a human epic row acts as its item", w: 140, setup: []string{"3"}, sel: "laptop/acme/storefront/sf-c1x", keys: []string{"enter", "x"},
+		{name: "a human epic row acts as its item", w: 140, setup: []string{"2"}, sel: "laptop/acme/storefront/sf-c1x", keys: []string{"l", "x"},
 			want: []Effect{Act{Action: api.NewAction{Kind: "done", Key: "laptop/acme/storefront/sf-c1x.5"}, Done: "Done: Set up the wallet-pay sandbox account"}}},
 		{name: "a human epic row links to its item", w: 140, setup: []string{"2"}, sel: "laptop/acme/storefront/sf-c1x", keys: []string{"l", "o"},
 			want: []Effect{OpenURL{URL: "https://meat.example.com/?item=laptop%2Facme%2Fstorefront%2Fsf-c1x.5"}}},
@@ -169,7 +185,7 @@ func TestKeyTable(t *testing.T) {
 				t.Fatalf("selection %q is not a child", m.selKey)
 			}
 			m, _ = m.Key("h")
-			if m.selKey != "laptop/acme/api/api-h3k" || !m.expanded[m.selKey] {
+			if m.selKey != epicMark+"laptop/acme/api/api-h3k" || !m.expanded[m.selKey] {
 				t.Fatalf("h on a child: %q expanded %v, want its card, still unfolded", m.selKey, m.expanded)
 			}
 			m, _ = m.Key("h")
@@ -182,7 +198,7 @@ func TestKeyTable(t *testing.T) {
 				t.Fatalf("right did not unfold %q", m.selKey)
 			}
 			m, _ = m.Key("right")
-			if !strings.HasPrefix(m.selKey, "laptop/acme/api/api-h3k>") {
+			if !strings.HasPrefix(m.selKey, epicMark+"laptop/acme/api/api-h3k>") {
 				t.Fatalf("second right selected %q, want the card's first child", m.selKey)
 			}
 			m, _ = m.Key("right")
@@ -190,7 +206,7 @@ func TestKeyTable(t *testing.T) {
 				t.Fatal("right on a child did not open it")
 			}
 			m, _ = m.Key("left")
-			if m.open || !strings.HasPrefix(m.selKey, "laptop/acme/api/api-h3k>") {
+			if m.open || !strings.HasPrefix(m.selKey, epicMark+"laptop/acme/api/api-h3k>") {
 				t.Fatalf("left: open %v selection %q", m.open, m.selKey)
 			}
 		}},
@@ -203,23 +219,9 @@ func TestKeyTable(t *testing.T) {
 				t.Fatalf("left: open %v selection %q", m.open, m.selKey)
 			}
 		}},
-		{name: "right drills into a card in All", w: 56, setup: []string{"3"}, sel: "laptop/acme/api/api-h3k", keys: []string{"right"}, check: func(t *testing.T, m Model) {
-			if m.drill != "laptop/acme/api/api-h3k" {
-				t.Fatalf("drill %q", m.drill)
-			}
-		}},
 		{name: "right on a child in B opens it", w: 140, setup: []string{"2"}, sel: "laptop/acme/storefront/sf-c1x", keys: []string{"right", "j", "right"}, check: func(t *testing.T, m Model) {
 			if !m.open || !m.right || m.rightIdx != 1 {
 				t.Fatalf("open %v right %v idx %d", m.open, m.right, m.rightIdx)
-			}
-		}},
-		{name: "a tab keeps its selection while another shows", w: 140, keys: []string{"j", "j", "2", "j", "1"}, check: func(t *testing.T, m Model) {
-			if m.selIdx != 2 {
-				t.Fatalf("back on To-dos at %d %q, want the third row", m.selIdx, m.selKey)
-			}
-			m, _ = m.Key("2")
-			if m.selIdx != 1 {
-				t.Fatalf("back on Epics at %d %q, want the second row", m.selIdx, m.selKey)
 			}
 		}},
 		{name: "snooze menu: arrows pick, enter snoozes", w: 56, keys: []string{"s", "down", "down", "up", "enter"}, check: func(t *testing.T, m Model) {
@@ -227,13 +229,8 @@ func TestKeyTable(t *testing.T) {
 				t.Fatal("enter left the menu open")
 			}
 		}},
-		{name: "drill and back in All", w: 56, setup: []string{"3"}, sel: "laptop/acme/api/api-h3k", keys: []string{"enter", "esc"}, check: func(t *testing.T, m Model) {
-			if m.drill != "" || m.selKey != "laptop/acme/api/api-h3k" {
-				t.Fatalf("drill %q selection %q", m.drill, m.selKey)
-			}
-		}},
 		{name: "G and g", w: 56, keys: []string{"G"}, check: func(t *testing.T, m Model) {
-			if m.selKey != "hub/personal/mm-30" {
+			if m.selKey != epicMark+"laptop/dotfiles/dot-7ab" {
 				t.Fatalf("G selected %q", m.selKey)
 			}
 			m, _ = m.Key("g")
@@ -261,11 +258,6 @@ func TestKeyTable(t *testing.T) {
 					t.Fatalf("esc: open %v right %v idx %d", m.open, m.right, m.rightIdx)
 				}
 			}},
-		{name: "h leaves a drill in All", w: 56, setup: []string{"3"}, sel: "laptop/acme/api/api-h3k", keys: []string{"enter", "h"}, check: func(t *testing.T, m Model) {
-			if m.drill != "" || m.selKey != "laptop/acme/api/api-h3k" {
-				t.Fatalf("drill %q selection %q", m.drill, m.selKey)
-			}
-		}},
 		{name: "x moves the selection off the done to-do", w: 56, keys: []string{"x"},
 			want: []Effect{Act{Action: api.NewAction{Kind: "done", Key: "hub/personal/mm-28"}, Done: "Done: Book the boiler service"}},
 			check: func(t *testing.T, m Model) {
@@ -443,7 +435,7 @@ func TestSetDataKeepsSelection(t *testing.T) {
 	m = selectKey(t, m, "laptop/acme/storefront/sf-q2e")
 	e.Repos = e.Repos[1:]
 	m = m.SetData(s, e, now)
-	if m.selKey != "laptop/acme/storefront/sf-q2e" {
+	if m.selKey != epicMark+"laptop/acme/storefront/sf-q2e" {
 		t.Fatalf("epic selection %q", m.selKey)
 	}
 }
@@ -477,7 +469,7 @@ func TestResizeOpensDetail(t *testing.T) {
 		t.Fatalf("child %q not open: %v %q", child, m.open, m.openKey)
 	}
 	m, _ = m.Key("esc")
-	if m.selKey != "laptop/acme/storefront/sf-c1x" {
+	if m.selKey != epicMark+"laptop/acme/storefront/sf-c1x" {
 		t.Fatalf("back in A the selection is %q", m.selKey)
 	}
 
@@ -508,7 +500,7 @@ func TestNotices(t *testing.T) {
 func TestGroups(t *testing.T) {
 	s, _ := load(t)
 	var got []string
-	for _, g := range buildGroups(s.Items, now, true) {
+	for _, g := range buildGroups(s.Items, now) {
 		var ids []string
 		for _, i := range g.items {
 			ids = append(ids, i.ID)
@@ -520,7 +512,7 @@ func TestGroups(t *testing.T) {
 		"today: mm-44",
 		"evening: mm-31",
 		"week: mm-50 mm-46 mm-47 mm-6",
-		"nodate: mm-12 mm-52 mm-4 mm-45",
+		"nodate: sf-k2a mm-12 mm-52 mm-4 mm-45 sf-c1x.5 dot-3mm",
 		"later: mm-40",
 		"done: mm-30",
 	}

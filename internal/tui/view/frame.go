@@ -13,7 +13,7 @@ func (m *Model) frame() []line {
 	if h <= 0 {
 		return nil
 	}
-	top := []line{m.tabBar(w)}
+	top := []line{m.topBar(w)}
 	if m.filtering || m.filter != "" {
 		top = append(top, m.filterLine(w))
 	}
@@ -38,19 +38,26 @@ func (m *Model) frame() []line {
 	return out
 }
 
-func (m *Model) tabBar(w int) line {
+// topBar is the counts of both sections, the section the selection is in
+// lit, then the project and the link on the right.
+func (m *Model) topBar(w int) line {
 	open, cards := 0, 0
+	epics := false
 	if m.d != nil {
 		open, cards = openToday(m.d.state.Items, m.d.now), m.d.cardCount()
+		epics = m.d.hasEpics()
 	}
-	tab := func(t Tab, label string) seg {
-		if m.tab == t {
+	part := func(on bool, label string) seg {
+		if on {
 			return sg(label, sTab)
 		}
 		return sg(label, sSoft)
 	}
-	left := line{sg(" ", sPlain), tab(TabTodos, " 1 To-dos "+itoa(open)+" "), sg(" ", sPlain),
-		tab(TabEpics, " 2 Epics "+itoa(cards)+" "), sg(" ", sPlain), tab(TabAll, " 3 All ")}
+	here := inEpics(m.selKey)
+	left := line{sg(" ", sPlain), part(!here, " To-dos "+itoa(open)+" ")}
+	if epics {
+		left = append(left, sg(" ", sPlain), part(here, " Epics "+itoa(cards)+" "))
+	}
 	var right line
 	if m.inScope() {
 		right = line{sg(clean(m.scopeName())+"  ", sAccent)}
@@ -132,18 +139,28 @@ func (m *Model) hints() []hint {
 		return []hint{{"l", "into epic"}, {"y", "copy"}, {"Y", "copy all"}, {"Esc", "back"}, {"?", "keys"}}
 	case m.open:
 		return append(append([]hint{{"y", "copy"}, {"Y", "copy all"}}, acts...), hint{"Esc", "back"}, hint{"?", "keys"})
-	case lay == "b" && m.tab == TabEpics && m.right:
+	case m.right:
 		return []hint{{"Enter", "open"}, {"h", "back"}, {"y", "copy"}, {"Y", "copy all"}, {"?", "keys"}}
-	case lay == "b" && m.tab == TabEpics:
-		return []hint{{"Enter", "open"}, {"l", "into epic"}, {"y", "copy"}, {"/", "filter"}, {"?", "keys"}}
-	case lay == "b":
-		return append(append([]hint{{"Enter", "open"}, {"y", "copy"}}, acts...), hint{"/", "filter"}, hint{"?", "keys"})
-	case lay == "a" && m.tab == TabEpics:
-		return []hint{{"Enter", "open"}, {"l h", "fold"}, {"y", "copy"}, {"/", "filter"}, {"?", "keys"}}
-	case m.drill != "":
-		return []hint{{"Enter", "open"}, {"y", "copy"}, {"Esc", "back"}, {"?", "keys"}}
+	case inEpics(m.selKey) && lay == "b":
+		return []hint{{"Enter", "open"}, {"l", "into epic"}, {"y", "copy"}, {"Tab", "to-dos"}, {"/", "filter"}, {"?", "keys"}}
+	case inEpics(m.selKey):
+		return []hint{{"Enter", "open"}, {"l h", "fold"}, {"y", "copy"}, {"Tab", "to-dos"}, {"/", "filter"}, {"?", "keys"}}
 	}
-	return append(append([]hint{{"Enter", "open"}, {"y", "copy"}}, acts...), hint{"/", "filter"}, hint{"?", "keys"})
+	hs := append([]hint{{"Enter", "open"}, {"y", "copy"}}, acts...)
+	if m.hasEpicRows() {
+		hs = append(hs, hint{"Tab", "epics"})
+	}
+	return append(hs, hint{"/", "filter"}, hint{"?", "keys"})
+}
+
+// hasEpicRows reports whether the epics section has a row Tab can go to.
+func (m *Model) hasEpicRows() bool {
+	for _, r := range m.rows() {
+		if r.selectable() && inEpics(r.id) {
+			return true
+		}
+	}
+	return false
 }
 
 // body is the lines between the top and the status line, and the scroll
@@ -158,57 +175,15 @@ func (m *Model) body(w, h int) ([]line, string) {
 	if m.d == nil {
 		return []line{fit(line{sg("  Loading", sDim)}, w, sPlain)}, ""
 	}
-	lay := m.layout()
 	if m.open {
 		if t := m.shown(); t != nil {
 			return m.detailBody(t, w, h), ""
 		}
 	}
-	switch lay {
-	case "b":
+	if m.layout() == "b" {
 		return m.splitBody(w, h)
-	case "c":
-		if t := m.drillTarget(); t != nil {
-			crumb := fit(line{sg(" "+gBack+" Esc ", sAccent), sg("All "+gCrumb+" ", sDim), sg(clean(t.row.Title), sBold)}, w, sPlain)
-			lines, more := m.viewport(m.rows(), h-1, w, true)
-			return append([]line{crumb}, lines...), more
-		}
-		rows, hidden := m.d.allRows(m.filter)
-		lines, more := m.viewport(rows, h, w, true)
-		if hidden > 0 && w >= SplitAt {
-			more = strings.TrimSpace(more + "  " + itoa(hidden) + " snoozed or done hidden")
-		} else if hidden > 0 {
-			more = strings.TrimSpace(more + " +" + itoa(hidden) + " hidden")
-		}
-		return lines, more
 	}
-	rows := m.rows()
-	if len(rows) == 0 {
-		return m.empty(w), ""
-	}
-	return m.viewport(rows, h, w, true)
-}
-
-// empty is the body of a list with nothing in it.
-func (m *Model) empty(w int) []line {
-	var text string
-	switch {
-	case m.tab == TabTodos && m.filter != "":
-		text = "No matches."
-	case m.tab == TabTodos:
-		text = "Nothing due today."
-	case m.filter != "":
-		text = "No epics or tasks match the filter."
-	case len(m.d.epics.Repos) > 0 || m.d.epicsSwitchedOn():
-		text = "No epics yet. They show here once the machine sends them."
-	default:
-		text = "No repo shows its epics. Switch them on for a repo in the app's Settings."
-	}
-	out := []line{nil}
-	for _, l := range wrap(text, w-4) {
-		out = append(out, line{sg("  "+l, sDim)})
-	}
-	return out
+	return m.viewport(m.rows(), h, w, true)
 }
 
 // viewport draws rows from the scroll offset into h lines, the selected
@@ -245,9 +220,9 @@ func (m *Model) viewport(rows []row, h, w int, focus bool) ([]line, string) {
 
 // detailBody is a full-screen detail under its crumb.
 func (m *Model) detailBody(t *target, w, h int) []line {
-	from := map[Tab]string{TabTodos: "To-dos", TabEpics: "Epics", TabAll: "All"}[m.tab]
-	if d := m.drillTarget(); d != nil {
-		from = "All " + gCrumb + " " + clean(d.row.Title)
+	from := "To-dos"
+	if inEpics(m.selKey) {
+		from = "Epics"
 	}
 	out := []line{fit(line{sg(" "+gBack+" Esc ", sAccent), sg(from, sDim)}, w, sPlain)}
 	lines := m.detailLines(t, w)
@@ -278,16 +253,10 @@ func splitWidths(w int) (int, int) {
 func (m *Model) splitBody(w, h int) ([]line, string) {
 	lw, rw := splitWidths(w)
 	rows := m.rows()
-	var left []line
-	var more string
-	if len(rows) == 0 {
-		left = m.empty(lw)
-	} else {
-		left, more = m.viewport(rows, h, lw, !m.right)
-	}
+	left, more := m.viewport(rows, h, lw, !m.right)
 	var right []line
 	if t := m.listTarget(); t != nil {
-		if m.tab == TabEpics && t.card && t.row != nil {
+		if inEpics(m.selKey) && t.card && t.row != nil {
 			right = m.cardPane(t, rw, h)
 		} else {
 			right = m.detailLines(t, rw)
