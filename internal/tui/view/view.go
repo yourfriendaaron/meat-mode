@@ -134,7 +134,7 @@ type Model struct {
 	selIdx int // among the selectable rows
 	scroll int // first row drawn
 
-	open         bool // a full-screen detail (layouts A and C)
+	open         bool // a full-screen detail (layout A, or Enter in B)
 	openKey      string
 	openRow      bool // openKey is an epic row's
 	detailScroll int

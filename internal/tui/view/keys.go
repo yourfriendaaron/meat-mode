@@ -275,7 +275,13 @@ func (m *Model) stepPast(key string) {
 	}
 	rows := m.rows()
 	sel := selectable(rows)
-	if len(sel) < 2 || m.selIdx >= len(sel) || (rows[sel[m.selIdx]].id != key && rows[sel[m.selIdx]].id != epicMark+key) {
+	if len(sel) < 2 || m.selIdx >= len(sel) {
+		return
+	}
+	// A to-do row's id is its key; an epic row's adds epicMark in front,
+	// and a child in layout A's tree its card's id and ">" too.
+	id := rows[sel[m.selIdx]].id
+	if id != key && id != epicMark+key && !(inEpics(id) && strings.HasSuffix(id, ">"+key)) {
 		return
 	}
 	if m.selIdx+1 < len(sel) {

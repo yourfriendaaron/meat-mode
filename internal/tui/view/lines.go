@@ -351,7 +351,7 @@ func (d *data) cardRight(re *api.RepoEpics, r *api.EpicRow, w int) line {
 	return append(right, sg(padRight(" "+itoa(done)+"/"+itoa(total), 6), sSoft))
 }
 
-// cardLead is a row of layout B's left list and of All's epics up to its
+// cardLead is a row of layout B's left list up to its
 // title: the list mark when epics from more than one repo are in view, the
 // id, and "↳ " for a card nested in another.
 func (d *data) cardLead(re *api.RepoEpics, r *api.EpicRow, depth int) line {
@@ -366,7 +366,7 @@ func (d *data) cardLead(re *api.RepoEpics, r *api.EpicRow, depth int) line {
 	return append(left, d.nestedState(re, r)...)
 }
 
-// cardLine is one row of layout B's left list and of All's epics: its lead
+// cardLine is one row of layout B's left list: its lead
 // and title, then a card's facts and bar or a task's status.
 func (m *Model) cardLine(re *api.RepoEpics, r *api.EpicRow, depth int, w int) line {
 	d := m.d

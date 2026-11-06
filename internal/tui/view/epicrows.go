@@ -368,7 +368,7 @@ func (d *data) cardFacts(re *api.RepoEpics, r *api.EpicRow, indent string, w int
 	return out
 }
 
-// openLines are the selected row of layouts A and C opened in place: the
+// openLines are the selected row of layout A opened in place: the
 // rest of its title, wrapped, then a card's facts. first is the row's own
 // line: its id and the title's first line.
 func (m *Model) openLines(re *api.RepoEpics, r *api.EpicRow, lead line, w int) (first line, more []line) {

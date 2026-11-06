@@ -142,21 +142,31 @@ func (m *Model) hints() []hint {
 	case m.right:
 		return []hint{{"Enter", "open"}, {"h", "back"}, {"y", "copy"}, {"Y", "copy all"}, {"?", "keys"}}
 	case inEpics(m.selKey) && lay == "b":
-		return []hint{{"Enter", "open"}, {"l", "into epic"}, {"y", "copy"}, {"Tab", "to-dos"}, {"/", "filter"}, {"?", "keys"}}
+		return m.withTab([]hint{{"Enter", "open"}, {"l", "into epic"}, {"y", "copy"}}, false)
 	case inEpics(m.selKey):
-		return []hint{{"Enter", "open"}, {"l h", "fold"}, {"y", "copy"}, {"Tab", "to-dos"}, {"/", "filter"}, {"?", "keys"}}
+		return m.withTab([]hint{{"Enter", "open"}, {"l h", "fold"}, {"y", "copy"}}, false)
 	}
-	hs := append([]hint{{"Enter", "open"}, {"y", "copy"}}, acts...)
-	if m.hasEpicRows() {
-		hs = append(hs, hint{"Tab", "epics"})
+	return m.withTab(append([]hint{{"Enter", "open"}, {"y", "copy"}}, acts...), true)
+}
+
+// withTab ends hints with Tab, when the other section has a row to go to,
+// then / and ?.
+func (m *Model) withTab(hs []hint, toEpics bool) []hint {
+	if m.hasRowIn(toEpics) {
+		label := "to-dos"
+		if toEpics {
+			label = "epics"
+		}
+		hs = append(hs, hint{"Tab", label})
 	}
 	return append(hs, hint{"/", "filter"}, hint{"?", "keys"})
 }
 
-// hasEpicRows reports whether the epics section has a row Tab can go to.
-func (m *Model) hasEpicRows() bool {
+// hasRowIn reports whether the epics section, or the to-dos when epics is
+// false, has a row Tab can go to.
+func (m *Model) hasRowIn(epics bool) bool {
 	for _, r := range m.rows() {
-		if r.selectable() && inEpics(r.id) {
+		if r.selectable() && inEpics(r.id) == epics {
 			return true
 		}
 	}

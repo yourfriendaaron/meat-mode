@@ -18,7 +18,7 @@
                                                         |
                                                         |
                                                         |
- Enter open  l h fold  y copy  Tab to-dos  / filter  ? ⋯|
+ Enter open  l h fold  y copy  / filter  ? keys         |
 
 == 89 x 20, layout a
   To-dos 4   Epics 6                                                              ◉ live |
@@ -40,7 +40,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  l h fold  y copy  Tab to-dos  / filter  ? keys                              |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
 
 == 90 x 20, layout b
   To-dos 4   Epics 6                                                               ◉ live |
@@ -62,7 +62,7 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                            |
+ Enter open  l into epic  y copy  / filter  ? keys                                        |
 
 == 140 x 20, layout b
   To-dos 4   Epics 6                                                                                                                 ◉ live |
@@ -84,7 +84,7 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                                                                              |
+ Enter open  l into epic  y copy  / filter  ? keys                                                                                          |
 
 == 56 x 30, layout a
   To-dos 4   Epics 6                             ◉ live |
@@ -116,7 +116,7 @@
                                                         |
                                                         |
                                                         |
- Enter open  l h fold  y copy  Tab to-dos  / filter  ? ⋯|
+ Enter open  l h fold  y copy  / filter  ? keys         |
 
 == 89 x 30, layout a
   To-dos 4   Epics 6                                                              ◉ live |
@@ -148,7 +148,7 @@
                                                                                          |
                                                                                          |
                                                                                          |
- Enter open  l h fold  y copy  Tab to-dos  / filter  ? keys                              |
+ Enter open  l h fold  y copy  / filter  ? keys                                          |
 
 == 90 x 30, layout b
   To-dos 4   Epics 6                                                               ◉ live |
@@ -180,7 +180,7 @@
                                                  ╎                                        |
                                                  ╎                                        |
                                                  ╎                                        |
- Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                            |
+ Enter open  l into epic  y copy  / filter  ? keys                                        |
 
 == 140 x 30, layout b
   To-dos 4   Epics 6                                                                                                                 ◉ live |
@@ -212,5 +212,5 @@
                                                                              ╎                                                              |
                                                                              ╎                                                              |
                                                                              ╎                                                              |
- Enter open  l into epic  y copy  Tab to-dos  / filter  ? keys                                                                              |
+ Enter open  l into epic  y copy  / filter  ? keys                                                                                          |
 

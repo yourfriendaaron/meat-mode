@@ -618,3 +618,53 @@ func TestSnoozeArrowsMatchDigits(t *testing.T) {
 		t.Fatalf("arrows gave %#v, 2 gave %#v", byArrows, byDigit)
 	}
 }
+
+// TestDoneStepsPastEpicRows checks that x on an agent's task in the epics
+// section moves the selection on, as on a to-do: a task at the top of a
+// repo's list (layout B), and a task inside an unfolded card (layout A).
+func TestDoneStepsPastEpicRows(t *testing.T) {
+	const top = "laptop/acme/storefront/sf-q2e"
+	s, e := load(t)
+	for i := range s.Items {
+		if s.Items[i].Key == "laptop/acme/storefront/sf-c1x.5" {
+			it := s.Items[i]
+			it.ID, it.Key, it.Parent, it.Title = "sf-q2e", top, "", "Flaky test in cart.spec"
+			s.Items = append(s.Items, it)
+			break
+		}
+	}
+	for k := range e.Repos {
+		for j := range e.Repos[k].Rows {
+			if r := &e.Repos[k].Rows[j]; e.Repos[k].Repo == "acme/storefront" && r.ID == "sf-q2e" {
+				r.Human = true
+			}
+		}
+	}
+	m := New(hub).Resize(140, 30).SetConn(ConnLive).SetData(s, e, now)
+	m = selectKey(t, m, epicMark+top)
+	m, fx := keys(t, m, "x")
+	if a, ok := act(fx); !ok || a.Action.Key != top {
+		t.Fatalf("x on %s gave %#v", top, fx)
+	}
+	if m.selKey == epicMark+top {
+		t.Error("the selection stayed on the done task at the top of the list")
+	}
+
+	const child = "laptop/acme/storefront/sf-c1x.5"
+	m = selectKey(t, model(t, 56, 24), epicMark+"laptop/acme/storefront/sf-c1x")
+	m, _ = keys(t, m, "l")
+	for i := 0; i < 10 && !strings.HasSuffix(m.selKey, ">"+child); i++ {
+		m, _ = m.Key("j")
+	}
+	if !strings.HasSuffix(m.selKey, ">"+child) {
+		t.Fatalf("never reached %s in the tree: %q", child, m.selKey)
+	}
+	was := m.selKey
+	m, fx = keys(t, m, "x")
+	if a, ok := act(fx); !ok || a.Action.Key != child {
+		t.Fatalf("x on %s gave %#v", child, fx)
+	}
+	if m.selKey == was {
+		t.Error("the selection stayed on the done task inside the card")
+	}
+}
