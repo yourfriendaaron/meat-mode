@@ -359,12 +359,17 @@ func TestStatus(t *testing.T) {
 		t.Errorf("status warns about a service that runs this binary:\n%s", out)
 	}
 
+	prev := skipGuarded
+	t.Cleanup(func() { skipGuarded = prev })
+	skipGuarded = false
+	out.Reset()
+	if err := Main(context.Background(), []string{"status"}, env); err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(out.String(), "Not searched") {
 		t.Errorf("status names guarded folders off macOS:\n%s", out)
 	}
-	prev := skipGuarded
 	skipGuarded = true
-	t.Cleanup(func() { skipGuarded = prev })
 	out.Reset()
 	if err := Main(context.Background(), []string{"status"}, env); err != nil {
 		t.Fatal(err)
