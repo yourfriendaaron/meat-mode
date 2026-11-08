@@ -498,6 +498,10 @@ func status(ctx context.Context, env Env) error {
 		}
 	}
 	fmt.Fprintf(out, "Roots:    %s\n", orNone(strings.Join(s.Roots, ", ")))
+	if skipGuarded && slices.ContainsFunc(s.Roots, func(r string) bool { return sameFile(r, env.Paths.Home) }) {
+		fmt.Fprintf(out, "          Not searched: %s in the home folder, as macOS asks before a background program reads them. To search one, pair with --root for each folder to search.\n",
+			strings.Join(GuardedFolders, ", "))
+	}
 	repos, err := s.Repos()
 	if err != nil {
 		return err

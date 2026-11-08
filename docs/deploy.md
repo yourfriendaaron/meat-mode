@@ -267,6 +267,8 @@ Pairing checks the token with the hub, saves the config (`~/.config/meat-mode/br
 
 The bridge looks through your home folder for the repos of every tracker it has, on start and every 5 minutes, at any depth. It skips dependency, cache and app-data folders, Git worktrees, symlinks and each tracker's own store, and a store a tracker does not count, such as a `.beads` folder without a database (bd's own `~/.beads`). A repo with two trackers syncs from one of them, beads first.
 
+On macOS it also leaves out `~/Library` and the folders macOS asks your permission for: Desktop, Documents, Downloads, Movies, Music and Pictures. macOS asks again for each new version of an unsigned program, so searching them would bring the prompts back on every update. To sync a repo in one of them, pair with `--root` for each folder to search, such as `--root ~/Developer --root ~/Documents/code`, and allow the prompt once per version. `meat-mode bridge status` names the folders it leaves out.
+
 Every repo it finds appears in the app under **Settings**, below its machine, with a switch. The setup wizard's **Choose repos** step shows the same switches. Switches start off. Turn one on and that repo's items arrive within a few seconds; turn it off and they leave the app. If the machine is off, the switch shows "Waiting for" the machine until it is back. The machine keeps your choices in its own config file, and it only accepts a switch for a repo it found itself.
 
 You can also opt a repo in from the repo itself, with this line in a `.meat-mode.yaml` file at its root. A switch set in the app wins over it.

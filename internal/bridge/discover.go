@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -46,7 +47,7 @@ func syncSwitch(switches map[string]bool, name string) *bool {
 
 // Discover walks each root for the stores of trackers, which are in the
 // order tracker.Sort gives. The walk skips the folders in pruneNames,
-// pruneHomePaths and each tracker's Info.Prune, symlinks, Git worktrees and
+// pruneHomePaths, GuardedFolders on macOS, and each tracker's Info.Prune, symlinks, Git worktrees and
 // anything it cannot read, and finds repos nested at any depth. A folder
 // belongs to the first tracker whose Detect matches it; any other that
 // matches is skipped with a log line. Names are paths relative to home (see
@@ -100,33 +101,38 @@ var pruneNames = map[string]bool{
 // pruneHomePaths are folders under the home folder that hold caches, system
 // or application data rather than the user's repos.
 var pruneHomePaths = map[string]bool{
-	"go/pkg":                      true,
-	".local/share/containers":     true,
-	".local/share/Trash":          true,
-	".local/share/Steam":          true,
-	".local/share/flatpak":        true,
-	".local/share/mise":           true,
-	".local/share/pnpm":           true,
-	".local/share/docker":         true,
-	".local/state":                true,
-	".var":                        true,
-	".steam":                      true,
-	".mozilla":                    true,
-	".docker":                     true,
-	".nvm":                        true,
-	".pyenv":                      true,
-	".rbenv":                      true,
-	".sdkman":                     true,
-	"snap":                        true,
-	"Library/Caches":              true,
-	"Library/Containers":          true,
-	"Library/Group Containers":    true,
-	"Library/Developer":           true,
-	"Library/Application Support": true,
-	"Library/Logs":                true,
-	"Library/Mail":                true,
-	"Library/Photos":              true,
+	"go/pkg":                  true,
+	".local/share/containers": true,
+	".local/share/Trash":      true,
+	".local/share/Steam":      true,
+	".local/share/flatpak":    true,
+	".local/share/mise":       true,
+	".local/share/pnpm":       true,
+	".local/share/docker":     true,
+	".local/state":            true,
+	".var":                    true,
+	".steam":                  true,
+	".mozilla":                true,
+	".docker":                 true,
+	".nvm":                    true,
+	".pyenv":                  true,
+	".rbenv":                  true,
+	".sdkman":                 true,
+	"snap":                    true,
+	// macOS: caches, application data and cloud drives, never repos.
+	"Library": true,
 }
+
+// GuardedFolders are the folders under the home folder that macOS asks the
+// user's permission to read, for each new build of an unsigned program.
+// The bridge runs in the background, so on macOS the walk of the home
+// folder leaves them out, and a repo in one is found only from a root
+// given for it (see Config.Roots).
+var GuardedFolders = []string{"Desktop", "Documents", "Downloads", "Movies", "Music", "Pictures"}
+
+// skipGuarded is whether the walk of the home folder leaves out
+// GuardedFolders: on macOS, where reading one asks the user.
+var skipGuarded = runtime.GOOS == "darwin"
 
 // found is one tracker store the walk found.
 type found struct {
@@ -167,7 +173,7 @@ func scan(root, home string, trackers []tracker.Tracker, dirs *int, log *slog.Lo
 			}
 		}
 		for _, d := range sub {
-			if rel, ok := relTo(home, d); ok && pruneHomePaths[rel] {
+			if rel, ok := relTo(home, d); ok && (pruneHomePaths[rel] || skipGuarded && slices.Contains(GuardedFolders, rel)) {
 				continue
 			}
 			if es, err := os.ReadDir(d); err == nil {

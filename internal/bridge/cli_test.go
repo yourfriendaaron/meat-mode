@@ -359,6 +359,21 @@ func TestStatus(t *testing.T) {
 		t.Errorf("status warns about a service that runs this binary:\n%s", out)
 	}
 
+	if strings.Contains(out.String(), "Not searched") {
+		t.Errorf("status names guarded folders off macOS:\n%s", out)
+	}
+	prev := skipGuarded
+	skipGuarded = true
+	t.Cleanup(func() { skipGuarded = prev })
+	out.Reset()
+	if err := Main(context.Background(), []string{"status"}, env); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Not searched: Desktop, Documents, Downloads") {
+		t.Errorf("status on macOS does not name the folders it skips:\n%s", out)
+	}
+	skipGuarded = prev
+
 	// After an update that put the new binary in another folder, the
 	// service still runs the old one; status says so and how to fix it.
 	svc := env.Service.(*fakeService)

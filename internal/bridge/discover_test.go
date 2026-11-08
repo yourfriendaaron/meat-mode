@@ -47,6 +47,38 @@ func repoDirs(repos []Repo) []string {
 	return out
 }
 
+// TestDiscoverSkipsGuardedFolders checks that on macOS the walk of the home
+// folder leaves out the folders macOS asks permission for, and cloud drives
+// under Library, while a root given inside one is still searched.
+func TestDiscoverSkipsGuardedFolders(t *testing.T) {
+	home := t.TempDir()
+	in := func(rel string) string { return filepath.Join(home, filepath.FromSlash(rel)) }
+	writeRepo(t, in("Developer/garden"), "")
+	writeRepo(t, in("Documents/kitchen"), "")
+	writeRepo(t, in("Downloads/shed"), "")
+	writeRepo(t, in("Library/CloudStorage/Drive-Example/plans"), "")
+	writeRepo(t, in("Library/Mobile Documents/notes"), "")
+	writeRepo(t, in("projects/Documents/porch"), "") // only the home folder's own
+
+	for _, c := range []struct {
+		guarded bool
+		roots   []string
+		want    []string
+	}{
+		{true, []string{home}, []string{in("Developer/garden"), in("projects/Documents/porch")}},
+		{false, []string{home}, []string{in("Developer/garden"), in("Documents/kitchen"), in("Downloads/shed"), in("projects/Documents/porch")}},
+		{true, []string{in("Developer"), in("Documents")}, []string{in("Developer/garden"), in("Documents/kitchen")}},
+	} {
+		prev := skipGuarded
+		skipGuarded = c.guarded
+		got := repoDirs(Discover(c.roots, home, beadsOnly, quiet))
+		skipGuarded = prev
+		if !slices.Equal(got, c.want) {
+			t.Errorf("guarded %v, roots %v: found\n  %v\nwant\n  %v", c.guarded, c.roots, got, c.want)
+		}
+	}
+}
+
 func TestDiscoverWalksTheHomeFolder(t *testing.T) {
 	home := t.TempDir()
 	in := func(rel string) string { return filepath.Join(home, filepath.FromSlash(rel)) }
