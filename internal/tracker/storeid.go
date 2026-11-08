@@ -107,10 +107,15 @@ func normaliseRemote(u string) string {
 	if u == "" {
 		return ""
 	}
-	if _, rest, ok := strings.Cut(u, "://"); ok {
+	if scheme, rest, ok := strings.Cut(u, "://"); ok {
+		// A file URL is a local path, whatever its host says.
+		if strings.EqualFold(scheme, "file") {
+			return ""
+		}
 		u = rest
-	} else if i, j := strings.IndexByte(u, ':'), strings.IndexByte(u, '/'); i > 0 && (j < 0 || i < j) {
-		// scp-like user@host:path
+	} else if i, j := strings.IndexByte(u, ':'), strings.IndexByte(u, '/'); i > 1 && (j < 0 || i < j) {
+		// scp-like user@host:path; one letter before the colon is a
+		// Windows drive, a local path.
 		u = u[:i] + "/" + u[i+1:]
 	} else {
 		return ""

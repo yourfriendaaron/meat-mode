@@ -18,6 +18,10 @@ func TestNormaliseRemote(t *testing.T) {
 		"https://example.com/team/garden/":           "example.com/team/garden",
 		"/srv/git/garden.git":                        "",
 		"../garden":                                  "",
+		`C:\repos\garden`:                            "",
+		"C:/repos/garden":                            "",
+		"file:///srv/git/garden.git":                 "",
+		"file://localhost/srv/git/garden.git":        "",
 		"":                                           "",
 		"https://example.com":                        "",
 	} {

@@ -195,7 +195,7 @@ func (s *Store) LinkedSources() (string, error) {
 }
 
 // migrateTrackerID adds repos.tracker_id: the tracker store's own identity
-// as the bridge last reported it (api.Repo.TrackerID), ” for none. It is
+// as the bridge last reported it (api.Repo.TrackerID), empty for none. It is
 // Go so that the tests of older migrations, which step user_version back,
 // can run it again.
 func (s *Store) migrateTrackerID(tx *sql.Tx) error {
