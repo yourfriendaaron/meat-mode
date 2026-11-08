@@ -173,6 +173,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
+	savedToken := false
 	if len(pos) == 1 {
 		// Pairing again with the hub it is paired with, to point the
 		// service at a new binary, keeps the token it has. A token is
@@ -182,6 +183,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 			pos = append(pos, s.Token)
 		case s.Saved.Token != "" && strings.TrimRight(pos[0], "/") == s.Saved.HubURL:
 			pos = append(pos, s.Saved.Token)
+			savedToken = true
 		}
 	}
 	if len(pos) != 2 {
@@ -264,6 +266,9 @@ func pair(ctx context.Context, args []string, env Env) error {
 	hello := api.Hello{Version: env.Version, BdVersion: beadsVersion(versions), Trackers: versions, Harness: hi}
 	reply, err := env.hub(cfg, s.Allowed).Hello(ctx, hello)
 	if err != nil {
+		if savedToken {
+			return fmt.Errorf("cannot reach the hub with the saved token; if the machine was revoked, pair with a new token: %w", err)
+		}
 		return fmt.Errorf("cannot reach the hub with that token: %w", err)
 	}
 	// The switches may have changed since the file was read, from

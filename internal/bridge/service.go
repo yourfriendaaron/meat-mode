@@ -326,7 +326,8 @@ func (l *Launchd) Install(exe, pathEnv string) error {
 	}
 	// Replace a running copy. bootout returns before the agent has gone,
 	// and a bootstrap while it is still there fails with an I/O error, so
-	// wait for it to go, then retry the bootstrap while that error lasts.
+	// wait for it to go, then retry the bootstrap a few seconds whatever
+	// the error, as launchd's error text is no contract to match on.
 	target := l.domain() + "/" + LaunchdLabel
 	if _, err := l.Run("launchctl", "bootout", target); err == nil {
 		for range launchdTries {

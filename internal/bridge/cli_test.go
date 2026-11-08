@@ -399,6 +399,16 @@ func TestPairAgainKeepsTheToken(t *testing.T) {
 	if svc.exe != "/opt/meat-mode/2.0.0/meat-mode" || len(hub.Hellos()) != 2 {
 		t.Errorf("service runs %q after %d hellos", svc.exe, len(hub.Hellos()))
 	}
+	// A saved token the hub no longer takes is named as the saved one.
+	stale := fakehub.New(map[string]string{"token-sam": "laptop"})
+	defer stale.Close()
+	cfg.HubURL = stale.URL
+	if err := cfg.Save(env.Paths.Config); err != nil {
+		t.Fatal(err)
+	}
+	if err := Main(context.Background(), []string{"pair", stale.URL}, env); err == nil || !strings.Contains(err.Error(), "the saved token") {
+		t.Fatalf("pair with a revoked saved token = %v", err)
+	}
 	err = Main(context.Background(), []string{"pair", other.URL}, env)
 	if err == nil || !strings.Contains(err.Error(), "needs a hub URL and a token") {
 		t.Fatalf("pair with another hub and no token = %v", err)
