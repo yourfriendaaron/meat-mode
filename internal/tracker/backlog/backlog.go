@@ -164,6 +164,12 @@ func readRootConfig(path string) (folder string, ok bool) {
 // from known keys, so the repo-root .meat-mode.yaml is the only switch.
 func (b *Tracker) OptedIn(dir string) bool { return tracker.RepoOptIn(dir) }
 
+var _ tracker.StoreIDer = (*Tracker)(nil)
+
+// StoreID implements tracker.StoreIDer: Backlog.md keeps its tasks in Git,
+// so the store is the repo's origin and the folder's place in it.
+func (b *Tracker) StoreID(dir string) string { return tracker.GitStoreID(dir) }
+
 func (b *Tracker) now() time.Time {
 	if b.Now != nil {
 		return b.Now()

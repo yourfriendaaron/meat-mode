@@ -80,13 +80,18 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		if r.SpaceColour != nil && !personal {
 			colour = *r.SpaceColour
 		}
-		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, tracker, actions, epics, epics_on, colour)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		trackerID := r.TrackerID
+		if personal {
+			trackerID = ""
+		}
+		if _, err := tx.Exec(`INSERT INTO repos (bridge, name, personal, opted_in, agents_allowed, tracker, actions, epics, epics_on, colour, tracker_id)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (bridge, name) DO UPDATE SET personal = excluded.personal, opted_in = excluded.opted_in,
 				agents_allowed = excluded.agents_allowed, tracker = excluded.tracker, actions = excluded.actions,
-				epics = excluded.epics, epics_on = excluded.epics_on, colour = COALESCE(excluded.colour, repos.colour)`,
+				epics = excluded.epics, epics_on = excluded.epics_on, colour = COALESCE(excluded.colour, repos.colour),
+				tracker_id = excluded.tracker_id`,
 			bridge, r.Name, personal, r.OptedIn, r.AgentsAllowed,
-			truncRunes(strings.TrimSpace(r.Tracker), maxTrackerLen), actions, r.Epics, r.EpicsOn, colour); err != nil {
+			truncRunes(strings.TrimSpace(r.Tracker), maxTrackerLen), actions, r.Epics, r.EpicsOn, colour, trackerID); err != nil {
 			return err
 		}
 	}

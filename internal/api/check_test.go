@@ -110,18 +110,21 @@ func TestCheckItemsTruncatesTheRest(t *testing.T) {
 }
 
 func TestCheckRepos(t *testing.T) {
-	got, err := CheckRepos([]Repo{{Name: "projects/garden", Bridge: "laptop", Pending: true, AgentsPending: true}})
+	got, err := CheckRepos([]Repo{{Name: "projects/garden", Bridge: "laptop", Pending: true, AgentsPending: true, Group: "laptop/garden", Standby: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[0].Bridge != "" || got[0].Pending || got[0].AgentsPending {
+	if got[0].Bridge != "" || got[0].Pending || got[0].AgentsPending || got[0].Group != "" || got[0].Standby {
 		t.Fatalf("not cleaned: %+v", got[0])
 	}
 	for name, repos := range map[string][]Repo{
-		"duplicate":    {{Name: "garden"}, {Name: "garden"}},
-		"bad name":     {{Name: "../garden"}},
-		"colour below": {{Name: "garden", SpaceColour: intPtr(-1)}},
-		"colour above": {{Name: "garden", SpaceColour: intPtr(ListColours)}},
+		"duplicate":     {{Name: "garden"}, {Name: "garden"}},
+		"bad name":      {{Name: "../garden"}},
+		"colour below":  {{Name: "garden", SpaceColour: intPtr(-1)}},
+		"colour above":  {{Name: "garden", SpaceColour: intPtr(ListColours)}},
+		"tracker short": {{Name: "garden", TrackerID: strings.Repeat("a", TrackerIDLen-1)}},
+		"tracker upper": {{Name: "garden", TrackerID: strings.Repeat("A", TrackerIDLen)}},
+		"tracker text":  {{Name: "garden", TrackerID: strings.Repeat("g", TrackerIDLen)}},
 	} {
 		if _, err := CheckRepos(repos); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: err = %v, want ErrInvalid", name, err)
@@ -129,6 +132,9 @@ func TestCheckRepos(t *testing.T) {
 	}
 	if _, err := CheckRepos([]Repo{{Name: "garden", SpaceColour: intPtr(0)}, {Name: "chores", SpaceColour: intPtr(ListColours - 1)}}); err != nil {
 		t.Errorf("colours in range: %v", err)
+	}
+	if _, err := CheckRepos([]Repo{{Name: "garden", TrackerID: strings.Repeat("0f", TrackerIDLen/2)}}); err != nil {
+		t.Errorf("valid trackerId: %v", err)
 	}
 	// A bad name is reported before a bad colour, even on an earlier repo.
 	_, err = CheckRepos([]Repo{{Name: "garden", SpaceColour: intPtr(9)}, {Name: "../chores"}})

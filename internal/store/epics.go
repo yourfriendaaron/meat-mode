@@ -103,7 +103,53 @@ func (s *Store) Epics() (api.Epics, error) {
 		out.Repos[i].Rows = append(out.Repos[i].Rows, row)
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	linked, err := linkedLists(s.db, s.now(), s.onlineWindow())
+	if err != nil {
+		return out, err
+	}
+	out.Repos = oneEpicSet(out.Repos, linked)
+	return out, nil
+}
+
+// oneEpicSet keeps one epic set of each linked list, so its epics show
+// once: the first repo's, in the list's order, whose bridge is online,
+// else the first repo's that has a set.
+func oneEpicSet(repos []api.RepoEpics, l links) []api.RepoEpics {
+	has := map[string]bool{}
+	for _, re := range repos {
+		has[re.Bridge+"/"+re.Repo] = true
+	}
+	keep := map[string]bool{}
+	for _, g := range l.groups {
+		pick := ""
+		for _, m := range g.members {
+			if has[m.key()] && m.online {
+				pick = m.key()
+				break
+			}
+		}
+		if pick == "" {
+			for _, m := range g.members {
+				if has[m.key()] {
+					pick = m.key()
+					break
+				}
+			}
+		}
+		keep[pick] = true
+	}
+	out := repos[:0]
+	for _, re := range repos {
+		key := re.Bridge + "/" + re.Repo
+		if _, linked := l.group(key); linked && !keep[key] {
+			continue
+		}
+		out = append(out, re)
+	}
+	return out
 }
 
 // epicsHeld sums up what a bridge holds for the Epics view, the rows and

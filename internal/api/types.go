@@ -219,7 +219,23 @@ type Repo struct {
 	// sends it in State. Nil when the repo is no workspace or the bridge is
 	// older.
 	SpaceColour *int `json:"spaceColour,omitempty"`
+	// Bridge-only: the tracker store's own identity, the same in every
+	// clone of the repo on any machine, as TrackerIDLen lowercase hex
+	// digits (a SHA-256). The hub links the repos that share one into one
+	// list (docs/api.md, Linked lists) and never sends it in State. Empty
+	// when the tracker has none or the bridge is older.
+	TrackerID string `json:"trackerId,omitempty"`
+	// Hub-only: the key, "<bridge>/<name>", of the first repo of the
+	// linked list this repo is in, the same on every repo of it; empty for
+	// a repo linked with no other (docs/api.md, Linked lists).
+	Group string `json:"group,omitempty"`
+	// Hub-only: a linked repo whose items the list does not show now,
+	// because another repo of its group is the list's source.
+	Standby bool `json:"standby,omitempty"`
 }
+
+// TrackerIDLen is the length of a repo's TrackerID: a SHA-256 in hex.
+const TrackerIDLen = 64
 
 // TrackerVersion is one tracker a bridge runs and its tool's version.
 type TrackerVersion struct {

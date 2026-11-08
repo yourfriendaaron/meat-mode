@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -104,6 +105,15 @@ func Run(ctx context.Context, cfg Config, opts Options) error {
 	if h.publicDNS().State != api.DNSSkipped {
 		go h.watchPublicDNS(ctx)
 	}
+	var window time.Duration
+	if v := os.Getenv("MEAT_MODE_ONLINE_WINDOW"); v != "" {
+		// End-to-end tests take a bridge for offline within seconds.
+		if window, err = time.ParseDuration(v); err != nil || window <= 0 {
+			return fmt.Errorf("MEAT_MODE_ONLINE_WINDOW must be a positive duration, not %q", v)
+		}
+		st.SetOnlineWindow(window)
+	}
+	go h.watchLinked(ctx, linkedCheckEvery(window))
 	if err := h.endOtherLogins(ctx); err != nil {
 		return err
 	}

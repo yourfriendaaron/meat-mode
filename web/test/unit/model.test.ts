@@ -13,8 +13,11 @@ import {
   isWontDo,
   kindOf,
   openToday,
+  followLinked,
+  linkedWith,
   repoDetail,
   repoLabel,
+  shownCopy,
   subtaskChip,
   subtasksFirst,
   syncStatus,
@@ -337,4 +340,19 @@ test("closes go sub-tasks first, and a delete takes the open sub-tasks along", (
   const all = [parent, a, b, done];
   assert.deepEqual(subtasksFirst([parent, a], all, false).map((i) => i.id), ["a", "p"]);
   assert.deepEqual(subtasksFirst([parent], all, true).map((i) => i.id), ["a", "b", "p"]);
+});
+
+test("a linked list shows in the sidebar once, from the copy it shows, and its view follows that copy", () => {
+  const desk: Repo = { bridge: "desk", name: "projects/garden", personal: false, optedIn: true, group: "desk/projects/garden", standby: true };
+  const laptop: Repo = { bridge: "laptop", name: "Developer/garden", personal: false, optedIn: true, group: "desk/projects/garden" };
+  const chores: Repo = { bridge: "desk", name: "chores", personal: false, optedIn: true };
+  const all = [desk, laptop, chores];
+  assert.deepEqual(visibleRepos(all).map((r) => r.bridge + "/" + r.name), ["desk/chores", "laptop/Developer/garden"]);
+  assert.deepEqual(linkedWith(desk, all), [desk, laptop]);
+  assert.deepEqual(linkedWith(chores, all), [chores]);
+  assert.equal(shownCopy(desk, all), laptop);
+  assert.equal(shownCopy(laptop, all), laptop);
+  assert.equal(followLinked("list:desk/projects/garden", all), "list:laptop/Developer/garden");
+  assert.equal(followLinked("list:desk/chores", all), "list:desk/chores");
+  assert.equal(followLinked("today", all), "today");
 });

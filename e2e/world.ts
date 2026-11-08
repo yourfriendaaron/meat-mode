@@ -242,6 +242,8 @@ export interface WorldOptions {
    * loopback and treats it as a secure context.
    */
   proxyHost?: string;
+  /** Adds to the hub's environment. */
+  hubEnv?: Record<string, string>;
 }
 
 export class World {
@@ -403,6 +405,7 @@ export class World {
       MEAT_MODE_NTFY_TOPIC: NTFY_TOPIC,
       MEAT_MODE_REMINDER_INTERVAL: "1s",
     };
+    Object.assign(env, this.opts.hubEnv);
     if (this.passwordHash) env.MEAT_MODE_PASSWORD_HASH = this.passwordHash;
     if (this.opts.proxyHost) {
       // The address the user opens is the proxy's; the hub hears its name in Host.
@@ -519,6 +522,42 @@ export class World {
     }
     this.machines.set(name, m);
     return m;
+  }
+
+  /**
+   * Clones a machine's beads repo onto another machine, under the same name,
+   * as two computers share one beads database: through a Dolt remote, a bare
+   * Git repo in the World's folder, pushed from the first and bootstrapped in
+   * the second. Both then share its project_id; sync() moves changes
+   * between them.
+   */
+  async cloneRepo(from: string, repo: string, to: string): Promise<string> {
+    const src = this.machine(from).repos[repo];
+    const remote = join(this.tmp, "remotes", `${from}-${repo.replaceAll("/", "-")}.git`);
+    const git = (cwd: string, ...args: string[]) => execFileP("git", args, { cwd, env: this.bdEnv() });
+    await mkdir(remote, { recursive: true });
+    await git(remote, "init", "-q", "--bare");
+    // Dolt pushes only to a Git remote with a branch.
+    const seed = `${remote}-seed`;
+    await git(this.tmp, "clone", "-q", remote, seed);
+    await git(seed, "commit", "-q", "--allow-empty", "-m", "Start");
+    await git(seed, "push", "-q", "origin", "HEAD:main");
+    await this.bd(src, "dolt", "remote", "add", "origin", `file://${remote}`);
+    await this.bd(src, "dolt", "push");
+    const m = this.machine(to);
+    const dir = join(m.root, repo);
+    await mkdir(join(dir, ".beads"), { recursive: true });
+    await git(dir, "init", "-q");
+    for (const f of ["metadata.json", "config.yaml"]) await writeFile(join(dir, ".beads", f), await readFile(join(src, ".beads", f)));
+    await this.bd(dir, "bootstrap");
+    m.repos[repo] = dir;
+    return dir;
+  }
+
+  /** Pushes a cloned repo's changes from one copy to its Dolt remote and pulls them into another. */
+  async sync(fromDir: string, toDir: string): Promise<void> {
+    await this.bd(fromDir, "dolt", "push");
+    await this.bd(toDir, "dolt", "pull");
   }
 
   private bridgeEnv(m: Machine): NodeJS.ProcessEnv {

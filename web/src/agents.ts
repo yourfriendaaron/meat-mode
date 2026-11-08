@@ -7,7 +7,7 @@ import { ApiError, errorText } from "./api.ts";
 import { esc } from "./html.ts";
 import { ICON } from "./icons.ts";
 import { listBadge } from "./identity.ts";
-import { HUB_BRIDGE, repoCan, repoLabel } from "./model.ts";
+import { HUB_BRIDGE, linkedWith, repoCan, repoLabel, shownCopy } from "./model.ts";
 import type { AgentLimits, Bridge, LimitName, LimitsChange, Repo, RunLimits } from "./types.ts";
 
 /** Where release binaries download from; the names match .github/workflows/release.yml. */
@@ -92,10 +92,26 @@ export function machineReposHTML(repos: Repo[], bridge: string, opts: MachineRep
     .map((r) => {
       const control = `<button class="switch" role="switch" id="${esc(`${idPrefix}${bridge}/${r.name}`)}" aria-checked="${r.optedIn}" aria-label="Sync ${esc(repoLabel(r))} (${esc(r.name)})" data-act="sync-switch" data-bridge="${esc(bridge)}" data-repo="${esc(r.name)}"><span class="switch-knob" aria-hidden="true"></span></button>`;
       const note = r.pending ? `<div class="muted small" role="status">Waiting for ${esc(bridge)}</div>` : "";
+      const linked = linkedLineHTML(r, repos);
       const { line, how } = agentsLineHTML(r, bridge, idPrefix, opts.howAlwaysOpen === true);
-      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div class="m-repo-title">${listBadge(r, repos)}<span>${esc(repoLabel(r))}</span></div><div class="muted small">${esc(r.tracker ? `${r.name} · ${r.tracker}` : r.name)}</div>${line}${note}</div>${control}</div>${how}</li>`;
+      return `<li class="m-repo"><div class="m-repo-main"><div class="m-repo-name"><div class="m-repo-title">${listBadge(r, repos)}<span>${esc(repoLabel(r))}</span></div><div class="muted small">${esc(r.tracker ? `${r.name} · ${r.tracker}` : r.name)}</div>${linked}${line}${note}</div>${control}</div>${how}</li>`;
     })
     .join("")}</ul>`;
+}
+
+/**
+ * The line under a repo that holds the same tracker store as repos elsewhere
+ * (docs/api.md, Linked lists): where the other copies are, and which copy the
+ * list shows. "" for a repo in no linked list.
+ */
+export function linkedLineHTML(r: Repo, all: Repo[]): string {
+  if (!r.group) return "";
+  const others = linkedWith(r, all).filter((x) => x !== r);
+  if (!others.length) return "";
+  const where = others.map((x) => (x.bridge === r.bridge ? x.name : `${x.bridge}`)).join(", ");
+  const src = shownCopy(r, all);
+  const shows = !r.optedIn && !others.some((x) => x.optedIn) ? "" : src === r ? " · The list shows this copy" : ` · The list shows ${src.bridge === r.bridge ? src.name : src.bridge}'s copy`;
+  return `<div class="muted small m-linked">Same list on ${esc(where)}${esc(shows)}</div>`;
 }
 
 /** A repo's agents line under its name, and the command box it opens, both "" where there is nothing to say. */

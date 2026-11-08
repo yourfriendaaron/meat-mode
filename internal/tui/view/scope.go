@@ -44,6 +44,19 @@ func hereLists(repos []api.Repo, h Here) map[string]bool {
 			}
 		}
 		if len(out) > 0 {
+			// A linked list's other copies hold the same tasks, and the hub
+			// shows them from one copy at a time (docs/api.md, Linked lists).
+			groups := map[string]bool{}
+			for k := range repos {
+				if r := &repos[k]; r.Group != "" && out[listKey(r.Bridge, r.Name)] {
+					groups[r.Group] = true
+				}
+			}
+			for k := range repos {
+				if r := &repos[k]; r.Group != "" && groups[r.Group] {
+					out[listKey(r.Bridge, r.Name)] = true
+				}
+			}
 			return out
 		}
 		up := filepath.Dir(dir)

@@ -213,3 +213,27 @@ func TestEpicRowsWaitsDatesAndComments(t *testing.T) {
 		t.Errorf("beds notes = %q; want the bead's notes", got)
 	}
 }
+
+func TestStoreID(t *testing.T) {
+	var _ tracker.StoreIDer = (*beads.CLI)(nil)
+	dir := t.TempDir()
+	if got := (&beads.CLI{}).StoreID(dir); got != "" {
+		t.Fatalf("no .beads: %q", got)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for text, want := range map[string]string{
+		`{"database": "dolt", "project_id": "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a51"}`: "0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a51",
+		`{"database": "dolt"}`:        "",
+		`{"project_id": "two words"}`: "",
+		`not json`:                    "",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, ".beads", "metadata.json"), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := (&beads.CLI{}).StoreID(dir); got != want {
+			t.Errorf("StoreID with %s = %q, want %q", text, got, want)
+		}
+	}
+}

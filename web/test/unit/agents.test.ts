@@ -17,6 +17,7 @@ import {
   limitsChange,
   limitsText,
   agentsHowOpen,
+  linkedLineHTML,
   machineReposHTML,
   pickMachine,
   PLATFORMS,
@@ -274,4 +275,17 @@ test("the limits box offers the form, a reset for a limit the app set, and none 
   assert.match(limitsBoxHTML(old, { open: true }), /Update the bridge on desk/);
   assert.equal(limitsBoxHTML({ ...b, lastSeen: null }, { open: false }), "");
   assert.match(limitsBoxHTML({ ...b, limitsPending: true }, { open: false }), /role="status">Waiting for desk/);
+});
+
+test("a linked repo says where its other copies are and which copy the list shows", () => {
+  const desk: Repo = { bridge: "desk", name: "projects/garden", personal: false, optedIn: true, group: "desk/projects/garden" };
+  const laptop: Repo = { bridge: "laptop", name: "Developer/garden", personal: false, optedIn: true, group: "desk/projects/garden", standby: true };
+  const all = [desk, laptop];
+  assert.match(linkedLineHTML(desk, all), />Same list on laptop · The list shows this copy</);
+  assert.match(linkedLineHTML(laptop, all), />Same list on desk · The list shows desk&#39;s copy</);
+  assert.match(machineReposHTML(all, "laptop"), /m-linked/);
+  // Neither copy switched on: nothing shows, so the line names the copies alone.
+  const off = all.map((r) => ({ ...r, optedIn: false, standby: false }));
+  assert.match(linkedLineHTML(off[0], off), />Same list on laptop</);
+  assert.equal(linkedLineHTML({ bridge: "desk", name: "chores", personal: false, optedIn: true }, all), "");
 });

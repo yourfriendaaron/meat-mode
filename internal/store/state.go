@@ -43,6 +43,12 @@ func (s *Store) State() (api.State, error) {
 		return st, err
 	}
 
+	linked, err := linkedLists(s.db, st.ServerTime, s.onlineWindow())
+	if err != nil {
+		return st, err
+	}
+	markLinked(st.Repos, linked)
+
 	hidden := map[string]bool{}
 	names, err := hiddenProjects(s.db)
 	if err != nil {
@@ -67,6 +73,10 @@ func (s *Store) State() (api.State, error) {
 			return err
 		}
 		if b == HubBridge && hiddenClosed(it, st.ServerTime) {
+			return nil
+		}
+		// A linked list shows its source's copy of each task alone.
+		if linked.hidden(b + "/" + r) {
 			return nil
 		}
 		// A deleted project keeps only its deleted items, for the Deleted view.
@@ -188,7 +198,7 @@ func (s *Store) State() (api.State, error) {
 
 	for _, a := range shown {
 		if a.Kind == api.KindAdd {
-			if _, ok := repoSynced[a.Bridge+"/"+a.Repo]; !ok {
+			if _, ok := repoSynced[a.Bridge+"/"+a.Repo]; !ok || linked.hidden(a.Bridge+"/"+a.Repo) {
 				continue
 			}
 			st.Items = append(st.Items, provisional(a))

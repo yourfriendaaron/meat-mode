@@ -2,6 +2,7 @@ package beads
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -96,6 +97,28 @@ func hasDatabase(dir string) bool {
 	}
 	dbs, _ := filepath.Glob(filepath.Join(beadsDir, "*.db"))
 	return len(dbs) > 0
+}
+
+// maxMetadataBytes is how much of .beads/metadata.json StoreID reads.
+const maxMetadataBytes = 64 << 10
+
+var _ tracker.StoreIDer = (*CLI)(nil)
+
+// StoreID implements tracker.StoreIDer: the project_id in
+// .beads/metadata.json, which bd writes once on init, keeps in every clone
+// and refuses to run against a database that holds another.
+func (c *CLI) StoreID(dir string) string {
+	data, err := tracker.ReadRegular(filepath.Join(dir, ".beads", "metadata.json"), maxMetadataBytes)
+	if err != nil || len(data) > maxMetadataBytes {
+		return ""
+	}
+	var m struct {
+		ProjectID string `json:"project_id"`
+	}
+	if json.Unmarshal(data, &m) != nil {
+		return ""
+	}
+	return tracker.CleanStoreID(m.ProjectID)
 }
 
 // OptedIn implements tracker.Tracker: the top-level line

@@ -39,6 +39,8 @@ import {
   repoCan,
   type Group,
   type ViewId,
+  followLinked,
+  linkedWith,
 } from "./model.ts";
 import { fmtAgo, fmtWhen, fmtWhenAt, fromYmd, startOfDay, toLocalInput, ymd } from "./dates.ts";
 import { addMonths, monthEntries, monthHTML, monthOf, monthSpan, viewSwitchHTML, type MonthEntry } from "./month.ts";
@@ -1932,10 +1934,12 @@ function renderSettings() {
   renderTheme();
 }
 
+/** Flips a repo's sync switch, and its linked copies' with it, so the list keeps a copy to fall back on (docs/api.md, Linked lists). */
 async function switchSync(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
   if (!r) return;
-  await post({ id: newId(), kind: "sync", bridge, repo, payload: { on: !r.optedIn } });
+  const on = !r.optedIn;
+  for (const x of linkedWith(r, repos())) if (x.optedIn !== on) await post({ id: newId(), kind: "sync", bridge: x.bridge, repo: x.name, payload: { on } });
   await refresh();
 }
 
@@ -2019,6 +2023,8 @@ async function refresh(): Promise<void> {
       const server = new Date(st.serverTime).getTime();
       if (!Number.isNaN(server)) S.offset = server - Date.now();
       if (S.selected && !byKey(S.selected)) S.selected = null;
+      // A linked list whose source moved to another machine keeps its view.
+      if (S.view.startsWith("list:")) S.view = followLinked(S.view as ViewId, st.repos ?? []);
       // No repo left that can show epics takes the view with it.
       if (S.view === "epics" && !epicsOffered(st.repos ?? [])) {
         S.view = "today";
@@ -2459,10 +2465,12 @@ async function doTell(key: string) {
   if (t && S.toast?.id === t.id) showToast(t.text, t.undo, t.tell);
 }
 
+/** Flips a repo's epics switch, and its linked copies' with it. */
 async function switchEpics(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
   if (!r?.epics) return;
-  await post({ id: newId(), kind: "epics", bridge, repo, payload: { on: !r.epicsOn } });
+  const on = !r.epicsOn;
+  for (const x of linkedWith(r, repos())) if (x.epics && x.epicsOn !== on) await post({ id: newId(), kind: "epics", bridge: x.bridge, repo: x.name, payload: { on } });
   await refresh();
 }
 
@@ -3107,7 +3115,7 @@ function updateQaAgent(listKey: string) {
 
 /** The lists a new task can go to: those whose tracker takes adds. */
 function addable(): Repo[] {
-  return repos().filter((r) => repoCan(r, "add"));
+  return repos().filter((r) => repoCan(r, "add") && !r.standby);
 }
 
 /** The list being viewed, as a repo key, so a new task starts there. */

@@ -116,6 +116,7 @@ func CheckRepos(repos []Repo) ([]Repo, error) {
 		}
 		seen[r.Name] = true
 		r.Bridge, r.Pending, r.AgentsPending, r.EpicsPending = "", false, false, false
+		r.Group, r.Standby = "", false
 		out = append(out, r)
 	}
 	// Workspace colours are checked after the rest, so a report with a bad
@@ -123,6 +124,9 @@ func CheckRepos(repos []Repo) ([]Repo, error) {
 	for _, r := range out {
 		if r.SpaceColour != nil && (*r.SpaceColour < 0 || *r.SpaceColour >= ListColours) {
 			return nil, Invalidf("repo %q has a spaceColour %d outside 0 to %d", r.Name, *r.SpaceColour, ListColours-1)
+		}
+		if r.TrackerID != "" && !validTrackerID(r.TrackerID) {
+			return nil, Invalidf("repo %q has a trackerId that is not %d lowercase hex digits", r.Name, TrackerIDLen)
 		}
 	}
 	return out, nil
@@ -264,4 +268,17 @@ func checkRun(r RunReport) (Run, error) {
 		run.EndedAt = &t
 	}
 	return run, nil
+}
+
+// validTrackerID reports whether id is TrackerIDLen lowercase hex digits.
+func validTrackerID(id string) bool {
+	if len(id) != TrackerIDLen {
+		return false
+	}
+	for _, c := range id {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }

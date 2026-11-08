@@ -700,7 +700,8 @@ export interface ToolbarView {
  */
 export function menusHTML(v: ToolbarView): string {
   const ui = v.ui;
-  const can = v.repos.filter((r) => r.epics === true).sort((a, b) => a.bridge.localeCompare(b.bridge) || a.name.localeCompare(b.name));
+  // A linked list is one pick, its shown copy's; the pick switches every copy (main.ts, switchEpics).
+  const can = v.repos.filter((r) => r.epics === true && !r.standby).sort((a, b) => a.bridge.localeCompare(b.bridge) || a.name.localeCompare(b.name));
   const shown = can.filter((r) => r.epicsOn === true).length;
   const repoBtn = `<span>Repos${shown ? ` <span class="ep-n">${shown}</span>` : ""}</span>`;
   let i = 0;

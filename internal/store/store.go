@@ -74,6 +74,7 @@ type Store struct {
 	offline   map[string]bool            // runs the last State showed offline; see joinRuns
 	applying  map[string]map[string]bool // per bridge, the actions its last run list holds as applied; see ReplaceRuns
 	inflight  map[string]bool            // attachment files being written; the sweep leaves them alone
+	online    time.Duration              // see SetOnlineWindow
 
 	restoring sync.Mutex // one restore at a time, so two never write the same files
 }
@@ -160,7 +161,7 @@ func (s *Store) emit(c Change) {
 	}
 }
 
-const schemaVersion = 18
+const schemaVersion = 19
 
 var migrations = []string{
 	// 1: initial schema.
@@ -358,6 +359,8 @@ CREATE INDEX IF NOT EXISTS attachments_item ON attachments(bridge, repo, item_id
 	``,
 	// 18: repos.colour and repo_icons, by goMigrations.
 	``,
+	// 19: repos.tracker_id, by goMigrations.
+	``,
 }
 
 // goMigrations are the schema steps written in Go, run in the same
@@ -370,6 +373,7 @@ var goMigrations = map[int]func(*Store, *sql.Tx) error{
 	16: (*Store).migrateProjectHidden,
 	17: (*Store).migrateEpics,
 	18: (*Store).migrateIdentity,
+	19: (*Store).migrateTrackerID,
 }
 
 // migrateEpics adds the Epics view's tables (epics.go). repos gains epics,

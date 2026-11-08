@@ -277,6 +277,10 @@ sync: true
 
 A tracker can have its own place for that line too; for beads it is `meat-mode.sync: true` in `.beads/config.yaml`. Only the tasks marked for you appear: in beads, those labelled `human`. Each tracker's page says how it marks them, and the app offers only the actions the repo's tracker supports. Repos are told apart by their path, so `projects/garden` and `work/garden` both sync; the app shows the folder name, and the path where two names match.
 
+### One repo on several machines
+
+A repo cloned on two machines, such as a beads database synced through a Dolt remote, holds the same tasks on both. The hub sees that their tracker store is the same and shows them as one list, each task once, from one machine at a time: the one paired first while it is online, otherwise another that is. Settings marks each copy with "Same list on" the other machines and says which copy the list shows. Its sync switch switches every copy, so leave them all on: when the machine the list shows goes offline, the list carries on from another within about 3 minutes. Both bridges need a version that reports the tracker's identity; an older one shows its copy as a list of its own. Keep each clone synced, as a copy that has fallen behind shows older tasks when the list moves to it. [api.md](api.md#linked-lists) has the rules.
+
 ## Reminders
 
 Each device you turned reminders on for gets one at an item's due time, and at the end of a snooze. A repeating to-do reminds for each date it comes round to. Closed items never remind.
@@ -544,4 +548,4 @@ To restore, set up a fresh hub and load the file in the setup wizard's restore s
 
 ## Several machines
 
-Pair each agent machine with its own name. Items are kept per machine, and a tap is replayed only by the machine that owns the item. A machine that is off keeps its actions waiting until it is back; the others carry on.
+Pair each agent machine with its own name. Items are kept per machine, and a tap is replayed only by the machine that owns the item. A machine that is off keeps its actions waiting until it is back; the others carry on. A repo found on several machines shows as one list (see [One repo on several machines](#one-repo-on-several-machines)).

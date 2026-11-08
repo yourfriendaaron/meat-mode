@@ -125,6 +125,12 @@ func (*Ticket) Detect(dir string, entries []fs.DirEntry) bool {
 
 func (*Ticket) OptedIn(dir string) bool { return tracker.RepoOptIn(dir) }
 
+var _ tracker.StoreIDer = (*Ticket)(nil)
+
+// StoreID implements tracker.StoreIDer: ticket keeps its tickets in Git, so
+// the store is the repo's origin and the folder's place in it.
+func (*Ticket) StoreID(dir string) string { return tracker.GitStoreID(dir) }
+
 func (t *Ticket) List(_ context.Context, dir string) ([]tracker.Issue, error) {
 	files, err := os.ReadDir(filepath.Join(dir, storeDir))
 	if err != nil {

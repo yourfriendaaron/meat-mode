@@ -446,11 +446,12 @@ func badgeText(code string) string {
 }
 
 // visibleRepos are the repos shown as lists: the hub's own and opted-in
-// ones, the personal list first, then by label, name and bridge.
+// ones but a linked list's standby copies, the personal list first, then
+// by label, name and bridge.
 func visibleRepos(repos []api.Repo) []*api.Repo {
 	var out []*api.Repo
 	for k := range repos {
-		if r := &repos[k]; isPersonal(r.Bridge) || r.OptedIn {
+		if r := &repos[k]; (isPersonal(r.Bridge) || r.OptedIn) && !r.Standby {
 			out = append(out, r)
 		}
 	}

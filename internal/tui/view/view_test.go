@@ -3,6 +3,7 @@ package view
 import (
 	"encoding/json"
 	"flag"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -195,5 +196,26 @@ func TestStartsOnTheToDos(t *testing.T) {
 	m, _ = m.Key("2")
 	if !inEpics(m.selKey) {
 		t.Fatalf("2 selected %q, want an epic of the project", m.selKey)
+	}
+}
+
+// TestHereTakesLinkedCopies checks that a folder matching one copy of a
+// linked list scopes to every copy, as the hub shows the list from one copy
+// at a time.
+func TestHereTakesLinkedCopies(t *testing.T) {
+	repos := []api.Repo{
+		{Bridge: "desk", Name: "projects/garden", Group: "desk/projects/garden"},
+		{Bridge: "laptop", Name: "Developer/garden", Group: "desk/projects/garden", Standby: true},
+		{Bridge: "desk", Name: "projects/kitchen"},
+	}
+	got := hereLists(repos, Here{Home: "/srv/sam", Dir: "/srv/sam/Developer/garden/src"})
+	want := map[string]bool{listKey("desk", "projects/garden"): true, listKey("laptop", "Developer/garden"): true}
+	if !maps.Equal(got, want) {
+		t.Errorf("hereLists = %v, want %v", got, want)
+	}
+	// The list counts once, from the copy the hub shows.
+	repos[0].OptedIn, repos[1].OptedIn = true, true
+	if v := visibleRepos(repos); len(v) != 1 || v[0].Bridge != "desk" {
+		t.Errorf("visibleRepos = %v, want desk's copy alone", v)
 	}
 }

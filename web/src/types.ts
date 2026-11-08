@@ -156,6 +156,10 @@ export interface Repo {
   colour?: number;
   /** The hash of the repo's icon, loaded from GET /api/icons/{hash}; absent when it has none. */
   icon?: string;
+  /** The linked list the repo is in, the key of its first repo, when another repo holds the same tracker store (docs/api.md, Linked lists). */
+  group?: string;
+  /** The repo is a linked list's standby: the list shows another repo's items, so this one has none in State. */
+  standby?: boolean;
 }
 
 /** An agent run's state (docs/api.md, Agent runs). No run on an item means no agent was ever asked. */

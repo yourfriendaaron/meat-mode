@@ -149,6 +149,7 @@ func (w *world) wire(repos ...api.Repo) []api.Repo {
 	for i := range repos {
 		repos[i].Tracker, repos[i].Actions = info.Title, info.Actions
 		repos[i].Epics = epicsOf(w.tr) != nil
+		repos[i].TrackerID = trackerID(Repo{Dir: filepath.Join(w.root, repos[i].Name), Tracker: w.tr})
 	}
 	return repos
 }

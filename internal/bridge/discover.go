@@ -1,6 +1,8 @@
 package bridge
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -243,4 +245,21 @@ func resolvePath(dir string) string {
 	}
 	abs, _ := filepath.Abs(dir)
 	return abs
+}
+
+// trackerID is what the hub links clones of r's store by (api.Repo.TrackerID):
+// a SHA-256 of the tracker's name and the store's own identity, so the
+// identity itself, such as a remote's URL, never leaves the machine. It is
+// "" when the tracker gives none.
+func trackerID(r Repo) string {
+	ider, ok := r.Tracker.(tracker.StoreIDer)
+	if !ok {
+		return ""
+	}
+	id := ider.StoreID(r.Dir)
+	if id == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(r.Tracker.Info().Name + ":" + id))
+	return hex.EncodeToString(sum[:])
 }

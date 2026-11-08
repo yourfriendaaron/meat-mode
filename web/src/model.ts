@@ -450,11 +450,12 @@ export function deleteListQuestion(label: string, open: number): string {
 
 /**
  * Repos shown as lists: the hub's own (the personal list and the projects)
- * and opted-in ones, the personal list first, then by name.
+ * and opted-in ones but a linked list's standby copies, the personal list
+ * first, then by name.
  */
 export function visibleRepos(repos: Repo[]): Repo[] {
   return repos
-    .filter((r) => isPersonal(r) || r.optedIn)
+    .filter((r) => (isPersonal(r) || r.optedIn) && !r.standby)
     .sort(
       (a, b) =>
         Number(isPersonalList(b)) - Number(isPersonalList(a)) ||
@@ -462,6 +463,23 @@ export function visibleRepos(repos: Repo[]): Repo[] {
         a.name.localeCompare(b.name) ||
         a.bridge.localeCompare(b.bridge),
     );
+}
+
+/** The repos of the linked list `r` is in, `r` alone when it is in none (docs/api.md, Linked lists). */
+export function linkedWith(r: Repo, all: Repo[]): Repo[] {
+  return r.group ? all.filter((x) => x.group === r.group) : [r];
+}
+
+/** The repo whose items a linked list shows now: `r` itself unless it is the standby. */
+export function shownCopy(r: Repo, all: Repo[]): Repo {
+  return r.standby ? (linkedWith(r, all).find((x) => !x.standby) ?? r) : r;
+}
+
+/** A list view moved to the repo its linked list shows now, so it keeps its items when the list's source moves to another machine. */
+export function followLinked(view: ViewId, all: Repo[]): ViewId {
+  if (!view.startsWith("list:")) return view;
+  const r = all.find((x) => `list:${repoKey(x)}` === view);
+  return r ? `list:${repoKey(shownCopy(r, all))}` : view;
 }
 
 export const LIST_COLOURS = 6;

@@ -427,7 +427,8 @@ func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 		next[r.Name] = st
 		info := r.Tracker.Info()
 		wire = append(wire, api.Repo{Name: r.Name, OptedIn: r.Synced(), AgentsAllowed: b.Agents[r.Name],
-			Tracker: info.Title, Actions: info.Actions, Epics: epicsOf(r.Tracker) != nil, EpicsOn: b.epicsOn(*r), SpaceColour: colours[i]})
+			Tracker: info.Title, Actions: info.Actions, Epics: epicsOf(r.Tracker) != nil, EpicsOn: b.epicsOn(*r), SpaceColour: colours[i],
+			TrackerID: trackerID(*r)})
 	}
 	b.repos = next
 	if reflect.DeepEqual(wire, b.reposSent) && b.now().Sub(b.reposAt) < RefreshEvery {
