@@ -58,17 +58,26 @@ func (m *Model) topBar(w int) line {
 	if epics {
 		left = append(left, sg(" ", sPlain), part(here, " Epics "+itoa(cards)+" "))
 	}
-	var right line
-	if m.inScope() {
-		right = line{sg(clean(m.scopeName())+"  ", sAccent)}
-	}
+	var conn seg
 	switch m.conn {
 	case ConnLive:
-		right = append(right, sg(gLive+" live ", sGreen))
+		conn = sg(gLive+" live ", sGreen)
 	case ConnDown:
-		right = append(right, sg(gLive+" retrying ", sRed))
+		conn = sg(gLive+" retrying ", sRed)
 	default:
-		right = append(right, sg(gLive+" connecting ", sYellow))
+		conn = sg(gLive+" connecting ", sYellow)
+	}
+	right := line{conn}
+	switch {
+	case m.inScope():
+		right = line{sg(clean(m.scopeName())+"  ", sAccent), conn}
+	case m.unmatched() != "":
+		// Said only when it fits whole, so a narrow pane keeps the
+		// connection state rather than losing both.
+		hint := line{sg(clean(m.unmatched())+" is not on the hub  ", sSoft), conn}
+		if left.width()+hint.width() <= w {
+			right = hint
+		}
 	}
 	return lr(left, right, w)
 }

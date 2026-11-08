@@ -124,6 +124,10 @@ var scenarios = []scenario{
 		s, e := load(t)
 		return New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam/acme/api/internal"}).Resize(w, h).SetConn(ConnLive).SetData(s, e, now)
 	}},
+	{"not-on-hub", func(t *testing.T, w, h int) Model {
+		s, e := load(t)
+		return New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam/notes"}).Resize(w, h).SetConn(ConnLive).SetData(s, e, now)
+	}},
 	{"loading", func(t *testing.T, w, h int) Model { return New(hub).Resize(w, h) }},
 }
 

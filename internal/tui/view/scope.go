@@ -83,3 +83,19 @@ func (m *Model) scopeName() string {
 	}
 	return ""
 }
+
+// unmatched is the name of the folder the viewer was started in when it is
+// in no project the hub knows, for the top line to say why every list
+// shows; "" once data has loaded and a project matched, before any data,
+// with no folder, and in the home folder or the root, which hold every
+// project rather than being one.
+func (m *Model) unmatched() string {
+	if m.d == nil || len(m.here) > 0 || m.hereAt.Dir == "" {
+		return ""
+	}
+	dir := filepath.Clean(m.hereAt.Dir)
+	if dir == filepath.Dir(dir) || (m.hereAt.Home != "" && dir == filepath.Clean(m.hereAt.Home)) {
+		return ""
+	}
+	return filepath.Base(dir)
+}

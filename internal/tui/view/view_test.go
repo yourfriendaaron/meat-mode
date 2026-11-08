@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -159,9 +160,25 @@ func TestHereScope(t *testing.T) {
 	if got := open(m); !got["personal"] {
 		t.Fatalf("unmatched folder lists = %v, want every list", got)
 	}
+	if got := m.unmatched(); got != "notes" {
+		t.Fatalf("unmatched = %q, want notes", got)
+	}
+	wide := m.Resize(100, 30)
+	if top := wide.topBar(100).plain(); !strings.Contains(top, "notes is not on the hub") {
+		t.Fatalf("top line %q does not say the folder is not on the hub", top)
+	}
 	m, _ = m.Key("p")
 	if m.notice == "" || m.noticeKind != NoticeWarn {
 		t.Fatalf("p outside a project gave notice %q", m.notice)
+	}
+	// Home and a matched project say nothing.
+	home := New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam"}).SetData(s, e, now)
+	if got := home.unmatched(); got != "" {
+		t.Fatalf("unmatched in home = %q, want none", got)
+	}
+	proj := New(hub).SetHere(Here{Home: "/srv/sam", Dir: "/srv/sam/acme/api"}).SetData(s, e, now)
+	if got := proj.unmatched(); got != "" {
+		t.Fatalf("unmatched in a project = %q, want none", got)
 	}
 }
 

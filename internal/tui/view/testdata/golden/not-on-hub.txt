@@ -1,0 +1,216 @@
+== 56 x 20, layout a
+  To-dos 4   Epics 6    notes is not on the hub  ◉ live |
+ Past due 2                                             |
+› ◦  ✓  Book the boiler service              1d overdue |
+  ✦ API Rotate the staging API key in the ⋯ 17h overdue |
+ Today 1                                                |
+  ◦  ✓  Pick up dry cleaning                      12:30 |
+ This evening 1                                         |
+  ◦  ✓  Water the plants                        ↻ 18:00 |
+ This week 4                                            |
+  ◦  ✓  Cancel the trial subscription      ☾ Wed, Nov 4 |
+  ◦  ✓  Buy birthday card for Alex       1/2 Thu, Nov 5 |
+    ◦  ✓  Choose a card                      Thu, Nov 5 |
+  ◦ GAR Fix the gate latch                   Sun, Nov 8 |
+ Any time 7                                             |
+  ✦ STO Approve the footer text                         |
+  ◦  ✓  Call Sam about the weekend                      |
+  ◦ GAR Label the seed packets 🌱 種                    |
+  ◦ GAR Order bark mulch                                |
+  ◦  ✓  Read through the lease renewal and write down ⋯ |
+ Enter open  y copy  x done  s snooze  d delete 1-18/45 |
+
+== 89 x 20, layout a
+  To-dos 4   Epics 6                                     notes is not on the hub  ◉ live |
+ Past due 2                                                                              |
+› ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
+  ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
+ Today 1                                                                                 |
+  ◦  ✓  mm-44     Pick up dry cleaning                              #errands       12:30 |
+ This evening 1                                                                          |
+  ◦  ✓  mm-31     Water the plants                                   #home ↻       18:00 |
+ This week 4                                                                             |
+  ◦  ✓  mm-50     Cancel the trial subscription                             ☾ Wed, Nov 4 |
+  ◦  ✓  mm-46     Buy birthday card for Alex                    #errands 1/2  Thu, Nov 5 |
+    ◦  ✓  mm-47     Choose a card                                             Thu, Nov 5 |
+  ◦ GAR mm-6      Fix the gate latch                                          Sun, Nov 8 |
+ Any time 7                                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                                |
+  ◦  ✓  mm-12     Call Sam about the weekend                                             |
+  ◦ GAR mm-52     Label the seed packets 🌱 種                                           |
+  ◦ GAR mm-4      Order bark mulch                                               #garden |
+  ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
+ Enter open  y copy  x done  s snooze  d delete  Tab epics  / filter  ? keys     1-18/45 |
+
+== 90 x 20, layout b
+  To-dos 4   Epics 6                                      notes is not on the hub  ◉ live |
+ Past due 2                                      ╎ Book the boiler service                |
+› ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
+  ✦ API Rotate the staging API key ⋯ 17h overdue ╎ 1d overdue  #home                      |
+ Today 1                                         ╎                                        |
+  ◦  ✓  Pick up dry cleaning               12:30 ╎  Last one was in October. The          |
+ This evening 1                                  ╎  engineer's number is on the fridge.   |
+  ◦  ✓  Water the plants                 ↻ 18:00 ╎                                        |
+ This week 4                                     ╎                                        |
+  ◦  ✓  Cancel the trial subscript⋯ ☾ Wed, Nov 4 ╎                                        |
+  ◦  ✓  Buy birthday card for Al⋯ 1/2 Thu, Nov 5 ╎                                        |
+    ◦  ✓  Choose a card               Thu, Nov 5 ╎                                        |
+  ◦ GAR Fix the gate latch            Sun, Nov 8 ╎                                        |
+ Any time 7                                      ╎                                        |
+  ✦ STO Approve the footer text                  ╎                                        |
+  ◦  ✓  Call Sam about the weekend               ╎                                        |
+  ◦ GAR Label the seed packets 🌱 種             ╎                                        |
+  ◦ GAR Order bark mulch                         ╎                                        |
+  ◦  ✓  Read through the lease renewal and writ⋯ ╎                                        |
+ Enter open  y copy  x done  s snooze  d delete  Tab epics  / filter  ? keys      1-18/40 |
+
+== 140 x 20, layout b
+  To-dos 4   Epics 6                                                                                        notes is not on the hub  ◉ live |
+ Past due 2                                                                  ╎ Book the boiler service                                      |
+› ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
+  ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ 1d overdue  #home                                            |
+ Today 1                                                                     ╎                                                              |
+  ◦  ✓  mm-44     Pick up dry cleaning                  #errands       12:30 ╎  Last one was in October. The engineer's number is on the    |
+ This evening 1                                                              ╎  fridge.                                                     |
+  ◦  ✓  mm-31     Water the plants                       #home ↻       18:00 ╎                                                              |
+ This week 4                                                                 ╎                                                              |
+  ◦  ✓  mm-50     Cancel the trial subscription                 ☾ Wed, Nov 4 ╎                                                              |
+  ◦  ✓  mm-46     Buy birthday card for Alex        #errands 1/2  Thu, Nov 5 ╎                                                              |
+    ◦  ✓  mm-47     Choose a card                                 Thu, Nov 5 ╎                                                              |
+  ◦ GAR mm-6      Fix the gate latch                              Sun, Nov 8 ╎                                                              |
+ Any time 7                                                                  ╎                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                    ╎                                                              |
+  ◦  ✓  mm-12     Call Sam about the weekend                                 ╎                                                              |
+  ◦ GAR mm-52     Label the seed packets 🌱 種                               ╎                                                              |
+  ◦ GAR mm-4      Order bark mulch                                   #garden ╎                                                              |
+  ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎                                                              |
+ Enter open  y copy  x done  s snooze  d delete  Tab epics  / filter  ? keys                                                        1-18/40 |
+
+== 56 x 30, layout a
+  To-dos 4   Epics 6    notes is not on the hub  ◉ live |
+ Past due 2                                             |
+› ◦  ✓  Book the boiler service              1d overdue |
+  ✦ API Rotate the staging API key in the ⋯ 17h overdue |
+ Today 1                                                |
+  ◦  ✓  Pick up dry cleaning                      12:30 |
+ This evening 1                                         |
+  ◦  ✓  Water the plants                        ↻ 18:00 |
+ This week 4                                            |
+  ◦  ✓  Cancel the trial subscription      ☾ Wed, Nov 4 |
+  ◦  ✓  Buy birthday card for Alex       1/2 Thu, Nov 5 |
+    ◦  ✓  Choose a card                      Thu, Nov 5 |
+  ◦ GAR Fix the gate latch                   Sun, Nov 8 |
+ Any time 7                                             |
+  ✦ STO Approve the footer text                         |
+  ◦  ✓  Call Sam about the weekend                      |
+  ◦ GAR Label the seed packets 🌱 種                    |
+  ◦ GAR Order bark mulch                                |
+  ◦  ✓  Read through the lease renewal and write down ⋯ |
+  ✦ STO Set up the wallet-pay sandbox account           |
+  ✦ DOT Sign in to the package registry once so the ag⋯ |
+ Later 1                                                |
+  ◦  ✓  Renew passport                      Sat, Nov 14 |
+ Done today 1                                           |
+  ✓  ✓  Take out recycling                              |
+                                                        |
+ Epics 6                                                |
+ API acme/api  synced 4m ago                            |
+   ◒ Moving 2                                           |
+ Enter open  y copy  x done  s snooze  d delete 1-28/45 |
+
+== 89 x 30, layout a
+  To-dos 4   Epics 6                                     notes is not on the hub  ◉ live |
+ Past due 2                                                                              |
+› ◦  ✓  mm-28     Book the boiler service                              #home  1d overdue |
+  ✦ API api-9fq   Rotate the staging API key in the vault                    17h overdue |
+ Today 1                                                                                 |
+  ◦  ✓  mm-44     Pick up dry cleaning                              #errands       12:30 |
+ This evening 1                                                                          |
+  ◦  ✓  mm-31     Water the plants                                   #home ↻       18:00 |
+ This week 4                                                                             |
+  ◦  ✓  mm-50     Cancel the trial subscription                             ☾ Wed, Nov 4 |
+  ◦  ✓  mm-46     Buy birthday card for Alex                    #errands 1/2  Thu, Nov 5 |
+    ◦  ✓  mm-47     Choose a card                                             Thu, Nov 5 |
+  ◦ GAR mm-6      Fix the gate latch                                          Sun, Nov 8 |
+ Any time 7                                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                                |
+  ◦  ✓  mm-12     Call Sam about the weekend                                             |
+  ◦ GAR mm-52     Label the seed packets 🌱 種                                           |
+  ◦ GAR mm-4      Order bark mulch                                               #garden |
+  ◦  ✓  mm-45     Read through the lease renewal and write down every clau⋯ #admin #home |
+  ✦ STO sf-c1x.5  Set up the wallet-pay sandbox account                                  |
+  ✦ DOT dot-3mm   Sign in to the package registry once so the agent can publish          |
+ Later 1                                                                                 |
+  ◦  ✓  mm-40     Renew passport                                      #admin Sat, Nov 14 |
+ Done today 1                                                                            |
+  ✓  ✓  mm-30     Take out recycling                                                     |
+                                                                                         |
+ Epics 6                                                                                 |
+ API acme/api  synced 4m ago                                                             |
+   ◒ Moving 2                                                                            |
+ Enter open  y copy  x done  s snooze  d delete  Tab epics  / filter  ? keys     1-28/45 |
+
+== 90 x 30, layout b
+  To-dos 4   Epics 6                                      notes is not on the hub  ◉ live |
+ Past due 2                                      ╎ Book the boiler service                |
+› ◦  ✓  Book the boiler service       1d overdue ╎ mm-28   ✓  personal                    |
+  ✦ API Rotate the staging API key ⋯ 17h overdue ╎ 1d overdue  #home                      |
+ Today 1                                         ╎                                        |
+  ◦  ✓  Pick up dry cleaning               12:30 ╎  Last one was in October. The          |
+ This evening 1                                  ╎  engineer's number is on the fridge.   |
+  ◦  ✓  Water the plants                 ↻ 18:00 ╎                                        |
+ This week 4                                     ╎                                        |
+  ◦  ✓  Cancel the trial subscript⋯ ☾ Wed, Nov 4 ╎                                        |
+  ◦  ✓  Buy birthday card for Al⋯ 1/2 Thu, Nov 5 ╎                                        |
+    ◦  ✓  Choose a card               Thu, Nov 5 ╎                                        |
+  ◦ GAR Fix the gate latch            Sun, Nov 8 ╎                                        |
+ Any time 7                                      ╎                                        |
+  ✦ STO Approve the footer text                  ╎                                        |
+  ◦  ✓  Call Sam about the weekend               ╎                                        |
+  ◦ GAR Label the seed packets 🌱 種             ╎                                        |
+  ◦ GAR Order bark mulch                         ╎                                        |
+  ◦  ✓  Read through the lease renewal and writ⋯ ╎                                        |
+  ✦ STO Set up the wallet-pay sandbox account    ╎                                        |
+  ✦ DOT Sign in to the package registry once so⋯ ╎                                        |
+ Later 1                                         ╎                                        |
+  ◦  ✓  Renew passport               Sat, Nov 14 ╎                                        |
+ Done today 1                                    ╎                                        |
+  ✓  ✓  Take out recycling                       ╎                                        |
+                                                 ╎                                        |
+ Epics 6                                         ╎                                        |
+ ◒ Moving 4                                      ╎                                        |
+ API api-h3k   Rate limiting v2     ▰▰▰▱▱▱ 2/5   ╎                                        |
+ Enter open  y copy  x done  s snooze  d delete  Tab epics  / filter  ? keys      1-28/40 |
+
+== 140 x 30, layout b
+  To-dos 4   Epics 6                                                                                        notes is not on the hub  ◉ live |
+ Past due 2                                                                  ╎ Book the boiler service                                      |
+› ◦  ✓  mm-28     Book the boiler service                  #home  1d overdue ╎ mm-28   ✓  personal                                          |
+  ✦ API api-9fq   Rotate the staging API key in the vault        17h overdue ╎ 1d overdue  #home                                            |
+ Today 1                                                                     ╎                                                              |
+  ◦  ✓  mm-44     Pick up dry cleaning                  #errands       12:30 ╎  Last one was in October. The engineer's number is on the    |
+ This evening 1                                                              ╎  fridge.                                                     |
+  ◦  ✓  mm-31     Water the plants                       #home ↻       18:00 ╎                                                              |
+ This week 4                                                                 ╎                                                              |
+  ◦  ✓  mm-50     Cancel the trial subscription                 ☾ Wed, Nov 4 ╎                                                              |
+  ◦  ✓  mm-46     Buy birthday card for Alex        #errands 1/2  Thu, Nov 5 ╎                                                              |
+    ◦  ✓  mm-47     Choose a card                                 Thu, Nov 5 ╎                                                              |
+  ◦ GAR mm-6      Fix the gate latch                              Sun, Nov 8 ╎                                                              |
+ Any time 7                                                                  ╎                                                              |
+  ✦ STO sf-k2a    Approve the footer text                                    ╎                                                              |
+  ◦  ✓  mm-12     Call Sam about the weekend                                 ╎                                                              |
+  ◦ GAR mm-52     Label the seed packets 🌱 種                               ╎                                                              |
+  ◦ GAR mm-4      Order bark mulch                                   #garden ╎                                                              |
+  ◦  ✓  mm-45     Read through the lease renewal and write dow⋯ #admin #home ╎                                                              |
+  ✦ STO sf-c1x.5  Set up the wallet-pay sandbox account                      ╎                                                              |
+  ✦ DOT dot-3mm   Sign in to the package registry once so the agent can pub⋯ ╎                                                              |
+ Later 1                                                                     ╎                                                              |
+  ◦  ✓  mm-40     Renew passport                          #admin Sat, Nov 14 ╎                                                              |
+ Done today 1                                                                ╎                                                              |
+  ✓  ✓  mm-30     Take out recycling                                         ╎                                                              |
+                                                                             ╎                                                              |
+ Epics 6                                                                     ╎                                                              |
+ ◒ Moving 4                                                                  ╎                                                              |
+ API api-h3k   Rate limiting v2                  ◒1 ⊘1 ◦1 ✓2  ▰▰▰▱▱▱▱▱ 2/5   ╎                                                              |
+ Enter open  y copy  x done  s snooze  d delete  Tab epics  / filter  ? keys                                                        1-28/40 |
+
