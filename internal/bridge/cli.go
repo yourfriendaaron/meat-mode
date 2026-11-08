@@ -162,6 +162,7 @@ func pair(ctx context.Context, args []string, env Env) error {
 	fs.Usage = func() {
 		fmt.Fprintln(env.Stderr, "usage: meat-mode bridge pair <hub url> [<token> | -] [--root DIR]... [--allow-insecure-http] [--no-service]")
 		fmt.Fprintln(env.Stderr, "The token is the argument, one line of standard input when it is -, or MEAT_MODE_BRIDGE_TOKEN when it is left out.")
+		fmt.Fprintln(env.Stderr, "Pairing again with the hub it is paired with keeps the saved token, so after an update `meat-mode bridge pair <hub url>` points the service at the new binary.")
 		fs.PrintDefaults()
 	}
 	pos, err := parseInterleaved(fs, args)
@@ -172,8 +173,16 @@ func pair(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) == 1 && s.Token != "" {
-		pos = append(pos, s.Token)
+	if len(pos) == 1 {
+		// Pairing again with the hub it is paired with, to point the
+		// service at a new binary, keeps the token it has. A token is
+		// never sent to another hub unless it is given.
+		switch {
+		case s.Token != "":
+			pos = append(pos, s.Token)
+		case s.Saved.Token != "" && strings.TrimRight(pos[0], "/") == s.Saved.HubURL:
+			pos = append(pos, s.Saved.Token)
+		}
 	}
 	if len(pos) != 2 {
 		fs.Usage()
@@ -289,6 +298,32 @@ func pair(ctx context.Context, args []string, env Env) error {
 	}
 	fmt.Fprintf(env.Stdout, "Installed and started the user service (%s).\n", svc.File())
 	return nil
+}
+
+// serviceDrift says when the service runs another program than this one,
+// as after an update that installed the new version in another folder;
+// "" when they match or either cannot be told.
+func serviceDrift(env Env, svc Service) string {
+	runs := svc.Executable()
+	exe, err := env.executable()
+	if runs == "" || err != nil || sameFile(runs, exe) {
+		return ""
+	}
+	return fmt.Sprintf("It runs %s, not this %s. Run `%s bridge pair <hub url>` to point it at this one.", runs, exe, exe)
+}
+
+// sameFile reports whether a and b name one file, following links.
+func sameFile(a, b string) bool {
+	if a == b {
+		return true
+	}
+	if ra, err := filepath.EvalSymlinks(a); err == nil {
+		a = ra
+	}
+	if rb, err := filepath.EvalSymlinks(b); err == nil {
+		b = rb
+	}
+	return a == b
 }
 
 // agentPath is the harness program's absolute path as this shell finds it,
@@ -453,6 +488,9 @@ func status(ctx context.Context, env Env) error {
 		fmt.Fprintf(out, "Service:  %v\n", err)
 	} else {
 		fmt.Fprintf(out, "Service:  %s\n", svc.Status())
+		if warn := serviceDrift(env, svc); warn != "" {
+			fmt.Fprintf(out, "          %s\n", warn)
+		}
 	}
 	fmt.Fprintf(out, "Roots:    %s\n", orNone(strings.Join(s.Roots, ", ")))
 	repos, err := s.Repos()

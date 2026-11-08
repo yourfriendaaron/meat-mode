@@ -21,6 +21,7 @@ import (
 type fakeService struct {
 	installed       bool
 	exe, path, file string
+	runs            string // what Executable reports; "" for exe
 }
 
 func (f *fakeService) Install(exe, pathEnv string) error {
@@ -30,6 +31,12 @@ func (f *fakeService) Install(exe, pathEnv string) error {
 func (f *fakeService) Uninstall() error { f.installed = false; return nil }
 func (f *fakeService) Status() string   { return "fake" }
 func (f *fakeService) File() string     { return f.file }
+func (f *fakeService) Executable() string {
+	if f.runs != "" {
+		return f.runs
+	}
+	return f.exe
+}
 
 // fakeBD writes a script that answers `bd version --json`.
 func fakeBD(t *testing.T, version string) string {
@@ -347,6 +354,57 @@ func TestStatus(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out.String(), "It runs") {
+		t.Errorf("status warns about a service that runs this binary:\n%s", out)
+	}
+
+	// After an update that put the new binary in another folder, the
+	// service still runs the old one; status says so and how to fix it.
+	svc := env.Service.(*fakeService)
+	svc.runs = "/opt/meat-mode/1.0.0/meat-mode"
+	out.Reset()
+	if err := Main(context.Background(), []string{"status"}, env); err != nil {
+		t.Fatal(err)
+	}
+	if want := "It runs /opt/meat-mode/1.0.0/meat-mode, not this /opt/meat-mode/meat-mode. Run `/opt/meat-mode/meat-mode bridge pair <hub url>`"; !strings.Contains(out.String(), want) {
+		t.Errorf("status lacks %q:\n%s", want, out)
+	}
+}
+
+// TestPairAgainKeepsTheToken checks that pairing again with the hub the
+// bridge is paired with needs no token, as after an update, and that the
+// saved token never goes to another hub.
+func TestPairAgainKeepsTheToken(t *testing.T) {
+	t.Setenv("MEAT_MODE_BRIDGE_TOKEN", "")
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	other := fakehub.New(map[string]string{token: us})
+	defer other.Close()
+	env, svc, out := testEnv(t, fakeBD(t, "1.3.1"))
+	if err := Main(context.Background(), []string{"pair", hub.URL, token, "--root", "~/code"}, env); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	env.Executable = "/opt/meat-mode/2.0.0/meat-mode"
+	if err := Main(context.Background(), []string{"pair", hub.URL + "/"}, env); err != nil {
+		t.Fatalf("pair again: %v\n%s", err, out)
+	}
+	cfg, err := readConfigFile(env.Paths.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Token != token || len(cfg.Roots) != 1 || cfg.Roots[0] != filepath.Join(env.Paths.Home, "code") {
+		t.Errorf("config after pairing again = %+v", cfg)
+	}
+	if svc.exe != "/opt/meat-mode/2.0.0/meat-mode" || len(hub.Hellos()) != 2 {
+		t.Errorf("service runs %q after %d hellos", svc.exe, len(hub.Hellos()))
+	}
+	err = Main(context.Background(), []string{"pair", other.URL}, env)
+	if err == nil || !strings.Contains(err.Error(), "needs a hub URL and a token") {
+		t.Fatalf("pair with another hub and no token = %v", err)
+	}
+	if len(other.Hellos()) != 0 {
+		t.Error("the saved token was sent to another hub")
 	}
 }
 

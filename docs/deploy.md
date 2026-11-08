@@ -539,7 +539,7 @@ To restore, set up a fresh hub and load the file in the setup wizard's restore s
 ## Updating
 
 - **Hub**: `git pull && docker compose up -d --build`. The database migrates itself on start.
-- **Bridge**: replace the binary, then run `meat-mode bridge pair …` again with the same arguments (leaving out `--personal`), or restart the service (`systemctl --user restart meat-mode-bridge`, or on macOS `launchctl kickstart -k gui/$(id -u)/com.github.yourfriendaaron.meat-mode.bridge`).
+- **Bridge**: install the new binary, then run it as `meat-mode bridge pair <hub url>`. Pairing again with the hub the bridge is paired with keeps the saved token, the roots and the switches, and points the service at the binary you ran, so run the new one: when an installer keeps each version in its own folder (mise does), the service otherwise keeps running the old one. `meat-mode bridge status` says when the service runs another binary than the one you called. When the new binary replaced the old one at the same path, restarting the service is enough (`systemctl --user restart meat-mode-bridge`, or on macOS `launchctl kickstart -k gui/$(id -u)/com.github.yourfriendaaron.meat-mode.bridge`).
 
 ## Uninstalling
 

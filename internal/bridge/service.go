@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Service names.
@@ -37,6 +38,9 @@ type Service interface {
 	Status() string
 	// File is where the service file lives.
 	File() string
+	// Executable is the program the service file runs, or "" when there is
+	// no service file or it cannot be read.
+	Executable() string
 }
 
 // NewService returns the service manager for goos: systemd on Linux, launchd
@@ -175,6 +179,52 @@ func (s *Systemd) Uninstall() error {
 	return s.ctl("daemon-reload")
 }
 
+// Executable implements Service: the program of the unit's ExecStart, with
+// SystemdUnit's quoting, $$ and %h undone.
+func (s *Systemd) Executable() string {
+	b, err := os.ReadFile(s.File())
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		v, ok := strings.CutPrefix(line, "ExecStart=")
+		if !ok {
+			continue
+		}
+		v, ok = strings.CutSuffix(strings.TrimSpace(v), " bridge run")
+		if !ok {
+			return ""
+		}
+		v = strings.ReplaceAll(v, "$$", "$")
+		if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
+			v = strings.NewReplacer(`\\`, `\`, `\"`, `"`).Replace(v[1 : len(v)-1])
+		}
+		return unHomeSpec(v, s.Home)
+	}
+	return ""
+}
+
+// unHomeSpec undoes homeSpec for one path: %h is the home folder, %% is %.
+func unHomeSpec(s, home string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '%' && i+1 < len(s) {
+			switch s[i+1] {
+			case '%':
+				b.WriteByte('%')
+				i++
+				continue
+			case 'h':
+				b.WriteString(strings.TrimRight(home, "/"))
+				i++
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
 // Status implements Service.
 func (s *Systemd) Status() string {
 	if _, err := os.Stat(s.File()); err != nil {
@@ -186,10 +236,26 @@ func (s *Systemd) Status() string {
 
 // Launchd manages a launchd user agent.
 type Launchd struct {
-	Dir  string // ~/Library/LaunchAgents
-	Home string
-	UID  int
-	Run  Runner
+	Dir   string // ~/Library/LaunchAgents
+	Home  string
+	UID   int
+	Run   Runner
+	Sleep func(time.Duration) // nil: time.Sleep
+}
+
+// launchdTries is how many times Install checks that the old agent is gone,
+// and then tries to load the new one, LaunchdPause apart.
+const launchdTries = 20
+
+// LaunchdPause is the wait between Install's checks.
+const LaunchdPause = 250 * time.Millisecond
+
+func (l *Launchd) sleep(d time.Duration) {
+	if l.Sleep != nil {
+		l.Sleep(d)
+		return
+	}
+	time.Sleep(d)
 }
 
 // File implements Service.
@@ -248,6 +314,7 @@ func (l *Launchd) Install(exe, pathEnv string) error {
 	if err != nil {
 		return err
 	}
+	var out []byte
 	if err := os.MkdirAll(l.Dir, 0o755); err != nil {
 		return err
 	}
@@ -257,11 +324,28 @@ func (l *Launchd) Install(exe, pathEnv string) error {
 	if err := os.WriteFile(l.File(), []byte(plist), 0o644); err != nil {
 		return err
 	}
-	_, _ = l.Run("launchctl", "bootout", l.domain()+"/"+LaunchdLabel) // replace a running copy
-	if out, err := l.Run("launchctl", "bootstrap", l.domain(), l.File()); err != nil {
-		return fmt.Errorf("launchctl bootstrap: %v: %s", err, bytes.TrimSpace(out))
+	// Replace a running copy. bootout returns before the agent has gone,
+	// and a bootstrap while it is still there fails with an I/O error, so
+	// wait for it to go, then retry the bootstrap while that error lasts.
+	target := l.domain() + "/" + LaunchdLabel
+	if _, err := l.Run("launchctl", "bootout", target); err == nil {
+		for range launchdTries {
+			if _, err := l.Run("launchctl", "print", target); err != nil {
+				break
+			}
+			l.sleep(LaunchdPause)
+		}
 	}
-	return nil
+	for i := range launchdTries {
+		if i > 0 {
+			l.sleep(LaunchdPause)
+		}
+		if out, err = l.Run("launchctl", "bootstrap", l.domain(), l.File()); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("launchctl bootstrap: %v: %s; load it with `launchctl bootstrap %s %s`",
+		err, bytes.TrimSpace(out), l.domain(), l.File())
 }
 
 // Uninstall implements Service.
@@ -271,6 +355,55 @@ func (l *Launchd) Uninstall() error {
 		return err
 	}
 	return nil
+}
+
+// Executable implements Service: the first of the plist's ProgramArguments.
+func (l *Launchd) Executable() string {
+	b, err := os.ReadFile(l.File())
+	if err != nil {
+		return ""
+	}
+	return plistProgram(b)
+}
+
+// plistProgram reads the first string of ProgramArguments from a property
+// list's top dictionary.
+func plistProgram(b []byte) string {
+	d := xml.NewDecoder(bytes.NewReader(b))
+	d.Strict = false
+	depth, key, inArgs := 0, "", false
+	for {
+		tok, err := d.Token()
+		if err != nil {
+			return ""
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			depth++
+			switch {
+			case depth == 3 && t.Name == xml.Name{Local: "key"}:
+				var k string
+				if d.DecodeElement(&k, &t) != nil {
+					return ""
+				}
+				depth--
+				key = k
+			case depth == 3 && t.Name == xml.Name{Local: "array"}:
+				inArgs = key == "ProgramArguments"
+			case depth == 4 && inArgs && t.Name == xml.Name{Local: "string"}:
+				var v string
+				if d.DecodeElement(&v, &t) != nil {
+					return ""
+				}
+				return v
+			}
+		case xml.EndElement:
+			if depth == 3 {
+				inArgs = false
+			}
+			depth--
+		}
+	}
 }
 
 // Status implements Service.
