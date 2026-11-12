@@ -214,6 +214,54 @@ func TestEpicRowsWaitsDatesAndComments(t *testing.T) {
 	}
 }
 
+// TestEpicComments checks, against real bd, that one batched call gives each
+// bead its comments oldest first, that a bead bd does not hold is left out
+// without losing the others, and that a flag-shaped id never reaches bd.
+func TestEpicComments(t *testing.T) {
+	dir := beadstest.NewRepo(t, "", "garden")
+	tr, err := beads.New(tracker.Env{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	add := func(title string) string {
+		out := beadstest.Run(t, dir, "bd", "create", "--title="+title, "-t", "task", "--json")
+		var b beads.Bead
+		if err := json.Unmarshal([]byte(out[strings.Index(out, "{"):]), &b); err != nil || b.ID == "" {
+			t.Fatalf("bd create printed %q: %v", out, err)
+		}
+		return b.ID
+	}
+	beds, plain, fence := add("Dig the beds"), add("Rake the soil"), add("Paint the fence")
+	beadstest.Run(t, dir, "bd", "comments", "add", beds, "Check the soil first.")
+	beadstest.Run(t, dir, "bd", "comments", "add", beds, "Use the long spade.")
+	beadstest.Run(t, dir, "bd", "comments", "add", fence, "Two coats.")
+
+	ec := tr.(tracker.EpicComments)
+	ctx := context.Background()
+	got, err := ec.EpicComments(ctx, dir, []string{beds, plain, "tst-nope", fence})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["tst-nope"]; ok {
+		t.Errorf("an unknown id came back: %+v", got["tst-nope"])
+	}
+	if c := got[beds]; len(c) != 2 || c[0].Text != "Check the soil first." || c[1].Text != "Use the long spade." || c[0].ID == "" || c[0].Author == "" || c[0].CreatedAt.IsZero() {
+		t.Errorf("beds comments = %+v", c)
+	}
+	if c := got[fence]; len(c) != 1 || c[0].Text != "Two coats." {
+		t.Errorf("fence comments = %+v", c)
+	}
+	if len(got[plain]) != 0 {
+		t.Errorf("plain comments = %+v", got[plain])
+	}
+	if _, err := ec.EpicComments(ctx, dir, []string{beds, "--version"}); !errors.Is(err, beads.ErrBadID) {
+		t.Errorf("flag id: %v", err)
+	}
+	if got, err := ec.EpicComments(ctx, dir, nil); err != nil || len(got) != 0 {
+		t.Errorf("no ids: %v, %v", got, err)
+	}
+}
+
 func TestStoreID(t *testing.T) {
 	var _ tracker.StoreIDer = (*beads.CLI)(nil)
 	dir := t.TempDir()

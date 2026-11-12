@@ -170,6 +170,13 @@ test.describe("desktop", () => {
     await page.locator("#epics").screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/epics.png` : undefined });
     await tulips.locator(".ep-main").click();
     const facts = page.locator(".ep-facts");
+    // The comments' text is in Details, oldest first, as the task sheet shows notes.
+    const comments = page.locator('section[aria-labelledby="ep-d-comments"] .note');
+    await expect(comments).toHaveCount(2);
+    await expect(comments.locator(".note-author")).toHaveText(["alex", "sam"]);
+    await expect(comments.first().locator(".md em")).toHaveText("usual");
+    await expect(comments.nth(1)).toContainText("Water the plants after planting.");
+    await expect(facts).not.toContainText("Comments");
     await expect(facts.locator(".ep-wait")).toContainText("Fence post leans");
     await facts.locator(".ep-wait").click();
     await expect(page.locator("#d-title")).toHaveText("Fence post leans");

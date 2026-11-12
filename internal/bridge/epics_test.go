@@ -3,11 +3,14 @@ package bridge
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +27,33 @@ type epicTracker struct {
 	mu    sync.Mutex
 	rows  []api.EpicRow
 	reads int
+	// comments is what EpicComments answers, by id; commentCalls are the
+	// ids it was asked for, one slice per call; commentErr fails it.
+	comments     map[string][]api.Comment
+	commentCalls [][]string
+	commentErr   error
+}
+
+func (e *epicTracker) EpicComments(_ context.Context, _ string, ids []string) (map[string][]api.Comment, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.commentCalls = append(e.commentCalls, slices.Clone(ids))
+	if e.commentErr != nil {
+		return nil, e.commentErr
+	}
+	got := map[string][]api.Comment{}
+	for _, id := range ids {
+		if cs, ok := e.comments[id]; ok {
+			got[id] = cs
+		}
+	}
+	return got, nil
+}
+
+func (e *epicTracker) calls() [][]string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return slices.Clone(e.commentCalls)
 }
 
 func (e *epicTracker) EpicRows(context.Context, string) ([]api.EpicRow, error) {
@@ -138,6 +168,181 @@ func TestEpicsSent(t *testing.T) {
 	ew.after(time.Minute)
 	if got := ids(ew.rows()); ew.puts() != 3 || !reflect.DeepEqual(got, []string{"gd-1", "gd-1.1"}) {
 		t.Errorf("changed set: %d puts, rows %v", ew.puts(), got)
+	}
+}
+
+// commented is a row with n comments, updated at the given time.
+func commented(r api.EpicRow, n int, at time.Time) api.EpicRow {
+	r.CommentCount, r.UpdatedAt = n, at
+	return r
+}
+
+func gardenComments(id string, n int) []api.Comment {
+	var cs []api.Comment
+	for i := range n {
+		cs = append(cs, api.Comment{ID: fmt.Sprintf("%s-c%d", id, i), Author: "sam", Text: "Water the plants " + id, CreatedAt: time.Date(2030, 1, 1+i, 9, 0, 0, 0, time.UTC)})
+	}
+	return cs
+}
+
+func hasComments(rows []api.EpicRow, id string) bool {
+	for _, r := range rows {
+		if r.ID == id {
+			return len(r.Comments) > 0
+		}
+	}
+	return false
+}
+
+// TestEpicsComments: a row with comments gets their text, a row without
+// none and no call; an unchanged row is served from the cache, a row whose
+// count or updatedAt moved is read again, and a row that left the set leaves
+// the cache.
+func TestEpicsComments(t *testing.T) {
+	ew := newEpicsWorld(t)
+	t0 := time.Date(2030, 2, 1, 9, 0, 0, 0, time.UTC)
+	seed, hose := commented(gardenSeed, 2, t0), commented(gardenHose, 1, t0)
+	ew.et.comments = map[string][]api.Comment{"gd-1.1": gardenComments("gd-1.1", 2), "gd-2": gardenComments("gd-2", 1)}
+	ew.et.set(gardenEpic, seed, hose)
+	ew.tick(ew.b)
+	rows := ew.rows()
+	if got := rows[1].Comments; !reflect.DeepEqual(got, ew.et.comments["gd-1.1"]) {
+		t.Fatalf("seed comments = %+v", got)
+	}
+	if len(rows[0].Comments) != 0 {
+		t.Errorf("a row with no comments got %+v", rows[0].Comments)
+	}
+	if got := ew.et.calls(); !reflect.DeepEqual(got, [][]string{{"gd-1.1", "gd-2"}}) {
+		t.Fatalf("first pass asked for %v", got)
+	}
+
+	// Nothing changed: the cache answers and no call is made.
+	ew.after(time.Minute)
+	if got := len(ew.et.calls()); got != 1 {
+		t.Errorf("unchanged rows made %d calls", got)
+	}
+	// A new comment moves the count: only that row is read again.
+	ew.et.comments["gd-2"] = gardenComments("gd-2", 2)
+	ew.et.set(gardenEpic, seed, commented(gardenHose, 2, t0))
+	ew.after(time.Minute)
+	if got := ew.et.calls(); len(got) != 2 || !reflect.DeepEqual(got[1], []string{"gd-2"}) {
+		t.Errorf("changed count: calls %v", got)
+	}
+	if got := ew.rows()[2].Comments; len(got) != 2 {
+		t.Errorf("hose comments = %+v", got)
+	}
+	// An edited comment moves updatedAt at the same count.
+	ew.et.set(gardenEpic, seed, commented(gardenHose, 2, t0.Add(time.Hour)))
+	ew.after(time.Minute)
+	if got := ew.et.calls(); len(got) != 3 {
+		t.Errorf("changed updatedAt: calls %v", got)
+	}
+	// A row that leaves the set leaves the cache: back again, it is read.
+	ew.et.set(gardenEpic, seed)
+	ew.after(time.Minute)
+	ew.et.set(gardenEpic, seed, commented(gardenHose, 2, t0.Add(time.Hour)))
+	ew.after(time.Minute)
+	if got := ew.et.calls(); len(got) != 4 || !reflect.DeepEqual(got[3], []string{"gd-2"}) {
+		t.Errorf("row back after leaving: calls %v", got)
+	}
+}
+
+// TestEpicsCommentsCapPerPass: at most 50 rows are read a pass, in Budget
+// order (cards, open, closed, then id), and the rest go without comments
+// until a later pass.
+func TestEpicsCommentsCapPerPass(t *testing.T) {
+	ew := newEpicsWorld(t)
+	t0 := time.Date(2030, 2, 1, 9, 0, 0, 0, time.UTC)
+	ew.et.comments = map[string][]api.Comment{}
+	rows := []api.EpicRow{commented(api.EpicRow{ID: "gd-0", Title: "Plan", Type: "epic", Status: "open"}, 1, t0)}
+	ew.et.comments["gd-0"] = gardenComments("gd-0", 1)
+	for i := range 59 {
+		id := fmt.Sprintf("gd-c%02d", i)
+		status := "closed"
+		if i >= 30 {
+			status = "open"
+		}
+		rows = append(rows, commented(api.EpicRow{ID: id, Title: "Task", Status: status, Parent: "gd-0"}, 1, t0))
+		ew.et.comments[id] = gardenComments(id, 1)
+	}
+	ew.et.set(rows...)
+	ew.tick(ew.b)
+	calls := ew.et.calls()
+	if len(calls) != 1 || len(calls[0]) != EpicCommentReads {
+		t.Fatalf("calls = %v", calls)
+	}
+	// The card, then the 29 open rows by id (gd-c30..gd-c58 are open
+	// children), then the closed ones by id.
+	if calls[0][0] != "gd-0" || calls[0][1] != "gd-c30" || calls[0][29] != "gd-c58" || calls[0][30] != "gd-c00" || calls[0][49] != "gd-c19" {
+		t.Errorf("read order = %v", calls[0])
+	}
+	got := ew.rows()
+	if !hasComments(got, "gd-c19") || hasComments(got, "gd-c20") {
+		t.Errorf("comments past the cap: c19 %v, c20 %v", hasComments(got, "gd-c19"), hasComments(got, "gd-c20"))
+	}
+	// The next pass reads the rest and only the rest.
+	ew.after(time.Minute)
+	calls = ew.et.calls()
+	if len(calls) != 2 || len(calls[1]) != 10 || calls[1][0] != "gd-c20" {
+		t.Fatalf("second pass calls = %v", calls)
+	}
+	if !hasComments(ew.rows(), "gd-c20") || !hasComments(ew.rows(), "gd-c58") {
+		t.Error("rows still without comments after the second pass")
+	}
+}
+
+// TestEpicsCommentsFailed: a failed read is logged once for the pass, the
+// set is still sent, and comments the bridge already holds stay.
+func TestEpicsCommentsFailed(t *testing.T) {
+	ew := newEpicsWorld(t)
+	t0 := time.Date(2030, 2, 1, 9, 0, 0, 0, time.UTC)
+	ew.et.comments = map[string][]api.Comment{"gd-1.1": gardenComments("gd-1.1", 1), "gd-2": gardenComments("gd-2", 1)}
+	ew.et.set(gardenEpic, commented(gardenSeed, 1, t0), gardenHose)
+	ew.tick(ew.b)
+
+	ew.et.commentErr = errors.New("bd is busy")
+	ew.et.set(gardenEpic, commented(gardenSeed, 1, t0), commented(gardenHose, 1, t0))
+	ew.after(time.Minute)
+	rows := ew.rows()
+	if len(rows) != 3 || !hasComments(rows, "gd-1.1") || hasComments(rows, "gd-2") {
+		t.Errorf("rows after a failed read: %+v", rows)
+	}
+	if n := strings.Count(ew.log.String(), "cannot read epic comments"); n != 1 {
+		t.Errorf("logged %d times:\n%s", n, ew.log)
+	}
+}
+
+// TestEpicsCommentsBudget: the bridge applies the budget after filling
+// comments, so a set whose comment text is past 4 MiB drops whole rows'
+// comments rather than being refused by the hub.
+func TestEpicsCommentsBudget(t *testing.T) {
+	ew := newEpicsWorld(t)
+	t0 := time.Date(2030, 2, 1, 9, 0, 0, 0, time.UTC)
+	big := []api.Comment{{ID: "c1", Author: "sam", Text: strings.Repeat("a", api.CommentLimit)}}
+	ew.et.comments = map[string][]api.Comment{}
+	var rows []api.EpicRow
+	for i := range api.MaxEpicDescriptions/api.CommentLimit + 5 {
+		id := fmt.Sprintf("gd-%03d", i)
+		rows = append(rows, commented(api.EpicRow{ID: id, Status: "open"}, 1, t0))
+		ew.et.comments[id] = big
+	}
+	ew.et.set(rows...)
+	ew.tick(ew.b)
+	for range 4 { // 214 rows, EpicCommentReads a pass
+		ew.after(time.Minute)
+	}
+	got := ew.rows()
+	if len(got) != len(rows) {
+		t.Fatalf("the hub took %d rows of %d", len(got), len(rows))
+	}
+	total := 0
+	for _, r := range got {
+		for _, c := range r.Comments {
+			total += len(c.Text)
+		}
+	}
+	if total > api.MaxEpicDescriptions || total < api.MaxEpicDescriptions-api.CommentLimit {
+		t.Errorf("comment text totals %d bytes", total)
 	}
 }
 

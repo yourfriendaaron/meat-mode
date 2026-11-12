@@ -86,13 +86,14 @@ const (
 // CheckEpicRows checks and cleans a repo's epic set in place, as the hub
 // and the fake hub take it. Like CheckItems it truncates rather than
 // refuses what one bead could get wrong: a title past ItemTitleLimit, a
-// description or notes past ItemDescriptionLimit, a
+// description or notes past ItemDescriptionLimit, a comment's text past
+// CommentLimit or its id or author past CommentAuthorLimit, a
 // priority outside 0 to 4 (clamped), an unknown status (read as open), and
 // a parent that names no card in the set or leads back to the row
 // (cleared). It refuses, with an
 // error matching ErrInvalid, only a set past MaxEpicRows, a row whose id is
-// not a bead id or appears twice, or descriptions and notes past
-// MaxEpicDescriptions.
+// not a bead id or appears twice, or descriptions, notes and comment text
+// past MaxEpicDescriptions.
 func CheckEpicRows(rows []EpicRow) error {
 	if len(rows) > MaxEpicRows {
 		return Invalidf("an epic set holds at most %d rows, not %d", MaxEpicRows, len(rows))
@@ -129,6 +130,13 @@ func CheckEpicRows(rows []EpicRow) error {
 		r.Description = TruncRunes(r.Description, ItemDescriptionLimit)
 		r.Notes = TruncRunes(r.Notes, ItemDescriptionLimit)
 		total += len(r.Description) + len(r.Notes)
+		for j := range r.Comments {
+			c := &r.Comments[j]
+			c.ID = TruncRunes(c.ID, CommentAuthorLimit)
+			c.Author = TruncRunes(c.Author, CommentAuthorLimit)
+			c.Text = TruncRunes(c.Text, CommentLimit)
+			total += len(c.Text)
+		}
 		r.BlockedBy = cleanBlockedBy(r)
 		r.CommentCount = max(r.CommentCount, 0)
 		if r.Status != "deferred" {
@@ -155,7 +163,7 @@ func CheckEpicRows(rows []EpicRow) error {
 		}
 	}
 	if total > MaxEpicDescriptions {
-		return Invalidf("an epic set holds at most %d bytes of description and notes, not %d", MaxEpicDescriptions, total)
+		return Invalidf("an epic set holds at most %d bytes of description, notes and comment text, not %d", MaxEpicDescriptions, total)
 	}
 	return nil
 }

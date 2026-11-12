@@ -147,6 +147,89 @@ func TestOutlineSpendsNotesAfterDescriptions(t *testing.T) {
 	}
 }
 
+// comments is n comments of size bytes of text each.
+func comments(n, size int) []api.Comment {
+	var cs []api.Comment
+	for i := range n {
+		cs = append(cs, api.Comment{ID: fmt.Sprintf("c-%d", i), Author: "sam", Text: strings.Repeat("a", size)})
+	}
+	return cs
+}
+
+// TestBudgetSpendsCommentsAfterNotes: comments come after every description
+// and note, so a closed task keeps its notes over a card's comments; a row's
+// comments stay whole or go whole; and the budget holds.
+func TestBudgetSpendsCommentsAfterNotes(t *testing.T) {
+	big := strings.Repeat("a", api.ItemDescriptionLimit)
+	n := api.MaxEpicDescriptions / api.ItemDescriptionLimit
+	var rows []api.EpicRow
+	for i := range n {
+		rows = append(rows, api.EpicRow{ID: fmt.Sprintf("ga-%04d", i), Status: StatusClosed, Notes: big})
+	}
+	// The notes leave room for less than two comments of 20000 bytes.
+	rows = append(rows, api.EpicRow{ID: "gz-0000", Epic: true, Status: StatusOpen, Comments: comments(2, api.CommentLimit)})
+	rows = append(rows, api.EpicRow{ID: "gz-0001", Epic: true, Status: StatusOpen, Comments: comments(1, 5)})
+	Budget(rows)
+	total := 0
+	for _, r := range rows {
+		if r.Notes == "" && r.Status == StatusClosed {
+			t.Errorf("%s lost its notes to comments", r.ID)
+		}
+		total += len(r.Notes)
+		for _, c := range r.Comments {
+			total += len(c.Text)
+		}
+	}
+	if total > api.MaxEpicDescriptions {
+		t.Fatalf("text totals %d bytes", total)
+	}
+	if got := rows[n].Comments; got != nil {
+		t.Errorf("a row's comments were kept in part: %d of 2", len(got))
+	}
+	if got := rows[n+1].Comments; len(got) != 1 {
+		t.Errorf("a smaller row's comments did not fit: %d of 1", len(got))
+	}
+}
+
+// TestBudgetSpendsCommentsCardsFirst: past the budget a card keeps its
+// comments over an open task, and an open task over a closed one.
+func TestBudgetSpendsCommentsCardsFirst(t *testing.T) {
+	n := api.MaxEpicDescriptions / api.CommentLimit
+	var rows []api.EpicRow
+	for i := range n {
+		rows = append(rows, api.EpicRow{ID: fmt.Sprintf("ga-%04d", i), Status: StatusClosed, Comments: comments(1, api.CommentLimit)})
+	}
+	rows = append(rows, api.EpicRow{ID: "gm-0000", Status: StatusOpen, Comments: comments(1, api.CommentLimit)})
+	for i := range n - 1 {
+		rows = append(rows, api.EpicRow{ID: fmt.Sprintf("gz-%04d", i), Epic: true, Status: StatusOpen, Comments: comments(1, api.CommentLimit)})
+	}
+	Budget(rows)
+	for _, r := range rows {
+		switch {
+		case r.Epic && r.Comments == nil:
+			t.Errorf("card %s lost its comments", r.ID)
+		case r.ID == "gm-0000" && r.Comments == nil:
+			t.Errorf("open task lost its comments before a closed one")
+		case r.Status == StatusClosed && r.Comments != nil:
+			t.Errorf("closed %s kept its comments past the budget", r.ID)
+		}
+	}
+}
+
+// TestBudgetCutsCommentText: a comment is cut to CommentLimit runes before
+// it is counted, without changing the caller's slice.
+func TestBudgetCutsCommentText(t *testing.T) {
+	in := []api.Comment{{ID: "c-1", Author: "sam", Text: strings.Repeat("é", api.CommentLimit+5)}}
+	rows := []api.EpicRow{{ID: "gd-1", Status: StatusOpen, Comments: in}}
+	Budget(rows)
+	if n := utf8.RuneCountInString(rows[0].Comments[0].Text); n != api.CommentLimit+1 { // TruncRunes adds an ellipsis
+		t.Fatalf("comment is %d runes", n)
+	}
+	if n := utf8.RuneCountInString(in[0].Text); n != api.CommentLimit+5 {
+		t.Fatalf("the caller's comment changed to %d runes", n)
+	}
+}
+
 func TestOutlineCapsRowsClosedFirst(t *testing.T) {
 	rows := []api.EpicRow{{ID: "e", Type: "epic", Status: StatusOpen}}
 	for i := range api.MaxEpicRows + 10 {

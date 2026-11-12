@@ -3,6 +3,7 @@ package beads_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -423,5 +424,57 @@ func TestCLIHidesBridgeEnvironment(t *testing.T) {
 	}
 	if !strings.Contains(got, "PATH=") || !strings.Contains(got, "BD_NON_INTERACTIVE=1") {
 		t.Errorf("bd lost the rest of its environment:\n%s", got)
+	}
+}
+
+// TestEpicCommentsChunks checks, with a stand-in bd, that ids go to bd 25 to
+// a call with the flags first, and that a chunk bd answers "not found" for
+// is read again one id at a time.
+func TestEpicCommentsChunks(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "calls")
+	bin := filepath.Join(dir, "bd")
+	script := `#!/bin/sh
+echo "$#" >> ` + log + `
+for a in "$@"; do
+  if [ "$a" = tst-gone ]; then
+    echo '{"error":"no issues found matching the provided IDs"}'; exit 1
+  fi
+done
+sep=0; out=""
+for a in "$@"; do
+  if [ "$sep" = 1 ]; then out="$out{\"id\":\"$a\",\"comments\":[{\"id\":\"c-$a\",\"author\":\"sam\",\"text\":\"Water the plants\",\"created_at\":\"2026-01-02T03:04:05Z\"}]},"; fi
+  if [ "$a" = -- ]; then sep=1; fi
+done
+echo "[${out%,}]"
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &beads.CLI{Bin: bin}
+	var ids []string
+	for i := range 55 {
+		ids = append(ids, fmt.Sprintf("tst-%d", i))
+	}
+	got, err := c.EpicComments(context.Background(), "", ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 55 || got["tst-54"][0].Text != "Water the plants" || got["tst-0"][0].Author != "sam" {
+		t.Fatalf("got %d ids: %+v", len(got), got["tst-0"])
+	}
+	calls, _ := os.ReadFile(log)
+	// show --include-comments --brief-deps --json -- plus the ids.
+	if want := "30\n30\n10\n"; string(calls) != want {
+		t.Errorf("bd called with argument counts %q; want %q", calls, want)
+	}
+
+	os.Remove(log)
+	got, err = c.EpicComments(context.Background(), "", []string{"tst-1", "tst-gone", "tst-2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || len(got["tst-1"]) != 1 || len(got["tst-2"]) != 1 {
+		t.Errorf("after a missing id: %+v", got)
 	}
 }

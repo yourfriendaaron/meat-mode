@@ -47,12 +47,12 @@ type EpicComments interface {
 // Parent is kept only when it names a card, so a row with a Parent is
 // always a direct child of a card in the set. Every row keeps its
 // Description and Notes, each cut to api.ItemDescriptionLimit runes. Past
-// api.MaxEpicDescriptions bytes over the set, descriptions and then notes
-// are kept in this order until the budget runs out, and the rest are
-// dropped: cards, then rows that are not closed, then closed rows, each by
-// ID. Rows come back sorted by ID; past api.MaxEpicRows the set is cut
-// at that many, dropping closed rows first. Rows whose id is not a bead id
-// are left out, and so is any row after the first with the same id.
+// api.MaxEpicDescriptions bytes over the set, Budget keeps descriptions,
+// then notes, then comments, in the order cards, rows that are not closed,
+// closed rows, each by ID, and drops the rest. Rows come back sorted by ID;
+// past api.MaxEpicRows the set is cut at that many, dropping closed rows
+// first. Rows whose id is not a bead id are left out, and so is any row
+// after the first with the same id.
 func Outline(rows []api.EpicRow) []api.EpicRow {
 	seen := make(map[string]bool, len(rows))
 	rows = slices.DeleteFunc(slices.Clone(rows), func(r api.EpicRow) bool {
@@ -114,8 +114,19 @@ func Outline(rows []api.EpicRow) []api.EpicRow {
 			}
 		}
 	}
-	// Descriptions spend the budget first, then notes, each in the same
-	// order: cards, rows that are not closed, closed rows.
+	Budget(out)
+	return out
+}
+
+// Budget keeps the text of rows within api.MaxEpicDescriptions bytes over
+// the set, in place: descriptions first, then notes, then comments, each in
+// the same order: cards, rows that are not closed, closed rows, each by
+// the order rows come in (by ID, as Outline sorts them). What does not fit
+// is dropped; a row's comments stay whole or go whole, counted as the sum
+// of their text, and each text is first cut to api.CommentLimit runes.
+// Outline calls it, and the bridge calls it again once it has filled in
+// comments.
+func Budget(rows []api.EpicRow) {
 	total := 0
 	passes := []func(api.EpicRow) bool{
 		func(r api.EpicRow) bool { return r.Epic },
@@ -127,11 +138,11 @@ func Outline(rows []api.EpicRow) []api.EpicRow {
 		func(r *api.EpicRow) *string { return &r.Notes },
 	} {
 		for _, pass := range passes {
-			for i := range out {
-				if !pass(out[i]) {
+			for i := range rows {
+				if !pass(rows[i]) {
 					continue
 				}
-				f := field(&out[i])
+				f := field(&rows[i])
 				total += len(*f)
 				if total > api.MaxEpicDescriptions {
 					total -= len(*f)
@@ -140,5 +151,23 @@ func Outline(rows []api.EpicRow) []api.EpicRow {
 			}
 		}
 	}
-	return out
+	for _, pass := range passes {
+		for i := range rows {
+			if !pass(rows[i]) || len(rows[i].Comments) == 0 {
+				continue
+			}
+			r := &rows[i]
+			r.Comments = slices.Clone(r.Comments)
+			size := 0
+			for j := range r.Comments {
+				r.Comments[j].Text = api.TruncRunes(r.Comments[j].Text, api.CommentLimit)
+				size += len(r.Comments[j].Text)
+			}
+			if total+size > api.MaxEpicDescriptions {
+				r.Comments = nil
+				continue
+			}
+			total += size
+		}
+	}
 }

@@ -496,12 +496,20 @@ func (m *Model) itemDetail(t *target, w int) []line {
 	}
 	if len(it.Comments) > 0 {
 		out = append(out, nil, line{sg(" Notes and replies ", sHead), sg(itoa(len(it.Comments)), sDim)})
-		for _, c := range it.Comments {
-			head := clean(c.Author) + " " + gDot + " " + fmtAgo(c.CreatedAt, d.now)
-			out = append(out, line{sg("  "+gBullet+" ", sAccent), sg(head, sDim)})
-			for _, l := range wrap(c.Text, w-5) {
-				out = append(out, line{sg("    "+l, sSoft)})
-			}
+		out = append(out, d.commentLines(it.Comments, w)...)
+	}
+	return out
+}
+
+// commentLines are comments in the order given: author and time on one dim
+// line, the text wrapped below.
+func (d *data) commentLines(cs []api.Comment, w int) []line {
+	var out []line
+	for _, c := range cs {
+		head := clean(c.Author) + " " + gDot + " " + fmtAgo(c.CreatedAt, d.now)
+		out = append(out, line{sg("  "+gBullet+" ", sAccent), sg(head, sDim)})
+		for _, l := range wrap(c.Text, w-5) {
+			out = append(out, line{sg("    "+l, sSoft)})
 		}
 	}
 	return out
@@ -531,7 +539,7 @@ func (m *Model) rowDetail(t *target, w int) []line {
 	if r.ClosedAt != nil {
 		facts = append(facts, "closed "+fmtAgo(*r.ClosedAt, d.now))
 	}
-	if r.CommentCount > 0 {
+	if r.CommentCount > 0 && len(r.Comments) == 0 {
 		facts = append(facts, comments(r.CommentCount))
 	}
 	if len(facts) > 0 {
@@ -565,6 +573,10 @@ func (m *Model) rowDetail(t *target, w int) []line {
 		out = append(out, line{sg("  No description", sDim)})
 	}
 	out = append(out, notesLines(r, w, sPlain)...)
+	if len(r.Comments) > 0 {
+		out = append(out, nil, line{sg(" Comments ", sHead), sg(itoa(len(r.Comments)), sDim)})
+		out = append(out, d.commentLines(r.Comments, w)...)
+	}
 	if kids := d.children(re, r.ID); len(kids) > 0 {
 		done, total := d.progress(re, r.ID)
 		head := line{sg(" Children ", sHead)}

@@ -384,6 +384,8 @@ export interface EpicRow {
   deferUntil?: string;
   /** How many comments the bead has; absent for none. */
   commentCount?: number;
+  /** The bead's comments, oldest first, for Details; absent when its tracker gives none or the bridge has not read them yet. */
+  comments?: Comment[];
 }
 
 /** One repo's rows in GET /api/epics. */
