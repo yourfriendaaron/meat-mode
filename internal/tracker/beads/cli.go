@@ -30,9 +30,10 @@ type CLI struct {
 }
 
 var (
-	_ tracker.Tracker = (*CLI)(nil)
-	_ tracker.Agent   = (*CLI)(nil)
-	_ tracker.Epics   = (*CLI)(nil)
+	_ tracker.Tracker      = (*CLI)(nil)
+	_ tracker.Agent        = (*CLI)(nil)
+	_ tracker.Epics        = (*CLI)(nil)
+	_ tracker.EpicComments = (*CLI)(nil)
 )
 
 // Error is a failed bd call.
@@ -264,6 +265,61 @@ func (c *CLI) blockedBy(ctx context.Context, dir string) (map[string][]string, e
 		}
 	}
 	return m, nil
+}
+
+// commentChunk is how many ids one bd show call takes in EpicComments.
+const commentChunk = 25
+
+// EpicComments implements tracker.EpicComments: the comments of each named
+// bead from bd show, commentChunk ids to a call. A chunk in which bd
+// answers not found for an id is read again one id at a time, and the ids
+// bd does not hold are left out.
+func (c *CLI) EpicComments(ctx context.Context, dir string, ids []string) (map[string][]api.Comment, error) {
+	for _, id := range ids {
+		if err := CheckID(id); err != nil {
+			return nil, err
+		}
+	}
+	got := make(map[string][]api.Comment, len(ids))
+	for chunk := range slices.Chunk(ids, commentChunk) {
+		list, err := c.showComments(ctx, dir, chunk)
+		if errors.Is(err, tracker.ErrNotFound) && len(chunk) > 1 {
+			for _, id := range chunk {
+				one, err := c.showComments(ctx, dir, []string{id})
+				if errors.Is(err, tracker.ErrNotFound) {
+					continue
+				}
+				if err != nil {
+					return nil, err
+				}
+				list = append(list, one...)
+			}
+		} else if err != nil && !errors.Is(err, tracker.ErrNotFound) {
+			return nil, err
+		}
+		for _, b := range list {
+			cs := make([]api.Comment, 0, len(b.Comments))
+			for _, m := range b.Comments {
+				cs = append(cs, api.Comment{ID: m.ID, Author: m.Author, Text: m.Text, CreatedAt: m.CreatedAt})
+			}
+			slices.SortStableFunc(cs, func(a, b api.Comment) int { return a.CreatedAt.Compare(b.CreatedAt) })
+			got[b.ID] = cs
+		}
+	}
+	return got, nil
+}
+
+// showComments is one bd show call for already checked ids.
+func (c *CLI) showComments(ctx context.Context, dir string, ids []string) ([]Bead, error) {
+	out, err := c.run(ctx, dir, append([]string{"show", "--include-comments", "--brief-deps", "--json", "--"}, ids...)...)
+	if err != nil {
+		return nil, err
+	}
+	var list []Bead
+	if err := decode(out, &list); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 // Show implements tracker.Tracker.
