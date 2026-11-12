@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
@@ -166,5 +167,56 @@ func TestNestedCardInAnotherStateShowsItsOwn(t *testing.T) {
 	}
 	if got := d.nestedState(re, top); got != nil {
 		t.Errorf("a top-level card shows a state mark %v", got)
+	}
+}
+
+// TestRowDetailShowsComments: a row's details list its comments as notes
+// are drawn, a dim line of author and time with the text wrapped below; a
+// row with a count and no text keeps the count, and one with the text
+// drops the count for the list.
+func TestRowDetailShowsComments(t *testing.T) {
+	e := nestedEpics()
+	e.Repos[0].Rows = append(e.Repos[0].Rows, api.EpicRow{ID: "gd-9", Title: "Mend the hose", Status: "open", Priority: 2})
+	rows := e.Repos[0].Rows
+	rows[6].CommentCount = 2
+	rows[6].Comments = []api.Comment{
+		{ID: "c-1", Author: "alex", Text: "Check the washer first.", CreatedAt: now.Add(-48 * 60 * time.Minute)},
+		{ID: "c-2", Author: "sam", Text: "The hose is mended, but the tap still drips and needs a new washer before Friday.", CreatedAt: now.Add(-time.Hour)},
+	}
+	rows[4].CommentCount = 3 // gd-3: counted, not read yet
+	m := New(hub).Resize(50, 40).SetConn(ConnLive).SetData(api.State{}, e, now)
+	m, _ = m.Key("2")
+	detail := func(id string) []string {
+		var out []string
+		m := selectKey(t, m, id)
+		for _, l := range m.detailLines(m.target(), 40) {
+			out = append(out, l.plain())
+		}
+		return out
+	}
+	got := detail("desk/garden/gd-9")
+	text := strings.Join(got, "\n")
+	for _, want := range []string{" Comments 2", "  "+gBullet+" alex "+gDot+" ", "    Check the washer first.", "  "+gBullet+" sam "+gDot+" ", "    The hose is mended"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("details lack %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "2 comments") {
+		t.Errorf("details keep the count beside the comments:\n%s", text)
+	}
+	if i, j := slices.Index(got, "    Check the washer first."), slices.IndexFunc(got, func(s string) bool { return strings.HasPrefix(s, "  "+gBullet+" sam") }); i < 0 || j < i {
+		t.Errorf("comments are not oldest first:\n%s", text)
+	}
+	for _, l := range got {
+		if w := len([]rune(l)); w > 40 {
+			t.Errorf("line of %d cells past the width: %q", w, l)
+		}
+	}
+	if c := selectKey(t, m, "desk/garden/gd-9"); !strings.Contains(c.d.refFull(c.target()), "\n\nComments:\n- alex: Check the washer first.\n- sam: The hose") {
+		t.Errorf("Y does not copy the comments: %q", c.d.refFull(c.target()))
+	}
+	text = strings.Join(detail("desk/garden/gd-3"), "\n")
+	if !strings.Contains(text, "3 comments") || strings.Contains(text, " Comments ") {
+		t.Errorf("a row with only a count lost it:\n%s", text)
 	}
 }
