@@ -448,6 +448,33 @@ test("Details: every field, the description as Markdown, a card's children and a
   assert.match(child, /<dt>Assignee<\/dt><dd><span class="muted">Nobody<\/span>/);
 });
 
+test("Details show a row's comments oldest first as the task sheet shows notes, and keep the count until the text arrives", () => {
+  const rows = [
+    row("gd-1", {
+      title: "Mend the hose",
+      commentCount: 2,
+      comments: [
+        { id: "c-1", author: "alex", text: "Check the **washer** first.", createdAt: "2026-11-01T09:00:00Z" },
+        { id: "c-2", author: "sam", text: "<b>Done</b>, water the plants.", createdAt: "2026-11-02T08:00:00Z" },
+      ],
+    }),
+    row("gd-2", { title: "Paint the fence", commentCount: 3 }),
+  ];
+  const data = { repos: [repo(rows)] };
+  const dv = { data, find: none, repos: stateRepos, now };
+  const html = epicDetailHTML(findRow(data, "home/projects/garden/gd-1", none)!, dv);
+  assert.match(html, /<h3 id="ep-d-comments">Comments<\/h3><ol class="notes">/);
+  assert.match(html, /<li class="note note-agent" data-entry="c-1"><div class="note-head"><span class="note-author">alex<\/span><span class="note-time">[^<]+<\/span><\/div><div class="md"><p>Check the <strong>washer<\/strong> first\.<\/p>/);
+  assert.ok(html.indexOf('data-entry="c-1"') < html.indexOf('data-entry="c-2"'), "oldest first");
+  assert.match(html, /<span class="note-author">sam<\/span>/);
+  assert.doesNotMatch(html, /<b>Done<\/b>/, "comment text is escaped Markdown");
+  assert.doesNotMatch(html, /<dt>Comments<\/dt>/, "the list replaces the count fact");
+
+  const counted = epicDetailHTML(findRow(data, "home/projects/garden/gd-2", none)!, dv);
+  assert.match(counted, /<dt>Comments<\/dt><dd>3<\/dd>/);
+  assert.doesNotMatch(counted, /ep-d-comments/);
+});
+
 test("Details of a human row with its State item say it is also your task and offer Open task", () => {
   const data = { repos: [repo([row("gd-3", { human: true, title: "Order compost" })])] };
   const items = [{ key: "home/projects/garden/gd-3", title: "Order compost for the beds", status: "in_progress" } as Item];

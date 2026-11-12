@@ -5,7 +5,7 @@
 // is Critical or Blocked, and Details show any row. The filtering, ordering,
 // progress and HTML are pure; main.ts holds the state and wires the events.
 
-import { fmtAgo, fmtDate, fmtWhenAt } from "./dates.ts";
+import { fmtAgo, fmtDate, fmtWhen, fmtWhenAt } from "./dates.ts";
 import { esc } from "./html.ts";
 import { ICON } from "./icons.ts";
 import { listBadge, listColourClass } from "./identity.ts";
@@ -839,7 +839,8 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
     const links = next.map((b) => `<button class="ep-link ep-wait" data-act="ep-open" data-key="${esc((b as ShownRow).key)}">${statusPill(b.status)}<span>${esc(b.title)}</span><code class="ep-id">${esc(b.id)}</code></button>`);
     facts.push(["Unlocks", `<span class="ep-waits">${links.join("")}</span>`]);
   }
-  if ((r.commentCount ?? 0) > 0) facts.push(["Comments", esc(String(r.commentCount))]);
+  // Without the text yet, the count stands; with it, the list below does.
+  if ((r.commentCount ?? 0) > 0 && !r.comments?.length) facts.push(["Comments", esc(String(r.commentCount))]);
   if (parent) facts.push(["Epic", `<button class="ep-link" data-act="ep-open" data-key="${esc(parent.key)}">${esc(parent.title)}</button>`]);
   const up = when(r.updatedAt, v.now);
   if (up) facts.push(["Updated", up]);
@@ -851,6 +852,15 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
   const desc = r.description?.trim() ? `<div class="md">${renderMarkdown(r.description)}</div>` : '<p class="muted small">No description.</p>';
   const notes = r.notes?.trim()
     ? `<section class="d-section" aria-labelledby="ep-d-notes"><h3 id="ep-d-notes">Notes</h3><div class="md">${renderMarkdown(r.notes)}</div></section>\n`
+    : "";
+  // The task sheet's notes: the same list, head and Markdown body, read-only.
+  const comments = r.comments?.length
+    ? `<section class="d-section" aria-labelledby="ep-d-comments"><h3 id="ep-d-comments">Comments</h3><ol class="notes">${r.comments
+        .map(
+          (c) =>
+            `<li class="note note-agent" data-entry="${esc(c.id)}"><div class="note-head"><span class="note-author">${esc(c.author)}</span><span class="note-time">${esc(fmtWhen(new Date(c.createdAt), v.now))}</span></div><div class="md">${renderMarkdown(c.text)}</div></li>`,
+        )
+        .join("")}</ol></section>\n`
     : "";
   const kidsHTML = r.epic
     ? `<section class="d-section" aria-labelledby="ep-d-kids"><h3 id="ep-d-kids">Tasks <span class="group-count">${kids.length}</span></h3>${
@@ -865,6 +875,6 @@ export function epicDetailHTML(r: ShownRow, v: DetailView): string {
 ${human}
 <dl class="ep-facts">${facts.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>
 <section class="d-section" aria-labelledby="ep-d-desc"><h3 id="ep-d-desc">Description</h3>${desc}</section>
-${notes}${kidsHTML}
+${notes}${comments}${kidsHTML}
 </div>`;
 }
