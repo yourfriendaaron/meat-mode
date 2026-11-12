@@ -28,6 +28,42 @@ func TestCheckEpicRowsCleans(t *testing.T) {
 	}
 }
 
+// TestCheckEpicRowsCutsComments: a comment's text is cut to CommentLimit and
+// its id and author to CommentAuthorLimit, and its text counts against the
+// set's budget with descriptions and notes.
+func TestCheckEpicRowsCutsComments(t *testing.T) {
+	rows := []EpicRow{{ID: "gd-1", Status: "open", CommentCount: 1, Comments: []Comment{{
+		ID:     strings.Repeat("i", CommentAuthorLimit+9),
+		Author: strings.Repeat("a", CommentAuthorLimit+9),
+		Text:   strings.Repeat("é", CommentLimit+9),
+	}}}}
+	if err := CheckEpicRows(rows); err != nil {
+		t.Fatal(err)
+	}
+	c := rows[0].Comments[0]
+	if n := len([]rune(c.Text)); n != CommentLimit+1 {
+		t.Errorf("text is %d runes", n)
+	}
+	if len([]rune(c.ID)) != CommentAuthorLimit+1 || len([]rune(c.Author)) != CommentAuthorLimit+1 {
+		t.Errorf("id and author are %d and %d runes", len([]rune(c.ID)), len([]rune(c.Author)))
+	}
+
+	// Descriptions fill the budget but for less than a comment; the text of
+	// one more row's comment tips it over.
+	big := strings.Repeat("a", ItemDescriptionLimit)
+	var set []EpicRow
+	for i := range MaxEpicDescriptions / ItemDescriptionLimit {
+		set = append(set, EpicRow{ID: "gd-" + strings.Repeat("x", 1) + string(rune('a'+i%26)) + string(rune('a'+i/26)), Status: "open", Description: big})
+	}
+	if err := CheckEpicRows(set); err != nil {
+		t.Fatalf("descriptions alone: %v", err)
+	}
+	set = append(set, EpicRow{ID: "gd-last", Status: "open", Comments: []Comment{{Author: "sam", Text: strings.Repeat("a", MaxEpicDescriptions)}}})
+	if err := CheckEpicRows(set); !errors.Is(err, ErrInvalid) {
+		t.Errorf("comment text past the budget: got %v, want ErrInvalid", err)
+	}
+}
+
 func TestCheckEpicRowsRefuses(t *testing.T) {
 	for name, rows := range map[string][]EpicRow{
 		"bad id":      {{ID: "-x", Status: "open"}},
