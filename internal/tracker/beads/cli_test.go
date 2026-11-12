@@ -477,4 +477,13 @@ echo "[${out%,}]"
 	if len(got) != 2 || len(got["tst-1"]) != 1 || len(got["tst-2"]) != 1 {
 		t.Errorf("after a missing id: %+v", got)
 	}
+
+	// An id bd could not hold is left out; the rest are still read.
+	got, err = c.EpicComments(context.Background(), "", []string{"tst-1", "tst 3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || len(got["tst-1"]) != 1 {
+		t.Errorf("after an id bd could not hold: %+v", got)
+	}
 }

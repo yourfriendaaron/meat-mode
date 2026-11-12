@@ -123,7 +123,8 @@ func Outline(rows []api.EpicRow) []api.EpicRow {
 // the same order: cards, rows that are not closed, closed rows, each by
 // the order rows come in (by ID, as Outline sorts them). What does not fit
 // is dropped; a row's comments stay whole or go whole, counted as the sum
-// of their text, and each text is first cut to api.CommentLimit runes.
+// of their ids, authors and texts, each first cut as api.CheckEpicRows cuts
+// it.
 // Outline calls it, and the bridge calls it again once it has filled in
 // comments.
 func Budget(rows []api.EpicRow) {
@@ -161,7 +162,10 @@ func Budget(rows []api.EpicRow) {
 			size := 0
 			for j := range r.Comments {
 				r.Comments[j].Text = api.TruncRunes(r.Comments[j].Text, api.CommentLimit)
-				size += len(r.Comments[j].Text)
+				c := &r.Comments[j]
+				c.ID = api.TruncRunes(c.ID, api.CommentAuthorLimit)
+				c.Author = api.TruncRunes(c.Author, api.CommentAuthorLimit)
+				size += len(c.ID) + len(c.Author) + len(c.Text)
 			}
 			if total+size > api.MaxEpicDescriptions {
 				r.Comments = nil

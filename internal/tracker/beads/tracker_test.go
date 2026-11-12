@@ -254,8 +254,9 @@ func TestEpicComments(t *testing.T) {
 	if len(got[plain]) != 0 {
 		t.Errorf("plain comments = %+v", got[plain])
 	}
-	if _, err := ec.EpicComments(ctx, dir, []string{beds, "--version"}); !errors.Is(err, beads.ErrBadID) {
-		t.Errorf("flag id: %v", err)
+	// An id bd could not hold, such as a flag, never reaches bd.
+	if got, err := ec.EpicComments(ctx, dir, []string{beds, "--version"}); err != nil || len(got) != 1 || len(got[beds]) != 2 {
+		t.Errorf("flag id: %v, %+v", err, got)
 	}
 	if got, err := ec.EpicComments(ctx, dir, nil); err != nil || len(got) != 0 {
 		t.Errorf("no ids: %v, %v", got, err)
