@@ -68,19 +68,47 @@ object Hub {
     fun isSameOrigin(url: String, origin: String): Boolean = originOf(url) == origin
 
     /**
+     * The first path segments the hub serves as API, not as app pages. Any app
+     * can send the app an intent with a path, so one of these would, say, open
+     * the export and download the whole board.
+     */
+    private val NOT_PAGES = setOf("api", "bridge", "calendar", "healthz")
+
+    /**
      * The absolute URL to open in the WebView for [target], a path or URL from a
-     * push or an intent. Anything off the hub's origin opens the hub's root
-     * instead, as the service worker does.
+     * push or an intent. Anything off the hub's origin, or on it but not an app
+     * page, opens the hub's root instead.
      */
     fun inAppUrl(target: String?, origin: String): String {
         val root = "$origin/"
         if (target.isNullOrBlank()) return root
         val resolved = try {
-            URI(root).resolve(target.trim()).toString()
+            URI(root).resolve(target.trim())
         } catch (_: IllegalArgumentException) {
             return root
         }
-        return if (isSameOrigin(resolved, origin)) resolved else root
+        val url = resolved.toString()
+        return if (isSameOrigin(url, origin) && isAppPage(resolved)) url else root
+    }
+
+    /**
+     * Whether [uri]'s path is an app page: its first segment, once decoded and
+     * with dot segments and repeated slashes resolved as the hub's router does,
+     * is none of [NOT_PAGES]. An encoded slash or backslash, which could split
+     * a segment differently on the way, is never a page.
+     */
+    private fun isAppPage(uri: URI): Boolean {
+        val raw = uri.rawPath ?: return true
+        if (raw.contains("%2f", ignoreCase = true) || raw.contains("%5c", ignoreCase = true) || raw.contains('\\')) return false
+        val segments = ArrayList<String>()
+        for (s in uri.path.orEmpty().split('/')) {
+            when (s) {
+                "", "." -> {}
+                ".." -> segments.removeLastOrNull()
+                else -> segments.add(s)
+            }
+        }
+        return segments.firstOrNull() !in NOT_PAGES
     }
 
     /** The item's page, as the service worker builds it. */

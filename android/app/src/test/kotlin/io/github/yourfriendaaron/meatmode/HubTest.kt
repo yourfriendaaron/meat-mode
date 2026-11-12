@@ -67,6 +67,21 @@ class HubTest {
     }
 
     @Test
+    fun inAppUrlOpensOnlyAppPages() {
+        val o = "https://hub.example.com"
+        for (t in listOf(
+            "/api/export", "api/export", "/api", "/bridge/v1/actions", "/calendar/feed.ics", "/healthz",
+            "https://hub.example.com/api/export", "//api/export", "/x/../api/export", "/./api/export",
+            "/%61pi/export", "/x/..%2Fapi/export", "/x%2F..%2Fapi/export", "/x/%2e%2e/api/export",
+            "/x\\..\\api/export",
+        )) {
+            assertEquals(t, "https://hub.example.com/", Hub.inAppUrl(t, o))
+        }
+        assertEquals("https://hub.example.com/apiary", Hub.inAppUrl("/apiary", o))
+        assertEquals("https://hub.example.com/?item=api%2Fx", Hub.inAppUrl("/?item=api%2Fx", o))
+    }
+
+    @Test
     fun itemPathsMatchTheServiceWorker() {
         // encodeURIComponent("laptop/projects/garden/gd-1")
         assertEquals("/?item=laptop%2Fprojects%2Fgarden%2Fgd-1", Hub.itemPath("laptop/projects/garden/gd-1"))
