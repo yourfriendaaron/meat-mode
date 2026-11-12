@@ -460,11 +460,13 @@ func (t *Ticket) exec(ctx context.Context, dir string, args ...string) (string, 
 	return stdout.String(), nil
 }
 
-// Prompt tells an agent run where the task is and how to answer.
-func (*Ticket) Prompt(id string) string {
+// Prompt tells an agent run where the task is, how to answer and the rules,
+// with the user's own words quoted.
+func (*Ticket) Prompt(id string, notes []string) string {
 	return fmt.Sprintf(`A person asked you about the ticket %[1]s. Read it, with its notes, using `+"`tk show %[1]s`"+`.
 
-Do what it asks. When you have an answer or a question for them, reply with a note: `+"`tk add-note %[1]s \"<your reply>\"`"+`. When the work is finished, close it: `+"`tk close %[1]s`"+`.`, id)
+When you have an answer or a question for them, reply with a note: `+"`tk add-note %[1]s \"<your reply>\"`"+`. When the work is finished, close it: `+"`tk close %[1]s`"+`. `, id) +
+		tracker.UserWords("note", notes)
 }
 
 func (*Ticket) FollowUp(id, text string) string {

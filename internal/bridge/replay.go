@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -442,11 +443,14 @@ func (b *Bridge) ask(ctx context.Context, a api.Action, st *repoState, res api.A
 	switch {
 	case a.Kind == api.KindAsk:
 		req.BeadID = a.BeadID
+		req.Notes = slices.Clone(a.UserNotes)
 		if strings.TrimSpace(a.Payload.Text) != "" {
 			req.Text = a.Payload.Text
+			req.Notes = append(req.Notes, a.Payload.Text)
 		}
 	case a.Kind == api.KindAdd && a.Payload.Ask && res.BeadID != "":
 		req.BeadID = res.BeadID
+		req.Notes = []string{a.Payload.Title}
 	default:
 		return
 	}

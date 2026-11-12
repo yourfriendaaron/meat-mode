@@ -316,6 +316,17 @@ func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "a device token asks without a note")
 		return
 	}
+	if deviceOf(r) != "" && na.Kind == api.KindAsk {
+		stopped, err := s.retryable(na)
+		if err != nil {
+			s.storeError(w, r, err)
+			return
+		}
+		if !stopped {
+			writeError(w, http.StatusUnauthorized, "a device token retries only a stopped run")
+			return
+		}
+	}
 	user, err := s.userName()
 	if err != nil {
 		s.storeError(w, r, err)
@@ -331,6 +342,28 @@ func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, a)
+}
+
+// retryable reports whether a device token may post ask na: the Retry button
+// on a stopped run's push, so the item's run as State shows it is stopped. An
+// ask on the same item already logged under na's id passes, so a resent tap
+// gets its action back.
+func (s *Server) retryable(na api.NewAction) (bool, error) {
+	if a, err := s.store.Action(na.ID); err == nil {
+		return a.Kind == api.KindAsk && store.ItemKey(a.Bridge, a.Repo, a.BeadID) == na.Key, nil
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return false, err
+	}
+	st, err := s.store.State()
+	if err != nil {
+		return false, err
+	}
+	for _, it := range st.Items {
+		if it.Key == na.Key {
+			return it.Run != nil && it.Run.State == api.RunStopped, nil
+		}
+	}
+	return false, nil
 }
 
 // actionLimit reads a list of actions' ?limit=: 50 when absent, at most 500.

@@ -167,6 +167,45 @@ func TestDeviceTokenOpensOnlyItsRoutes(t *testing.T) {
 	h.expect(deviceDo(t, h.srv, "PUT", "/api/devices/self", sub, "mmd_good", ""), http.StatusUnauthorized)
 }
 
+func TestDeviceTokenRetriesOnlyAStoppedRun(t *testing.T) {
+	h := newHarness(t, nil, true)
+	h.pair()
+	h.push.giveToken("mmd_good", fakeDevice)
+	h.expect(h.do("PUT", "/bridge/v1/repos", []api.Repo{{Name: "garden", OptedIn: true, AgentsAllowed: true}}, h.token), http.StatusNoContent)
+	retry := func(id string) string {
+		return fmt.Sprintf(`{"id":%q,"kind":"ask","key":"laptop/garden/gd-1"}`, id)
+	}
+	runs := func(state, reason string) {
+		t.Helper()
+		started := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+		run := api.Run{ID: "r1", State: state, Reason: reason, Agent: "planner", StartedAt: started, Count: 1}
+		if state != api.RunWorking {
+			run.EndedAt = &started
+		}
+		h.expect(h.do("PUT", "/bridge/v1/runs", []api.RunReport{{Repo: "garden", BeadID: "gd-1", Run: run}}, h.token), http.StatusNoContent)
+	}
+
+	// No run, a working run and a finished run cannot be woken by a token.
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa1"), "mmd_good", ""), http.StatusUnauthorized)
+	runs(api.RunWorking, "")
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa2"), "mmd_good", ""), http.StatusUnauthorized)
+	runs(api.RunDone, "")
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa3"), "mmd_good", ""), http.StatusUnauthorized)
+
+	// A stopped run's Retry goes through, and the same tap again gets it back.
+	runs(api.RunStopped, api.ReasonStopped)
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa4"), "mmd_good", ""), http.StatusCreated)
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa4"), "mmd_good", ""), http.StatusOK)
+	// A known action id that is not an ask on this item passes nothing.
+	other := `{"id":"0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa4","kind":"ask","key":"laptop/garden/gd-2"}`
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", other, "mmd_good", ""), http.StatusUnauthorized)
+	// The pending ask shows the run working again, so a second Retry is refused.
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa5"), "mmd_good", ""), http.StatusUnauthorized)
+	if as := decode[[]api.Action](t, h.do("GET", "/api/actions", nil, "")); len(as) != 1 {
+		t.Fatalf("%d actions stored, want the one retry", len(as))
+	}
+}
+
 func TestDeviceRequestIgnoresTheSessionCookie(t *testing.T) {
 	h := newLoginHarness(t, Config{PasswordHash: cheapHash("water the plants")})
 	h.push.giveToken("mmd_good", fakeDevice)

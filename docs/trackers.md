@@ -50,7 +50,7 @@ Every method that takes `dir` gets the repo folder that `Detect` matched. A meth
 
 A tracker that lists `ask` implements `tracker.Agent`:
 
-- `Prompt(id)` is the first message of a run: where the task and its notes are, how to close it and how to reply with a note, using the tracker's own commands.
+- `Prompt(id, notes)` is the first message of a run: where the task and its notes are, how to close it and how to reply with a note, using the tracker's own commands, then `tracker.UserWords` with the tracker's word for a note: the rules every tracker's prompt shares and `notes`, the user's own words from the app, quoted.
 - `FollowUp(id, text)` is the message for a note the person adds to a live run.
 - `Env(actor)` is the variables the agent gets so its writes carry its name, such as `BEADS_ACTOR=<actor>`. The bridge drops any inherited variable of the same name.
 - `Describe(words)` names one of the tracker's commands in plain words for the run's activity line, such as "Closing the task", or returns `""` when the command is not the tracker's.

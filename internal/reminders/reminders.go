@@ -86,6 +86,11 @@ type Scheduler struct {
 	// push. Nil means never.
 	ClosedInApp func(ctx context.Context, key string, since time.Time) (bool, error)
 
+	// AskedInApp, when set, reports whether the hub's action log holds an
+	// ask for the item with key; a run end without one sends no push, so a
+	// bridge cannot make up a run whose push carries Retry. Nil means always.
+	AskedInApp func(ctx context.Context, key string) (bool, error)
+
 	// Allows, when set, reports whether the item with key can take an
 	// action of kind, so a reminder leaves out the Done or Snooze button
 	// its list's tracker cannot apply. Nil means every kind.

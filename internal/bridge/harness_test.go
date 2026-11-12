@@ -196,3 +196,21 @@ func TestHelloNamesTheHarness(t *testing.T) {
 		t.Errorf("hello harness = %+v, want %+v", got, want)
 	}
 }
+
+// The prompt quotes the user's own words the hub sent with the ask, then
+// the ask's own note.
+func TestPromptQuotesTheUserNotes(t *testing.T) {
+	w, _, id := agentWorld(t)
+	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }))
+	w.tick(b)
+	a := action("ask-reply", api.KindAsk, "garden", id, api.Payload{Text: "reply"})
+	a.UserNotes = []string{"Email the plan to Sam"}
+	w.hub.Enqueue(us, a)
+	w.tick(b)
+	w.oneOK(aid("ask-reply"))
+	run := w.waitRun(b, id, settled)
+	want := `--- user note ---\nEmail the plan to Sam\n--- end ---\n--- user note ---\nreply\n--- end ---`
+	if log := w.runLog(id, run.ID); !strings.Contains(log, want) {
+		t.Errorf("the prompt does not quote the notes:\n%s", log)
+	}
+}

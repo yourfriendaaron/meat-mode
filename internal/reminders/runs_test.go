@@ -258,3 +258,34 @@ func (c *chanNotifier) Notify(_ context.Context, m notify.Message) error {
 	c.got <- m
 	return nil
 }
+
+func TestNoPushForARunNoAskStarted(t *testing.T) {
+	ctx := context.Background()
+	db, c, src, n := setup(t)
+	s := sched(t, db, c, src, n)
+	asked := false
+	s.AskedInApp = func(_ context.Context, key string) (bool, error) { return asked && key == runKey, nil }
+	// A bridge reports a stopped run no ask in the app started: it is
+	// recorded and stays silent, so its Retry never shows.
+	src.items = []api.Item{runItem(api.RunStopped, api.ReasonFailed)}
+	if err := s.CheckRuns(ctx); err != nil {
+		t.Fatal(err)
+	}
+	asked = true
+	if err := s.CheckRuns(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(n.got) != 0 {
+		t.Fatalf("pushes %+v", n.got)
+	}
+	// A run an ask started pushes.
+	next := runItem(api.RunStopped, api.ReasonFailed)
+	next.Run.ID = "r2"
+	src.items = []api.Item{next}
+	if err := s.CheckRuns(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(n.got) != 1 {
+		t.Fatalf("pushes %+v", n.got)
+	}
+}

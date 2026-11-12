@@ -260,7 +260,7 @@ func TestDescribe(t *testing.T) {
 
 func TestPromptNamesCommands(t *testing.T) {
 	b := &Tracker{}
-	p := b.Prompt("TASK-3")
+	p := b.Prompt("TASK-3", nil)
 	for _, want := range []string{"backlog task view TASK-3", "backlog task edit TASK-3 --status Done", "--comment-author \"$" + AuthorEnv + "\""} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q", want)

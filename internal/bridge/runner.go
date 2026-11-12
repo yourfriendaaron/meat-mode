@@ -156,8 +156,11 @@ type askRequest struct {
 	Repo     Repo
 	BeadID   string
 	Text     string // the note; "" for none
-	Author   string
-	Allowed  bool // the repo's agents switch is on
+	// Notes are the user's own words on the task from the app, oldest
+	// first, this ask's note last: the prompt quotes them.
+	Notes   []string
+	Author  string
+	Allowed bool // the repo's agents switch is on
 }
 
 func runKey(repo, bead string) string { return repo + "\x00" + bead }
@@ -520,7 +523,7 @@ func (r *AgentRunner) launch(req askRequest, rec *beadRecord, run *api.Run) (*li
 		key: runKey(req.Repo.Name, req.BeadID), rec: rec, run: run, repo: req.Repo, ag: ag, cwd: cwd,
 		done: make(chan struct{}), log: logf, limits: r.Config.Limits(),
 	}
-	if err := r.spawn(lr, ag.Prompt(req.BeadID)); err != nil {
+	if err := r.spawn(lr, ag.Prompt(req.BeadID, req.Notes)); err != nil {
 		logf.Close()
 		return nil, err
 	}
