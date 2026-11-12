@@ -92,11 +92,16 @@ function epicRow(id: string, title: string, over: Partial<EpicRow> = {}): EpicRo
   return { id, title, status: "open", priority: 2, updatedAt: at(13, 9), ...over };
 }
 
+const TULIP_COMMENTS = [
+  { id: "ga-10.7-c1", author: "alex", text: "Order the bulbs from the *usual* shop.", createdAt: at(12, 10) },
+  { id: "ga-10.7-c2", author: "sam", text: "Bulbs are in. Water the plants after planting.", createdAt: at(13, 8) },
+];
+
 /**
  * The garden repo's epics: a card in progress with six of its seven
  * children closed, a card holding the human task ga-1 (whose State item
  * gives its title) and a nested card, and two other tasks. The tulips wait
- * on the leaning fence post and carry two comments.
+ * on the leaning fence post and carry two comments, with their text.
  */
 export function gardenEpics(): EpicRow[] {
   const planting = [1, 2, 3, 4, 5, 6].map((n) => epicRow(`ga-10.${n}`, ["Dig the beds", "Buy bulbs", "Sort the seed packets", "Clean the pots", "Mark the rows", "Plant the garlic"][n - 1], { parent: "ga-10", status: "closed", closedAt: at(12, 9) }));
@@ -110,7 +115,7 @@ export function gardenEpics(): EpicRow[] {
       description: "Get every bed planted before the first frost.\n\n- **Bulbs** first\n- then the garlic",
     }),
     ...planting,
-    epicRow("ga-10.7", "Plant the tulip bulbs", { parent: "ga-10", type: "task", assignee: "sam", blockedBy: ["ga-20.2"], commentCount: 2 }),
+    epicRow("ga-10.7", "Plant the tulip bulbs", { parent: "ga-10", type: "task", assignee: "sam", blockedBy: ["ga-20.2"], commentCount: 2, comments: TULIP_COMMENTS }),
     epicRow("ga-20", "Beds and paths", { epic: true, type: "epic", priority: 2, notes: "Gravel is **cheaper** in bulk." }),
     epicRow("ga-20.1", "Paths", { epic: true, type: "epic", parent: "ga-20", priority: 3 }),
     epicRow("ga-20.1.1", "Lay the gravel", { parent: "ga-20.1", type: "chore", status: "closed", closedAt: at(11, 9) }),
