@@ -79,7 +79,8 @@ func (s *Scheduler) CheckRuns(ctx context.Context) error {
 // checkRuns sends one push per run end, keyed on the item, the run's id and
 // its state. An end is recorded even when it sends nothing: a run the user
 // stopped, one on an item the user closed in the app after the run started,
-// or one older than RunLate. A working run, the hub's provisional ones
+// one on an item no ask in the app ever woke an agent on, or one older than
+// RunLate. A working run, the hub's provisional ones
 // included, never pushes.
 func (s *Scheduler) checkRuns(ctx context.Context, items []api.Item, now time.Time) error {
 	var errs []error
@@ -103,6 +104,14 @@ func (s *Scheduler) checkRuns(ctx context.Context, items []api.Item, now time.Ti
 			continue
 		}
 		quiet := r.Reason == api.ReasonStopped || (r.EndedAt != nil && now.Sub(*r.EndedAt) > RunLate)
+		if !quiet && s.AskedInApp != nil {
+			asked, err := s.AskedInApp(ctx, it.Key)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			quiet = !asked
+		}
 		if !quiet && s.ClosedInApp != nil {
 			closed, err := s.ClosedInApp(ctx, it.Key, r.StartedAt)
 			if err != nil {

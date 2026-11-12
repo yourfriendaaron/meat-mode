@@ -58,6 +58,7 @@ func runHub(args []string) error {
 			s.Allows = st.Allows
 			s.Lead = stateItems{st}
 			s.ClosedInApp = st.ClosedInApp
+			s.AskedInApp = st.AskedInApp
 			// A run's end pushes as soon as the bridge reports it.
 			st.Watch(func(c store.Change) {
 				if c.Kind == "runs" {

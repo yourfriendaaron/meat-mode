@@ -276,3 +276,19 @@ func (s *Store) ClosedInApp(ctx context.Context, key string, since time.Time) (b
 	}
 	return closed, rows.Err()
 }
+
+// AskedInApp reports whether the action log holds an ask for the item, pending
+// or applied: an ask on it, or the add with ask that created it. A run starts
+// only from one, so a run end without one was never asked for.
+func (s *Store) AskedInApp(ctx context.Context, key string) (bool, error) {
+	b, r, id, ok := SplitKey(key)
+	if !ok {
+		return false, nil
+	}
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM actions
+		WHERE bridge = ? AND repo = ? AND bead_id = ? AND status IN (?, ?)
+		AND (kind = ? OR (kind = ? AND json_extract(payload, '$.ask') = 1))`,
+		b, r, id, api.StatusPending, api.StatusApplied, api.KindAsk, api.KindAdd).Scan(&n)
+	return n > 0, err
+}

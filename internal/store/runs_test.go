@@ -516,3 +516,46 @@ func TestClosedInApp(t *testing.T) {
 		t.Error("a reopened item counts as closed")
 	}
 }
+
+func TestAskedInApp(t *testing.T) {
+	s, _ := open(t)
+	seedAgents(t, s)
+	ctx := context.Background()
+	asked := func(key string) bool {
+		t.Helper()
+		ok, err := s.AskedInApp(ctx, key)
+		must(t, err)
+		return ok
+	}
+	key := ItemKey("laptop", "garden", "gd-1")
+	if asked(key) {
+		t.Error("an item with no ask counts")
+	}
+	// A note is not an ask; a cancelled ask is none.
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindNote, Key: key, Payload: api.Payload{Text: "Use the can"}}, "alex-app")
+	must(t, err)
+	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindAsk, Key: key}, "alex-app")
+	must(t, err)
+	_, err = s.CancelAction(id2)
+	must(t, err)
+	if asked(key) {
+		t.Error("a note or a cancelled ask counts")
+	}
+	_, _, err = s.AppendAction(api.NewAction{ID: id3, Kind: api.KindAsk, Key: key}, "alex-app")
+	must(t, err)
+	if !asked(key) || asked(ItemKey("laptop", "garden", "gd-2")) {
+		t.Error("a pending ask counts on its item only")
+	}
+	// An add with ask counts for the bead it created; a plain add does not.
+	_, _, err = s.AppendAction(api.NewAction{ID: id4, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+		Payload: api.Payload{Title: "Plan the beds", Ask: true}}, "alex-app")
+	must(t, err)
+	must(t, s.ReportResult("laptop", id4, api.ActionResult{OK: true, BeadID: "gd-7"}))
+	_, _, err = s.AppendAction(api.NewAction{ID: id5, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+		Payload: api.Payload{Title: "Buy seeds"}}, "alex-app")
+	must(t, err)
+	must(t, s.ReportResult("laptop", id5, api.ActionResult{OK: true, BeadID: "gd-8"}))
+	if !asked(ItemKey("laptop", "garden", "gd-7")) || asked(ItemKey("laptop", "garden", "gd-8")) {
+		t.Error("an add counts only with ask")
+	}
+}
