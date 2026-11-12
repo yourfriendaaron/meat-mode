@@ -196,7 +196,7 @@ func TestRowDetailShowsComments(t *testing.T) {
 	}
 	got := detail("desk/garden/gd-9")
 	text := strings.Join(got, "\n")
-	for _, want := range []string{" Comments 2", "  "+gBullet+" alex "+gDot+" ", "    Check the washer first.", "  "+gBullet+" sam "+gDot+" ", "    The hose is mended"} {
+	for _, want := range []string{" Comments 2", "  " + gBullet + " alex " + gDot + " ", "    Check the washer first.", "  " + gBullet + " sam " + gDot + " ", "    The hose is mended"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("details lack %q:\n%s", want, text)
 		}
