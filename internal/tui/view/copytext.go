@@ -27,8 +27,9 @@ func (d *data) refLine(t *target) string {
 }
 
 // refFull is refLine, then the list, due date and tags (or the repo,
-// status and priority), then the description, the notes, and the
-// sub-tasks or an epic's children as a checklist.
+// status and priority), then the description, the notes, the notes and
+// replies or a row's comments, and the sub-tasks or an epic's children as a
+// checklist.
 func (d *data) refFull(t *target) string {
 	var b strings.Builder
 	b.WriteString(d.refLine(t))

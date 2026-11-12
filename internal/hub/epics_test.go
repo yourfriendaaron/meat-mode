@@ -30,7 +30,7 @@ func (h *harness) pairEpics() {
 
 // epicMarkers are the strings only the invented epic rows below hold: none
 // may appear on any path that serves the person's own to-dos.
-var epicMarkers = []string{"gd-77", "gd-78", "Plan the beds", "Dig the beds", "Fix the fence", "Spring beds", "epic copy"}
+var epicMarkers = []string{"gd-77", "gd-78", "Plan the beds", "Dig the beds", "Fix the fence", "Spring beds", "epic copy", "Two coats"}
 
 // epicSet is an invented epic set. gd-1 is a human row whose id is also the
 // item gd-1 that pair adds, under another title.
@@ -40,7 +40,8 @@ func epicSet() []api.EpicRow {
 		{ID: "gd-77", Title: "Plan the beds", Type: "epic", Status: "open", Priority: 1, Epic: true, Description: "Spring beds.", UpdatedAt: at},
 		{ID: "gd-77.1", Title: "Dig the beds", Status: "open", Priority: 2, Parent: "gd-77", Assignee: "sam", UpdatedAt: at},
 		{ID: "gd-1", Title: "Water the plants, the epic copy", Status: "open", Priority: 2, Parent: "gd-77", Human: true, UpdatedAt: at},
-		{ID: "gd-78", Title: "Fix the fence", Status: "in_progress", Priority: 3, UpdatedAt: at},
+		{ID: "gd-78", Title: "Fix the fence", Status: "in_progress", Priority: 3, UpdatedAt: at, CommentCount: 1,
+			Comments: []api.Comment{{ID: "c-1", Author: "sam", Text: "Two coats.", CreatedAt: at}}},
 	}
 }
 
@@ -60,6 +61,11 @@ func TestEpicsRoutes(t *testing.T) {
 	if len(e.Repos) != 1 || e.Repos[0].Bridge != "laptop" || e.Repos[0].Repo != "garden" || len(e.Repos[0].Rows) != 4 ||
 		e.Repos[0].Rows[0].ID != "gd-1" || e.Repos[0].SyncedAt.IsZero() {
 		t.Fatalf("epics %+v", e)
+	}
+	for _, r := range e.Repos[0].Rows {
+		if r.ID == "gd-78" && (len(r.Comments) != 1 || r.Comments[0].Text != "Two coats." || r.Comments[0].Author != "sam" || r.Comments[0].CreatedAt.IsZero()) {
+			t.Errorf("gd-78 comments %+v", r.Comments)
+		}
 	}
 
 	// 409, never 404, for a repo the report lacks or shows without epicsOn.

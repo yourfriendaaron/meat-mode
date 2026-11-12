@@ -273,13 +273,9 @@ const commentChunk = 25
 // EpicComments implements tracker.EpicComments: the comments of each named
 // bead from bd show, commentChunk ids to a call. A chunk in which bd
 // answers not found for an id is read again one id at a time, and the ids
-// bd does not hold are left out.
+// bd does not hold are left out, as are ids bd could not hold.
 func (c *CLI) EpicComments(ctx context.Context, dir string, ids []string) (map[string][]api.Comment, error) {
-	for _, id := range ids {
-		if err := CheckID(id); err != nil {
-			return nil, err
-		}
-	}
+	ids = slices.DeleteFunc(slices.Clone(ids), func(id string) bool { return CheckID(id) != nil })
 	got := make(map[string][]api.Comment, len(ids))
 	for chunk := range slices.Chunk(ids, commentChunk) {
 		list, err := c.showComments(ctx, dir, chunk)

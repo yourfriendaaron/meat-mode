@@ -135,7 +135,7 @@ func CheckEpicRows(rows []EpicRow) error {
 			c.ID = TruncRunes(c.ID, CommentAuthorLimit)
 			c.Author = TruncRunes(c.Author, CommentAuthorLimit)
 			c.Text = TruncRunes(c.Text, CommentLimit)
-			total += len(c.Text)
+			total += len(c.ID) + len(c.Author) + len(c.Text)
 		}
 		r.BlockedBy = cleanBlockedBy(r)
 		r.CommentCount = max(r.CommentCount, 0)

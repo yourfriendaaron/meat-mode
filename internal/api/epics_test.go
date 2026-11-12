@@ -29,7 +29,7 @@ func TestCheckEpicRowsCleans(t *testing.T) {
 }
 
 // TestCheckEpicRowsCutsComments: a comment's text is cut to CommentLimit and
-// its id and author to CommentAuthorLimit, and its text counts against the
+// its id and author to CommentAuthorLimit, and all three count against the
 // set's budget with descriptions and notes.
 func TestCheckEpicRowsCutsComments(t *testing.T) {
 	rows := []EpicRow{{ID: "gd-1", Status: "open", CommentCount: 1, Comments: []Comment{{
@@ -61,6 +61,17 @@ func TestCheckEpicRowsCutsComments(t *testing.T) {
 	set = append(set, EpicRow{ID: "gd-last", Status: "open", Comments: []Comment{{Author: "sam", Text: strings.Repeat("a", MaxEpicDescriptions)}}})
 	if err := CheckEpicRows(set); !errors.Is(err, ErrInvalid) {
 		t.Errorf("comment text past the budget: got %v, want ErrInvalid", err)
+	}
+
+	// Ids and authors count too: comments of one letter each, with long
+	// ids and authors, still tip a set over.
+	long := strings.Repeat("\U0001F331", CommentAuthorLimit)
+	many := make([]Comment, MaxEpicDescriptions/(2*len(long))+1)
+	for i := range many {
+		many[i] = Comment{ID: long, Author: long, Text: "a"}
+	}
+	if err := CheckEpicRows([]EpicRow{{ID: "gd-1", Status: "open", Comments: many}}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("ids and authors past the budget: got %v, want ErrInvalid", err)
 	}
 }
 

@@ -230,6 +230,29 @@ func TestBudgetCutsCommentText(t *testing.T) {
 	}
 }
 
+// TestBudgetCountsCommentIDsAndAuthors: the bridge counts a comment as the
+// hub does, id and author included, so a set it sends is never refused.
+func TestBudgetCountsCommentIDsAndAuthors(t *testing.T) {
+	long := strings.Repeat("\U0001F331", api.CommentAuthorLimit+5)
+	many := make([]api.Comment, api.MaxEpicDescriptions/(2*4*api.CommentAuthorLimit)+1)
+	for i := range many {
+		many[i] = api.Comment{ID: long, Author: long, Text: "a"}
+	}
+	rows := []api.EpicRow{{ID: "gd-1", Status: StatusOpen, Comments: many}}
+	Budget(rows)
+	if rows[0].Comments != nil {
+		t.Fatalf("kept %d comments past the budget", len(rows[0].Comments))
+	}
+	if many[0].ID != long {
+		t.Fatal("the caller's comment changed")
+	}
+	rows = []api.EpicRow{{ID: "gd-1", Status: StatusOpen, Comments: many[:1]}}
+	Budget(rows)
+	if err := api.CheckEpicRows(rows); err != nil || utf8.RuneCountInString(rows[0].Comments[0].Author) != api.CommentAuthorLimit+1 {
+		t.Fatalf("one comment: %v, author %d runes", err, utf8.RuneCountInString(rows[0].Comments[0].Author))
+	}
+}
+
 func TestOutlineCapsRowsClosedFirst(t *testing.T) {
 	rows := []api.EpicRow{{ID: "e", Type: "epic", Status: StatusOpen}}
 	for i := range api.MaxEpicRows + 10 {
