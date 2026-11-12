@@ -346,11 +346,11 @@ func (s *Server) handleNewAction(w http.ResponseWriter, r *http.Request) {
 
 // retryable reports whether a device token may post ask na: the Retry button
 // on a stopped run's push, so the item's run as State shows it is stopped. An
-// ask already logged under na's id passes, so a resent tap gets its action
-// back.
+// ask on the same item already logged under na's id passes, so a resent tap
+// gets its action back.
 func (s *Server) retryable(na api.NewAction) (bool, error) {
-	if _, err := s.store.Action(na.ID); err == nil {
-		return true, nil
+	if a, err := s.store.Action(na.ID); err == nil {
+		return a.Kind == api.KindAsk && store.ItemKey(a.Bridge, a.Repo, a.BeadID) == na.Key, nil
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return false, err
 	}

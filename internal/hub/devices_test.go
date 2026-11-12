@@ -196,6 +196,9 @@ func TestDeviceTokenRetriesOnlyAStoppedRun(t *testing.T) {
 	runs(api.RunStopped, api.ReasonStopped)
 	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa4"), "mmd_good", ""), http.StatusCreated)
 	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa4"), "mmd_good", ""), http.StatusOK)
+	// A known action id that is not an ask on this item passes nothing.
+	other := `{"id":"0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa4","kind":"ask","key":"laptop/garden/gd-2"}`
+	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", other, "mmd_good", ""), http.StatusUnauthorized)
 	// The pending ask shows the run working again, so a second Retry is refused.
 	h.expect(deviceDo(t, h.srv, "POST", "/api/actions", retry("0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4aa5"), "mmd_good", ""), http.StatusUnauthorized)
 	if as := decode[[]api.Action](t, h.do("GET", "/api/actions", nil, "")); len(as) != 1 {

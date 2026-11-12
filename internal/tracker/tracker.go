@@ -136,9 +136,21 @@ func UserWords(note string, notes []string) string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString("--- user note ---\n" + strings.TrimSpace(n) + "\n--- end ---")
+		b.WriteString("--- user note ---\n" + quoteLines(strings.TrimSpace(n)) + "\n--- end ---")
 	}
 	return b.String()
+}
+
+// quoteLines indents a note's lines that would read as one of UserWords'
+// delimiters, so a note cannot close its own quote.
+func quoteLines(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(strings.TrimSpace(l), "---") {
+			lines[i] = "  " + l
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Info is what the bridge, hub and app know about a tracker.
