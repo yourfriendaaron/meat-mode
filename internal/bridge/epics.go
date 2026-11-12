@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
@@ -21,6 +23,9 @@ import (
 const (
 	EpicsEvery   = time.Minute // how often the bridge reads a repo for epics, at most
 	EpicsBackoff = time.Hour   // how long it sends no epics to a hub that has no epics route
+	// EpicCommentReads is how many rows' comments the bridge reads in one
+	// pass; the rest wait for the next.
+	EpicCommentReads = 50
 )
 
 const epicsUsage = "usage: meat-mode bridge epics [on|off <repo>]"
@@ -132,6 +137,17 @@ type epicState struct {
 	// refused is the hash of the last set the hub refused (400 or 413); it
 	// is not sent again until it changes.
 	refused string
+	// comments is what the bridge has read of each row's comments, by id,
+	// and the count and time of the row it read them for.
+	comments map[string]epicComments
+}
+
+// epicComments is one row's comments as read, with the CommentCount and
+// UpdatedAt the row had then.
+type epicComments struct {
+	count     int
+	updatedAt time.Time
+	comments  []api.Comment
 }
 
 func (b *Bridge) epicsEvery() time.Duration {
@@ -185,6 +201,7 @@ func (b *Bridge) syncEpics(ctx context.Context) error {
 			continue
 		}
 		rows = tracker.Outline(rows)
+		b.fillEpicComments(ctx, name, es, rows)
 		if len(rows) == 0 && es.sentLen > 0 && !es.emptyOnce {
 			// A tracker can answer an empty list by mistake; wait for the
 			// next read to say so too.
@@ -220,6 +237,80 @@ func (b *Bridge) syncEpics(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// fillEpicComments gives the rows with comments their text when the tracker
+// can read it. A row whose count and UpdatedAt match what the cache holds
+// takes the cached comments; the others are misses, and at most
+// EpicCommentReads of them, in the order Budget spends in, are read in one
+// call. The rest go without comments this pass. The cache drops ids that are
+// no longer rows. A failed read is logged and leaves the cache as it was;
+// misses then take whatever the cache holds. It ends by applying the
+// budget again, now that rows carry comments.
+func (b *Bridge) fillEpicComments(ctx context.Context, name string, es *epicState, rows []api.EpicRow) {
+	ec, ok := es.tracker.(tracker.EpicComments)
+	if !ok {
+		return
+	}
+	if es.comments == nil {
+		es.comments = map[string]epicComments{}
+	}
+	inRows := make(map[string]bool, len(rows))
+	var misses []int
+	for i := range rows {
+		r := &rows[i]
+		inRows[r.ID] = true
+		if r.CommentCount <= 0 {
+			continue
+		}
+		if c, ok := es.comments[r.ID]; ok && c.count == r.CommentCount && c.updatedAt.Equal(r.UpdatedAt) {
+			r.Comments = c.comments
+			continue
+		}
+		misses = append(misses, i)
+	}
+	for id := range es.comments {
+		if !inRows[id] {
+			delete(es.comments, id)
+		}
+	}
+	rank := func(r api.EpicRow) int {
+		switch {
+		case r.Epic:
+			return 0
+		case r.Status != tracker.StatusClosed:
+			return 1
+		}
+		return 2
+	}
+	slices.SortStableFunc(misses, func(i, j int) int {
+		return cmp.Or(cmp.Compare(rank(rows[i]), rank(rows[j])), strings.Compare(rows[i].ID, rows[j].ID))
+	})
+	misses = misses[:min(len(misses), EpicCommentReads)]
+	if len(misses) > 0 {
+		ids := make([]string, len(misses))
+		for k, i := range misses {
+			ids[k] = rows[i].ID
+		}
+		got, err := ec.EpicComments(ctx, es.dir, ids)
+		if err != nil {
+			b.log().Warn("cannot read epic comments", "repo", name, "err", err)
+		}
+		for _, i := range misses {
+			r := &rows[i]
+			if err != nil {
+				if c, ok := es.comments[r.ID]; ok {
+					r.Comments = c.comments
+				}
+				continue
+			}
+			if cs, ok := got[r.ID]; ok {
+				es.comments[r.ID] = epicComments{r.CommentCount, r.UpdatedAt, cs}
+				r.Comments = cs
+			}
+		}
+	}
+	tracker.Budget(rows)
 }
 
 // epicsHash identifies a set of rows, so an unchanged set is not sent again.
