@@ -439,6 +439,11 @@ type Action struct {
 	Error     string     `json:"error,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
 	AppliedAt *time.Time `json:"appliedAt,omitempty"`
+	// UserNotes is filled on an ask served to its bridge: what the user
+	// wrote in the app on the task before it, oldest first. The agent run's
+	// prompt quotes these as the only words that can ask for an outward
+	// action; a comment's author name in the tracker can be forged.
+	UserNotes []string `json:"userNotes,omitempty"`
 }
 
 // ActionResult is what a bridge reports after replaying an action.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -449,10 +450,72 @@ func normalisePayload(p api.Payload) api.Payload {
 	return p
 }
 
-// PendingActions returns the bridge's pending actions, oldest first.
+// PendingActions returns the bridge's pending actions, oldest first. An ask
+// carries the user's own words on its task in UserNotes.
 func (s *Store) PendingActions(bridge string) ([]api.Action, error) {
-	return s.queryActions(`SELECT `+actionCols+` FROM actions
+	as, err := s.queryActions(`SELECT `+actionCols+` FROM actions
 		WHERE bridge = ? AND status = ? ORDER BY seq`, bridge, api.StatusPending)
+	if err != nil {
+		return nil, err
+	}
+	for i := range as {
+		if as[i].Kind == api.KindAsk {
+			if as[i].UserNotes, err = s.userNotes(as[i]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return as, nil
+}
+
+// Bounds on an ask's UserNotes.
+const (
+	maxUserNotes      = 20
+	maxUserNotesBytes = 64 << 10
+)
+
+// userNotes is what the user wrote in the app on ask a's task before it,
+// oldest first: the text of each applied note and ask with text, and the
+// title of the add that created the task. Only the app's own actions count,
+// not a paired machine's. It keeps the latest maxUserNotes, each cut to
+// api.CommentLimit, within maxUserNotesBytes, dropping the oldest first.
+func (s *Store) userNotes(a api.Action) ([]string, error) {
+	rows, err := s.db.Query(`SELECT kind, payload FROM actions
+		WHERE bridge = ? AND repo = ? AND bead_id = ? AND status = ? AND machine = '' AND seq < ? AND kind IN (?, ?, ?)
+		ORDER BY seq DESC`, a.Bridge, a.Repo, a.BeadID, api.StatusApplied, a.Seq, api.KindNote, api.KindAsk, api.KindAdd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	size := 0
+	for rows.Next() && len(out) < maxUserNotes {
+		var kind, payload string
+		if err := rows.Scan(&kind, &payload); err != nil {
+			return nil, err
+		}
+		var p api.Payload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return nil, err
+		}
+		text := p.Text
+		if kind == api.KindAdd {
+			text = p.Title
+		}
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		text = api.TruncRunes(text, api.CommentLimit)
+		if size += len(text); size > maxUserNotesBytes {
+			break
+		}
+		out = append(out, text)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	slices.Reverse(out)
+	return out, nil
 }
 
 // RecentActions returns up to limit actions, newest first.

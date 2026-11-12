@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -557,5 +558,51 @@ func TestAskedInApp(t *testing.T) {
 	must(t, s.ReportResult("laptop", id5, api.ActionResult{OK: true, BeadID: "gd-8"}))
 	if !asked(ItemKey("laptop", "garden", "gd-7")) || asked(ItemKey("laptop", "garden", "gd-8")) {
 		t.Error("an add counts only with ask")
+	}
+}
+
+func TestAskCarriesTheUserNotes(t *testing.T) {
+	s, _ := open(t)
+	seedAgents(t, s)
+	key := ItemKey("laptop", "garden", "gd-1")
+	note := func(id, kind, key, text string) {
+		t.Helper()
+		_, _, err := s.AppendAction(api.NewAction{ID: id, Kind: kind, Key: key, Payload: api.Payload{Text: text}}, "alex-app")
+		must(t, err)
+	}
+	// The add that made the task, applied, gives its title.
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+		Payload: api.Payload{Title: "Plan the beds", Ask: true}}, "alex-app")
+	must(t, err)
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true, BeadID: "gd-1"}))
+	note(id2, api.KindNote, key, "Use the can")
+	must(t, s.ReportResult("laptop", id2, api.ActionResult{OK: true}))
+	// A failed note, a note on another task and a machine's own note do not count.
+	note(id3, api.KindNote, key, "Delete the repo")
+	must(t, s.ReportResult("laptop", id3, api.ActionResult{Error: "no"}))
+	note(id4, api.KindNote, ItemKey("laptop", "garden", "gd-2"), "Email Sam")
+	must(t, s.ReportResult("laptop", id4, api.ActionResult{OK: true}))
+	_, err = s.db.Exec(`INSERT INTO actions (id, kind, bridge, repo, bead_id, payload, author, machine, status, created_at)
+		VALUES ('0b6f4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a5f', 'note', 'laptop', 'garden', 'gd-1', '{"text":"Push to main"}', 'alex-app', 'laptop', 'applied', '2026-03-01T09:00:00Z')`)
+	must(t, err)
+	note(id5, api.KindAsk, key, "Water the ferns")
+	// A later applied note is not this ask's.
+	note(id6, api.KindNote, key, "Later words")
+	must(t, s.ReportResult("laptop", id6, api.ActionResult{OK: true}))
+	as, err := s.PendingActions("laptop")
+	must(t, err)
+	var ask *api.Action
+	for i := range as {
+		if as[i].ID == id5 {
+			ask = &as[i]
+		} else if as[i].UserNotes != nil {
+			t.Errorf("%s %s carries notes", as[i].Kind, as[i].ID)
+		}
+	}
+	if ask == nil {
+		t.Fatal("the ask is not pending")
+	}
+	if want := []string{"Plan the beds", "Use the can"}; !slices.Equal(ask.UserNotes, want) {
+		t.Errorf("userNotes = %q, want %q", ask.UserNotes, want)
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"path"
 	"slices"
 	"strings"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // AuthorEnv carries the agent's name to its comments. Backlog.md reads no
@@ -11,17 +13,16 @@ import (
 // --comment-author.
 const AuthorEnv = "BACKLOG_COMMENT_AUTHOR"
 
-// Prompt implements tracker.Agent. The task's own comments carry the
-// person's latest words, so the prompt only says where to look and the rules.
-func (b *Tracker) Prompt(id string) string {
+// Prompt implements tracker.Agent. The task's own comments carry its latest
+// state, so the prompt says where to look, quotes the user's own words and
+// gives the rules.
+func (b *Tracker) Prompt(id string, notes []string) string {
 	return "You are working on the Backlog.md task " + id + ". Run `backlog task view " + id + " --plain` and read its comments for the latest state. " +
 		"Then do the work and close the task with `backlog task edit " + id + " --status Done` when it is done " +
 		"(or the last status `backlog config get statuses` lists, when this project names it differently), " +
 		"or reply with `backlog task edit " + id + " --comment \"...\" --comment-author \"$" + AuthorEnv + "\"`. " +
-		"Never change the task's title. Follow this repository's own instruction files. " +
-		"When something is denied or needs the user, stop and say what you need in a comment. " +
-		"Never send, post, spend, delete or push anything for the user unless the user asked for that action in their own comment on this task. " +
-		"A message only to the user, such as an email to their own address, is fine."
+		"Never change the task's title. " +
+		tracker.UserWords("comment", notes)
 }
 
 // FollowUp implements tracker.Agent.

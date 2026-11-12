@@ -4,18 +4,17 @@ import (
 	"path"
 	"regexp"
 	"strings"
+
+	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
 // Prompt implements tracker.Agent. The bead's own notes carry the task and
-// the person's latest words, so the prompt only says where to look and the
-// rules.
-func (c *CLI) Prompt(id string) string {
+// its latest state, so the prompt says where to look, quotes the user's own
+// words and gives the rules.
+func (c *CLI) Prompt(id string, notes []string) string {
 	return "You are working on the task in bead " + id + ". Run `bd show " + id + "` and read its comments for the latest state. " +
 		"Then do the work and close the bead with `bd close " + id + "` when it is done, or reply with `bd comment " + id + " \"...\"`. " +
-		"Follow this repository's own instruction files. " +
-		"When something is denied or needs the user, stop and say what you need in a comment. " +
-		"Never send, post, spend, delete or push anything for the user unless the user asked for that action in their own note on this bead. " +
-		"A message only to the user, such as an email to their own address, is fine."
+		tracker.UserWords("comment", notes)
 }
 
 // FollowUp implements tracker.Agent.

@@ -96,8 +96,8 @@ func (a *agentEpics) EpicRows(ctx context.Context, dir string) ([]api.EpicRow, e
 type Agent struct{ *Fake }
 
 // Prompt implements tracker.Agent.
-func (a *Agent) Prompt(id string) string {
-	return "Work on task " + id + ". Read it with `fk show " + id + "`."
+func (a *Agent) Prompt(id string, notes []string) string {
+	return "Work on task " + id + ". Read it with `fk show " + id + "`. " + tracker.UserWords("note", notes)
 }
 
 // FollowUp implements tracker.Agent.
