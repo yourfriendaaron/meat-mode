@@ -47,6 +47,12 @@ type EpicRow struct {
 	DeferUntil *time.Time `json:"deferUntil,omitempty"`
 	// CommentCount is how many comments the bead has.
 	CommentCount int `json:"commentCount,omitempty"`
+	// Comments are the bead's comments, oldest first, for Details: each
+	// text at most CommentLimit runes, and within MaxEpicDescriptions over
+	// the whole set, after descriptions and notes. Empty for a tracker
+	// without tracker.EpicComments, and for a row the bridge has not read
+	// them for yet; CommentCount still counts them then.
+	Comments []Comment `json:"comments,omitempty"`
 }
 
 // RepoEpics is one repo's projection in GET /api/epics.
@@ -73,7 +79,7 @@ const EpicsEvent = "epics"
 // Limits on a repo's epic set (docs/api.md, Epics).
 const (
 	MaxEpicRows         = 2000
-	MaxEpicDescriptions = 4 << 20 // bytes of description and notes over the whole set
+	MaxEpicDescriptions = 4 << 20 // bytes of description, notes and comment text over the whole set
 	MaxEpicBlockedBy    = 20      // blocker ids kept on one row
 )
 

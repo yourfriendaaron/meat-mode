@@ -21,6 +21,18 @@ type Epics interface {
 	EpicRows(ctx context.Context, dir string) ([]api.EpicRow, error)
 }
 
+// EpicComments is what a tracker that implements Epics may also implement
+// to give epic rows their comment text (docs/trackers.md, Epics). The
+// bridge asks only for rows Outline kept whose CommentCount is above zero
+// and that it has not read at the same CommentCount and UpdatedAt.
+type EpicComments interface {
+	// EpicComments returns the comments of each named task, oldest first,
+	// keyed by id, in as few tracker calls as it can. A task that no
+	// longer exists is left out of the map, not an error. Like EpicRows it
+	// returns the whole answer or an error.
+	EpicComments(ctx context.Context, dir string, ids []string) (map[string][]api.Comment, error)
+}
+
 // Outline selects what the hub gets from every row of a repo, the same way
 // for every tracker:
 //
