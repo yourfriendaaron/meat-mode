@@ -87,7 +87,7 @@ func (b *Bridge) replay(ctx context.Context) (map[string]bool, error) {
 				ids[res.BeadID] = true
 			}
 			if res.OK {
-				b.ask(ctx, a, st, res)
+				b.ask(a, st, res)
 			}
 		}
 		// The hub drops its own view of an ask or stop once the action is
@@ -430,7 +430,7 @@ func (b *Bridge) stop(a api.Action) api.ActionResult {
 // ask hands an applied ask, or an add with ask, to the runner, once its note
 // is on the task. No other action ever starts a run, and only a tracker that
 // implements tracker.Agent runs one.
-func (b *Bridge) ask(ctx context.Context, a api.Action, st *repoState, res api.ActionResult) {
+func (b *Bridge) ask(a api.Action, st *repoState, res api.ActionResult) {
 	if b.Runner == nil || agentOf(st.Tracker) == nil {
 		return
 	}
