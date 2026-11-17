@@ -605,7 +605,7 @@ export class World {
       await execFileP("go", ["build", "-o", dir + "/", "./internal/bridge/fakeagent"], { cwd: repoRoot, env: { ...process.env, CGO_ENABLED: "0" } });
       this.fake = join(dir, "fakeagent");
     }
-    return { MEAT_MODE_AGENT_COMMAND: this.fake, MEAT_MODE_AGENT_TIMEOUT: timeout, FAKEAGENT_STEP: stepDelay };
+    return { MEAT_MODE_AGENT_COMMAND: `${this.fake} --step ${stepDelay}`, MEAT_MODE_AGENT_TIMEOUT: timeout };
   }
 
   /** Starts `meat-mode bridge run` for a machine. extra adds to its environment. */
