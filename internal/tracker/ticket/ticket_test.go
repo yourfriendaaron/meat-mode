@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker/trackertest"
 )
@@ -102,7 +103,7 @@ func TestParseWithoutNotes(t *testing.T) {
 
 func TestDismissReason(t *testing.T) {
 	data := "---\nid: a-1\nstatus: closed\n---\n# Renew the card\n\n## Notes\n\n**2026-01-20T08:00:00Z**\n\nby alex:\n\n" + dismissedNote + "\n"
-	if is := parseTicket([]byte(data)).issue("a-1", "v", time.Now()); is.CloseReason != "dismissed" {
+	if is := parseTicket([]byte(data)).issue("a-1", "v", time.Now()); is.CloseReason != api.ReasonDismissed {
 		t.Errorf("close reason %q", is.CloseReason)
 	}
 }
@@ -194,7 +195,7 @@ func TestDismissAfterANoteOnlyAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if is.Status != tracker.StatusClosed || is.CloseReason != "dismissed" {
+	if is.Status != tracker.StatusClosed || is.CloseReason != api.ReasonDismissed {
 		t.Errorf("status %q, close reason %q; want closed and dismissed", is.Status, is.CloseReason)
 	}
 	notes := 0

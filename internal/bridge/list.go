@@ -119,7 +119,7 @@ func itemLine(it api.Item, indent string, loc *time.Location) string {
 
 // closedWord says how a closed to-do closed.
 func closedWord(it api.Item) string {
-	if it.CloseReason == "Dismissed" {
+	if it.CloseReason == api.ReasonDismissed {
 		return "deleted"
 	}
 	return "done"

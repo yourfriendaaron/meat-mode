@@ -374,7 +374,7 @@ func (f *Fake) Dismiss(_ context.Context, dir, id, _ string) error {
 		return fmt.Errorf("task %s is already closed", id)
 	}
 	now := f.Now().UTC()
-	t.Status, t.ClosedAt, t.CloseReason = tracker.StatusClosed, &now, "Dismissed"
+	t.Status, t.ClosedAt, t.CloseReason = tracker.StatusClosed, &now, api.ReasonDismissed
 	f.write(t, "dismiss "+dir+" "+id)
 	return nil
 }

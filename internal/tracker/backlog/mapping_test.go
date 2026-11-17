@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
@@ -49,7 +50,7 @@ func TestToIssue(t *testing.T) {
 	switch {
 	case got.ID != "TASK-7.1" || got.Title != "Book the train" || got.Description != "Before the 10th.":
 		t.Fatalf("fields: %+v", got)
-	case got.Status != tracker.StatusClosed || got.CloseReason != "Dismissed":
+	case got.Status != tracker.StatusClosed || got.CloseReason != api.ReasonDismissed:
 		t.Fatalf("status %q, reason %q", got.Status, got.CloseReason)
 	case got.ClosedAt == nil || !got.ClosedAt.Equal(updated) || !got.UpdatedAt.Equal(updated):
 		t.Fatalf("closed at %v, updated at %v", got.ClosedAt, got.UpdatedAt)

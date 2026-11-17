@@ -104,7 +104,7 @@ func TestDismissAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != tracker.StatusClosed || got.CloseReason != "Dismissed" || got.ClosedAt == nil {
+	if got.Status != tracker.StatusClosed || got.CloseReason != api.ReasonDismissed || got.ClosedAt == nil {
 		t.Fatalf("after Dismiss: %+v", got)
 	}
 	for _, l := range got.Labels {

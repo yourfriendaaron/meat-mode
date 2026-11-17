@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads/beadstest"
@@ -235,7 +236,7 @@ func TestCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = c.Show(ctx, dir, id)
-	if got.Status != "closed" || got.CloseReason != "Dismissed" {
+	if got.Status != "closed" || got.CloseReason != api.ReasonDismissed {
 		t.Fatalf("after dismiss: %+v", got)
 	}
 	if err := c.Dismiss(ctx, dir, id, "alex-app"); err == nil {

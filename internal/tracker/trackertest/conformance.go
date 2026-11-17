@@ -103,6 +103,8 @@ func Run(t *testing.T, name string, setup Setup) {
 		if check(t, tr, api.KindDismiss, tr.Dismiss(ctx, dir, id, "alex")) {
 			if got := listed(t, tr, dir, id); got.Status != tracker.StatusClosed {
 				t.Fatalf("status %q after Dismiss; want closed", got.Status)
+			} else if got.CloseReason != api.ReasonDismissed {
+				t.Fatalf("close reason %q after Dismiss; want %q", got.CloseReason, api.ReasonDismissed)
 			}
 		}
 	})
