@@ -9,7 +9,7 @@ import { parseQuickAdd } from "./quickadd.ts";
 import { firstOccurrence, isLastOfMonth, repeatWords, sameRule, weekOfDate } from "./repeat.ts";
 
 /** "Today", "Tomorrow", "Sun, Nov 1", "Sun, Jan 3, 2027". */
-export function dayLine(due: Date, now: Date): string {
+function dayLine(due: Date, now: Date): string {
   if (sameDay(due, now)) return "Today";
   if (sameDay(due, addDays(now, 1))) return "Tomorrow";
   if (sameDay(due, addDays(now, -1))) return "Yesterday";

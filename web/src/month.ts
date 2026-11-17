@@ -14,7 +14,7 @@ const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 /** Titles a day cell shows before "+n more". */
-export const CELL_TITLES = 3;
+const CELL_TITLES = 3;
 
 /** The first day of the month `d` falls in, at local midnight. */
 export function monthOf(d: Date): Date {
@@ -106,7 +106,7 @@ export function monthTitle(month: Date): string {
 }
 
 /** "Wednesday 4 November". */
-export function longDay(d: Date): string {
+function longDay(d: Date): string {
   return `${DAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
 }
 

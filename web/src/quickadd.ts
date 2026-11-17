@@ -45,12 +45,12 @@ export interface QuickOptions {
 }
 
 /** Hour used for "tonight". */
-export const TONIGHT_HOUR = 20;
+const TONIGHT_HOUR = 20;
 /** Hour used for a date given without a time. */
 export const DEFAULT_HOUR = 9;
 
 /** Hour used for "morning", where chrono reads 6:00. */
-export const MORNING_HOUR = 9;
+const MORNING_HOUR = 9;
 
 const PART_OF_DAY = /\b(morning|noon|midday|afternoon|evening|night|midnight)\b/i;
 const TONIGHT = /\btonight\b/i;
@@ -514,12 +514,12 @@ export function parseQuickAdd(text: string, now: Date, lists: QuickList[], opts:
 }
 
 /** Whether a list takes a repeat: only the hub's personal list does, as the hub checks. */
-export function takesRepeat(r: Repo | undefined): boolean {
+function takesRepeat(r: Repo | undefined): boolean {
   return !!r && isPersonal(r);
 }
 
 /** Whether a list takes tags from the app: the personal list and projects do, a tracker's list does not. */
-export function takesTags(r: Repo | undefined): boolean {
+function takesTags(r: Repo | undefined): boolean {
   return !!r && isPersonal(r);
 }
 

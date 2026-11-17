@@ -8,7 +8,7 @@ import { DISMISSED, isAgentItem, isPersonal } from "./model.ts";
 import type { Action, Item, NewAction } from "./types.ts";
 
 /** Close reason the hub writes for Done. */
-export const DONE_REASON = "Done in Meat Mode";
+const DONE_REASON = "Done in Meat Mode";
 
 /** The hub calls the pipeline makes: api.ts in the app, an in-memory fake in tests. */
 export interface ActionsApi {
@@ -44,7 +44,7 @@ export function movedOn(p: Posted): boolean {
 }
 
 /** Whether a done on this item moves it on rather than closing it: a repeating personal item. */
-export function repeatsOnDone(item: Item): boolean {
+function repeatsOnDone(item: Item): boolean {
   return isPersonal(item) && !!item.repeat;
 }
 
@@ -52,7 +52,7 @@ export function repeatsOnDone(item: Item): boolean {
  * What an action does to the local copy before the hub answers. False when it
  * changes nothing there, as a note or an ask waits for the hub's reply.
  */
-export function patchItem(i: Item, a: NewAction, now: Date): boolean {
+function patchItem(i: Item, a: NewAction, now: Date): boolean {
   const p = a.payload;
   switch (a.kind) {
     case "done":
@@ -180,5 +180,3 @@ export function createActions(deps: ActionsDeps) {
 
   return { perform, undo };
 }
-
-export type Actions = ReturnType<typeof createActions>;

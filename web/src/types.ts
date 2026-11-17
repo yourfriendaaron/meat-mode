@@ -82,7 +82,7 @@ export interface Edit {
   repeat?: Repeat;
   /** Ends the repeat; never sent with `repeat`. */
   clearRepeat?: boolean;
-  /** Minutes, 0 (no early reminder) to MAX_LEAD_MINUTES. */
+  /** Minutes, 0 (no early reminder) to one week. */
   remindBefore?: number;
   /** Goes back to the hub's reminderLead; never sent with `remindBefore`. */
   clearRemindBefore?: boolean;
@@ -98,9 +98,6 @@ export type RepeatUnit = "day" | "week" | "month" | "year";
 
 /** Caps Repeat.interval. */
 export const MAX_REPEAT_INTERVAL = 100;
-/** Caps a reminder lead time: one week. */
-export const MAX_LEAD_MINUTES = 7 * 24 * 60;
-
 /** One later date of a repeating item's series (docs/api.md, Month view). */
 export interface Occurrence {
   key: string;
@@ -438,7 +435,7 @@ export interface SetupInfo {
 export interface Settings {
   name: string;
   timeZone: string;
-  /** Minutes before an item's due time an early reminder comes, 0 (none) to MAX_LEAD_MINUTES. */
+  /** Minutes before an item's due time an early reminder comes, 0 (none) to one week. */
   reminderLead: number;
 }
 

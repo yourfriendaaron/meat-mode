@@ -11,7 +11,7 @@ const KEY = "meat-mode.theme";
 const BG: Record<Theme, string> = { dark: "#282A36", light: "#FFFBEB" };
 const SYSTEM_LIGHT = "(prefers-color-scheme: light)";
 
-export function getThemeChoice(): ThemeChoice {
+function getThemeChoice(): ThemeChoice {
   try {
     const v = localStorage.getItem(KEY);
     return v === "light" || v === "system" ? v : "dark";

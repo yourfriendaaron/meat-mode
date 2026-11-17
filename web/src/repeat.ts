@@ -65,7 +65,7 @@ function monthly(interval: number, which: string, day: string): RepeatRule {
 }
 
 /** The day of the month of month m's nth weekday wd (1 to 4), or its last for -1. */
-export function weekdayOfMonth(y: number, m: number, wd: number, n: number): number {
+function weekdayOfMonth(y: number, m: number, wd: number, n: number): number {
   const first = 1 + ((wd - new Date(y, m, 1).getDay() + 7) % 7);
   if (n > 0) return first + 7 * (n - 1);
   const days = new Date(y, m + 1, 0).getDate();

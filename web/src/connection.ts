@@ -32,9 +32,9 @@ export interface Probe {
 }
 
 /** A device clock further from the hub's than this is reported. */
-export const CLOCK_LIMIT_MS = 60_000;
+const CLOCK_LIMIT_MS = 60_000;
 /** How long live updates have to arrive. */
-export const LIVE_WAIT_MS = 5000;
+const LIVE_WAIT_MS = 5000;
 
 function sameOrigin(a: string, b: string): boolean {
   try {
@@ -53,11 +53,11 @@ function hostOf(url: string): string {
 }
 
 /** The fix for a public address, shared by the check and the warning in Settings. */
-export const PUBLIC_DNS_FIX =
+const PUBLIC_DNS_FIX =
   "The hub must be reachable only on your private network. If you turned on Tailscale Funnel for it, turn Funnel off; its public records can take a few hours to go away. Otherwise remove the public DNS record for this name, or point it at a private address.";
 
 /** What public DNS says of the hub's name, when the internet can find it; otherwise null. */
-export function publicDnsWarning(status: SetupStatus): { detail: string; fix: string } | null {
+function publicDnsWarning(status: SetupStatus): { detail: string; fix: string } | null {
   if (status.publicDns?.state !== "public") return null;
   const addrs = status.publicDns.addresses ?? [];
   const list = addrs.length ? addrs.join(", ") : "a public address";
@@ -262,7 +262,7 @@ function probeLive(): Promise<Probe["live"]> {
 }
 
 /** Runs every check, drawing the app before and after. */
-export async function runChecks(ctx: AppContext): Promise<void> {
+async function runChecks(ctx: AppContext): Promise<void> {
   if (checks.loading()) return;
   checks.forget();
   const run = checks.reload(ctx.render);

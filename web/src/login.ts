@@ -13,11 +13,6 @@ export function gate(s: Session): "claim" | "login" | null {
   return s.authenticated ? null : "login";
 }
 
-/** Whether the app must ask for the password before it loads anything. */
-export function needsLogin(s: Session): boolean {
-  return s.login && !s.authenticated;
-}
-
 /** The message under the password field after a login the hub refused. */
 export function loginErrorText(e: unknown): string {
   return errorText(e, { unauthorized: "Wrong password.", other: (m) => `Could not log in: ${m}` });

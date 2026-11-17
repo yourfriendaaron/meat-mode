@@ -12,7 +12,7 @@ import type { Settings } from "./types.ts";
 export const LEAD_CHOICES = [0, 5, 10, 15, 30, 60, 120, 1440];
 
 /** "30 minutes", "1 hour", "2 days"; "" for 0. */
-export function leadText(minutes: number): string {
+function leadText(minutes: number): string {
   const unit = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   if (minutes <= 0) return "";
   if (minutes % 1440 === 0) return unit(minutes / 1440, "day");

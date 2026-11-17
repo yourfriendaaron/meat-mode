@@ -14,13 +14,13 @@ import { repoLabel } from "./model.ts";
 import type { EpicRow, Epics, Item, Repo, RepoEpics } from "./types.ts";
 
 /** P0 to P4 by name. */
-export const PRIORITY_NAMES = ["Critical", "High", "Medium", "Low", "Backlog"];
+const PRIORITY_NAMES = ["Critical", "High", "Medium", "Low", "Backlog"];
 
 /**
  * The states a row shows, in the order the Filter menu lists them: the
  * tracker's five, and waiting, an open bead that waits on another.
  */
-export const STATUSES = ["open", "in_progress", "blocked", "waiting", "deferred", "closed"] as const;
+const STATUSES = ["open", "in_progress", "blocked", "waiting", "deferred", "closed"] as const;
 
 const STATUS_NAMES: Record<string, string> = {
   open: "Open",
@@ -150,7 +150,7 @@ export function progressText(p: Progress): string {
 export type EpicsSort = "priority" | "status" | "progress" | "updated";
 export type EpicsMenu = "repo" | "filter" | "view";
 
-export const SORTS: [EpicsSort, string][] = [
+const SORTS: [EpicsSort, string][] = [
   ["priority", "Priority"],
   ["status", "Status"],
   ["progress", "Progress"],
@@ -193,7 +193,7 @@ export function newEpicsUI(): EpicsUI {
 }
 
 /** Whether a search, status or priority filter narrows the rows. */
-export function filtering(ui: EpicsUI): boolean {
+function filtering(ui: EpicsUI): boolean {
   return ui.q.trim() !== "" || ui.statuses.size > 0 || ui.priorities.size > 0;
 }
 
@@ -212,7 +212,7 @@ function updated(r: EpicRow): number {
 }
 
 /** The default order: priority, then what needs a hand, then most recently updated. */
-export function byPriority(a: EpicRow, b: EpicRow): number {
+function byPriority(a: EpicRow, b: EpicRow): number {
   return (
     a.priority - b.priority ||
     needRank(a.status) - needRank(b.status) ||
@@ -226,7 +226,7 @@ export function byPriority(a: EpicRow, b: EpicRow): number {
  * undefined for a row that is no card or a card with no children, which
  * Progress puts after the cards that have some.
  */
-export function sorter(sort: EpicsSort, percent: (r: EpicRow) => number | undefined): (a: EpicRow, b: EpicRow) => number {
+function sorter(sort: EpicsSort, percent: (r: EpicRow) => number | undefined): (a: EpicRow, b: EpicRow) => number {
   switch (sort) {
     case "status":
       return (a, b) => needRank(a.status) - needRank(b.status) || a.priority - b.priority || updated(b) - updated(a) || naturalCompare(a.id, b.id);
@@ -240,7 +240,7 @@ export function sorter(sort: EpicsSort, percent: (r: EpicRow) => number | undefi
 }
 
 /** The groups a repo's cards show under, in order, then its top-level tasks. */
-export const EPIC_GROUPS = [
+const EPIC_GROUPS = [
   ["blocked", "Blocked"],
   ["moving", "Moving"],
   ["ready", "Ready to start"],
@@ -257,7 +257,7 @@ const GROUP_RANK = new Map<string, number>(EPIC_GROUPS.map(([g], i) => [g, i]));
  * when a child is in progress, else Ready to start (the terminal viewer's
  * cardGroup).
  */
-export function cardGroup(r: EpicRow, kids: EpicRow[]): EpicGroup {
+function cardGroup(r: EpicRow, kids: EpicRow[]): EpicGroup {
   switch (r.status) {
     case "blocked":
       return "blocked";
@@ -434,7 +434,7 @@ function repoOf(data: Epics | null, repoKey: string): RepoEpics | undefined {
 }
 
 /** The State repo a set of epics belongs to, or a stand-in when State does not hold it. */
-export function stateRepo(r: { bridge: string; repo: string }, repos: Repo[]): Repo {
+function stateRepo(r: { bridge: string; repo: string }, repos: Repo[]): Repo {
   return repos.find((x) => x.bridge === r.bridge && x.name === r.repo) ?? { bridge: r.bridge, name: r.repo, personal: false, optedIn: false };
 }
 

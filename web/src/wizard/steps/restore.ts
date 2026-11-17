@@ -3,7 +3,7 @@ import { esc } from "../../html.ts";
 import { ORDER, registerStep } from "../registry.ts";
 
 /** POST /api/restore's answer (docs/api.md, Export and restore). */
-export interface RestoreResult {
+interface RestoreResult {
   items: number;
   actions: number;
   reminders: number;

@@ -42,7 +42,7 @@ export function dueLabel(d: Date, now: Date): string {
 }
 
 /** The hour a date picked without a time takes, as quick add gives one. */
-export const DRAFT_HOUR = DEFAULT_HOUR;
+const DRAFT_HOUR = DEFAULT_HOUR;
 
 /** "09:05": a time as an <input type="time"> holds it. */
 export function hhmm(d: Date): string {
@@ -150,7 +150,7 @@ export function draftRule(d: EditDraft): RepeatRule | null | undefined {
 }
 
 /** What the due field will save: a date, none, or the text it could not read. */
-export type DueOutcome = { kind: "keep"; at: Date | null } | { kind: "set"; at: Date } | { kind: "clear" } | { kind: "invalid" };
+type DueOutcome = { kind: "keep"; at: Date | null } | { kind: "set"; at: Date } | { kind: "clear" } | { kind: "invalid" };
 
 /** The due time the draft's date and time make: null for none, undefined when either is not a real one. */
 export function draftDue(d: Pick<EditDraft, "date" | "time">): Date | null | undefined {
@@ -164,7 +164,7 @@ export function draftDue(d: Pick<EditDraft, "date" | "time">): Date | null | und
 }
 
 /** What the draft does to the due time. The item's own time, to the minute, keeps it. */
-export function dueOutcome(item: Item, d: EditDraft): DueOutcome {
+function dueOutcome(item: Item, d: EditDraft): DueOutcome {
   const at = draftDue(d);
   const had = item.dueAt ? new Date(item.dueAt) : null;
   if (at === undefined) return { kind: "invalid" };

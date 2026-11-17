@@ -45,7 +45,7 @@ function tagsLine(was: string[] | undefined, now: string[]): string {
 }
 
 /** Each field an edit set, in plain words, in the order the sheet shows them. */
-export function editLines(set: Edit, was: Edit | undefined, ctx: HistoryContext): string[] {
+function editLines(set: Edit, was: Edit | undefined, ctx: HistoryContext): string[] {
   const out: string[] = [];
   if (set.title !== undefined) out.push(`Renamed to ${quoted(set.title)}`);
   if (set.due !== undefined) out.push(`Moved to ${at(set.due, ctx.now)}`);
@@ -117,7 +117,7 @@ export function byLine(a: Action, now: Date): string {
  * What a change touched, for telling whether a later one overrode it:
  * fields of the item, its open or closed status, its snooze, or one note.
  */
-export function touched(a: Action): string[] {
+function touched(a: Action): string[] {
   const p = a.payload;
   switch (a.kind) {
     case "done":
