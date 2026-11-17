@@ -2016,6 +2016,7 @@ async function refresh(): Promise<void> {
   refreshing = (async () => {
     try {
       const st = await api.state();
+      await Promise.all(slides);
       noteRunEnds(st.items ?? []);
       const shownBefore = epicsShown(S.state?.repos ?? []);
       S.state = st;
@@ -2175,9 +2176,9 @@ async function doDone(key: string) {
   // The check fills as the row slides; a rewrite drops the class, and so does a failed post.
   const checks = document.querySelectorAll<HTMLElement>(`.check[data-key="${CSS.escape(key)}"]`);
   for (const c of checks) c.classList.add("filling");
-  await slideAway(key);
-  moveSelectionOff([key]);
-  const h = await actions.perform([{ id: newId(), kind: "done", key, payload: {} }], { onPatched: render });
+  // The post goes with the tap; the list draws the change once the row has slid off.
+  const slid = slideAway(key).then(() => moveSelectionOff([key]));
+  const h = await actions.perform([{ id: newId(), kind: "done", key, payload: {} }], { onPatched: render, drawAfter: slid });
   for (const c of checks) c.classList.remove("filling");
   const p = h.posted[0];
   if (p && movedOn(p)) {
@@ -2199,6 +2200,8 @@ function allClear(): boolean {
 
 /** Keys whose rows are sliding away; a render meanwhile draws them hidden. */
 const leaving = new Set<string>();
+/** The slides running now; a refresh draws its state once they end, so the hub's reply cannot cut one short. */
+const slides = new Set<Promise<void>>();
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
@@ -2206,7 +2209,14 @@ const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
  * slides on from wherever a swipe let go. Resolves at once where motion is
  * reduced or the row is not on screen.
  */
-async function slideAway(key: string): Promise<void> {
+function slideAway(key: string): Promise<void> {
+  const p = slide(key);
+  slides.add(p);
+  void p.finally(() => slides.delete(p));
+  return p;
+}
+
+async function slide(key: string): Promise<void> {
   const li = document.querySelector<HTMLElement>(`#list .row[data-key="${CSS.escape(key)}"]`);
   const fg = li?.querySelector<HTMLElement>(".row-fg");
   if (!li || !fg) return;

@@ -134,18 +134,29 @@ export function createActions(deps: ActionsDeps) {
 
   /**
    * Patches the local copy for every action, calls `onPatched` so the caller
-   * can draw it, then posts them in order. A failed post is reported and left
-   * out of the handle.
+   * can draw it, then posts them in order. With `drawAfter`, the posts start
+   * at once and the patch waits for it, so an animation can run meanwhile.
+   * A failed post is reported and left out of the handle.
    */
-  async function perform(actions: NewAction[], opts: { onPatched?: () => void } = {}): Promise<Handle> {
-    for (const a of actions) patch(a);
-    opts.onPatched?.();
-    const posted: Posted[] = [];
-    for (const sent of actions) {
-      const applied = await post(sent);
-      if (applied) posted.push({ sent, applied });
+  async function perform(actions: NewAction[], opts: { onPatched?: () => void; drawAfter?: Promise<void> } = {}): Promise<Handle> {
+    const draw = () => {
+      for (const a of actions) patch(a);
+      opts.onPatched?.();
+    };
+    if (!opts.drawAfter) draw();
+    const posting = (async () => {
+      const posted: Posted[] = [];
+      for (const sent of actions) {
+        const applied = await post(sent);
+        if (applied) posted.push({ sent, applied });
+      }
+      return posted;
+    })();
+    if (opts.drawAfter) {
+      await opts.drawAfter;
+      draw();
     }
-    return { posted };
+    return { posted: await posting };
   }
 
   /**
