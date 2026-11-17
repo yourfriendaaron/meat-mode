@@ -64,7 +64,5 @@
     <string name="channel_agents_about">Replies, finished work and stopped runs from agents</string>
 
     <string name="action_refused_title">That button did not go through</string>
-    <string name="action_refused_hub">The hub did not take it. Tap to open the item.</string>
-    <string name="action_refused_offline">The hub could not be reached. Tap to open the item.</string>
     <string name="action_refused_off">Reminders are off on this phone. Tap to open the item.</string>
 </resources>
