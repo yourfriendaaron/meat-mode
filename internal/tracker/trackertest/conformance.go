@@ -25,6 +25,7 @@ type Setup func(t *testing.T) (tracker.Tracker, string)
 func Run(t *testing.T, name string, setup Setup) {
 	ctx := context.Background()
 	t.Run("info", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		if err := tracker.Validate(name, tr); err != nil {
 			t.Fatal(err)
@@ -45,6 +46,7 @@ func Run(t *testing.T, name string, setup Setup) {
 	})
 
 	t.Run("create, list, show", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		action := uuid.NewString()
 		due := time.Now().Add(48 * time.Hour).Truncate(time.Hour)
@@ -72,6 +74,7 @@ func Run(t *testing.T, name string, setup Setup) {
 	})
 
 	t.Run("a title starting with a dash", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "-v Water the plants", Actor: "alex"})
 		if got := listed(t, tr, dir, id); got.Title != "-v Water the plants" {
@@ -80,6 +83,7 @@ func Run(t *testing.T, name string, setup Setup) {
 	})
 
 	t.Run("close and reopen", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Book the dentist", Actor: "alex"})
 		before := listed(t, tr, dir, id).Version
@@ -98,6 +102,7 @@ func Run(t *testing.T, name string, setup Setup) {
 	})
 
 	t.Run("dismiss", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Renew the library card", Actor: "alex"})
 		if check(t, tr, api.KindDismiss, tr.Dismiss(ctx, dir, id, "alex")) {
@@ -110,6 +115,7 @@ func Run(t *testing.T, name string, setup Setup) {
 	})
 
 	t.Run("snooze", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Call the plumber", Actor: "alex"})
 		until := time.Now().Add(72 * time.Hour).Truncate(time.Minute)
@@ -128,6 +134,7 @@ func Run(t *testing.T, name string, setup Setup) {
 	})
 
 	t.Run("note", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		id := create(t, tr, dir, tracker.NewIssue{Title: "Pick up the parcel", Actor: "alex"})
 		before := listed(t, tr, dir, id).Version
@@ -154,6 +161,7 @@ func Run(t *testing.T, name string, setup Setup) {
 	})
 
 	t.Run("subtask", func(t *testing.T) {
+		t.Parallel()
 		tr, dir := setup(t)
 		parent := create(t, tr, dir, tracker.NewIssue{Title: "Plan the trip", Actor: "alex"})
 		id, err := tr.Create(ctx, dir, tracker.NewIssue{Title: "Book the train", Parent: parent, Actor: "alex"})

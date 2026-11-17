@@ -40,6 +40,7 @@ const viewFixture = `{
 }`
 
 func TestToIssue(t *testing.T) {
+	t.Parallel()
 	var v viewJSON
 	if err := json.Unmarshal([]byte(viewFixture), &v); err != nil {
 		t.Fatal(err)
@@ -67,6 +68,7 @@ func TestToIssue(t *testing.T) {
 }
 
 func TestMapStatus(t *testing.T) {
+	t.Parallel()
 	board := []string{"Inbox", "To Do", "Doing", "Shipped"}
 	for _, c := range []struct {
 		status string
@@ -94,6 +96,7 @@ func TestMapStatus(t *testing.T) {
 }
 
 func TestParseStatuses(t *testing.T) {
+	t.Parallel()
 	if got := parseStatuses("To Do, In Progress, Done\n"); strings.Join(got, "|") != "To Do|In Progress|Done" {
 		t.Fatalf("got %q", got)
 	}
@@ -103,6 +106,7 @@ func TestParseStatuses(t *testing.T) {
 }
 
 func TestPriorities(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]int{"High": 1, "medium": 2, "low": 3, "Critical": 0, "someday": 2} {
 		if got := mapPriority(&in); got != want {
 			t.Errorf("%q = %d; want %d", in, got, want)
@@ -114,6 +118,7 @@ func TestPriorities(t *testing.T) {
 }
 
 func TestParseTime(t *testing.T) {
+	t.Parallel()
 	for _, s := range []string{"2026-03-01T08:15:00Z", "2026-03-01"} {
 		if parseTime(&s) == nil {
 			t.Errorf("cannot read %q", s)
@@ -128,6 +133,7 @@ func TestParseTime(t *testing.T) {
 // The version follows the file, so a new comment changes it, and the status
 // and parent title, which come from outside it.
 func TestFingerprint(t *testing.T) {
+	t.Parallel()
 	is := tracker.Issue{ID: "TASK-1", Title: "Water the plants", Status: tracker.StatusOpen}
 	file := []byte("---\nid: TASK-1\n---\n")
 	base := fingerprint(is, file)
@@ -145,6 +151,7 @@ func TestFingerprint(t *testing.T) {
 }
 
 func TestListJSONRefusesPart(t *testing.T) {
+	t.Parallel()
 	var l listJSON
 	if err := json.Unmarshal([]byte(`{"schemaVersion":1,"kind":"task-list","tasks":[],"total":9,"nextSkip":5}`), &l); err != nil {
 		t.Fatal(err)
@@ -155,6 +162,7 @@ func TestListJSONRefusesPart(t *testing.T) {
 }
 
 func TestDetect(t *testing.T) {
+	t.Parallel()
 	write := func(t *testing.T, dir, name, body string) {
 		t.Helper()
 		p := filepath.Join(dir, name)
@@ -199,6 +207,7 @@ func TestDetect(t *testing.T) {
 }
 
 func TestTaskFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	tasks := filepath.Join(dir, "backlog", "tasks")
 	if err := os.MkdirAll(tasks, 0o755); err != nil {
@@ -220,6 +229,7 @@ func TestTaskFiles(t *testing.T) {
 }
 
 func TestCheckVersion(t *testing.T) {
+	t.Parallel()
 	for v, ok := range map[string]bool{"1.54.0": true, "1.51.0": true, "v2.0": true, "1.50.1": false, "1.51.0-beta.1": false, "soon": false} {
 		if err := checkVersion(v); (err == nil) != ok {
 			t.Errorf("checkVersion(%q) = %v", v, err)
@@ -228,6 +238,7 @@ func TestCheckVersion(t *testing.T) {
 }
 
 func TestCheckID(t *testing.T) {
+	t.Parallel()
 	for _, id := range []string{"TASK-1", "back-760.1", "task-001"} {
 		if err := checkID(id); err != nil {
 			t.Errorf("%q: %v", id, err)
@@ -241,6 +252,7 @@ func TestCheckID(t *testing.T) {
 }
 
 func TestDescribe(t *testing.T) {
+	t.Parallel()
 	b := &Tracker{}
 	for cmd, want := range map[string]string{
 		"backlog task view TASK-1 --plain":                       "Reading the task",
@@ -260,6 +272,7 @@ func TestDescribe(t *testing.T) {
 }
 
 func TestPromptNamesCommands(t *testing.T) {
+	t.Parallel()
 	b := &Tracker{}
 	p := b.Prompt("TASK-3", nil)
 	for _, want := range []string{"backlog task view TASK-3", "backlog task edit TASK-3 --status Done", "--comment-author \"$" + AuthorEnv + "\""} {
