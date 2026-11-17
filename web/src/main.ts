@@ -2117,7 +2117,7 @@ const actions = createActions({
   newId,
   now,
   item: (key) => byKey(key),
-  onError: (during, e) => showToast(`Could not ${during}: ${e.message}`),
+  onError: (during, e) => showToast(errorText(e, { other: (m) => `Could not ${during}: ${m}` })),
 });
 
 /** Posts one action; the hub's copy of it, or null when it failed (a toast says why). */
