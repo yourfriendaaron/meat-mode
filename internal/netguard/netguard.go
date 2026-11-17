@@ -1,6 +1,8 @@
 // Package netguard tells private network addresses from the rest. The hub
 // refuses requests from outside the private set and the bridge refuses a hub
-// outside it (docs/api.md, Private network only).
+// outside it (docs/api.md, Private network only). It also holds what the
+// bridge and the terminal viewer share as clients of the hub: the guarded
+// HTTP client and the safe printing of the hub's error text.
 //
 // The set is built from named prefixes, not from net.IP.IsPrivate, which
 // leaves out the shared address space Tailscale uses and is not meant for

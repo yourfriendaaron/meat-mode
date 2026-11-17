@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
 
@@ -156,20 +155,7 @@ func New(hub string, allowed netguard.Set, s *Session, onSession func(Session)) 
 		cp.Hub = n
 		c.session = &cp
 	}
-	// The client never follows a redirect, which would carry the cookie or
-	// the password to wherever the Location points, and never uses a proxy
-	// from the environment, which would dial for it.
-	c.http = &http.Client{
-		Transport: &http.Transport{
-			Proxy:                 nil,
-			DialContext:           c.dial,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-			IdleConnTimeout:       90 * time.Second,
-			ForceAttemptHTTP2:     true,
-		},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
+	c.http = netguard.Client(http.Client{}, c.dial)
 	return c, nil
 }
 
@@ -314,9 +300,9 @@ func statusError(resp *http.Response, data []byte) error {
 	if code/100 == 3 {
 		return &HTTPError{Status: code, Msg: fmt.Sprintf(
 			"the hub replied %d with a redirect to %q; the viewer does not follow redirects, so give the final address",
-			code, safeMessage(resp.Header.Get("Location")))}
+			code, netguard.SafeMessage(resp.Header.Get("Location")))}
 	}
-	msg := hubMessage(data)
+	msg := netguard.HubMessage(data)
 	if msg == "" {
 		msg = http.StatusText(code)
 	}
@@ -327,41 +313,6 @@ func statusError(resp *http.Response, data []byte) error {
 		return &RetryError{Status: code, After: retryAfter(resp.Header.Get("Retry-After")), Msg: msg}
 	}
 	return &HTTPError{Status: code, Msg: fmt.Sprintf("the hub replied %d: %s", code, msg)}
-}
-
-// maxMessageRunes is the most of the hub's text an error message carries;
-// anything longer is cut, so a huge body cannot flood the terminal.
-const maxMessageRunes = 2000
-
-// safeMessage makes one line of the hub's text safe to print: no control
-// character, bidi control or invisible format character survives, and it
-// stops at maxMessageRunes runes.
-func safeMessage(s string) string {
-	var b strings.Builder
-	n := 0
-	for _, r := range s {
-		if n >= maxMessageRunes {
-			break
-		}
-		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) || unicode.Is(unicode.Cf, r) {
-			continue
-		}
-		b.WriteRune(r)
-		n++
-	}
-	return strings.TrimSpace(b.String())
-}
-
-// hubMessage is the hub's {"error"} text, or the body as it is, made
-// safe to print.
-func hubMessage(data []byte) string {
-	var e struct {
-		Error string `json:"error"`
-	}
-	if json.Unmarshal(data, &e) == nil && e.Error != "" {
-		return safeMessage(e.Error)
-	}
-	return safeMessage(string(data))
 }
 
 // retryAfter reads Retry-After as seconds or an HTTP date; 0 when absent
