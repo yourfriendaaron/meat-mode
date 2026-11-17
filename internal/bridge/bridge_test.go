@@ -66,8 +66,8 @@ func newWorld(t *testing.T, real bool) *world {
 // both runs a test against the fake tracker and, when bd is installed,
 // beads over real bd.
 func both(t *testing.T, f func(t *testing.T, w *world)) {
-	t.Run("fake", func(t *testing.T) { f(t, newWorld(t, false)) })
-	t.Run("bd", func(t *testing.T) { f(t, newWorld(t, true)) })
+	t.Run("fake", func(t *testing.T) { t.Parallel(); f(t, newWorld(t, false)) })
+	t.Run("bd", func(t *testing.T) { t.Parallel(); f(t, newWorld(t, true)) })
 }
 
 // repo makes a repo of the world's tracker under the root, opted in or not.
@@ -176,6 +176,7 @@ func action(name, kind, repo, bead string, p api.Payload) api.Action {
 }
 
 func TestReplaysEveryKindOnce(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		dir := w.repo("garden", true)
 		water := w.seed(dir, "Water the plants")
@@ -245,6 +246,7 @@ func TestReplaysEveryKindOnce(t *testing.T) {
 // journal recorded done or the hub heard the result. The restarted bridge
 // must find the change and not make it twice.
 func TestSurvivesCrashMidReplay(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		dir := w.repo("garden", true)
 		water := w.seed(dir, "Water the plants")
@@ -299,6 +301,7 @@ func TestSurvivesCrashMidReplay(t *testing.T) {
 // TestResendsResultAfterLostReport: bd ran and done was journaled, but the
 // hub never heard the result. The next round re-sends it without bd.
 func TestResendsResultAfterLostReport(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	water := w.seed(dir, "Water the plants")
@@ -319,6 +322,7 @@ func TestResendsResultAfterLostReport(t *testing.T) {
 }
 
 func TestSkipsReposNotOptedIn(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		in := w.repo("garden", true)
 		out := w.repo("kitchen", false)
@@ -356,6 +360,7 @@ func TestSkipsReposNotOptedIn(t *testing.T) {
 // Anything else, such as a bead without the human label or a flag-shaped id,
 // is refused without running bd.
 func TestRefusesUnknownBeads(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		dir := w.repo("garden", true)
 		water := w.seed(dir, "Water the plants")
@@ -395,6 +400,7 @@ func TestRefusesUnknownBeads(t *testing.T) {
 // hub cannot take fails the add, and a listed id the hub cannot take, such
 // as one under the provisional prefix, cannot be named by an action.
 func TestRefusesIDsTheHubCannotTake(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	w.seed(dir, "Water the plants")
@@ -418,6 +424,7 @@ func TestRefusesIDsTheHubCannotTake(t *testing.T) {
 }
 
 func TestIgnoresActionsForAnotherBridge(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	water := w.seed(dir, "Water the plants")
@@ -434,6 +441,7 @@ func TestIgnoresActionsForAnotherBridge(t *testing.T) {
 }
 
 func TestSyncsOnlyWhenSomethingChanged(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	water := w.seed(dir, "Water the plants")
@@ -467,6 +475,7 @@ func TestSyncsOnlyWhenSomethingChanged(t *testing.T) {
 }
 
 func TestOneRepoFailingDoesNotStopOthers(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	bad := w.repo("broken", true)
 	good := w.repo("garden", true)
@@ -481,6 +490,7 @@ func TestOneRepoFailingDoesNotStopOthers(t *testing.T) {
 // A repo whose tasks the hub cannot take, by id or because it refuses the
 // set, does not stop the repos after it from syncing.
 func TestRefusedRepoDoesNotStopOthers(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	long := w.repo("a-long", true)
 	refused := w.repo("b-refused", true)
@@ -501,6 +511,7 @@ func TestRefusedRepoDoesNotStopOthers(t *testing.T) {
 }
 
 func TestHubDownThenBack(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	dir := w.repo("garden", true)
 	w.seed(dir, "Water the plants")
@@ -522,6 +533,7 @@ func TestHubDownThenBack(t *testing.T) {
 }
 
 func TestRefusesOldBD(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	b := w.start()
 	b.Trackers = []tracker.Tracker{&beads.CLI{Bin: fakeBD(t, "1.2.2")}}
@@ -535,6 +547,7 @@ func TestRefusesOldBD(t *testing.T) {
 }
 
 func TestRunStopsWithContext(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	w.repo("garden", true)
 	ctx, cancel := context.WithCancel(w.ctx)
@@ -554,6 +567,7 @@ func TestRunStopsWithContext(t *testing.T) {
 }
 
 func TestIgnoresActionsWithoutAUUID(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		dir := w.repo("garden", true)
 		water := w.seed(dir, "Water the plants")
@@ -575,6 +589,7 @@ func TestIgnoresActionsWithoutAUUID(t *testing.T) {
 }
 
 func TestScanCadence(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	w.repo("garden", true)
 	b := w.start()
@@ -601,6 +616,7 @@ func TestScanCadence(t *testing.T) {
 }
 
 func TestSameNamedReposSyncSideBySide(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		home := w.repo("projects/garden", true)
 		work := w.repo("work/garden", true)
@@ -628,6 +644,7 @@ func TestSameNamedReposSyncSideBySide(t *testing.T) {
 }
 
 func TestSyncSwitch(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		garden := w.repo("projects/garden", false)
 		w.seed(garden, "Water the plants")
@@ -676,6 +693,7 @@ func TestSyncSwitch(t *testing.T) {
 // the hub, and reports a close the tracker refuses while a child is open in
 // plain words.
 func TestSubtasks(t *testing.T) {
+	t.Parallel()
 	both(t, func(t *testing.T, w *world) {
 		dir := w.repo("garden", true)
 		water := w.seed(dir, "Water the plants")
@@ -716,6 +734,7 @@ func TestSubtasks(t *testing.T) {
 // tracker does not list fails with "<title> cannot <kind>", as the hub
 // would refuse it, and nothing is written.
 func TestRefusesWhatTheTrackerCannotDo(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	w.fake.Inf = tracker.Info{Name: "plain", Title: "Plain", Actions: []string{api.KindDone, api.KindAdd}}
 	w.tr = w.fake.Tracker()
@@ -760,6 +779,7 @@ func TestRefusesWhatTheTrackerCannotDo(t *testing.T) {
 // hello and finds no repos, while the others carry on. Only when every check
 // fails does the bridge refuse to start.
 func TestSkipsAFailedTracker(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t, false)
 	w.repo("garden", true)
 	broken := fake.New()

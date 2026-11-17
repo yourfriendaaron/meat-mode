@@ -43,8 +43,7 @@ type Hub struct {
 	// failIcons, when not 0, answers PUT /bridge/v1/icons with that status.
 	failIcons int
 	runs      map[string][]api.RunReport // bridge -> its last run list
-	runPuts   map[string]int
-	queue     map[string][]api.Action // bridge -> actions it was sent
+	queue     map[string][]api.Action    // bridge -> actions it was sent
 	results   map[string][]api.ActionResult
 	// atResult is the bridge's run list as it stood when each action's
 	// latest result arrived.
@@ -85,7 +84,7 @@ func New(tokens map[string]string) *Hub {
 		tokens: tokens, repos: map[string][]api.Repo{}, items: map[string][]api.Item{},
 		itemPuts: map[string]int{}, epics: map[string][]api.EpicRow{}, epicPuts: map[string]int{}, queue: map[string][]api.Action{}, results: map[string][]api.ActionResult{},
 		atResult: map[string][]api.RunReport{}, icons: map[string][]byte{}, iconPuts: map[string]int{},
-		runs: map[string][]api.RunReport{}, runPuts: map[string]int{},
+		runs: map[string][]api.RunReport{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /bridge/v1/hello", h.auth(h.hello))
@@ -512,7 +511,6 @@ func (h *Hub) putRuns(w http.ResponseWriter, r *http.Request, bridge string) {
 	}
 	h.mu.Lock()
 	h.runs[bridge] = runs
-	h.runPuts[bridge]++
 	h.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -740,11 +738,4 @@ func (h *Hub) Runs(bridge string) []api.RunReport {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return slices.Clone(h.runs[bridge])
-}
-
-// RunPuts counts the run lists received from a bridge.
-func (h *Hub) RunPuts(bridge string) int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.runPuts[bridge]
 }

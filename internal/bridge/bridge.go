@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -49,16 +50,15 @@ type Bridge struct {
 	// records one (in bridge.json). A nil SaveAgents refuses them.
 	Agents     map[string]bool
 	SaveAgents func(repo string, on bool) error
-	// LoadAgents, when set, rereads the agents map (from bridge.json) before
-	// each repo report and before each ask, so a change made with `meat-mode
-	// bridge agents` while the bridge runs takes effect at once.
-	LoadAgents func() (map[string]bool, error)
-	// Epics are the epics switches by repo name, SaveEpics records one
-	// switched off in the app, and LoadEpics rereads them before each repo
-	// report, as for agents. A nil SaveEpics refuses them.
+	// Epics are the epics switches by repo name, and SaveEpics records one
+	// switched off in the app. A nil SaveEpics refuses them.
 	Epics     map[string]bool
 	SaveEpics func(repo string, on bool) error
-	LoadEpics func() (map[string]bool, error)
+	// LoadConfig, when set, rereads bridge.json for the agents and epics
+	// maps once before each repo report and before each ask, so a change
+	// made with `meat-mode bridge agents` or `epics` while the bridge runs
+	// takes effect at once.
+	LoadConfig func() (Saved, error)
 	// LoadSpaceColours, when set, rereads the workspace colours file before
 	// each repo report. An error means no colours, never the last read.
 	LoadSpaceColours func() ([]SpaceColour, error)
@@ -79,27 +79,25 @@ type Bridge struct {
 	// record. Tests use it to simulate a crash.
 	afterWrite func(api.Action) error
 
-	name       string            // from hello; empty until the hub greeted us
-	available  []tracker.Tracker // the trackers whose check last passed
-	versions   []api.TrackerVersion
-	checked    bool             // the trackers were checked since the last hello
-	harness    *api.HarnessInfo // the agent harness at its last check; nil without a runner
-	repos      map[string]*repoState
-	found      []Repo // the last scan
-	scannedAt  time.Time
-	reposSent  []api.Repo
-	spaceWarn  string // the last workspace colours problem logged
+	name      string            // from hello; empty until the hub greeted us
+	available []tracker.Tracker // the trackers whose check last passed
+	versions  []api.TrackerVersion
+	checked   bool             // the trackers were checked since the last hello
+	harness   *api.HarnessInfo // the agent harness at its last check; nil without a runner
+	repos     map[string]*repoState
+	found     []Repo // the last scan
+	scannedAt time.Time
+	reposSent []api.Repo
+	spaceWarn string // the last workspace colours problem logged
+	// The last config reread problem and open mode logged, so each is
+	// logged when it first appears, not on every poll.
+	configWarn string
+	modeWarn   os.FileMode
 	reposAt    time.Time
 	lastFullAt time.Time
-	// The epics pass: what it knows by repo, until when it sends no epics
-	// to a hub that has no epics route, and whether it said so.
-	epicStates      map[string]*epicState
-	epicsOffUntil   time.Time
-	epicsGoneLogged bool
-	// The icon pass, likewise.
-	iconStates      map[string]*iconState
-	iconsOffUntil   time.Time
-	iconsGoneLogged bool
+	// The epics and icon passes.
+	epics hubPass[epicMore]
+	icons hubPass[struct{}]
 }
 
 type repoState struct {
@@ -124,25 +122,12 @@ func (b *Bridge) now() time.Time {
 	return time.Now()
 }
 
-func (b *Bridge) actionEvery() time.Duration {
+// every is the interval d, or Poll in its place when Poll is set.
+func (b *Bridge) every(d time.Duration) time.Duration {
 	if b.Poll > 0 {
 		return b.Poll
 	}
-	return ActionEvery
-}
-
-func (b *Bridge) syncEvery() time.Duration {
-	if b.Poll > 0 {
-		return b.Poll
-	}
-	return SyncEvery
-}
-
-func (b *Bridge) scanEvery() time.Duration {
-	if b.Poll > 0 {
-		return b.Poll
-	}
-	return ScanEvery
+	return d
 }
 
 func (b *Bridge) log() *slog.Logger {
@@ -205,7 +190,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 	for {
 		if !time.Now().Before(next) {
 			err := b.Tick(ctx, false)
-			wait := b.actionEvery()
+			wait := b.every(ActionEvery)
 			if err != nil {
 				if ctx.Err() != nil {
 					return nil
@@ -312,7 +297,7 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if err := b.hubErr(err); err != nil {
 		return err
 	}
-	if b.now().Sub(b.lastFullAt) >= b.syncEvery() {
+	if b.now().Sub(b.lastFullAt) >= b.every(SyncEvery) {
 		full = true
 	}
 	if b.Runner != nil {
@@ -402,9 +387,8 @@ func (b *Bridge) syncedNames() []string {
 // rereads each found repo's opt-in, and reports the repo list when it
 // changed.
 func (b *Bridge) discover(ctx context.Context, rescan bool) error {
-	b.reloadAgents()
-	b.reloadEpics()
-	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.scanEvery() {
+	b.reloadConfig()
+	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.every(ScanEvery) {
 		b.found = Discover(b.Roots, b.Home, b.available, b.log())
 		b.scannedAt = b.now()
 	}
@@ -459,18 +443,29 @@ func (b *Bridge) spaceColours() []SpaceColour {
 	return entries
 }
 
-// reloadAgents rereads the agents map from the config file. A failed read
-// keeps the map the bridge has.
-func (b *Bridge) reloadAgents() {
-	if b.LoadAgents == nil {
+// reloadConfig rereads the agents and epics maps from the config file. A
+// failed read keeps the maps the bridge has. A problem, or a file others can
+// read, is logged when it first appears or changes, as spaceColours does.
+func (b *Bridge) reloadConfig() {
+	if b.LoadConfig == nil {
 		return
 	}
-	m, err := b.LoadAgents()
+	s, err := b.LoadConfig()
 	if err != nil {
-		b.log().Warn("cannot reread the agents switches; keeping the last ones", "err", err)
+		if msg := err.Error(); msg != b.configWarn {
+			b.log().Warn("cannot reread the agents and epics switches; keeping the last ones", "err", err)
+			b.configWarn = msg
+		}
 		return
 	}
-	b.Agents = m
+	b.configWarn = ""
+	b.Agents, b.Epics = s.Agents, s.Epics
+	if !s.Open() {
+		b.modeWarn = 0
+	} else if s.Mode != b.modeWarn {
+		warnOpen(b.log(), s.Path, s.Mode)
+		b.modeWarn = s.Mode
+	}
 }
 
 // syncRepo lists a repo's tasks for the person and pushes the full set when
@@ -484,7 +479,7 @@ func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
 	var changed []string
 	refused := map[string]bool{}
 	for _, i := range list {
-		if !api.ValidSegment(i.ID) || strings.HasPrefix(i.ID, api.ProvisionalPrefix) {
+		if !api.ValidBeadID(i.ID) {
 			if !st.refused[i.ID] {
 				b.log().Warn("skipping a task whose id the hub cannot take", "repo", st.Name, "id", i.ID)
 			}

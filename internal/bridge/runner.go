@@ -791,7 +791,8 @@ func (r *AgentRunner) settle(lr *liveRun, p *agentProc, waitErr error) {
 	r.mu.Unlock()
 	lr.log.Close()
 
-	state, reason, detail, said := api.RunStopped, "", "", ""
+	state, detail, said := api.RunStopped, "", ""
+	var reason string
 	switch {
 	case ending == api.ReasonStopped:
 		reason = ending

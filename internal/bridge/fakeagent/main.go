@@ -15,7 +15,7 @@
 //
 //	reply   write a note with bd comment, then end the turn
 //	close   write a note and close the bead with bd close
-//	slow    take a few tool steps first, FAKEAGENT_STEP apart (default 500ms), so a follow-up lands mid-turn
+//	slow    take a few tool steps first, --step apart (default 500ms), so a follow-up lands mid-turn
 //	usage   report a rejected rate limit, then end the turn with a usage-limit error
 //	budget  end the turn with the max-budget error
 //	fail    end the turn with an error result
@@ -61,6 +61,8 @@ var (
 	noteRe  = regexp.MustCompile("(?:bead|task) ([A-Za-z0-9][A-Za-z0-9._-]*):")
 	bead    string
 	fake    bool // --protocol fake
+	// stepPause is the time between the tool steps of a slow turn.
+	stepPause = 500 * time.Millisecond
 )
 
 func main() {
@@ -81,6 +83,10 @@ func main() {
 			prompt = next
 		case "--protocol":
 			fake = next == "fake"
+		case "--step":
+			if d, err := time.ParseDuration(next); err == nil {
+				stepPause = d
+			}
 		}
 	}
 	session = resume
@@ -183,10 +189,6 @@ func turn(words string, in chan string) {
 	}
 	step("Bash", map[string]any{"command": "bd show " + bead, "description": "Read the bead"}, bd("show", "--", bead))
 	if has("slow") {
-		pause := 500 * time.Millisecond
-		if d, err := time.ParseDuration(os.Getenv("FAKEAGENT_STEP")); err == nil {
-			pause = d
-		}
 		for _, s := range []struct {
 			name  string
 			input map[string]any
@@ -195,7 +197,7 @@ func turn(words string, in chan string) {
 			{"Bash", map[string]any{"command": "go test ./...", "description": "Run the tests"}},
 			{"Read", map[string]any{"file_path": "notes.txt"}},
 		} {
-			time.Sleep(pause)
+			time.Sleep(stepPause)
 			step(s.name, s.input, "ok")
 		}
 	}

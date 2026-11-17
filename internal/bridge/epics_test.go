@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -399,7 +397,7 @@ func TestEpicsOldHub(t *testing.T) {
 }
 
 // TestEpicsConflictReportsRepos: a 409 makes the next round report the
-// repos again, and the set goes once the hub holds the repo with epics on.
+// repos again and send the set once the hub holds the repo with epics on.
 func TestEpicsConflictReportsRepos(t *testing.T) {
 	ew := newEpicsWorld(t)
 	ew.tick(ew.b)
@@ -412,13 +410,14 @@ func TestEpicsConflictReportsRepos(t *testing.T) {
 	if ew.puts() != 2 || ew.rows() != nil {
 		t.Fatalf("after the conflict: %d puts, rows %v", ew.puts(), ids(ew.rows()))
 	}
+	// The next round reports the repos and sends the set, as for icons,
+	// without waiting for the next read.
 	ew.after(time.Second)
 	if got := ew.hub.Repos(us); len(got) != 1 || !got[0].EpicsOn {
 		t.Errorf("repos not reported again: %+v", got)
 	}
-	ew.after(time.Minute)
 	if len(ew.rows()) != 2 {
-		t.Errorf("unchanged set not sent after the conflict: %v", ids(ew.rows()))
+		t.Errorf("set not sent on the round after the conflict: %v", ids(ew.rows()))
 	}
 	if n := len(ew.hub.Hellos()); n != 1 {
 		t.Errorf("%d hellos, want 1", n)
@@ -475,8 +474,8 @@ func TestEpicsSwitch(t *testing.T) {
 	if _, ok := ew.hub.Epics(us, "projects/garden"); ok || ew.puts() != 1 {
 		t.Errorf("after the switch-off: %d puts, rows kept %v", ew.puts(), ok)
 	}
-	if len(ew.b.epicStates) != 0 {
-		t.Errorf("pass state kept: %+v", ew.b.epicStates)
+	if len(ew.b.epics.repos) != 0 {
+		t.Errorf("pass state kept: %+v", ew.b.epics.repos)
 	}
 	ew.after(RefreshEvery)
 	if ew.puts() != 1 {
@@ -587,25 +586,5 @@ func TestEpicsCommand(t *testing.T) {
 		if err := Main(context.Background(), append([]string{"epics"}, args...), env); err == nil || !strings.Contains(err.Error(), "usage") {
 			t.Errorf("epics %v = %v, want usage", args, err)
 		}
-	}
-}
-
-func TestBridgeRereadsEpicsBeforeReport(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "bridge.json")
-	must(t, Config{Token: "t"}.Save(path))
-	b := &Bridge{LoadEpics: func() (map[string]bool, error) { return LoadEpics(path) }}
-	b.reloadEpics()
-	if b.Epics["garden"] {
-		t.Fatal("epics on before the switch")
-	}
-	must(t, SaveEpics(path, "garden", true))
-	b.reloadEpics()
-	if !b.Epics["garden"] {
-		t.Error("the switch made by the command did not reach the bridge")
-	}
-	must(t, os.WriteFile(path, []byte("{"), 0o600))
-	b.reloadEpics()
-	if !b.Epics["garden"] {
-		t.Error("a failed reread dropped the switches")
 	}
 }

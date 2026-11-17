@@ -60,21 +60,11 @@ func (h *Hub) client() *http.Client {
 }
 
 func (h *Hub) newClient() *http.Client {
-	c := &http.Client{Timeout: 30 * time.Second}
+	base := http.Client{Timeout: 30 * time.Second}
 	if h.HTTP != nil {
-		cp := *h.HTTP
-		c = &cp
+		base = *h.HTTP
 	}
-	c.Transport = &http.Transport{
-		Proxy:                 nil, // a proxy from the environment would dial for us
-		DialContext:           h.dial,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		IdleConnTimeout:       90 * time.Second,
-		ForceAttemptHTTP2:     true,
-	}
-	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return c
+	return netguard.Client(base, h.dial)
 }
 
 // dial goes through netguard.Dialer, which refuses a hub outside the allowed
@@ -128,15 +118,12 @@ func (h *Hub) send(ctx context.Context, method, path, contentType string, body [
 	}
 	if resp.StatusCode/100 == 3 {
 		return fmt.Errorf("the hub replied %d with a redirect to %q; the bridge does not follow redirects, so set the hub URL to the final address",
-			resp.StatusCode, resp.Header.Get("Location"))
+			resp.StatusCode, netguard.SafeMessage(resp.Header.Get("Location")))
 	}
 	if resp.StatusCode/100 != 2 {
-		var e struct {
-			Error string `json:"error"`
-		}
-		msg := strings.TrimSpace(string(data))
-		if json.Unmarshal(data, &e) == nil && e.Error != "" {
-			msg = e.Error
+		msg := netguard.HubMessage(data)
+		if msg == "" {
+			msg = http.StatusText(resp.StatusCode)
 		}
 		return &HTTPError{Status: resp.StatusCode, Message: msg}
 	}

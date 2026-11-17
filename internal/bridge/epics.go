@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"slices"
 	"sort"
 	"strings"
@@ -109,34 +108,15 @@ func (b *Bridge) epicsOn(r Repo) bool {
 	return b.Epics[r.Name] && epicsOf(r.Tracker) != nil
 }
 
-// reloadEpics rereads the epics map from the config file. A failed read
-// keeps the map the bridge has.
-func (b *Bridge) reloadEpics() {
-	if b.LoadEpics == nil {
-		return
-	}
-	m, err := b.LoadEpics()
-	if err != nil {
-		b.log().Warn("cannot reread the epics switches; keeping the last ones", "err", err)
-		return
-	}
-	b.Epics = m
-}
-
 // epicState is what the epics pass knows of one repo.
-type epicState struct {
-	dir     string
-	tracker tracker.Tracker
-	readAt  time.Time // the last read
-	sent    string    // hash of the last set the hub took; "" before one
-	sentAt  time.Time
-	sentLen int
+type epicState = passRepo[epicMore]
+
+// epicMore is what the epics pass keeps of a repo beyond a hubPass.
+type epicMore struct {
+	sentLen int // rows in the last set the hub took
 	// emptyOnce: the last read came back empty while the last set sent was
 	// not, and was held back.
 	emptyOnce bool
-	// refused is the hash of the last set the hub refused (400 or 413); it
-	// is not sent again until it changes.
-	refused string
 	// comments is what the bridge has read of each row's comments, by id,
 	// and the count and time of the row it read them for.
 	comments map[string]epicComments
@@ -150,51 +130,30 @@ type epicComments struct {
 	comments  []api.Comment
 }
 
-func (b *Bridge) epicsEvery() time.Duration {
-	if b.Poll > 0 {
-		return b.Poll
-	}
-	return EpicsEvery
-}
-
 // syncEpics is the epics pass: for each repo with epics on it reads the
 // rows at most once per EpicsEvery and sends the outline when it differs
 // from the last set sent, or after RefreshEvery. It runs after discover and
 // replay, so the hub knows each repo it sends and a switch-off applied this
-// tick sends nothing. A 404, 409, 400 or 413 from the hub stops nothing
-// else; it returns other hub errors as items do.
+// tick sends nothing. The hub's reply is handled by hubPass.settle.
 func (b *Bridge) syncEpics(ctx context.Context) error {
-	if b.epicStates == nil {
-		b.epicStates = map[string]*epicState{}
-	}
-	on := map[string]bool{}
+	p := &b.epics
+	p.what, p.backoff = "epics", EpicsBackoff
 	names := make([]string, 0, len(b.repos))
 	for name, st := range b.repos {
 		if b.epicsOn(st.Repo) {
-			on[name] = true
 			names = append(names, name)
 		}
 	}
-	for name := range b.epicStates {
-		if !on[name] {
-			delete(b.epicStates, name) // switched off or gone
-		}
-	}
-	if b.now().Before(b.epicsOffUntil) {
+	if !p.begin(names, b.now()) {
 		return nil
 	}
 	slices.Sort(names)
 	for _, name := range names {
 		r := b.repos[name].Repo
-		es := b.epicStates[name]
-		if es == nil || es.dir != r.Dir || es.tracker != r.Tracker {
-			es = &epicState{dir: r.Dir, tracker: r.Tracker}
-			b.epicStates[name] = es
-		}
-		if !es.readAt.IsZero() && b.now().Sub(es.readAt) < b.epicsEvery() {
+		es, due := p.due(name, r, b.now(), b.every(EpicsEvery))
+		if !due {
 			continue
 		}
-		es.readAt = b.now()
 		rows, err := epicsOf(r.Tracker).EpicRows(ctx, r.Dir)
 		if err != nil {
 			b.log().Warn("cannot read epics", "repo", name, "err", err)
@@ -202,38 +161,23 @@ func (b *Bridge) syncEpics(ctx context.Context) error {
 		}
 		rows = tracker.Outline(rows)
 		b.fillEpicComments(ctx, name, es, rows)
-		if len(rows) == 0 && es.sentLen > 0 && !es.emptyOnce {
+		if len(rows) == 0 && es.more.sentLen > 0 && !es.more.emptyOnce {
 			// A tracker can answer an empty list by mistake; wait for the
 			// next read to say so too.
-			es.emptyOnce = true
+			es.more.emptyOnce = true
 			continue
 		}
-		es.emptyOnce = false
+		es.more.emptyOnce = false
 		sum := epicsHash(rows)
-		if sum == es.refused || (sum == es.sent && b.now().Sub(es.sentAt) < RefreshEvery) {
+		if es.unchanged(sum, b.now(), RefreshEvery) {
 			continue
 		}
 		err = b.Hub.PutEpics(ctx, name, rows)
-		var h *HTTPError
-		switch {
-		case err == nil:
-			es.sent, es.sentAt, es.sentLen, es.refused = sum, b.now(), len(rows), ""
-		case errors.As(err, &h) && h.Status == http.StatusNotFound:
-			if !b.epicsGoneLogged {
-				b.log().Warn("the hub does not take epics; sending none to it for an hour", "err", err)
-				b.epicsGoneLogged = true
-			}
-			b.epicsOffUntil = b.now().Add(EpicsBackoff)
-			return nil
-		case errors.As(err, &h) && h.Status == http.StatusConflict:
-			// The hub's repo list is not ours; report it again next tick.
-			b.log().Warn("the hub does not hold this repo with epics on; reporting the repos again", "repo", name, "err", err)
-			b.reposSent, es.sent = nil, ""
-		case refusedSet(err):
-			b.log().Warn("the hub refused this repo's epics; sending them again once they change", "repo", name, "err", err)
-			es.sent, es.refused = "", sum
-		default:
-			return hubError{err}
+		if err == nil {
+			es.more.sentLen = len(rows)
+		}
+		if stop, err := p.settle(b, name, es, sum, err); stop {
+			return err
 		}
 	}
 	return nil
@@ -252,9 +196,10 @@ func (b *Bridge) fillEpicComments(ctx context.Context, name string, es *epicStat
 	if !ok {
 		return
 	}
-	if es.comments == nil {
-		es.comments = map[string]epicComments{}
+	if es.more.comments == nil {
+		es.more.comments = map[string]epicComments{}
 	}
+	cache := es.more.comments
 	inRows := make(map[string]bool, len(rows))
 	var misses []int
 	for i := range rows {
@@ -263,15 +208,15 @@ func (b *Bridge) fillEpicComments(ctx context.Context, name string, es *epicStat
 		if r.CommentCount <= 0 {
 			continue
 		}
-		if c, ok := es.comments[r.ID]; ok && c.count == r.CommentCount && c.updatedAt.Equal(r.UpdatedAt) {
+		if c, ok := cache[r.ID]; ok && c.count == r.CommentCount && c.updatedAt.Equal(r.UpdatedAt) {
 			r.Comments = c.comments
 			continue
 		}
 		misses = append(misses, i)
 	}
-	for id := range es.comments {
+	for id := range cache {
 		if !inRows[id] {
-			delete(es.comments, id)
+			delete(cache, id)
 		}
 	}
 	rank := func(r api.EpicRow) int {
@@ -299,13 +244,13 @@ func (b *Bridge) fillEpicComments(ctx context.Context, name string, es *epicStat
 		for _, i := range misses {
 			r := &rows[i]
 			if err != nil {
-				if c, ok := es.comments[r.ID]; ok {
+				if c, ok := cache[r.ID]; ok {
 					r.Comments = c.comments
 				}
 				continue
 			}
 			if cs, ok := got[r.ID]; ok {
-				es.comments[r.ID] = epicComments{r.CommentCount, r.UpdatedAt, cs}
+				cache[r.ID] = epicComments{r.CommentCount, r.UpdatedAt, cs}
 				r.Comments = cs
 			}
 		}

@@ -66,10 +66,11 @@ func fakeAgent(t *testing.T) string {
 }
 
 // claudeHarness is the Claude Code harness running the fake agent, which
-// speaks its stream-json.
-func claudeHarness(t *testing.T) harness.Harness {
+// speaks its stream-json, with args after its path.
+func claudeHarness(t *testing.T, args ...string) harness.Harness {
 	t.Helper()
-	h, err := claude.New(harness.Env{Command: []string{fakeAgent(t)}, Getenv: os.Getenv, LookPath: exec.LookPath})
+	cmd := append([]string{fakeAgent(t)}, args...)
+	h, err := claude.New(harness.Env{Command: cmd, Getenv: os.Getenv, LookPath: exec.LookPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,10 +79,10 @@ func claudeHarness(t *testing.T) harness.Harness {
 
 // fakeHarness is internal/harness/fake running the fake agent in its
 // protocol, set up by set.
-func fakeHarness(t *testing.T, set func(*harness.Info)) *fakeh.Fake {
+func fakeHarness(t *testing.T, set func(*harness.Info), args ...string) *fakeh.Fake {
 	t.Helper()
 	f := fakeh.New()
-	f.Command = []string{fakeAgent(t), "--protocol", "fake"}
+	f.Command = append([]string{fakeAgent(t), "--protocol", "fake"}, args...)
 	if set != nil {
 		set(&f.Inf)
 	}
@@ -211,9 +212,9 @@ func hasCommentBy(i tracker.Issue, author, text string) bool {
 }
 
 func TestAgentRunWritesNoteThenCloses(t *testing.T) {
-	t.Setenv("FAKEAGENT_STEP", "1s")
+	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridge(true)
+	b := w.agentBridgeWith(true, claudeHarness(t, "--step", "1s"))
 	w.tick(b)
 	w.ask(b, "ask-close", id, "Please go slow and close it")
 
@@ -296,9 +297,9 @@ func TestAgentRunOutcomes(t *testing.T) {
 }
 
 func TestAgentFollowUpJoinsLiveRun(t *testing.T) {
-	t.Setenv("FAKEAGENT_STEP", "2s")
+	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridge(true)
+	b := w.agentBridgeWith(true, claudeHarness(t, "--step", "2s"))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
@@ -619,7 +620,7 @@ func TestAgentsSwitchPerRepo(t *testing.T) {
 
 	// The machine's own switch reaches the next report and the next ask.
 	file := map[string]bool{"garden": true}
-	b.LoadAgents = func() (map[string]bool, error) { return file, nil }
+	b.LoadConfig = func() (Saved, error) { return Saved{Config: Config{Agents: file}}, nil }
 	w.tick(b)
 	for _, r := range w.hub.Repos(us) {
 		if r.Name == "garden" && !r.AgentsAllowed {
