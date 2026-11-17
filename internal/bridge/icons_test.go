@@ -398,7 +398,7 @@ func TestIconsConflict(t *testing.T) {
 	// changes; the bridge looks again before its next report is due.
 	iw.hub.ForgetRepos(us)
 	iw.setIcon(iconOf("two"))
-	iw.b.iconStates[iw.name].lookedAt = time.Time{}
+	iw.b.icons.repos[iw.name].readAt = time.Time{}
 	iw.after(time.Minute)
 	if iw.puts() != 2 || iw.hub.Repos(us) != nil {
 		t.Fatalf("after the conflict: %d puts, repos %+v", iw.puts(), iw.hub.Repos(us))

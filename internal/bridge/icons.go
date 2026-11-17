@@ -2,9 +2,7 @@ package bridge
 
 import (
 	"context"
-	"errors"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -284,90 +282,43 @@ func asciiLower(b []byte) string {
 	return string(out)
 }
 
-// iconState is what the icon pass knows of one repo.
-type iconState struct {
-	dir      string
-	lookedAt time.Time // the last look
-	took     bool      // the hub took an icon, or none, since the start
-	tookAt   time.Time // when it last took one
-	sent     string    // api.IconHash of what it took; "" for none
-	// refused holds the hashes the hub refused (400 or 413); none is sent
-	// again, and each is logged once.
-	refused map[string]bool
-}
-
 // syncIcons is the icon pass: for each repo in the last repo report the hub
 // took, it looks for the repo's icon at most once per IconsEvery and sends
 // it when its hash differs from the last one the hub took, so after a start
 // every repo's icon goes once, an empty body for a repo with none. It runs
-// after discover, so the hub holds each repo it sends. A 404, 409, 400 or
-// 413 stops nothing else; other hub errors leave the icon unsent until the
-// next look and are returned as items' are.
+// after discover, so the hub holds each repo it sends. The hub's reply is
+// handled by hubPass.settle.
 func (b *Bridge) syncIcons(ctx context.Context) error {
-	if b.iconStates == nil {
-		b.iconStates = map[string]*iconState{}
-	}
-	reported := map[string]bool{}
+	p := &b.icons
+	p.what, p.backoff = "icons", IconsBackoff
 	names := make([]string, 0, len(b.reposSent))
 	for _, r := range b.reposSent {
 		if st := b.repos[r.Name]; st != nil {
-			reported[r.Name] = true
 			names = append(names, r.Name)
 		}
 	}
-	for name := range b.iconStates {
-		if !reported[name] {
-			delete(b.iconStates, name)
-		}
-	}
-	if b.now().Before(b.iconsOffUntil) {
+	if !p.begin(names, b.now()) {
 		return nil
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		dir := b.repos[name].Dir
-		is := b.iconStates[name]
-		if is == nil || is.dir != dir {
-			is = &iconState{dir: dir, refused: map[string]bool{}}
-			b.iconStates[name] = is
-		}
-		if !is.lookedAt.IsZero() && b.now().Sub(is.lookedAt) < b.every(IconsEvery) {
+		r := b.repos[name].Repo
+		is, due := p.due(name, r, b.now(), b.every(IconsEvery))
+		if !due {
 			continue
 		}
-		is.lookedAt = b.now()
-		icon := FindIcon(dir)
+		icon := FindIcon(r.Dir)
 		sum := ""
 		if icon != nil {
 			sum = api.IconHash(icon)
 		}
 		// The same icon goes again once an hour, so a hub restored from a
 		// backup that lacks it gets it back.
-		if is.refused[sum] || (is.took && sum == is.sent && b.now().Sub(is.tookAt) < IconsResend*b.every(IconsEvery)) {
+		if is.unchanged(sum, b.now(), IconsResend*b.every(IconsEvery)) {
 			continue
 		}
-		err := b.Hub.PutIcon(ctx, name, icon)
-		var h *HTTPError
-		switch {
-		case err == nil:
-			is.took, is.sent, is.tookAt = true, sum, b.now()
-		case errors.As(err, &h) && h.Status == http.StatusNotFound:
-			if !b.iconsGoneLogged {
-				b.log().Warn("the hub does not take icons; sending none to it for an hour", "err", err)
-				b.iconsGoneLogged = true
-			}
-			is.lookedAt = time.Time{}
-			b.iconsOffUntil = b.now().Add(IconsBackoff)
-			return nil
-		case errors.As(err, &h) && h.Status == http.StatusConflict:
-			// The hub's repo list is not ours; report it again, then send.
-			b.log().Warn("the hub does not hold this repo; reporting the repos again", "repo", name, "err", err)
-			b.reposSent = nil
-			is.took, is.sent, is.lookedAt = false, "", time.Time{}
-		case refusedSet(err):
-			b.log().Warn("the hub refused this repo's icon; not sending it again", "repo", name, "icon", sum, "err", err)
-			is.refused[sum] = true
-		default:
-			return hubError{err}
+		if stop, err := p.settle(b, name, is, sum, b.Hub.PutIcon(ctx, name, icon)); stop {
+			return err
 		}
 	}
 	return nil

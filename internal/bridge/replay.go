@@ -173,7 +173,7 @@ func (b *Bridge) applySwitch(ctx context.Context, a api.Action, st *repoState) (
 	}
 	(*switches)[a.Repo] = on
 	if a.Kind == api.KindEpics {
-		delete(b.epicStates, a.Repo)
+		delete(b.epics.repos, a.Repo)
 	}
 	// Report the repo list before the result, so the app never shows the old
 	// position between the two.

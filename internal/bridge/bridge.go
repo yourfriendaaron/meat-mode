@@ -95,15 +95,9 @@ type Bridge struct {
 	modeWarn   os.FileMode
 	reposAt    time.Time
 	lastFullAt time.Time
-	// The epics pass: what it knows by repo, until when it sends no epics
-	// to a hub that has no epics route, and whether it said so.
-	epicStates      map[string]*epicState
-	epicsOffUntil   time.Time
-	epicsGoneLogged bool
-	// The icon pass, likewise.
-	iconStates      map[string]*iconState
-	iconsOffUntil   time.Time
-	iconsGoneLogged bool
+	// The epics and icon passes.
+	epics hubPass[epicMore]
+	icons hubPass[struct{}]
 }
 
 type repoState struct {
