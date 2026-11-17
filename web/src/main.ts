@@ -2140,7 +2140,7 @@ function undoing(h: Handle): (() => Promise<void>) | undefined {
   };
 }
 
-/** Performs closing actions, drawing their local change with `draw`, and offers Undo. */
+/** Performs actions, drawing their local change with `draw`, and offers Undo in a toast saying `text`. */
 async function closing(acts: NewAction[], text: string, opts: { tell?: string; draw?: () => void } = {}) {
   const h = await actions.perform(acts, { onPatched: opts.draw ?? render });
   if (h.posted.length) showToast(text, undoing(h), opts.tell);
@@ -2484,13 +2484,6 @@ async function revokeAgents(bridge: string, repo: string) {
 
 // ---------- editing personal items ----------
 
-/** Performs an action on a personal item, offering Undo with `toast` when given. */
-async function postEdit(a: NewAction, toast?: string) {
-  const h = await actions.perform([a], { onPatched: render });
-  if (h.posted.length && toast) showToast(toast, undoing(h));
-  await refresh();
-}
-
 /**
  * Saves one change of a personal item as an edit holding only what changed,
  * with Undo. Returns why it cannot be saved, or "".
@@ -2503,7 +2496,7 @@ function saveField(key: string, change: (d: EditDraft) => void): string {
   const err = editError(it, d, now());
   if (err) return err;
   const set = diffEdit(it, d, now());
-  if (set) void postEdit({ id: newId(), kind: "edit", key, payload: { set } }, "Saved");
+  if (set) void closing([{ id: newId(), kind: "edit", key, payload: { set } }], "Saved");
   return "";
 }
 
@@ -2688,7 +2681,7 @@ function saveSchedule() {
       return;
     case "edit":
       closePage();
-      void postEdit({ id: newId(), kind: "edit", key: it.key, payload: { set: r.set } }, "Saved");
+      void closing([{ id: newId(), kind: "edit", key: it.key, payload: { set: r.set } }], "Saved");
   }
 }
 
@@ -2700,7 +2693,7 @@ function answerAsk(once: boolean) {
   const key = p.key;
   closePage();
   if (once) doSnooze([key], until);
-  else void postEdit({ id: newId(), kind: "edit", key, payload: { set } }, "Saved");
+  else void closing([{ id: newId(), kind: "edit", key, payload: { set } }], "Saved");
 }
 
 function openNoteEdit(key: string, commentId: string) {
@@ -2731,13 +2724,13 @@ function saveNoteEdit() {
   closeNoteEdit();
   if (text === c.text) return;
   const a: NewAction = { id: newId(), kind: "note-edit", key: n.key, payload: { commentId: c.id, text } };
-  void postEdit(a, "Note saved");
+  void closing([a], "Note saved");
 }
 
 function deleteNote(key: string, commentId: string) {
   if (S.noteEdit?.commentId === commentId) S.noteEdit = null;
   const a: NewAction = { id: newId(), kind: "note-delete", key, payload: { commentId } };
-  void postEdit(a, "Note deleted");
+  void closing([a], "Note deleted");
   $<HTMLElement>("#note-input").focus({ preventScroll: true });
 }
 
