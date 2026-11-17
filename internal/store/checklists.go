@@ -63,7 +63,7 @@ func convertChecklist(parent api.Item, checks []legacyCheck, at time.Time, taken
 	// The app lists sub-tasks by id, so the numbers are padded to one width.
 	width := len(fmt.Sprint(len(texts)))
 	for i, c := range texts {
-		id := ""
+		var id string
 		for n := 1; ; n++ {
 			id = fmt.Sprintf("%s.%0*d", parent.ID, width, i+1)
 			if n > 1 {

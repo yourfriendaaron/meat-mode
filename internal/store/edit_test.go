@@ -747,3 +747,32 @@ func TestChangingUntilKeepsTheSeries(t *testing.T) {
 		t.Fatalf("start after a move off the series %v", it.Repeat.Start)
 	}
 }
+
+// An add takes a title up to MaxTitleLen, and the bead the bridge then
+// reports keeps it whole, so the app never shows it cut. An edit that
+// leaves the title out keeps it, and a tracker's item takes no edit, so
+// an edit never sends a shortened title back to its bead.
+func TestLongTitleRoundTrips(t *testing.T) {
+	s, _ := open(t)
+	seed(t, s)
+	long := strings.Repeat("Water the plants ", 42)[:700]
+	_, _, err := s.AppendAction(api.NewAction{ID: id1, Kind: api.KindAdd, Bridge: "laptop", Repo: "garden",
+		Payload: api.Payload{Title: long}}, "alex-app")
+	must(t, err)
+	must(t, s.ReportResult("laptop", id1, api.ActionResult{OK: true, BeadID: "gd-7"}))
+	must(t, s.ReplaceItems("laptop", "garden", []api.Item{{ID: "gd-7", Title: long, Status: "open"}}))
+	if got := item(t, mustState(t, s), "laptop/garden/gd-7").Title; got != long {
+		t.Fatalf("synced title %d runes, want the 700 added", len([]rune(got)))
+	}
+	_, _, err = s.AppendAction(api.NewAction{ID: id2, Kind: api.KindEdit, Key: "laptop/garden/gd-7",
+		Payload: api.Payload{Set: &api.Edit{Priority: ptr(1)}}}, "alex-app")
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("edit of a tracker's item: %v", err)
+	}
+
+	key := hubKey(addPersonal(t, s, id3, long, nil).BeadID)
+	edit(t, s, key, api.Edit{Priority: ptr(1)})
+	if got := item(t, mustState(t, s), key).Title; got != long {
+		t.Fatalf("title after an edit %d runes, want 700", len([]rune(got)))
+	}
+}

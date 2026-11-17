@@ -120,7 +120,7 @@ func (s *Store) ReplaceRepos(bridge string, repos []api.Repo) error {
 		return err
 	}
 	// New repos get their colour slots once the dropped ones are gone.
-	if _, err := fillColours(tx, nameOrder); err != nil {
+	if err := fillColours(tx, nameOrder); err != nil {
 		return err
 	}
 	epicsAfter, err := epicsHeld(tx, bridge)

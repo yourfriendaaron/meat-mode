@@ -146,10 +146,10 @@ func (s *Scheduler) runMessage(it api.Item) notify.Message {
 	if agent == "" {
 		agent = "The agent"
 	}
-	agent = truncTitle(agent)
+	agent = api.TruncRunes(agent, maxTitleRunes)
 	link := fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(it.Key))
 	m := notify.Message{
-		Body:    truncTitle(it.Title),
+		Body:    api.TruncRunes(it.Title, maxTitleRunes),
 		URL:     link,
 		Tag:     runTag(it.Key),
 		Key:     it.Key,
@@ -170,7 +170,7 @@ func (s *Scheduler) runMessage(it api.Item) notify.Message {
 			m.Title += ": " + w
 		}
 		if d := strings.TrimSpace(r.Detail); d != "" {
-			m.Body += "\n" + truncTitle(d)
+			m.Body += "\n" + api.TruncRunes(d, maxTitleRunes)
 		}
 		m.Actions = append(m.Actions, notify.Action{Action: notify.ActionRetry, Title: "Retry"})
 	}

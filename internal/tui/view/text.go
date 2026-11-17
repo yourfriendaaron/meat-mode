@@ -53,7 +53,6 @@ var (
 	sRed    = style{fg: cRed}
 	sYellow = style{fg: cYellow}
 	sCyan   = style{fg: cCyan}
-	sBar    = style{bg: cBg2}
 	sTab    = style{fg: cOnAcc, bg: cPurple, bold: true}
 )
 

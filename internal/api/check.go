@@ -32,6 +32,8 @@ func Invalidf(format string, a ...any) error {
 const ProvisionalPrefix = "pending-"
 
 // Limits on what the app or an agent may post; longer text is refused.
+// MaxTitleLen is also the cut for a title a bridge sends, so an item added
+// with a long title comes back whole.
 const (
 	MaxNoteLen  = 10000
 	MaxTitleLen = 1000
@@ -41,7 +43,6 @@ const (
 // hub's database or the state the app downloads. Longer text is truncated,
 // not refused: one long bead must not stop a repo syncing.
 const (
-	ItemTitleLimit       = 500
 	ItemDescriptionLimit = 20000
 	CommentLimit         = 20000
 	CommentAuthorLimit   = 200
@@ -156,8 +157,8 @@ func CheckItems(items []Item) error {
 		if it.Parent != "" && (!ValidSegment(it.Parent) || it.Parent == it.ID) {
 			return Invalidf("item %q has a parent %q that is not valid", it.ID, it.Parent)
 		}
-		it.Title = TruncRunes(it.Title, ItemTitleLimit)
-		it.ParentTitle = TruncRunes(it.ParentTitle, ItemTitleLimit)
+		it.Title = TruncRunes(it.Title, MaxTitleLen)
+		it.ParentTitle = TruncRunes(it.ParentTitle, MaxTitleLen)
 		it.Description = TruncRunes(it.Description, ItemDescriptionLimit)
 		it.Notes = TruncRunes(it.Notes, ItemDescriptionLimit)
 		it.CreatedBy = TruncRunes(it.CreatedBy, CommentAuthorLimit)

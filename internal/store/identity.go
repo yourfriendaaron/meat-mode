@@ -46,8 +46,7 @@ func (s *Store) migrateIdentity(tx *sql.Tx) error {
 )`); err != nil {
 		return err
 	}
-	_, err := fillColours(tx, listOrder)
-	return err
+	return fillColours(tx, listOrder)
 }
 
 // colourRow is a repo row waiting for its slot.
@@ -81,22 +80,21 @@ func nameOrder(a, b colourRow) bool {
 // the slot held by the fewest repos that count, ties to the lowest, one
 // after another in the given order. A repo counts when it is not hidden
 // and its bridge is not revoked. A bridge's own personal repo, only a
-// source for the personal list, neither counts nor gets a slot. It
-// reports whether any row got one.
-func fillColours(tx *sql.Tx, less func(a, b colourRow) bool) (bool, error) {
+// source for the personal list, neither counts nor gets a slot.
+func fillColours(tx *sql.Tx, less func(a, b colourRow) bool) error {
 	var held [api.ListColours]int
 	rows, err := tx.Query(`SELECT r.colour, COUNT(*) FROM repos r
 		JOIN bridges b ON b.name = r.bridge AND b.revoked_at IS NULL
 		WHERE r.colour IS NOT NULL AND r.hidden = 0 AND (r.personal = 0 OR r.bridge = ?)
 		GROUP BY r.colour`, HubBridge)
 	if err != nil {
-		return false, err
+		return err
 	}
 	for rows.Next() {
 		var c, n int
 		if err := rows.Scan(&c, &n); err != nil {
 			rows.Close()
-			return false, err
+			return err
 		}
 		if c >= 0 && c < api.ListColours {
 			held[c] = n
@@ -104,7 +102,7 @@ func fillColours(tx *sql.Tx, less func(a, b colourRow) bool) (bool, error) {
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return false, err
+		return err
 	}
 
 	type waiting struct {
@@ -116,19 +114,19 @@ func fillColours(tx *sql.Tx, less func(a, b colourRow) bool) (bool, error) {
 		JOIN bridges b ON b.name = r.bridge
 		WHERE r.colour IS NULL AND (r.personal = 0 OR r.bridge = ?)`, HubBridge)
 	if err != nil {
-		return false, err
+		return err
 	}
 	for rows.Next() {
 		var w waiting
 		if err := rows.Scan(&w.bridge, &w.name, &w.counts); err != nil {
 			rows.Close()
-			return false, err
+			return err
 		}
 		todo = append(todo, w)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return false, err
+		return err
 	}
 	sort.Slice(todo, func(i, j int) bool { return less(todo[i].colourRow, todo[j].colourRow) })
 	for _, w := range todo {
@@ -139,13 +137,13 @@ func fillColours(tx *sql.Tx, less func(a, b colourRow) bool) (bool, error) {
 			}
 		}
 		if _, err := tx.Exec(`UPDATE repos SET colour = ? WHERE bridge = ? AND name = ?`, slot, w.bridge, w.name); err != nil {
-			return false, err
+			return err
 		}
 		if w.counts {
 			held[slot]++
 		}
 	}
-	return len(todo) > 0, nil
+	return nil
 }
 
 // SetIcon sets or, with no bytes, clears the icon of one of a bridge's
@@ -220,7 +218,7 @@ func (s *Store) addProject(name string) error {
 		HubBridge, name); err != nil {
 		return err
 	}
-	if _, err := fillColours(tx, listOrder); err != nil {
+	if err := fillColours(tx, listOrder); err != nil {
 		return err
 	}
 	return tx.Commit()
