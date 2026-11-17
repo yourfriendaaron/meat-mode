@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/notify"
@@ -234,7 +233,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		// Done and Snooze act on the item from the notification; a summary
 		// of several missed reminders drops them.
 		msg := notify.Message{
-			Title:   truncTitle(it.Title),
+			Title:   api.TruncRunes(it.Title, maxTitleRunes),
 			URL:     fmt.Sprintf("%s/?item=%s", s.publicURL, url.QueryEscape(link)),
 			Tag:     link,
 			Channel: notify.ChannelReminders,
@@ -399,13 +398,6 @@ func count(n int, unit string) string {
 	return fmt.Sprintf("%d %ss", n, unit)
 }
 
-// truncTitle caps a notification title at maxTitleRunes runes: a huge bead
-// title would overflow Web Push's 4 KiB payload and fail the whole send.
+// maxTitleRunes caps the text of a notification: a huge bead title would
+// overflow Web Push's 4 KiB payload and fail the whole send.
 const maxTitleRunes = 200
-
-func truncTitle(s string) string {
-	if utf8.RuneCountInString(s) <= maxTitleRunes {
-		return s
-	}
-	return string([]rune(s)[:maxTitleRunes]) + "…"
-}
