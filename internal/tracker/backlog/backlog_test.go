@@ -390,7 +390,6 @@ func TestEpicRowsSkipsStrayFiles(t *testing.T) {
 // set: a card the CLI cannot find keeps an empty description, and any
 // other failure fails the whole set.
 func TestEpicRowsViewFailure(t *testing.T) {
-	t.Parallel()
 	_, dir, run := newEpicRepo(t)
 	parent := add(t, run, "Plan the balcony", "--type", "epic", "-d", "Boxes first.")
 	add(t, run, "Line the boxes", "--parent", parent)
@@ -414,7 +413,6 @@ func TestEpicRowsViewFailure(t *testing.T) {
 // TestEpicRowsCachesDescriptions checks that a second read of an unchanged
 // repo runs no `backlog task view`.
 func TestEpicRowsCachesDescriptions(t *testing.T) {
-	t.Parallel()
 	_, dir, run := newEpicRepo(t)
 	parent := add(t, run, "Plan the terrace", "--type", "epic", "-d", "Pots first.")
 	add(t, run, "Scrub the pots", "--parent", parent)

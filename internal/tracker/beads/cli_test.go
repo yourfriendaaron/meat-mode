@@ -374,7 +374,6 @@ const humanList = `[
 // permissions warning on stderr and exits 0, and a bd that prints it on stdout
 // ahead of the JSON, even with brackets in the warning text.
 func TestCLIToleratesPermissionsWarning(t *testing.T) {
-	t.Parallel()
 	cases := map[string]struct{ stdout, stderr string }{
 		"stderr":            {humanList, permWarning + permWarning},
 		"stdout":            {permWarning + humanList, ""},
@@ -400,7 +399,6 @@ func TestCLIToleratesPermissionsWarning(t *testing.T) {
 // TestCLIRealFailureStillFails keeps a nonzero exit an error even with a
 // warning beside it.
 func TestCLIRealFailureStillFails(t *testing.T) {
-	t.Parallel()
 	cli := &beads.CLI{Bin: fakeBD(t, "", permWarning+"Error: no beads database found\n", 1)}
 	if _, err := cli.List(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "no beads database found") {
 		t.Fatalf("err = %v", err)
@@ -441,7 +439,6 @@ func TestCLIHidesBridgeEnvironment(t *testing.T) {
 // a call with the flags first, and that a chunk bd answers "not found" for
 // is read again one id at a time.
 func TestEpicCommentsChunks(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	log := filepath.Join(dir, "calls")
 	bin := filepath.Join(dir, "bd")
