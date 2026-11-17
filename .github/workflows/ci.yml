@@ -141,65 +141,49 @@ jobs:
           retention-days: 7
 
   # The suite runs twice, against the binary and against the image, side by side.
-  # The image leg loads the image the image job built and smoke-tested.
-  e2e:
-    needs: image
+  # The binary leg starts at once; the image leg waits for the image job and
+  # loads the image it built and smoke-tested.
+  e2e-binary:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [binary, image]
     env:
-      BD_VERSION: "1.3.1"
-      BD_SHA256: 3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c # beads_1.3.1_linux_amd64.tar.gz
       E2E_REQUIRE_BD: "1"
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: e2e/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24.22.0" # keep in step with mise.toml
-          cache: pnpm
-          cache-dependency-path: |
-            web/pnpm-lock.yaml
-            e2e/pnpm-lock.yaml
-      - name: Install bd from the beads release
-        run: |
-          tarball="beads_${BD_VERSION}_linux_amd64.tar.gz"
-          curl -fsSLO "https://github.com/gastownhall/beads/releases/download/v${BD_VERSION}/${tarball}"
-          echo "${BD_SHA256}  ${tarball}" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/bd"
-          tar -xzf "$tarball" -C "$RUNNER_TEMP/bd" bd
-          echo "$RUNNER_TEMP/bd" >> "$GITHUB_PATH"
-      - run: bd version
-      - run: pnpm --dir web install --frozen-lockfile
-      - run: pnpm --dir e2e install --frozen-lockfile
-      - run: pnpm --dir e2e typecheck
-      - run: pnpm --dir e2e exec playwright install --with-deps chromium
-      # The proxy tests run Caddy in front of the hub; pull it before the clock starts.
-      - run: docker pull caddy:2.10.2-alpine
-      - uses: actions/download-artifact@v4
-        if: matrix.target == 'image'
-        with:
-          name: image
-      - name: Load the image
-        if: matrix.target == 'image'
-        run: |
-          gunzip -c image.tar.gz | docker load
-          echo "E2E_IMAGE=meat-mode:ci" >> "$GITHUB_ENV"
-      - name: End-to-end against the ${{ matrix.target }}
+      - uses: ./.github/actions/e2e-setup
+      - name: End-to-end against the binary
         run: pnpm --dir e2e test
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: e2e-results-${{ matrix.target }}
+          name: e2e-results-binary
+          path: e2e/test-results
+          retention-days: 7
+
+  e2e-image:
+    needs: image
+    runs-on: ubuntu-latest
+    env:
+      E2E_REQUIRE_BD: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/e2e-setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: image
+      - name: Load the image
+        run: |
+          gunzip -c image.tar.gz | docker load
+          echo "E2E_IMAGE=meat-mode:ci" >> "$GITHUB_ENV"
+      - name: End-to-end against the image
+        run: pnpm --dir e2e test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results-image
           path: e2e/test-results
           retention-days: 7
 
@@ -213,7 +197,7 @@ jobs:
       - name: Smoke test
         run: |
           docker run -d --name mm -p 127.0.0.1:8080:8080 -e MEAT_MODE_PUBLIC_URL=http://127.0.0.1:8080 -e MEAT_MODE_USER=alex -e MEAT_MODE_VAPID_SUBJECT=mailto:alex@example.com meat-mode:ci
-          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz >/dev/null && break; sleep 1; done
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:8080/ | grep -qi '<html'
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/assets/missing.js)
           test "$code" = 404

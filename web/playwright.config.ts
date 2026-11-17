@@ -7,6 +7,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // CI runners have 4 cores; Playwright would use 2.
+  workers: process.env.CI ? 4 : undefined,
   reporter: process.env.CI ? "list" : [["list"]],
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
