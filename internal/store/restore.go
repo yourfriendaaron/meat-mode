@@ -449,7 +449,7 @@ func (s *Store) load(ex api.Export) (api.RestoreResult, error) {
 		}
 	}
 
-	if _, err := fillColours(tx, listOrder); err != nil {
+	if err := fillColours(tx, listOrder); err != nil {
 		return res, err
 	}
 

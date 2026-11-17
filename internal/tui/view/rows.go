@@ -30,13 +30,6 @@ func (t *target) id() string {
 	return t.row.ID
 }
 
-func (t *target) title() string {
-	if t.item != nil {
-		return t.item.Title
-	}
-	return t.row.Title
-}
-
 // row is one list row: a heading, or a selectable target.
 type row struct {
 	id   string // the selection's key: the target's key, or a path for a child in the tree
