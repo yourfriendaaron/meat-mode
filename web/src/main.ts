@@ -938,7 +938,7 @@ function entryOf(el: HTMLElement): { item: Item; entry: MoveEntry } | null {
 function moveEntry(item: Item, entry: MoveEntry, day: Date): string {
   const d = decideMove(item, entry, day, now(), allows(item, "snooze"), newId());
   if (d.kind === "refuse") return d.text;
-  if (d.kind === "move") void closing([d.action], d.toast);
+  if (d.kind === "move") void act([d.action], { toast: d.toast });
   return "";
 }
 
@@ -1065,7 +1065,7 @@ function submitMove() {
     return;
   }
   closeMove();
-  if (d.kind === "move") void closing([d.action], d.toast);
+  if (d.kind === "move") void act([d.action], { toast: d.toast });
 }
 
 function renderMoveDialog() {
@@ -1145,20 +1145,16 @@ async function doDeleteList() {
   if (!r) return;
   const view = S.view;
   const label = listLabel(r);
-  const h = await actions.perform([{ id: newId(), kind: "project-delete", bridge: r.bridge, repo: r.name, payload: {} }], {
-    onPatched: () => setView("today"),
-  });
-  const undo = undoing(h);
-  if (h.posted.length)
-    showToast(
-      `Deleted list: ${label}`,
+  await act([{ id: newId(), kind: "project-delete", bridge: r.bridge, repo: r.name, payload: {} }], {
+    draw: () => setView("today"),
+    toast: `Deleted list: ${label}`,
+    undo: (undo) =>
       undo &&
-        (async () => {
-          await undo();
-          if (S.view === "today") setView(view);
-        }),
-    );
-  await refresh();
+      (async () => {
+        await undo();
+        if (S.view === "today") setView(view);
+      }),
+  });
 }
 
 /** Filters the list to the items with `tag`, from every list; null ends the filter. */
@@ -1459,9 +1455,7 @@ async function undoChange(id: string) {
     return;
   }
   const text = changeText(changes[i], it, historyContext(it));
-  const h = await actions.perform([back], { onPatched: render });
-  if (h.posted.length) showToast(`Undone: ${text}`, undoing(h));
-  await refresh();
+  await act([back], { toast: `Undone: ${text}` });
   // The entry's Undo is gone once the history reloads; keep focus in the section.
   if (!document.activeElement || document.activeElement === document.body) document.getElementById("d-hist-toggle")?.focus();
 }
@@ -1939,8 +1933,7 @@ async function switchSync(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
   if (!r) return;
   const on = !r.optedIn;
-  for (const x of linkedWith(r, repos())) if (x.optedIn !== on) await post({ id: newId(), kind: "sync", bridge: x.bridge, repo: x.name, payload: { on } });
-  await refresh();
+  await act(linkedWith(r, repos()).filter((x) => x.optedIn !== on).map((x) => ({ id: newId(), kind: "sync", bridge: x.bridge, repo: x.name, payload: { on } })));
 }
 
 // ---------- setup wizard and Settings sections ----------
@@ -1970,7 +1963,7 @@ const ctx: AppContext = {
     await Promise.all([refresh(), reloadSetup(), sess]);
     render();
   },
-  perform: (acts) => actions.perform(acts),
+  act: (acts, toast) => act(acts, { toast, undo: false }),
   toast: (text, undo) => showToast(text, undo),
   setView: (v) => setView(v as View),
   openSettings(section) {
@@ -2130,11 +2123,6 @@ const actions = createActions({
   onError: (during, e) => showToast(errorText(e, { other: (m) => `Could not ${during}: ${m}` })),
 });
 
-/** Posts one action; the hub's copy of it, or null when it failed (a toast says why). */
-async function post(a: NewAction): Promise<Action | null> {
-  return (await actions.perform([a])).posted[0]?.applied ?? null;
-}
-
 /** The toast's Undo for what `h` posted: reverses it, then loads the state again. */
 function undoing(h: Handle): (() => Promise<void>) | undefined {
   // Once applied, a close undoes by a reopen, so a list that cannot reopen gets no Undo.
@@ -2150,11 +2138,39 @@ function undoing(h: Handle): (() => Promise<void>) | undefined {
   };
 }
 
-/** Performs actions, drawing their local change with `draw`, and offers Undo in a toast saying `text`. */
-async function closing(acts: NewAction[], text: string, opts: { tell?: string; draw?: () => void } = {}) {
-  const h = await actions.perform(acts, { onPatched: opts.draw ?? render });
-  if (h.posted.length) showToast(text, undoing(h), opts.tell);
+/** What act does around its actions; each part is optional. */
+interface ActOpts {
+  /** Draws the local change; render by default. */
+  draw?: () => void;
+  /** Posts at once but draws the local change once this settles, so an animation can run first. */
+  drawAfter?: Promise<void>;
+  /** Runs once any post landed, before the toast and the reload, such as to clear a draft. */
+  landed?: (h: Handle) => void;
+  /** What the toast says once any post landed, or a function of what landed ("" for no toast). */
+  toast?: string | ((h: Handle) => string);
+  /** The toast's Undo: undoing(h) by default; false for none; a function wraps it. */
+  undo?: false | ((undo: (() => Promise<void>) | undefined) => (() => Promise<void>) | undefined);
+  /** The key of the item whose agent the toast's Tell button asks. */
+  tell?: string;
+}
+
+/**
+ * The one way the app performs actions: patches and draws the local copy,
+ * posts in order, toasts what landed with its Undo, then loads the state
+ * again. A failed post toasts why and is left out of the handle.
+ */
+async function act(acts: NewAction[], o: ActOpts = {}): Promise<Handle> {
+  const h = await actions.perform(acts, { onPatched: o.draw ?? render, drawAfter: o.drawAfter });
+  if (h.posted.length) {
+    o.landed?.(h);
+    const text = typeof o.toast === "function" ? o.toast(h) : o.toast;
+    if (text) {
+      const undo = o.undo === false ? undefined : undoing(h);
+      showToast(text, typeof o.undo === "function" ? o.undo(undo) : undo, o.tell);
+    }
+  }
   await refresh();
+  return h;
 }
 
 function moveSelectionOff(keys: string[]) {
@@ -2187,17 +2203,19 @@ async function doDone(key: string) {
   for (const c of checks) c.classList.add("filling");
   // The post goes with the tap; the list draws the change once the row has slid off.
   const slid = slideAway(key).then(() => moveSelectionOff([key]));
-  const h = await actions.perform([{ id: newId(), kind: "done", key, payload: {} }], { onPatched: render, drawAfter: slid });
+  const h = await act([{ id: newId(), kind: "done", key, payload: {} }], {
+    drawAfter: slid,
+    // A repeating item's toast names its next date, which only the reloaded state has.
+    toast: (h) => (movedOn(h.posted[0]) ? "" : `Done: ${it.title}`),
+    tell: offersTell(it, repos()) ? key : undefined,
+  });
   for (const c of checks) c.classList.remove("filling");
   const p = h.posted[0];
   if (p && movedOn(p)) {
-    await refresh();
     const next = byKey(key);
     showToast(next?.dueAt ? `Done. Next: ${fmtWhenAt(new Date(next.dueAt), now())}` : `Done: ${it.title}`, undoing(h));
     return;
   }
-  if (p) showToast(`Done: ${it.title}`, undoing(h), offersTell(it, repos()) ? key : undefined);
-  await refresh();
   if (p && allClear()) play("clear");
 }
 
@@ -2261,7 +2279,8 @@ function doDismiss(key: string) {
   const subs = all.length - 1;
   moveSelectionOff(all.map((i) => i.key));
   const text = `${agent ? "Won't do" : "Deleted"}: ${it.title}${subs ? ` and ${subs === 1 ? "its sub-task" : `${subs} sub-tasks`}` : ""}`;
-  void closing(all.map((i) => ({ id: newId(), kind: "dismiss", key: i.key, payload: {} })), text, {
+  void act(all.map((i) => ({ id: newId(), kind: "dismiss", key: i.key, payload: {} })), {
+    toast: text,
     tell: offersTell(it, repos()) ? key : undefined,
     draw: () => (!agent && S.open === key ? closeDetail() : render()),
   });
@@ -2272,15 +2291,14 @@ async function doRestore(key: string) {
   const it = byKey(key);
   if (!it || isOpen(it) || !allows(it, "reopen")) return;
   play("undo");
-  await closing([{ id: newId(), kind: "reopen", key, payload: {} }], `Restored: ${it.title}`);
+  await act([{ id: newId(), kind: "reopen", key, payload: {} }], { toast: `Restored: ${it.title}` });
 }
 
 async function doReopen(key: string) {
   const it = byKey(key);
   if (!it || isOpen(it) || !allows(it, "reopen")) return;
   play("undo");
-  await actions.perform([{ id: newId(), kind: "reopen", key, payload: {} }], { onPatched: render });
-  await refresh();
+  await act([{ id: newId(), kind: "reopen", key, payload: {} }]);
 }
 
 function doSnooze(keys: string[], until: Date) {
@@ -2296,7 +2314,8 @@ function doSnooze(keys: string[], until: Date) {
   moveSelectionOff(keys);
   const label = fmtWhen(until, now());
   const text = acts.length > 1 ? `Snoozed ${acts.length} tasks to ${label}` : `Snoozed to ${label}`;
-  void closing(acts, text, {
+  void act(acts, {
+    toast: text,
     draw: () => {
       S.snoozeKeys = null;
       if (keys === bulkSnoozeKeys) {
@@ -2383,14 +2402,13 @@ async function bulkDone() {
   const keys = its.map((i) => i.key);
   play("done");
   moveSelectionOff(keys);
-  const h = await actions.perform(
+  await act(
     keys.map((key) => ({ id: newId(), kind: "done", key, payload: {} })),
-    { onPatched: endSelect },
+    {
+      draw: endSelect,
+      toast: (h) => bulkToast("Done", its.filter((i) => h.posted.some((p) => p.sent.key === i.key)).map((i) => i.title)),
+    },
   );
-  await refresh();
-  if (!h.posted.length) return;
-  const done = its.filter((i) => h.posted.some((p) => p.sent.key === i.key));
-  showToast(bulkToast("Done", done.map((i) => i.title)), undoing(h));
 }
 
 /** Delete or Won't do on every pick, with one Undo. */
@@ -2402,10 +2420,10 @@ function bulkDismiss() {
   const verb = bulkDismissDone(picked);
   moveSelectionOff(keys);
   const openGone = S.open && keys.includes(S.open) && isPersonal(byKey(S.open)!);
-  void closing(
+  void act(
     keys.map((key) => ({ id: newId(), kind: "dismiss", key, payload: {} })),
-    bulkToast(verb, picked.map((i) => i.title)),
     {
+      toast: bulkToast(verb, picked.map((i) => i.title)),
       draw: () => {
         endSelect();
         if (openGone) closeDetail();
@@ -2429,12 +2447,14 @@ async function doNote(key: string) {
   const ta = document.querySelector<HTMLTextAreaElement>("#note-input");
   const text = (ta?.value ?? "").trim();
   if (!text) return;
-  if (await post({ id: newId(), kind: "note", key, payload: { text } })) {
-    S.drafts.delete(key);
-    if (ta) ta.value = "";
-    showToast("Note saved");
-  }
-  await refresh();
+  await act([{ id: newId(), kind: "note", key, payload: { text } }], {
+    landed: () => {
+      S.drafts.delete(key);
+      if (ta) ta.value = "";
+    },
+    toast: "Note saved",
+    undo: false,
+  });
 }
 
 // ---------- agent runs ----------
@@ -2456,21 +2476,22 @@ async function doAsk(key: string, withNote: boolean) {
   const who = agentName(it);
   const follow = isWorking(it);
   const payload: Payload = text ? { text } : {};
-  if (await post({ id: newId(), kind: "ask", key, payload })) {
-    if (text) {
-      S.drafts.delete(key);
-      if (ta) ta.value = "";
-    }
-    showToast(follow ? `Sent to ${who}` : `Asked ${who}`);
-  }
-  await refresh();
+  await act([{ id: newId(), kind: "ask", key, payload }], {
+    landed: () => {
+      if (text) {
+        S.drafts.delete(key);
+        if (ta) ta.value = "";
+      }
+    },
+    toast: follow ? `Sent to ${who}` : `Asked ${who}`,
+    undo: false,
+  });
 }
 
 async function doStop(key: string) {
   const it = byKey(key);
   if (!it) return;
-  if (await post({ id: newId(), kind: "stop", key, payload: {} })) showToast(`Stopped ${agentName(it)}`);
-  await refresh();
+  await act([{ id: newId(), kind: "stop", key, payload: {} }], { toast: `Stopped ${agentName(it)}`, undo: false });
 }
 
 /** Tell <agent> in the undo bar: an ask with no text on the item just closed, so its agent reads why. */
@@ -2478,8 +2499,7 @@ async function doTell(key: string) {
   const t = S.toast;
   const it = byKey(key);
   if (!it || !allows(it, "ask")) return;
-  await post({ id: newId(), kind: "ask", key, payload: {} });
-  await refresh();
+  await act([{ id: newId(), kind: "ask", key, payload: {} }]);
   // The bar stays a while longer, now with Stop while the run works.
   if (t && S.toast?.id === t.id) showToast(t.text, t.undo, t.tell);
 }
@@ -2489,16 +2509,14 @@ async function switchEpics(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
   if (!r?.epics) return;
   const on = !r.epicsOn;
-  for (const x of linkedWith(r, repos())) if (x.epics && x.epicsOn !== on) await post({ id: newId(), kind: "epics", bridge: x.bridge, repo: x.name, payload: { on } });
-  await refresh();
+  await act(linkedWith(r, repos()).filter((x) => x.epics && x.epicsOn !== on).map((x) => ({ id: newId(), kind: "epics", bridge: x.bridge, repo: x.name, payload: { on } })));
 }
 
 async function revokeAgents(bridge: string, repo: string) {
   const r = repos().find((x) => x.bridge === bridge && x.name === repo);
   // The app can only switch agents off; they switch on at the machine (docs/api.md, Agents).
   if (!r?.agentsAllowed) return;
-  await post({ id: newId(), kind: "agents", bridge, repo, payload: { on: false } });
-  await refresh();
+  await act([{ id: newId(), kind: "agents", bridge, repo, payload: { on: false } }]);
 }
 
 // ---------- editing personal items ----------
@@ -2515,7 +2533,7 @@ function saveField(key: string, change: (d: EditDraft) => void): string {
   const err = editError(it, d, now());
   if (err) return err;
   const set = diffEdit(it, d, now());
-  if (set) void closing([{ id: newId(), kind: "edit", key, payload: { set } }], "Saved");
+  if (set) void act([{ id: newId(), kind: "edit", key, payload: { set } }], { toast: "Saved" });
   return "";
 }
 
@@ -2700,7 +2718,7 @@ function saveSchedule() {
       return;
     case "edit":
       closePage();
-      void closing([{ id: newId(), kind: "edit", key: it.key, payload: { set: r.set } }], "Saved");
+      void act([{ id: newId(), kind: "edit", key: it.key, payload: { set: r.set } }], { toast: "Saved" });
   }
 }
 
@@ -2712,7 +2730,7 @@ function answerAsk(once: boolean) {
   const key = p.key;
   closePage();
   if (once) doSnooze([key], until);
-  else void closing([{ id: newId(), kind: "edit", key, payload: { set } }], "Saved");
+  else void act([{ id: newId(), kind: "edit", key, payload: { set } }], { toast: "Saved" });
 }
 
 function openNoteEdit(key: string, commentId: string) {
@@ -2743,13 +2761,13 @@ function saveNoteEdit() {
   closeNoteEdit();
   if (text === c.text) return;
   const a: NewAction = { id: newId(), kind: "note-edit", key: n.key, payload: { commentId: c.id, text } };
-  void closing([a], "Note saved");
+  void act([a], { toast: "Note saved" });
 }
 
 function deleteNote(key: string, commentId: string) {
   if (S.noteEdit?.commentId === commentId) S.noteEdit = null;
   const a: NewAction = { id: newId(), kind: "note-delete", key, payload: { commentId } };
-  void closing([a], "Note deleted");
+  void act([a], { toast: "Note deleted" });
   $<HTMLElement>("#note-input").focus({ preventScroll: true });
 }
 
@@ -2772,25 +2790,21 @@ async function removeSubtask(key: string) {
   if (!it || !canRemoveSubtask(it)) return;
   const agent = isAgentItem(it);
   const wasDone = !isOpen(it);
-  const h = await actions.perform([{ id: newId(), kind: "dismiss", key, payload: {} }], {
-    onPatched: () => {
+  await act([{ id: newId(), kind: "dismiss", key, payload: {} }], {
+    draw: () => {
       render();
       // The row is gone; keep focus in the sub-tasks.
       document.querySelector<HTMLElement>("#sub-input")?.focus({ preventScroll: true });
     },
-  });
-  if (h.posted.length) {
-    const undo = undoing(h);
-    const back =
+    toast: `${agent ? "Won't do" : "Deleted"}: ${it.title}`,
+    undo: (undo) =>
       undo && wasDone
         ? async () => {
             await undo();
-            if (await post({ id: newId(), kind: "done", key, payload: {} })) await refresh();
+            await act([{ id: newId(), kind: "done", key, payload: {} }]);
           }
-        : undo;
-    showToast(`${agent ? "Won't do" : "Deleted"}: ${it.title}`, back);
-  }
-  await refresh();
+        : undo,
+  });
 }
 
 /** Adds a sub-task to an item, in the item's own list. */
@@ -2802,7 +2816,7 @@ async function addSubtask(key: string) {
   if (!title) return;
   input.value = "";
   S.subDrafts.delete(key);
-  if (await post({ id: newId(), kind: "add", bridge: it.bridge, repo: it.repo, payload: { title, due: null, parent: it.id } })) await refresh();
+  await act([{ id: newId(), kind: "add", bridge: it.bridge, repo: it.repo, payload: { title, due: null, parent: it.id } }]);
   document.querySelector<HTMLElement>("#sub-input")?.focus({ preventScroll: true });
 }
 
@@ -3194,15 +3208,17 @@ async function submitQuickAdd() {
   }
   const { title } = add.qa;
   const { wakes } = add;
-  if (await post(add.action)) {
-    play("add");
-    input.value = "";
-    qaListTouched = false;
-    qaAsk = null;
-    showToast(wakes ? `Added and asked an agent: ${title}` : `Added: ${title}`);
-    if (isPhone()) closeQuickAdd();
-  }
-  await refresh();
+  await act([add.action], {
+    landed: () => {
+      play("add");
+      input.value = "";
+      qaListTouched = false;
+      qaAsk = null;
+      if (isPhone()) closeQuickAdd();
+    },
+    toast: wakes ? `Added and asked an agent: ${title}` : `Added: ${title}`,
+    undo: false,
+  });
 }
 
 function openQuickAdd() {

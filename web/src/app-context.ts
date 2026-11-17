@@ -19,8 +19,12 @@ export interface AppContext {
   render(): void;
   /** Loads /api/state, /api/setup and /api/session again, then draws the app. */
   refresh(): Promise<void>;
-  /** Posts actions through the app's pipeline, which patches the local copy and toasts a failed post. */
-  perform(actions: NewAction[]): Promise<Handle>;
+  /**
+   * Performs actions through the app's pipeline, which patches the local
+   * copy and toasts a failed post, then toasts what `toast` says of those
+   * that landed, with no Undo, and loads the state again.
+   */
+  act(actions: NewAction[], toast: (h: Handle) => string): Promise<Handle>;
   /** Shows a short message at the bottom of the screen, with an Undo button when `undo` is given. */
   toast(text: string, undo?: () => Promise<void>): void;
   /** Switches the view, as the navigation does. */
