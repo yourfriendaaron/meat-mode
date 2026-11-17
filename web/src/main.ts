@@ -2006,6 +2006,13 @@ function render() {
 
 let refreshing: Promise<void> | null = null;
 let refreshAgain = false;
+/**
+ * The state, asked for as the page loads, alongside the session check; the
+ * first refresh uses it. A logged-out browser's 401 here ends nothing, and
+ * that refresh then asks again.
+ */
+let firstState: Promise<State> | null = api.firstState();
+firstState.catch(() => {});
 
 async function refresh(): Promise<void> {
   if (!shellUp) return;
@@ -2015,7 +2022,9 @@ async function refresh(): Promise<void> {
   }
   refreshing = (async () => {
     try {
-      const st = await api.state();
+      const early = firstState;
+      firstState = null;
+      const st = await (early ? early.catch(() => api.state()) : api.state());
       await Promise.all(slides);
       noteRunEnds(st.items ?? []);
       const shownBefore = epicsShown(S.state?.repos ?? []);

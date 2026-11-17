@@ -10,7 +10,9 @@ test("a hub with a password asks for it before loading anything", async ({ page,
   await expect(page.getByRole("heading", { name: "Meat Mode" })).toBeVisible();
   await expect(password(page)).toBeFocused();
   await expect(password(page)).toHaveAttribute("autocomplete", "current-password");
-  expect(hub.requests).toEqual(["GET /api/session"]);
+  // The state asked for alongside the session check is refused and shows no error.
+  expect(hub.requests.toSorted()).toEqual(["GET /api/session", "GET /api/state"]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await axe(page);
 
   await password(page).fill("not it");
@@ -23,6 +25,12 @@ test("a hub with a password asks for it before loading anything", async ({ page,
   await password(page).press("Enter");
   await expect(row(page, "Water the plants")).toBeVisible();
   expect(hub.requests).toContain("GET /api/events");
+});
+
+test("a logged-in load asks for the state once", async ({ page, hub }) => {
+  await page.goto("/");
+  await expect(row(page, "Water the plants")).toBeVisible();
+  expect(hub.requests.filter((r) => r === "GET /api/state")).toHaveLength(1);
 });
 
 test("too many tries says to wait", async ({ page, hub }) => {

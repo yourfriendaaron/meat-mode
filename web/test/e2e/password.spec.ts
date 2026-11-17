@@ -44,11 +44,12 @@ test.describe("desktop", () => {
     await expect(s.getByLabel("Setup code")).toBeFocused();
     await expect(s.getByLabel("Setup code")).toHaveAttribute("autocomplete", "one-time-code");
     await expect(s.getByLabel("New password", { exact: true })).toHaveAttribute("autocomplete", "new-password");
-    // Nothing but the claim step: no list, no navigation, no other request.
+    // Nothing but the claim step: no list, no navigation, and no request but
+    // the session check and the state asked for alongside it, which is refused.
     await expect(page.locator("#list")).toHaveCount(0);
     await expect(page.locator(".sidebar")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /no password/i })).toHaveCount(0);
-    expect(hub.requests).toEqual(["GET /api/session"]);
+    expect(hub.requests.toSorted()).toEqual(["GET /api/session", "GET /api/state"]);
     await axe(page);
     await lightTheme(page);
     await axe(page);
