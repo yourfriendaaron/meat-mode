@@ -150,13 +150,6 @@ type epicComments struct {
 	comments  []api.Comment
 }
 
-func (b *Bridge) epicsEvery() time.Duration {
-	if b.Poll > 0 {
-		return b.Poll
-	}
-	return EpicsEvery
-}
-
 // syncEpics is the epics pass: for each repo with epics on it reads the
 // rows at most once per EpicsEvery and sends the outline when it differs
 // from the last set sent, or after RefreshEvery. It runs after discover and
@@ -191,7 +184,7 @@ func (b *Bridge) syncEpics(ctx context.Context) error {
 			es = &epicState{dir: r.Dir, tracker: r.Tracker}
 			b.epicStates[name] = es
 		}
-		if !es.readAt.IsZero() && b.now().Sub(es.readAt) < b.epicsEvery() {
+		if !es.readAt.IsZero() && b.now().Sub(es.readAt) < b.every(EpicsEvery) {
 			continue
 		}
 		es.readAt = b.now()

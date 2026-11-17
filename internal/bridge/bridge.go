@@ -124,25 +124,12 @@ func (b *Bridge) now() time.Time {
 	return time.Now()
 }
 
-func (b *Bridge) actionEvery() time.Duration {
+// every is the interval d, or Poll in its place when Poll is set.
+func (b *Bridge) every(d time.Duration) time.Duration {
 	if b.Poll > 0 {
 		return b.Poll
 	}
-	return ActionEvery
-}
-
-func (b *Bridge) syncEvery() time.Duration {
-	if b.Poll > 0 {
-		return b.Poll
-	}
-	return SyncEvery
-}
-
-func (b *Bridge) scanEvery() time.Duration {
-	if b.Poll > 0 {
-		return b.Poll
-	}
-	return ScanEvery
+	return d
 }
 
 func (b *Bridge) log() *slog.Logger {
@@ -205,7 +192,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 	for {
 		if !time.Now().Before(next) {
 			err := b.Tick(ctx, false)
-			wait := b.actionEvery()
+			wait := b.every(ActionEvery)
 			if err != nil {
 				if ctx.Err() != nil {
 					return nil
@@ -312,7 +299,7 @@ func (b *Bridge) Tick(ctx context.Context, full bool) error {
 	if err := b.hubErr(err); err != nil {
 		return err
 	}
-	if b.now().Sub(b.lastFullAt) >= b.syncEvery() {
+	if b.now().Sub(b.lastFullAt) >= b.every(SyncEvery) {
 		full = true
 	}
 	if b.Runner != nil {
@@ -404,7 +391,7 @@ func (b *Bridge) syncedNames() []string {
 func (b *Bridge) discover(ctx context.Context, rescan bool) error {
 	b.reloadAgents()
 	b.reloadEpics()
-	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.scanEvery() {
+	if rescan || b.scannedAt.IsZero() || b.now().Sub(b.scannedAt) >= b.every(ScanEvery) {
 		b.found = Discover(b.Roots, b.Home, b.available, b.log())
 		b.scannedAt = b.now()
 	}
@@ -484,7 +471,7 @@ func (b *Bridge) syncRepo(ctx context.Context, st *repoState) error {
 	var changed []string
 	refused := map[string]bool{}
 	for _, i := range list {
-		if !api.ValidSegment(i.ID) || strings.HasPrefix(i.ID, api.ProvisionalPrefix) {
+		if !api.ValidBeadID(i.ID) {
 			if !st.refused[i.ID] {
 				b.log().Warn("skipping a task whose id the hub cannot take", "repo", st.Name, "id", i.ID)
 			}

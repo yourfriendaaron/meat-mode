@@ -440,11 +440,11 @@ func TestPairAgainKeepsTheToken(t *testing.T) {
 
 func TestPollIntervals(t *testing.T) {
 	b := &Bridge{}
-	if b.actionEvery() != ActionEvery || b.syncEvery() != SyncEvery || b.scanEvery() != ScanEvery {
+	if b.every(ActionEvery) != ActionEvery || b.every(SyncEvery) != SyncEvery {
 		t.Error("zero Poll should keep the defaults")
 	}
 	b.Poll = time.Second
-	if b.actionEvery() != time.Second || b.syncEvery() != time.Second || b.scanEvery() != time.Second {
+	if b.every(ActionEvery) != time.Second || b.every(ScanEvery) != time.Second {
 		t.Error("Poll should replace every interval")
 	}
 }

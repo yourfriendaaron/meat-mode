@@ -296,13 +296,6 @@ type iconState struct {
 	refused map[string]bool
 }
 
-func (b *Bridge) iconsEvery() time.Duration {
-	if b.Poll > 0 {
-		return b.Poll
-	}
-	return IconsEvery
-}
-
 // syncIcons is the icon pass: for each repo in the last repo report the hub
 // took, it looks for the repo's icon at most once per IconsEvery and sends
 // it when its hash differs from the last one the hub took, so after a start
@@ -338,7 +331,7 @@ func (b *Bridge) syncIcons(ctx context.Context) error {
 			is = &iconState{dir: dir, refused: map[string]bool{}}
 			b.iconStates[name] = is
 		}
-		if !is.lookedAt.IsZero() && b.now().Sub(is.lookedAt) < b.iconsEvery() {
+		if !is.lookedAt.IsZero() && b.now().Sub(is.lookedAt) < b.every(IconsEvery) {
 			continue
 		}
 		is.lookedAt = b.now()
@@ -349,7 +342,7 @@ func (b *Bridge) syncIcons(ctx context.Context) error {
 		}
 		// The same icon goes again once an hour, so a hub restored from a
 		// backup that lacks it gets it back.
-		if is.refused[sum] || (is.took && sum == is.sent && b.now().Sub(is.tookAt) < IconsResend*b.iconsEvery()) {
+		if is.refused[sum] || (is.took && sum == is.sent && b.now().Sub(is.tookAt) < IconsResend*b.every(IconsEvery)) {
 			continue
 		}
 		err := b.Hub.PutIcon(ctx, name, icon)
