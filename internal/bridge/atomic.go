@@ -7,16 +7,16 @@ import (
 
 // writeFileAtomic replaces the file at path with data so a crash leaves
 // either the old file or the new one, never a torn one. It writes a sibling
-// temp file with mode perm, fsyncs it, renames it over path and syncs the
+// temp file with mode 0o600, fsyncs it, renames it over path and syncs the
 // directory so the rename survives a power cut. The directory must exist.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+func writeFileAtomic(path string, data []byte) error {
 	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
 	// OpenFile applies the umask and keeps the mode of a leftover temp file.
-	if err := f.Chmod(perm); err != nil {
+	if err := f.Chmod(0o600); err != nil {
 		f.Close()
 		return err
 	}

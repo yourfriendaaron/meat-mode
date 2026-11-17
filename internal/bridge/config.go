@@ -302,7 +302,7 @@ func (c Config) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(path, append(b, '\n'), 0o600)
+	return writeFileAtomic(path, append(b, '\n'))
 }
 
 // ResolveRoots returns the scan roots with ~ expanded. With no roots set it

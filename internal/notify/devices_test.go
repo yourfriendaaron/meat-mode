@@ -121,7 +121,7 @@ type retry struct {
 	run   func()
 }
 
-func newAppServer(t *testing.T, r *Registry, cidrs ...netip.Prefix) *appServer {
+func newAppServer(t *testing.T, r *Registry) *appServer {
 	t.Helper()
 	a := &appServer{t: t, r: r, status: map[string]int{}, header: map[string]http.Header{},
 		resolveTo: []netip.Addr{loopback4}, now: time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)}
@@ -140,10 +140,7 @@ func newAppServer(t *testing.T, r *Registry, cidrs ...netip.Prefix) *appServer {
 		w.WriteHeader(code)
 	}))
 	t.Cleanup(a.srv.Close)
-	if cidrs == nil {
-		cidrs = []netip.Prefix{loopbackNet}
-	}
-	r.Guard = NewEndpointGuard(nil, cidrs)
+	r.Guard = NewEndpointGuard(nil, []netip.Prefix{loopbackNet})
 	a.use(r.Guard)
 	r.now = func() time.Time { return a.now }
 	r.after = func(d time.Duration, f func()) { a.retries = append(a.retries, retry{d, f}) }
@@ -535,12 +532,12 @@ func TestUnconfirmedRegistrationsAreCapped(t *testing.T) {
 
 func TestSendResults(t *testing.T) {
 	ctx := context.Background()
-	setup := func(t *testing.T, status int, header http.Header) (*Registry, *appServer, string) {
+	setup := func(t *testing.T, status int, header http.Header) (*Registry, *appServer) {
 		r, _ := newTestRegistry(t)
 		a := newAppServer(t, r)
-		id, _ := a.confirmed(newAppSub(t, a.endpoint("/up")), "")
+		a.confirmed(newAppSub(t, a.endpoint("/up")), "")
 		a.status["/up"], a.header["/up"] = status, header
-		return r, a, id
+		return r, a
 	}
 	listed := func(r *Registry) int {
 		ds, err := r.Devices(ctx)
@@ -551,7 +548,7 @@ func TestSendResults(t *testing.T) {
 	}
 
 	for _, code := range []int{404, 410} {
-		r, a, _ := setup(t, code, nil)
+		r, a := setup(t, code, nil)
 		r.Notify(ctx, Message{Title: "T"})
 		if listed(r) != 0 || len(a.retries) != 0 {
 			t.Errorf("%d: %d devices, %d retries; want the device removed", code, listed(r), len(a.retries))
@@ -559,7 +556,7 @@ func TestSendResults(t *testing.T) {
 	}
 
 	t.Run("413 keeps the subscription", func(t *testing.T) {
-		r, a, _ := setup(t, 413, nil)
+		r, a := setup(t, 413, nil)
 		if err := r.Notify(ctx, Message{Title: "T"}); err == nil {
 			t.Error("no error for 413")
 		}
@@ -570,7 +567,7 @@ func TestSendResults(t *testing.T) {
 
 	t.Run("removing or renewing a device drops its 429 hold", func(t *testing.T) {
 		for _, renew := range []bool{false, true} {
-			r, a, _ := setup(t, 429, nil)
+			r, a := setup(t, 429, nil)
 			r.Notify(ctx, Message{Title: "T"})
 			ep := a.endpoint("/up")
 			if _, held := r.held(ep, a.now); !held {
@@ -605,7 +602,7 @@ func TestSendResults(t *testing.T) {
 			if tc.retryAfter != "" {
 				h = http.Header{"Retry-After": {tc.retryAfter}}
 			}
-			r, a, _ := setup(t, 429, h)
+			r, a := setup(t, 429, h)
 			a.now = time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 			r.Notify(ctx, Message{Title: "first"})
 			r.Notify(ctx, Message{Title: "second"}) // held: not sent now
@@ -625,7 +622,7 @@ func TestSendResults(t *testing.T) {
 
 	for _, code := range []int{500, 503, 507} {
 		t.Run(fmt.Sprintf("%d is retried, then given up", code), func(t *testing.T) {
-			r, a, _ := setup(t, code, nil)
+			r, a := setup(t, code, nil)
 			if err := r.Notify(ctx, Message{Title: "T"}); err == nil {
 				t.Error("no error")
 			}
@@ -646,7 +643,7 @@ func TestSendResults(t *testing.T) {
 	}
 
 	t.Run("a retry that succeeds stops", func(t *testing.T) {
-		r, a, _ := setup(t, 502, nil)
+		r, a := setup(t, 502, nil)
 		r.Notify(ctx, Message{Title: "T"})
 		a.status["/up"] = 201
 		a.runRetries()
@@ -660,7 +657,7 @@ func TestSendResults(t *testing.T) {
 	})
 
 	t.Run("network errors are retried, without the endpoint in the error", func(t *testing.T) {
-		r, a, _ := setup(t, 201, nil)
+		r, a := setup(t, 201, nil)
 		endpoint := a.endpoint("/up")
 		a.srv.Close()
 		err := r.Notify(ctx, Message{Title: "T"})
@@ -677,7 +674,7 @@ func TestSendResults(t *testing.T) {
 	})
 
 	t.Run("3 days of only failures removes the subscription", func(t *testing.T) {
-		r, a, _ := setup(t, 500, nil)
+		r, a := setup(t, 500, nil)
 		r.Notify(ctx, Message{Title: "T"})
 		a.now = a.now.Add(3*24*time.Hour - time.Minute)
 		r.Notify(ctx, Message{Title: "T"})
@@ -692,7 +689,7 @@ func TestSendResults(t *testing.T) {
 	})
 
 	t.Run("a delivery resets the failure clock", func(t *testing.T) {
-		r, a, _ := setup(t, 500, nil)
+		r, a := setup(t, 500, nil)
 		r.Notify(ctx, Message{Title: "T"})
 		a.now = a.now.Add(2 * 24 * time.Hour)
 		a.status["/up"] = 201
@@ -706,7 +703,7 @@ func TestSendResults(t *testing.T) {
 	})
 
 	t.Run("a test reminder reports the first attempt only", func(t *testing.T) {
-		r, a, _ := setup(t, 503, nil)
+		r, a := setup(t, 503, nil)
 		got := r.TestReminder(ctx, "", a.endpoint("/up"), "https://meat.example.com")
 		if got.Push != "failed" || len(a.retries) != 0 {
 			t.Errorf("got %+v with %d retries; want failed and none", got, len(a.retries))

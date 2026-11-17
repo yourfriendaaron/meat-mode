@@ -361,7 +361,7 @@ func TestFromEnv(t *testing.T) {
 		t.Fatalf("err = %v, want an error naming MEAT_MODE_NTFY_TOPIC", err)
 	}
 	t.Setenv("MEAT_MODE_NTFY_TOPIC", "plants")
-	reg, n, err = FromEnv(t.TempDir(), testDB(t))
+	_, n, err = FromEnv(t.TempDir(), testDB(t))
 	if err != nil || len(n.(Multi)) != 2 {
 		t.Fatal(err)
 	}

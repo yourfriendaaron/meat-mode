@@ -245,7 +245,7 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 	}
 
 	wt := filepath.Join(w.state, "agents", "worktrees", "garden", id)
-	if got := strings.TrimSpace(beadsRun(t, wt, "git", "branch", "--show-current")); got != "meat-mode/"+id {
+	if got := strings.TrimSpace(beadsRun(t, wt, "branch", "--show-current")); got != "meat-mode/"+id {
 		t.Errorf("worktree branch = %q", got)
 	}
 	logf := filepath.Join(w.state, "agents", "logs", "garden", id, run.ID+".jsonl")
@@ -254,13 +254,13 @@ func TestAgentRunWritesNoteThenCloses(t *testing.T) {
 	}
 }
 
-func beadsRun(t *testing.T, dir, name string, args ...string) string {
+func beadsRun(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 	return string(out)
 }
@@ -681,7 +681,7 @@ func TestAgentWorktreeGoesWithTheBead(t *testing.T) {
 	if _, err := os.Stat(wt); !os.IsNotExist(err) {
 		t.Errorf("clean worktree still there: %v", err)
 	}
-	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/*"); strings.Contains(out, id) || !strings.Contains(out, keep) {
+	if out := beadsRun(t, dir, "branch", "--list", "meat-mode/*"); strings.Contains(out, id) || !strings.Contains(out, keep) {
 		t.Errorf("branches = %q", out)
 	}
 	if _, err := os.Stat(filepath.Join(dirty, "draft.txt")); err != nil {
@@ -696,10 +696,10 @@ func TestAgentWorktreeGoesWithTheBead(t *testing.T) {
 	}
 }
 
-// later moves the runner's clock d ahead of the real one.
-func later(b *Bridge, d time.Duration) {
+// later moves the runner's clock two hours ahead of the real one.
+func later(b *Bridge) {
 	b.Runner.mu.Lock()
-	b.Runner.Now = func() time.Time { return time.Now().Add(d) }
+	b.Runner.Now = func() time.Time { return time.Now().Add(2 * time.Hour) }
 	b.Runner.mu.Unlock()
 }
 
@@ -723,12 +723,12 @@ func TestIdleWorktreeGoesAndComesBack(t *testing.T) {
 
 	// Past it the folder goes; the task is still listed, so its branch,
 	// session and path stay.
-	later(b, 2*time.Hour)
+	later(b)
 	b.Runner.Collect()
 	if isDir(wt) {
 		t.Fatal("an idle clean worktree is still there")
 	}
-	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/"+id); !strings.Contains(out, id) {
+	if out := beadsRun(t, dir, "branch", "--list", "meat-mode/"+id); !strings.Contains(out, id) {
 		t.Errorf("the branch of a listed task went: %q", out)
 	}
 	if rec := runOf(b, id); rec.Session != session || rec.Worktree != wt {
@@ -741,7 +741,7 @@ func TestIdleWorktreeGoesAndComesBack(t *testing.T) {
 	if two.State != api.RunDone {
 		t.Errorf("second run = %+v", two)
 	}
-	if got := strings.TrimSpace(beadsRun(t, wt, "git", "branch", "--show-current")); got != "meat-mode/"+id {
+	if got := strings.TrimSpace(beadsRun(t, wt, "branch", "--show-current")); got != "meat-mode/"+id {
 		t.Errorf("remade worktree branch = %q", got)
 	}
 	logf := filepath.Join(w.state, "agents", "logs", "garden", id, two.ID+".jsonl")
@@ -757,13 +757,13 @@ func TestBranchGoesWhenTheBeadLeavesAfterAnIdleRemoval(t *testing.T) {
 	w.tick(b)
 	w.ask(b, "ask-1", id, "reply")
 	w.waitRun(b, id, settled)
-	later(b, 2*time.Hour)
+	later(b)
 	b.Runner.Collect()
-	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/"+id); !strings.Contains(out, id) {
+	if out := beadsRun(t, dir, "branch", "--list", "meat-mode/"+id); !strings.Contains(out, id) {
 		t.Fatalf("the branch went with the idle worktree: %q", out)
 	}
 	b.Runner.Listed("garden", map[string]string{})
-	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/*"); strings.Contains(out, id) {
+	if out := beadsRun(t, dir, "branch", "--list", "meat-mode/*"); strings.Contains(out, id) {
 		t.Errorf("the merged branch of a bead that left the set stays: %q", out)
 	}
 	if rec := runOf(b, id); rec.Worktree != "" || rec.Session != "" || rec.Main != "" {
@@ -782,18 +782,18 @@ func TestBranchStaysUntilTheDefaultBranchHoldsIt(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(wt, "hose.txt"), []byte("Water the plants\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	beadsRun(t, wt, "git", "add", "hose.txt")
-	beadsRun(t, wt, "git", "-c", "user.name=Sam", "-c", "user.email=sam@example.com", "commit", "-q", "-m", "Hose")
+	beadsRun(t, wt, "add", "hose.txt")
+	beadsRun(t, wt, "-c", "user.name=Sam", "-c", "user.email=sam@example.com", "commit", "-q", "-m", "Hose")
 	// The main checkout sits on another branch that holds the commit; the
 	// default branch does not.
-	beadsRun(t, dir, "git", "switch", "-q", "-c", "greenhouse")
-	beadsRun(t, dir, "git", "-c", "user.name=Sam", "-c", "user.email=sam@example.com", "merge", "-q", "--no-edit", "meat-mode/"+id)
+	beadsRun(t, dir, "switch", "-q", "-c", "greenhouse")
+	beadsRun(t, dir, "-c", "user.name=Sam", "-c", "user.email=sam@example.com", "merge", "-q", "--no-edit", "meat-mode/"+id)
 
 	b.Runner.Listed("garden", map[string]string{})
 	if isDir(wt) {
 		t.Error("the clean worktree of a bead that left the set is still there")
 	}
-	if out := beadsRun(t, dir, "git", "branch", "--list", "meat-mode/*"); !strings.Contains(out, id) {
+	if out := beadsRun(t, dir, "branch", "--list", "meat-mode/*"); !strings.Contains(out, id) {
 		t.Errorf("a branch the default branch lacks was deleted: %q", out)
 	}
 }
@@ -822,7 +822,7 @@ func TestIdleWorktreeKeepsFilesABuildCannotMake(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	later(b, 2*time.Hour)
+	later(b)
 	b.Runner.Collect()
 	if _, err := os.Stat(filepath.Join(wt, "plants.secret")); err != nil {
 		t.Fatalf("an ignored file no build makes was removed: %v", err)
@@ -862,8 +862,8 @@ func TestCollectSweepsWorktreesItHasNoRecordOf(t *testing.T) {
 	root := filepath.Join(w.state, "agents", "worktrees")
 	stray := filepath.Join(root, "garden", "stray")
 	odd := filepath.Join(root, "garden", "odd")
-	beadsRun(t, dir, "git", "worktree", "add", "-q", "-b", "meat-mode/stray", stray)
-	beadsRun(t, dir, "git", "worktree", "add", "-q", "-b", "trellis", odd)
+	beadsRun(t, dir, "worktree", "add", "-q", "-b", "meat-mode/stray", stray)
+	beadsRun(t, dir, "worktree", "add", "-q", "-b", "trellis", odd)
 	empty := filepath.Join(root, "orchard", "pears")
 	if err := os.MkdirAll(empty, 0o700); err != nil {
 		t.Fatal(err)
@@ -873,7 +873,7 @@ func TestCollectSweepsWorktreesItHasNoRecordOf(t *testing.T) {
 	if !isDir(stray) {
 		t.Fatal("a worktree with no record went inside the keep window")
 	}
-	later(b, 2*time.Hour)
+	later(b)
 	b.Runner.Collect()
 	if isDir(stray) {
 		t.Error("a stray worktree on its bead's branch is still there")
