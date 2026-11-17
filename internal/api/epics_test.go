@@ -9,7 +9,7 @@ import (
 
 func TestCheckEpicRowsCleans(t *testing.T) {
 	rows := []EpicRow{
-		{ID: "gd-1", Title: strings.Repeat("t", ItemTitleLimit+9), Status: "open", Epic: true, Description: "Plan the beds.", Priority: 9},
+		{ID: "gd-1", Title: strings.Repeat("t", MaxTitleLen+9), Status: "open", Epic: true, Description: "Plan the beds.", Priority: 9},
 		{ID: "gd-1.1", Title: "Water the plants", Status: "pinned", Parent: "gd-1", Description: "not a card", Priority: -2},
 		{ID: "gd-2", Title: "Mow the lawn", Status: "open", Parent: "gd-1.1"},
 		{ID: "gd-3", Title: "Fence", Status: "open", Parent: "gd-3"},
@@ -17,7 +17,7 @@ func TestCheckEpicRowsCleans(t *testing.T) {
 	if err := CheckEpicRows(rows); err != nil {
 		t.Fatal(err)
 	}
-	if len([]rune(rows[0].Title)) != ItemTitleLimit+1 || rows[0].Priority != 4 || rows[0].Description == "" {
+	if len([]rune(rows[0].Title)) != MaxTitleLen+1 || rows[0].Priority != 4 || rows[0].Description == "" {
 		t.Errorf("card not cleaned as expected: %+v", rows[0])
 	}
 	if rows[1].Status != "open" || rows[1].Priority != 0 || rows[1].Description != "not a card" || rows[1].Parent != "gd-1" {

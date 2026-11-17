@@ -689,8 +689,10 @@ func checkExportItem(it *api.ExportItem) error {
 		return invalidf("item %s: %s", key, fmt.Sprintf(format, a...))
 	}
 
+	// An item moved from a bridge's personal repo may hold a title the hub
+	// cut to MaxTitleLen with an ellipsis, one rune past what an edit sets.
 	title, err := api.CheckTitle(it.Title)
-	if err != nil {
+	if err != nil && (title == "" || overTruncated(title, MaxTitleLen)) {
 		return fail("%v", err)
 	}
 	it.Title = title
@@ -719,8 +721,8 @@ func checkExportItem(it *api.ExportItem) error {
 			return fail("%v", err)
 		}
 	}
-	if overTruncated(it.ParentTitle, maxTitleLen) {
-		return fail("parentTitle is longer than %d characters", maxTitleLen)
+	if overTruncated(it.ParentTitle, MaxTitleLen) {
+		return fail("parentTitle is longer than %d characters", MaxTitleLen)
 	}
 	if overTruncated(it.CreatedBy, maxCommentAuthorLen) {
 		return fail("createdBy is longer than %d characters", maxCommentAuthorLen)

@@ -47,7 +47,7 @@ func TestCheckItems(t *testing.T) {
 	items := []Item{{
 		ID: "gd-1", Key: "a/b/gd-1", Bridge: "a", Repo: "b", Pending: true,
 		Repeat: &Repeat{Every: EveryDay}, RemindBefore: &remind,
-		Title: strings.Repeat("t", ItemTitleLimit+1),
+		Title: strings.Repeat("t", MaxTitleLen+1),
 	}}
 	if err := CheckItems(items); err != nil {
 		t.Fatal(err)

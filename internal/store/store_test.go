@@ -653,7 +653,7 @@ func TestReplaceItemsTruncatesLongText(t *testing.T) {
 	rep := strings.Repeat
 	must(t, s.ReplaceItems("laptop", "garden", []api.Item{{
 		ID:          "gd-9",
-		Title:       rep("t", maxTitleLen+50),
+		Title:       rep("t", MaxTitleLen+50),
 		Description: rep("d", maxDescriptionLen+50),
 		Status:      "open",
 		Comments: []api.Comment{{
@@ -666,8 +666,8 @@ func TestReplaceItemsTruncatesLongText(t *testing.T) {
 	must(t, err)
 	it := item(t, st, "laptop/garden/gd-9")
 	runeLen := func(v string) int { return len([]rune(v)) }
-	if got := runeLen(it.Title); got != maxTitleLen+1 || !strings.HasSuffix(it.Title, "…") {
-		t.Fatalf("title %d runes, want %d plus an ellipsis", got, maxTitleLen)
+	if got := runeLen(it.Title); got != MaxTitleLen+1 || !strings.HasSuffix(it.Title, "…") {
+		t.Fatalf("title %d runes, want %d plus an ellipsis", got, MaxTitleLen)
 	}
 	if got := runeLen(it.Description); got != maxDescriptionLen+1 || !strings.HasSuffix(it.Description, "…") {
 		t.Fatalf("description %d runes", got)
@@ -681,9 +681,9 @@ func TestReplaceItemsTruncatesLongText(t *testing.T) {
 	}
 	// Truncation happens on rune boundaries, even when the cut lands inside
 	// a multi-byte character.
-	must(t, s.ReplaceItems("laptop", "garden", []api.Item{{ID: "gd-9", Title: rep("é", maxTitleLen+2), Status: "open"}}))
+	must(t, s.ReplaceItems("laptop", "garden", []api.Item{{ID: "gd-9", Title: rep("é", MaxTitleLen+2), Status: "open"}}))
 	st, _ = s.State()
-	if got := runeLen(item(t, st, "laptop/garden/gd-9").Title); got != maxTitleLen+1 {
+	if got := runeLen(item(t, st, "laptop/garden/gd-9").Title); got != MaxTitleLen+1 {
 		t.Fatalf("multi-byte title %d runes", got)
 	}
 }

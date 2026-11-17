@@ -85,7 +85,7 @@ const (
 
 // CheckEpicRows checks and cleans a repo's epic set in place, as the hub
 // and the fake hub take it. Like CheckItems it truncates rather than
-// refuses what one bead could get wrong: a title past ItemTitleLimit, a
+// refuses what one bead could get wrong: a title past MaxTitleLen, a
 // description or notes past ItemDescriptionLimit, a comment's text past
 // CommentLimit or its id or author past CommentAuthorLimit, a
 // priority outside 0 to 4 (clamped), an unknown status (read as open), and
@@ -115,7 +115,7 @@ func CheckEpicRows(rows []EpicRow) error {
 	total := 0
 	for i := range rows {
 		r := &rows[i]
-		r.Title = TruncRunes(r.Title, ItemTitleLimit)
+		r.Title = TruncRunes(r.Title, MaxTitleLen)
 		r.Type = TruncRunes(r.Type, LabelLimit)
 		r.Assignee = TruncRunes(r.Assignee, AgentNameLimit)
 		r.Priority = min(max(r.Priority, 0), 4)
