@@ -128,22 +128,49 @@ func applyOverrides(c Config, getenv func(string) string) (Config, error) {
 // overrides. A missing file gives an empty config. It logs a warning when
 // the file, which holds the token, is readable by anyone but its owner.
 func readConfigFile(path string) (Config, error) {
-	var c Config
+	s, err := LoadSaved(path)
+	if s.Open() {
+		warnOpen(slog.Default(), path, s.Mode)
+	}
+	return s.Config, err
+}
+
+// Saved is the config file as saved, with its permission bits; Mode is 0
+// when there is no file.
+type Saved struct {
+	Config
+	Path string
+	Mode os.FileMode
+}
+
+// Open reports whether anyone but the file's owner can read it.
+func (s Saved) Open() bool { return s.Mode&0o077 != 0 }
+
+// LoadSaved reads the config file at path as saved, without the environment
+// overrides and without a warning on its mode, which the caller gives. The
+// running bridge calls it once per poll, so `meat-mode bridge agents` and
+// `meat-mode bridge epics` reach the hub within one.
+func LoadSaved(path string) (Saved, error) {
+	s := Saved{Path: path}
 	b, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 	case err != nil:
-		return c, err
+		return s, err
 	default:
-		if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 {
-			slog.Warn("the bridge config holds the hub token but others can read it; run chmod 600 on it",
-				"file", path, "mode", fmt.Sprintf("%04o", fi.Mode().Perm()))
+		if fi, err := os.Stat(path); err == nil {
+			s.Mode = fi.Mode().Perm()
 		}
-		if err := json.Unmarshal(b, &c); err != nil {
-			return c, fmt.Errorf("read %s: %w", path, err)
+		if err := json.Unmarshal(b, &s.Config); err != nil {
+			return s, fmt.Errorf("read %s: %w", path, err)
 		}
 	}
-	return c, nil
+	return s, nil
+}
+
+func warnOpen(log *slog.Logger, path string, mode os.FileMode) {
+	log.Warn("the bridge config holds the hub token but others can read it; run chmod 600 on it",
+		"file", path, "mode", fmt.Sprintf("%04o", mode))
 }
 
 // SaveSwitch records one repo's sync switch in the config file at path. It
@@ -245,21 +272,6 @@ func SaveLimits(path string, c api.LimitsChange) (SavedLimits, error) {
 		return cfg.Save(path)
 	})
 	return out, err
-}
-
-// LoadAgents reads the agents map as saved in the config file at path. The
-// running bridge calls it before each repo report, so `meat-mode bridge
-// agents` reaches the hub within one poll.
-func LoadAgents(path string) (map[string]bool, error) {
-	c, err := readConfigFile(path)
-	return c.Agents, err
-}
-
-// LoadEpics reads the epics map as saved in the config file at path. The
-// running bridge calls it before each repo report, as LoadAgents.
-func LoadEpics(path string) (map[string]bool, error) {
-	c, err := readConfigFile(path)
-	return c.Epics, err
 }
 
 // WithConfigLock runs fn holding the lock that serializes every

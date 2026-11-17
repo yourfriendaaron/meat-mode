@@ -438,7 +438,7 @@ func (b *Bridge) ask(a api.Action, st *repoState, res api.ActionResult) {
 	if actor == "" {
 		actor = defaultActor
 	}
-	b.reloadAgents()
+	b.reloadConfig()
 	req := askRequest{ActionID: a.ID, Repo: st.Repo, Author: actor, Allowed: b.Agents[a.Repo]}
 	switch {
 	case a.Kind == api.KindAsk:

@@ -619,7 +619,7 @@ func TestAgentsSwitchPerRepo(t *testing.T) {
 
 	// The machine's own switch reaches the next report and the next ask.
 	file := map[string]bool{"garden": true}
-	b.LoadAgents = func() (map[string]bool, error) { return file, nil }
+	b.LoadConfig = func() (Saved, error) { return Saved{Config: Config{Agents: file}}, nil }
 	w.tick(b)
 	for _, r := range w.hub.Repos(us) {
 		if r.Name == "garden" && !r.AgentsAllowed {

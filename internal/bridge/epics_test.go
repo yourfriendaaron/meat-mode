@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -587,25 +585,5 @@ func TestEpicsCommand(t *testing.T) {
 		if err := Main(context.Background(), append([]string{"epics"}, args...), env); err == nil || !strings.Contains(err.Error(), "usage") {
 			t.Errorf("epics %v = %v, want usage", args, err)
 		}
-	}
-}
-
-func TestBridgeRereadsEpicsBeforeReport(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "bridge.json")
-	must(t, Config{Token: "t"}.Save(path))
-	b := &Bridge{LoadEpics: func() (map[string]bool, error) { return LoadEpics(path) }}
-	b.reloadEpics()
-	if b.Epics["garden"] {
-		t.Fatal("epics on before the switch")
-	}
-	must(t, SaveEpics(path, "garden", true))
-	b.reloadEpics()
-	if !b.Epics["garden"] {
-		t.Error("the switch made by the command did not reach the bridge")
-	}
-	must(t, os.WriteFile(path, []byte("{"), 0o600))
-	b.reloadEpics()
-	if !b.Epics["garden"] {
-		t.Error("a failed reread dropped the switches")
 	}
 }

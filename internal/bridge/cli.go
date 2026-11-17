@@ -404,12 +404,11 @@ func New(s Settings, log *slog.Logger) (*Bridge, error) {
 			return SaveSwitch(env.Paths.Config, repo, on)
 		},
 		Agents:     cfg.Agents,
-		LoadAgents: func() (map[string]bool, error) { return LoadAgents(env.Paths.Config) },
+		LoadConfig: func() (Saved, error) { return LoadSaved(env.Paths.Config) },
 		SaveAgents: func(repo string, on bool) error {
 			return SaveAgents(env.Paths.Config, repo, on)
 		},
-		Epics:     cfg.Epics,
-		LoadEpics: func() (map[string]bool, error) { return LoadEpics(env.Paths.Config) },
+		Epics: cfg.Epics,
 		SaveEpics: func(repo string, on bool) error {
 			return SaveEpics(env.Paths.Config, repo, on)
 		},

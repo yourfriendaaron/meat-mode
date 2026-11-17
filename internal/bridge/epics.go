@@ -109,20 +109,6 @@ func (b *Bridge) epicsOn(r Repo) bool {
 	return b.Epics[r.Name] && epicsOf(r.Tracker) != nil
 }
 
-// reloadEpics rereads the epics map from the config file. A failed read
-// keeps the map the bridge has.
-func (b *Bridge) reloadEpics() {
-	if b.LoadEpics == nil {
-		return
-	}
-	m, err := b.LoadEpics()
-	if err != nil {
-		b.log().Warn("cannot reread the epics switches; keeping the last ones", "err", err)
-		return
-	}
-	b.Epics = m
-}
-
 // epicState is what the epics pass knows of one repo.
 type epicState struct {
 	dir     string
