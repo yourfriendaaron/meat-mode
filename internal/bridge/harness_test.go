@@ -21,10 +21,10 @@ func (w *world) runLog(bead, run string) string {
 
 // A steering harness takes a note into the live run at once.
 func TestFakeHarnessSteers(t *testing.T) {
-	// Each step outlasts the note's delivery, which runs bd and slows on a busy machine.
-	t.Setenv("FAKEAGENT_STEP", "6s")
+	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridgeWith(true, fakeHarness(t, nil))
+	// Each step outlasts the note's delivery, which runs bd and slows on a busy machine.
+	b := w.agentBridgeWith(true, fakeHarness(t, nil, "--step", "6s"))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
@@ -47,9 +47,9 @@ func TestFakeHarnessSteers(t *testing.T) {
 // Without Steer, notes wait for the turn to end and then resume the
 // session in a new process, joined into one prompt, within the same run.
 func TestFakeHarnessHoldsNotesUntilTheTurnEnds(t *testing.T) {
-	t.Setenv("FAKEAGENT_STEP", "2s")
+	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }))
+	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }, "--step", "2s"))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
@@ -80,9 +80,9 @@ func TestFakeHarnessHoldsNotesUntilTheTurnEnds(t *testing.T) {
 
 // After a turn that failed, held notes stay on the bead for the next ask.
 func TestFakeHarnessKeepsNotesAfterAFailedTurn(t *testing.T) {
-	t.Setenv("FAKEAGENT_STEP", "2s")
+	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }))
+	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }, "--step", "2s"))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow fail")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
@@ -200,6 +200,7 @@ func TestHelloNamesTheHarness(t *testing.T) {
 // The prompt quotes the user's own words the hub sent with the ask, then
 // the ask's own note.
 func TestPromptQuotesTheUserNotes(t *testing.T) {
+	t.Parallel()
 	w, _, id := agentWorld(t)
 	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }))
 	w.tick(b)
