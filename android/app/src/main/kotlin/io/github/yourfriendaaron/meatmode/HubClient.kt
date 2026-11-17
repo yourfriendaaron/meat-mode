@@ -2,7 +2,9 @@ package io.github.yourfriendaaron.meatmode
 
 import org.json.JSONException
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.UnknownHostException
@@ -38,8 +40,7 @@ class HubClient(private val origin: String) {
             }
             val code = conn.responseCode
             val stream = if (code >= 400) conn.errorStream else conn.inputStream
-            val text = stream?.use { s -> s.readBytes().take(MAX_BODY).toByteArray().toString(Charsets.UTF_8) }.orEmpty()
-            return Response(code, text)
+            return Response(code, stream?.use { readBounded(it) }.orEmpty())
         } finally {
             conn.disconnect()
         }
@@ -77,6 +78,31 @@ class HubClient(private val origin: String) {
     }
 
     companion object {
-        private const val MAX_BODY = 64 * 1024
+        const val MAX_BODY = 64 * 1024
+
+        /** Reads at most [MAX_BODY] bytes; one more byte is an [IOException], and nothing past it is read. */
+        fun readBounded(stream: InputStream): String {
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(8 * 1024)
+            while (true) {
+                val n = stream.read(buf, 0, minOf(buf.size, MAX_BODY + 1 - out.size()))
+                if (n < 0) break
+                out.write(buf, 0, n)
+                if (out.size() > MAX_BODY) throw IOException("The hub's answer is too large.")
+            }
+            return out.toString(Charsets.UTF_8.name())
+        }
+
+        /** The words for a refused or failed button action; the same as `failureText` in web/src/sw-actions.ts. */
+        fun failureText(status: Int, body: String): String {
+            val reason = try {
+                JSONObject(body).opt("error").let { if (it is String) it.trim() else "" }
+            } catch (_: JSONException) {
+                ""
+            }
+            if (reason.isEmpty()) return if (status != 0) "The hub could not do that." else "Could not reach the hub."
+            val text = reason.replaceFirstChar { it.uppercase() }
+            return if (text.last() in ".!?") text else "$text."
+        }
     }
 }

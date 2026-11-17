@@ -181,7 +181,7 @@ class ActionWorker(context: Context, params: WorkerParameters) : Worker(context,
             return if (runAttemptCount + 1 < Work.MAX_ATTEMPTS) {
                 Result.retry()
             } else {
-                refused(ctx, tag, key, ctx.getString(R.string.action_refused_offline))
+                refused(ctx, tag, key, HubClient.failureText(0, ""))
             }
         }
         PushLog.add(ctx, "action $button: HTTP ${res.code}")
@@ -190,12 +190,7 @@ class ActionWorker(context: Context, params: WorkerParameters) : Worker(context,
             res.code >= 500 && runAttemptCount + 1 < Work.MAX_ATTEMPTS -> Result.retry()
             else -> {
                 if (res.code == 401) Registration.forget(ctx, revoke = false)
-                val reason = try {
-                    JSONObject(res.body).optString("error")
-                } catch (_: JSONException) {
-                    ""
-                }
-                refused(ctx, tag, key, reason.ifBlank { ctx.getString(R.string.action_refused_hub) })
+                refused(ctx, tag, key, HubClient.failureText(res.code, res.body))
             }
         }
     }
