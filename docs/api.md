@@ -48,7 +48,7 @@ The guard only refuses. A forged header can make a request look more public, nev
 
 | Method and path | Body | Response |
 |---|---|---|
-| `GET /api/state` | | `State`: every item, repo and bridge, the count of unapplied actions, server time |
+| `GET /api/state` | | `State`: every item, repo and bridge, the count of unapplied actions, server time; gzipped when the request accepts gzip, the one API reply that is |
 | `GET /api/events` | | Server-sent events: `event: change` with `data: {"rev": n}` whenever state changes; the app then re-fetches `/api/state`. `event: epics` with `data: {}` when the hub takes or drops a repo's epic rows; the app then re-fetches `/api/epics` if it shows them, and never `/api/state`. Epics events coalesce apart from change events, and a store change that only touches epic rows sends no `change`. Past 32 open streams the hub answers `503` with `Retry-After: 30`. |
 | `GET /api/epics` | | `Epics`: the epic rows of every repo whose epics are on (see Epics) |
 | `GET /api/icons/{hash}` | | A repo icon's bytes, by the `icon` hash a `Repo` in `State` carries (see List identity). `404` for a hash the hub holds for no repo, `400` for one that is not 32 lowercase hex digits |

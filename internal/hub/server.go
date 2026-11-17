@@ -290,7 +290,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		s.storeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSONGzip(w, r, http.StatusOK, st)
 }
 
 func (s *Server) handleEpics(w http.ResponseWriter, r *http.Request) {
