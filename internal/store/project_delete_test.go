@@ -12,22 +12,22 @@ import (
 	"github.com/yourfriendaaron/meat-mode/internal/api"
 )
 
-// hasRepo reports whether State lists the hub's repo name.
-func hasRepo(st api.State, name string) bool {
-	return slices.ContainsFunc(st.Repos, func(r api.Repo) bool { return r.Bridge == HubBridge && r.Name == name })
+// hasRepo reports whether State lists the garden repo.
+func hasRepo(st api.State) bool {
+	return slices.ContainsFunc(st.Repos, func(r api.Repo) bool { return r.Bridge == HubBridge && r.Name == garden })
 }
 
-// listsProject reports whether Projects names name.
-func listsProject(t *testing.T, s *Store, name string) bool {
+// listsProject reports whether Projects names the garden project.
+func listsProject(t *testing.T, s *Store) bool {
 	t.Helper()
 	ps, err := s.Projects()
 	must(t, err)
-	return slices.ContainsFunc(ps, func(p api.Project) bool { return p.Name == name })
+	return slices.ContainsFunc(ps, func(p api.Project) bool { return p.Name == garden })
 }
 
-func deleteProject(t *testing.T, s *Store, repo string) api.Action {
+func deleteProject(t *testing.T, s *Store) api.Action {
 	t.Helper()
-	a, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindProjectDelete, Bridge: HubBridge, Repo: repo}, "alex-app")
+	a, _, err := s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindProjectDelete, Bridge: HubBridge, Repo: garden}, "alex-app")
 	must(t, err)
 	return a
 }
@@ -50,13 +50,13 @@ func TestDeleteProjectAndUndo(t *testing.T) {
 	must(t, err)
 	c.tick()
 
-	del := deleteProject(t, s, garden)
+	del := deleteProject(t, s)
 	_, _, soilID, _ := SplitKey(soil)
 	if del.Status != api.StatusApplied || !slices.Equal(del.Payload.Items, []string{waterID, soilID}) {
 		t.Fatalf("delete = %+v", del)
 	}
 	st := mustState(t, s)
-	if hasRepo(st, garden) || listsProject(t, s, garden) {
+	if hasRepo(st) || listsProject(t, s) {
 		t.Fatal("a deleted project still shows")
 	}
 	// Its deleted items stay for the Deleted view; the done one goes with the list.
@@ -82,7 +82,7 @@ func TestDeleteProjectAndUndo(t *testing.T) {
 		t.Errorf("restore = %+v", undo)
 	}
 	st = mustState(t, s)
-	if !hasRepo(st, garden) || !listsProject(t, s, garden) {
+	if !hasRepo(st) || !listsProject(t, s) {
 		t.Fatal("the Undo did not bring the project back")
 	}
 	for _, key := range []string{water, soil} {
@@ -108,22 +108,22 @@ func TestDeletedProjectComesBack(t *testing.T) {
 	must(t, err)
 	water, _, err := s.AddPersonal(api.PersonalTodo{Title: "Water the plants"}, "laptop", garden)
 	must(t, err)
-	deleteProject(t, s, garden)
+	deleteProject(t, s)
 	added, _, err := s.AddPersonal(api.PersonalTodo{Title: "Pick a colour"}, "laptop", garden)
 	must(t, err)
 	st := mustState(t, s)
-	if !hasRepo(st, garden) || !listsProject(t, s, garden) {
+	if !hasRepo(st) || !listsProject(t, s) {
 		t.Fatal("an add did not bring the project back")
 	}
 	if item(t, st, added).Status != "open" || item(t, st, water).Status != "closed" {
 		t.Error("an add changed the deleted items")
 	}
 
-	deleteProject(t, s, garden)
+	deleteProject(t, s)
 	_, _, err = s.AppendAction(api.NewAction{ID: uuid.NewString(), Kind: api.KindReopen, Key: water}, "alex-app")
 	must(t, err)
 	st = mustState(t, s)
-	if !hasRepo(st, garden) || item(t, st, water).Status != "open" || item(t, st, added).Status != "closed" {
+	if !hasRepo(st) || item(t, st, water).Status != "open" || item(t, st, added).Status != "closed" {
 		t.Error("restoring one item did not bring the project back with just that item")
 	}
 }
@@ -162,7 +162,7 @@ func TestItemHistoryOfAProjectDeleteWithNoOpenItems(t *testing.T) {
 	must(t, err)
 	c.tick()
 
-	del := deleteProject(t, s, garden)
+	del := deleteProject(t, s)
 	if slices.Contains(del.Payload.Items, doneID) {
 		t.Fatalf("the done item was recorded as deleted: %+v", del.Payload.Items)
 	}
@@ -182,7 +182,7 @@ func TestRestoreKeepsAProjectDeleted(t *testing.T) {
 	must(t, err)
 	_, _, err = s.AddPersonal(api.PersonalTodo{Title: "Water the plants"}, "laptop", garden)
 	must(t, err)
-	deleteProject(t, s, garden)
+	deleteProject(t, s)
 	ex, err := s.Export()
 	must(t, err)
 	file, err := json.Marshal(ex)
@@ -191,7 +191,7 @@ func TestRestoreKeepsAProjectDeleted(t *testing.T) {
 	fresh, _ := open(t)
 	_, err = fresh.Restore(bytes.NewReader(file))
 	must(t, err)
-	if hasRepo(mustState(t, fresh), garden) || listsProject(t, fresh, garden) {
+	if hasRepo(mustState(t, fresh)) || listsProject(t, fresh) {
 		t.Error("a deleted project shows after a restore")
 	}
 }

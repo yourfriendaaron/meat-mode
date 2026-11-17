@@ -33,21 +33,21 @@ var (
 
 // hubAt serves a loopback hub; the URL's host is replaced by name so the
 // resolver decides where it goes.
-func hubAt(t *testing.T) (srv *httptest.Server, urlFor func(name string) string) {
+func hubAt(t *testing.T) (urlFor func(name string) string) {
 	t.Helper()
 	var hits atomic.Int32
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 		w.Write([]byte("[]"))
 	}))
 	t.Cleanup(srv.Close)
 	port := srv.Listener.Addr().String()
 	port = port[strings.LastIndex(port, ":"):]
-	return srv, func(name string) string { return "http://" + name + port }
+	return func(name string) string { return "http://" + name + port }
 }
 
 func TestHubDialCheck(t *testing.T) {
-	_, urlFor := hubAt(t)
+	urlFor := hubAt(t)
 	trusted, err := netguard.ParseTrusted(publicAddr.String() + "/24")
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestHubDialCheck(t *testing.T) {
 // TestHubDialsTheCheckedAddress: the name is looked up once per connection
 // and the connection goes to what was checked.
 func TestHubDialsTheCheckedAddress(t *testing.T) {
-	_, urlFor := hubAt(t)
+	urlFor := hubAt(t)
 	res := &fakeResolver{addrs: []netip.Addr{loopback}}
 	h := &Hub{URL: urlFor("hub.example.com"), Token: "t", Resolver: res}
 	if _, err := h.Actions(context.Background()); err != nil {
@@ -96,7 +96,7 @@ func TestHubIgnoresProxyFromEnvironment(t *testing.T) {
 	t.Setenv("HTTP_PROXY", proxy.URL)
 	t.Setenv("http_proxy", proxy.URL)
 	t.Setenv("NO_PROXY", "")
-	_, urlFor := hubAt(t)
+	urlFor := hubAt(t)
 	h := &Hub{URL: urlFor("hub.example.com"), Token: "t", Resolver: &fakeResolver{addrs: []netip.Addr{loopback}}}
 	if _, err := h.Actions(context.Background()); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestHubIgnoresProxyFromEnvironment(t *testing.T) {
 }
 
 func TestPairRefusesAHubOutsideThePrivateSet(t *testing.T) {
-	_, urlFor := hubAt(t)
+	urlFor := hubAt(t)
 	t.Setenv("MEAT_MODE_BRIDGE_TOKEN", "")
 	env, _, _ := testEnv(t, fakeBD(t, "1.3.1"))
 	env.Resolver = &fakeResolver{addrs: []netip.Addr{publicAddr}}
@@ -163,7 +163,7 @@ func TestRunReadsTrustedNetworksFromEnvThenFile(t *testing.T) {
 // TestRunLoopRetriesARefusedHub: a refusal is an error from the round, which
 // the run loop logs and retries like any network error.
 func TestRunLoopRetriesARefusedHub(t *testing.T) {
-	_, urlFor := hubAt(t)
+	urlFor := hubAt(t)
 	h := &Hub{URL: urlFor("hub.example.com"), Token: "t", Resolver: &fakeResolver{addrs: []netip.Addr{publicAddr}}}
 	b := &Bridge{Hub: h}
 	b.checked = true

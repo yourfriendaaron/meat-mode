@@ -12,7 +12,7 @@ func TestWriteFileAtomicReplacesWithMode(t *testing.T) {
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFileAtomic(path, []byte("new\n"), 0o600); err != nil {
+	if err := writeFileAtomic(path, []byte("new\n")); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(path)
@@ -38,7 +38,7 @@ func TestWriteFileAtomicTightensLeftoverTemp(t *testing.T) {
 	if err := os.WriteFile(path+".tmp", []byte("torn"), 0o666); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFileAtomic(path, []byte("x"), 0o600); err != nil {
+	if err := writeFileAtomic(path, []byte("x")); err != nil {
 		t.Fatal(err)
 	}
 	fi, _ := os.Stat(path)
@@ -49,7 +49,7 @@ func TestWriteFileAtomicTightensLeftoverTemp(t *testing.T) {
 
 func TestWriteFileAtomicMissingDirLeavesNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "absent", "f.json")
-	if err := writeFileAtomic(path, []byte("x"), 0o600); err == nil {
+	if err := writeFileAtomic(path, []byte("x")); err == nil {
 		t.Fatal("want an error for a missing directory")
 	}
 	if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {

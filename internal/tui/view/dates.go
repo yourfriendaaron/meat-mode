@@ -23,9 +23,9 @@ func addDays(t time.Time, n int) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day()+n, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
 }
 
-// at is t's date at hour:minute.
-func at(t time.Time, hour, minute int) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), hour, minute, 0, 0, t.Location())
+// at is t's date at hour:00.
+func at(t time.Time, hour int) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), hour, 0, 0, 0, t.Location())
 }
 
 func sameDay(a, b time.Time) bool {
@@ -125,16 +125,16 @@ func snoozeOptions(now time.Time) []snoozeOption {
 	var opts []snoozeOption
 	inHour := now.Add(time.Hour).Truncate(time.Minute)
 	opts = append(opts, snoozeOption{"In 1 hour", fmtTime(inHour), inHour})
-	if evening := at(now, 18, 0); now.Before(evening) {
+	if evening := at(now, 18); now.Before(evening) {
 		opts = append(opts, snoozeOption{"This evening", "18:00", evening})
 	}
-	opts = append(opts, snoozeOption{"Tomorrow", "9:00", at(addDays(now, 1), 9, 0)})
+	opts = append(opts, snoozeOption{"Tomorrow", "9:00", at(addDays(now, 1), 9)})
 	sat := startOfDay(addDays(now, (6-int(now.Weekday())+7)%7))
-	if !at(sat, 10, 0).After(now) {
+	if !at(sat, 10).After(now) {
 		sat = addDays(sat, 7)
 	}
-	opts = append(opts, snoozeOption{"This weekend", "Sat 10:00", at(sat, 10, 0)})
-	opts = append(opts, snoozeOption{"Next week", "Mon 9:00", at(nextMonday(now), 9, 0)})
+	opts = append(opts, snoozeOption{"This weekend", "Sat 10:00", at(sat, 10)})
+	opts = append(opts, snoozeOption{"Next week", "Mon 9:00", at(nextMonday(now), 9)})
 	month := time.Date(now.Year(), now.Month()+1, now.Day(), 9, 0, 0, 0, now.Location())
 	opts = append(opts, snoozeOption{"In a month", fmtDay(month), month})
 	return opts

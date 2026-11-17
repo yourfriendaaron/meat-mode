@@ -260,7 +260,7 @@ func (r *AgentRunner) save() error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(r.path(), append(b, '\n'), 0o600)
+	return writeFileAtomic(r.path(), append(b, '\n'))
 }
 
 // saveOrLog saves and logs a failure. Callers hold mu.

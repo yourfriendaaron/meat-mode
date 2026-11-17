@@ -10,10 +10,10 @@ import (
 // refuses private address literals in tracked files.
 func a4(a, b, c, d byte) netip.Addr { return netip.AddrFrom4([4]byte{a, b, c, d}) }
 
-func a6tail(head []byte, last byte) netip.Addr {
+func a6tail(head []byte) netip.Addr {
 	var x [16]byte
 	copy(x[:], head)
-	x[15] = last
+	x[15] = 1
 	return netip.AddrFrom16(x)
 }
 
@@ -34,10 +34,10 @@ func TestPrivate(t *testing.T) {
 		{a4(100, 127, 255, 255), true},
 		{a4(100, 128, 0, 1), false},
 		{a4(169, 254, 1, 1), true},
-		{a6tail([]byte{0xfd, 0x7a}, 1), true},
-		{a6tail([]byte{0xfc, 0x00}, 1), true},
-		{a6tail([]byte{0xfe, 0x80}, 1), true},
-		{a6tail([]byte{0xfe, 0xc0}, 1), false},
+		{a6tail([]byte{0xfd, 0x7a}), true},
+		{a6tail([]byte{0xfc, 0x00}), true},
+		{a6tail([]byte{0xfe, 0x80}), true},
+		{a6tail([]byte{0xfe, 0xc0}), false},
 		{netip.MustParseAddr("192.0.2.1"), false},
 		{netip.MustParseAddr("198.51.100.7"), false},
 		{netip.MustParseAddr("2001:db8::1"), false},
@@ -60,7 +60,7 @@ func TestPrivateMappedAndZoned(t *testing.T) {
 	if Private(public) {
 		t.Errorf("IPv4-mapped public %v counted private", public)
 	}
-	zoned := a6tail([]byte{0xfe, 0x80}, 1).WithZone("eth0")
+	zoned := a6tail([]byte{0xfe, 0x80}).WithZone("eth0")
 	if !Private(zoned) {
 		t.Errorf("zoned link-local %v not private", zoned)
 	}
@@ -115,7 +115,7 @@ func TestParseTrustedRefuses(t *testing.T) {
 
 func TestParseAddr(t *testing.T) {
 	ten := a4(10, 0, 0, 1).String()
-	ll := a6tail([]byte{0xfe, 0x80}, 1)
+	ll := a6tail([]byte{0xfe, 0x80})
 	for in, want := range map[string]netip.Addr{
 		"198.51.100.7":                   netip.MustParseAddr("198.51.100.7"),
 		" 198.51.100.7:4711":             netip.MustParseAddr("198.51.100.7"),

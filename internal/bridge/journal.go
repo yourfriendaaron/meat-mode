@@ -130,7 +130,7 @@ func (j *Journal) compact() error {
 			}
 		}
 	}
-	return writeFileAtomic(j.path, buf.Bytes(), 0o600)
+	return writeFileAtomic(j.path, buf.Bytes())
 }
 
 func (j *Journal) write(e JournalEntry) error {
