@@ -13,12 +13,12 @@ interface Bridge {
 }
 
 /** How long `hello` has to answer before the page treats the app as absent. */
-export const HELLO_WAIT_MS = 2000;
+const HELLO_WAIT_MS = 2000;
 /** How often, and for how long, the page asks `push-status` for a confirmation. */
-export const CONFIRM_POLL_MS = 1000;
-export const CONFIRM_WAIT_MS = 30_000;
+const CONFIRM_POLL_MS = 1000;
+const CONFIRM_WAIT_MS = 30_000;
 /** How long `push-on` has to answer: it waits for the user at Android's notification permission prompt and the distributor picker. */
-export const PUSH_ON_WAIT_MS = 180_000;
+const PUSH_ON_WAIT_MS = 180_000;
 
 let nextId = 0;
 const waiting = new Map<string, { ok: (v: any) => void; fail: (e: Error) => void }>();
@@ -74,7 +74,7 @@ export function appPushStatus(): AppPushStatus | null {
 }
 
 /** Asks the app how reminders stand and remembers it. Resolves to null when the app does not answer. */
-export async function refreshAppStatus(): Promise<AppPushStatus | null> {
+async function refreshAppStatus(): Promise<AppPushStatus | null> {
   if (!inApp) return null;
   try {
     appStatus = await appCall<AppPushStatus>("push-status", {}, 10_000);

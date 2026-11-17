@@ -12,7 +12,7 @@ export const NOW = new Date("2026-10-14T10:00:00Z");
 const at = (day: number, h: number, m = 0) => new Date(Date.UTC(2026, 9, day, h, m)).toISOString();
 
 /** The hub keeps the personal list itself, under this reserved bridge name. */
-export const HUB = "hub";
+const HUB = "hub";
 
 function item(repo: string, id: string, title: string, over: Partial<Item> = {}): Item {
   const bridge = repo === "personal" ? HUB : "home";
@@ -49,7 +49,7 @@ function cleanLabels(tags: string[]): string[] | string {
   return out.length > 20 ? "an item has at most 20 tags" : out;
 }
 
-export function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } {
+function fixtures(): { items: Item[]; repos: Repo[]; bridges: Bridge[] } {
   return {
     repos: [
       { bridge: HUB, name: "personal", personal: true, optedIn: true, colour: 0 },
@@ -212,7 +212,7 @@ function stepRepeat(r: Repeat, d: Date): Date {
  * The later dates of open repeating items in [from, to) (docs/api.md, Month
  * view): after each due time, on or before the rule's end, none for fromDone.
  */
-export function occurrencesIn(items: Item[], from: Date, to: Date): Occurrence[] {
+function occurrencesIn(items: Item[], from: Date, to: Date): Occurrence[] {
   const out: Occurrence[] = [];
   for (const it of items) {
     const r = it.repeat;
@@ -230,7 +230,7 @@ export function occurrencesIn(items: Item[], from: Date, to: Date): Occurrence[]
  * fake hub counts in UTC, the zone the tests run in, and a weekly rule with
  * weekdays only every week; tests stay within that.
  */
-export function nextDue(r: Repeat, dueAt: string, now: Date): string {
+function nextDue(r: Repeat, dueAt: string, now: Date): string {
   const step = (d: Date) => stepRepeat(r, d);
   const due = new Date(dueAt);
   if (r.fromDone) {

@@ -16,7 +16,7 @@ export function browserZone(): string {
 }
 
 /** Every IANA zone the browser knows, plus UTC, which some browsers leave out of the list. */
-export function zoneNames(): string[] {
+function zoneNames(): string[] {
   let names: string[] = [];
   try {
     names = Intl.supportedValuesOf("timeZone");

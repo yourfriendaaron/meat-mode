@@ -1,7 +1,12 @@
 // Local-time date helpers. Everything here is pure and takes `now` explicitly.
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** Day names by Date.getDay(), Sunday first. */
+export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+/** "Sun" to "Sat", by Date.getDay(). */
+export const SHORT_DAYS = DAY_NAMES.map((d) => d.slice(0, 3));
+/** Month names by Date.getMonth(). */
+export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = MONTH_NAMES.map((m) => m.slice(0, 3));
 
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -33,7 +38,7 @@ export function fmtTime(d: Date): string {
 
 /** "Fri, Oct 23". */
 export function fmtDay(d: Date): string {
-  return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return `${SHORT_DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
 /** "Nov 26", with the year when it is not now's: "Nov 26, 2027". */

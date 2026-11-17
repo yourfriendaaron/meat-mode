@@ -33,7 +33,7 @@ export function canMove(item: Item, kind: EntryKind, canSnooze: boolean): boolea
 }
 
 /** `day` at the time of day `at` shows, in local time. */
-export function onDay(day: Date, at: Date): Date {
+function onDay(day: Date, at: Date): Date {
   return new Date(day.getFullYear(), day.getMonth(), day.getDate(), at.getHours(), at.getMinutes(), at.getSeconds());
 }
 

@@ -1328,14 +1328,6 @@ select.qa-pill {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.d-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.d-actions .btn {
-  flex: 1;
-}
 .d-section {
   display: flex;
   flex-direction: column;

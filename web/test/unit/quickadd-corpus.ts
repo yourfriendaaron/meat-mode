@@ -5,13 +5,13 @@
 /** Wednesday 14 October 2026, 10:00. */
 export const WED = new Date(2026, 9, 14, 10, 0);
 /** Friday 16 October 2026, 22:00. */
-export const FRI_NIGHT = new Date(2026, 9, 16, 22, 0);
+const FRI_NIGHT = new Date(2026, 9, 16, 22, 0);
 /** Saturday 17 October 2026, 11:00. */
-export const SAT = new Date(2026, 9, 17, 11, 0);
+const SAT = new Date(2026, 9, 17, 11, 0);
 /** Wednesday 30 December 2026, 15:00. */
-export const YEAR_END = new Date(2026, 11, 30, 15, 0);
+const YEAR_END = new Date(2026, 11, 30, 15, 0);
 /** Sunday 31 January 2027, 08:00. */
-export const MONTH_END = new Date(2027, 0, 31, 8, 0);
+const MONTH_END = new Date(2027, 0, 31, 8, 0);
 
 export interface Phrase {
   say: string;

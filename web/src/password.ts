@@ -9,7 +9,7 @@ import { call, errorText } from "./api.ts";
 import { esc } from "./html.ts";
 
 /** The hub refuses a shorter password. */
-export const MIN_PASSWORD = 8;
+const MIN_PASSWORD = 8;
 
 export type Place = "wiz" | "set" | "claim";
 
@@ -58,12 +58,6 @@ export function messages(place: Place): string {
   if (s.error) return `<p id="${place}-pw-error" class="pw-error" role="alert" tabindex="-1">${esc(s.error)}</p>`;
   if (s.ok) return `<p id="${place}-pw-ok" class="pw-ok" role="status" tabindex="-1">${esc(s.ok)}</p>`;
   return "";
-}
-
-/** Clears the messages a form left, such as when the step is shown again. */
-export function clearStatus(place: Place): void {
-  status[place].error = "";
-  status[place].ok = "";
 }
 
 function field(place: Place, name: string, label: string, attrs: string): string {

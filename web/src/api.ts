@@ -67,9 +67,10 @@ export function setUnauthorizedHandler(fn: () => void) {
 /**
  * Calls one hub route and returns its JSON reply (undefined for 204). Throws
  * ApiError with the hub's message. Features with their own module call it
- * directly rather than adding to `api` below.
+ * directly rather than adding to `api` below. With `loggedOut`, a 401 is an
+ * answer the caller expects, not the end of the session.
  */
-export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function call<T>(method: string, path: string, body?: unknown, opts: { loggedOut?: boolean } = {}): Promise<T> {
   const res = await fetch(path, {
     method,
     // The hub refuses a state change without this type, even with no body.
@@ -77,7 +78,8 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(15000),
   });
-  return reply<T>(res, path);
+  // A 401 to a login or the session check is its answer, not a session that ended.
+  return reply<T>(res, !opts.loggedOut && path !== "/api/login" && path !== "/api/session");
 }
 
 /**
@@ -92,11 +94,11 @@ export async function sendFile<T>(path: string, file: Blob, timeout = 30 * 60 * 
     body: file,
     signal: timeout ? AbortSignal.timeout(timeout) : undefined,
   });
-  return reply<T>(res, path);
+  return reply<T>(res, true);
 }
 
-/** A hub reply's JSON (undefined for 204), or ApiError with the hub's message. */
-async function reply<T>(res: Response, path: string): Promise<T> {
+/** A hub reply's JSON (undefined for 204), or ApiError with the hub's message. With `ends`, a 401 means the session ended. */
+async function reply<T>(res: Response, ends: boolean): Promise<T> {
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     let reauth = false;
@@ -107,7 +109,7 @@ async function reply<T>(res: Response, path: string): Promise<T> {
     } catch {
       // keep the status line
     }
-    if (res.status === 401 && path !== "/api/login" && path !== "/api/session") onUnauthorized();
+    if (res.status === 401 && ends) onUnauthorized();
     throw new ApiError(res.status, msg, reauth, retryAfterSeconds(res.headers.get("Retry-After")));
   }
   if (res.status === 204) return undefined as T;
@@ -125,6 +127,8 @@ export const api = {
   login: (password: string) => call<void>("POST", "/api/login", { password }),
   logout: () => call<void>("POST", "/api/logout"),
   state: () => call<State>("GET", "/api/state"),
+  /** The state, asked for before the session check answers: a 401 from a logged-out browser ends nothing. */
+  firstState: () => call<State>("GET", "/api/state", undefined, { loggedOut: true }),
   postAction: (a: NewAction) => call<Action>("POST", "/api/actions", a),
   /** Throws ApiError 409 when the action was already applied; actions.ts then posts its inverse. */
   cancelAction: (id: string) => call<Action>("POST", `/api/actions/${encodeURIComponent(id)}/cancel`),

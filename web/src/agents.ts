@@ -144,7 +144,7 @@ export function trackersText(b: Bridge): string {
 }
 
 /** The harness a machine's agents run in, by the name the app shows. A bridge that sends none predates harnesses and runs Claude Code. */
-export function harnessTitle(b: Pick<Bridge, "harness">): string {
+function harnessTitle(b: Pick<Bridge, "harness">): string {
   return b.harness ? b.harness.title || b.harness.name : "Claude Code";
 }
 
@@ -164,7 +164,7 @@ export function durationText(seconds: number): string {
 }
 
 /** A cap in dollars: "$2", "$2.50". */
-export function dollars(usd: number): string {
+function dollars(usd: number): string {
   return Number.isInteger(usd) ? `$${usd}` : `$${usd.toFixed(2)}`;
 }
 
@@ -350,7 +350,7 @@ export function pickMachine(machines: Bridge[], chosen: string): string {
 }
 
 /** The variable on the agent machine that sets each limit's ceiling (docs/deploy.md, Settings). */
-export const LIMIT_MAX_ENV: Record<LimitName, string> = {
+const LIMIT_MAX_ENV: Record<LimitName, string> = {
   budgetUsd: "MEAT_MODE_AGENT_MAX_BUDGET_USD",
   timeoutSeconds: "MEAT_MODE_AGENT_MAX_TIMEOUT",
   runsPerTask: "MEAT_MODE_AGENT_MAX_RUNS_PER_TASK",
@@ -371,13 +371,13 @@ export function editableLimits(b: Pick<Bridge, "harness">): LimitName[] {
 }
 
 /** A limit's value as the form shows it: dollars, minutes for the time limit, a count otherwise. */
-export function limitFieldValue(name: LimitName, l: AgentLimits): string {
+function limitFieldValue(name: LimitName, l: AgentLimits): string {
   if (name === "timeoutSeconds") return String(Math.max(1, Math.round(l.timeoutSeconds / 60)));
   return String(l[name]);
 }
 
 /** A limit's value in words, as the form's hints show it. */
-export function limitText(name: LimitName, l: AgentLimits): string {
+function limitText(name: LimitName, l: AgentLimits): string {
   switch (name) {
     case "budgetUsd":
       return dollars(l.budgetUsd);

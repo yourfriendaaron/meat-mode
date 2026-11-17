@@ -2,19 +2,18 @@
 // items, and the selected day's list under it (docs/api.md, Month view). The
 // grid and entries are pure; main.ts holds the state and wires the events.
 
-import { addDays, fmtTime, sameDay, startOfDay, ymd } from "./dates.ts";
+import { addDays, DAY_NAMES, fmtTime, MONTH_NAMES, sameDay, startOfDay, ymd } from "./dates.ts";
 import { esc } from "./html.ts";
 import { ICON } from "./icons.ts";
 import { isOpen, isSnoozed } from "./model.ts";
 import type { EntryKind } from "./move.ts";
 import type { Item, Occurrence } from "./types.ts";
 
-const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** The grid's columns, Monday first. */
+const WEEKDAYS = [...DAY_NAMES.slice(1), DAY_NAMES[0]];
 
 /** Titles a day cell shows before "+n more". */
-export const CELL_TITLES = 3;
+const CELL_TITLES = 3;
 
 /** The first day of the month `d` falls in, at local midnight. */
 export function monthOf(d: Date): Date {
@@ -106,7 +105,7 @@ export function monthTitle(month: Date): string {
 }
 
 /** "Wednesday 4 November". */
-export function longDay(d: Date): string {
+function longDay(d: Date): string {
   return `${DAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
 }
 

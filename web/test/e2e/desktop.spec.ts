@@ -171,6 +171,20 @@ test("Undo cancels a pending Done", async ({ page, hub }) => {
   expect(hub.posted.map((a) => a.kind)).toEqual(["done"]);
 });
 
+test("a Done the hub refuses puts the row back and says why", async ({ page, hub }) => {
+  await openApp(page);
+  await page.route("**/api/actions", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({ status: 429, contentType: "application/json", headers: { "Retry-After": "30" }, body: JSON.stringify({ error: "too many requests" }) })
+      : route.fallback(),
+  );
+  await row(page, "Water the plants").getByRole("button", { name: "Mark done: Water the plants" }).click();
+  await expect(page.locator("#toast")).toContainText("Too many tries. Wait 30 seconds and try again.");
+  await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
+  await expect(page.locator(".group-done")).not.toContainText("Water the plants");
+  expect(hub.posted).toEqual([]);
+});
+
 test("Undo after the bridge applied it posts a reopen", async ({ page, hub }) => {
   await openApp(page);
   await row(page, "Order compost for the beds").getByRole("button", { name: "Mark done: Order compost for the beds" }).click();

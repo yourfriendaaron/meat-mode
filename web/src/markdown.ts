@@ -10,7 +10,7 @@ const md = new MarkdownIt("default", { html: false, linkify: false, typographer:
 /** The only addresses a link may have. Anything else shows as the link's text. */
 const SAFE_HREF = /^(https?:|mailto:)/i;
 
-export function safeHref(href: string): boolean {
+function safeHref(href: string): boolean {
   return SAFE_HREF.test(href.trim());
 }
 

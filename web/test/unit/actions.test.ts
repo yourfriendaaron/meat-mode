@@ -109,6 +109,24 @@ test("done on an agent item closes the local copy, waits for its bridge, and und
   assert.deepEqual(hub.posted.map((a) => a.kind), ["done"]);
 });
 
+test("with drawAfter the post goes at once and the local change waits for it", async () => {
+  const it = item("hub/personal/pe-1");
+  const hub = fakeHub([it]);
+  let slid!: () => void;
+  const drawAfter = new Promise<void>((r) => (slid = r));
+  let drawn = false;
+  const performing = hub.actions.perform([done(it.key, "d1")], { drawAfter, onPatched: () => (drawn = true) });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(hub.posted.map((a) => a.id), ["d1"]);
+  assert.equal(it.status, "open");
+  assert.equal(drawn, false);
+  slid();
+  const h = await performing;
+  assert.ok(drawn);
+  assert.equal(it.status, "closed");
+  assert.equal(h.posted.length, 1);
+});
+
 test("done on a personal item is applied at once, so its Undo falls back to a reopen on 409", async () => {
   const it = item("hub/personal/pe-1");
   const hub = fakeHub([it]);

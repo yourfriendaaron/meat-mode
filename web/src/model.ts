@@ -15,7 +15,7 @@ export type GroupId =
   | "nodate"
   | "done";
 
-export const GROUP_LABELS: Record<GroupId, string> = {
+const GROUP_LABELS: Record<GroupId, string> = {
   pastdue: "Past due",
   today: "Today",
   evening: "This evening",
@@ -45,7 +45,7 @@ export interface Group {
 }
 
 /** Hour from which a task counts as "this evening". */
-export const EVENING_HOUR = 17;
+const EVENING_HOUR = 17;
 /** Open tasks in a day above which the day-load bar warns. */
 export const DAY_CAPACITY = 8;
 
@@ -155,7 +155,7 @@ export function isSnoozed(item: Item, now: Date): boolean {
  * The moment that places an item on the agenda: a future snooze wins,
  * then the due date, then an expired snooze (the item has resurfaced).
  */
-export function whenOf(item: Item, now: Date): { at: Date | null; kind: "snoozed" | "due" | "resurfaced" | "none" } {
+function whenOf(item: Item, now: Date): { at: Date | null; kind: "snoozed" | "due" | "resurfaced" | "none" } {
   const defer = date(item.deferUntil);
   if (defer && defer > now) return { at: defer, kind: "snoozed" };
   const due = date(item.dueAt);
@@ -370,7 +370,7 @@ export function appAuthor(user: string): string {
 }
 
 /** "New": an agent item the user has never opened. */
-export function isNew(item: Item): boolean {
+function isNew(item: Item): boolean {
   return isOpen(item) && isAgentItem(item) && !item.seenAt;
 }
 
@@ -408,14 +408,14 @@ export function agentNewCount(items: Item[], user: string): number {
 }
 
 /** A bridge is online when it was seen within this window. */
-export const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
 export interface SyncStatus {
   tone: "synced" | "waiting";
   text: string;
 }
 
-export function bridgeOnline(b: Bridge, now: Date): boolean {
+function bridgeOnline(b: Bridge, now: Date): boolean {
   const seen = date(b.lastSeen);
   return seen !== null && now.getTime() - seen.getTime() <= ONLINE_WINDOW_MS;
 }

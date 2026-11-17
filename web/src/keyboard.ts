@@ -26,7 +26,7 @@ export interface ViewportSample {
  * Below this, a gap between the viewports is browser chrome such as a
  * collapsing address bar, not a keyboard.
  */
-export const MIN_KEYBOARD = 100;
+const MIN_KEYBOARD = 100;
 
 /**
  * Pixels of the layout viewport's bottom hidden behind the keyboard, or 0 when

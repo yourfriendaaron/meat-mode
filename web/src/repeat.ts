@@ -3,7 +3,7 @@
 // Pure: callers pass `now`.
 
 import { MAX_REPEAT_INTERVAL, type Repeat, type RepeatUnit } from "./types.ts";
-import { fmtDate, fromYmd } from "./dates.ts";
+import { DAY_NAMES, fmtDate, fromYmd, SHORT_DAYS } from "./dates.ts";
 
 /** What a repeat says, before the device's zone is added to it. */
 export type RepeatRule = Omit<Repeat, "timeZone" | "start">;
@@ -65,7 +65,7 @@ function monthly(interval: number, which: string, day: string): RepeatRule {
 }
 
 /** The day of the month of month m's nth weekday wd (1 to 4), or its last for -1. */
-export function weekdayOfMonth(y: number, m: number, wd: number, n: number): number {
+function weekdayOfMonth(y: number, m: number, wd: number, n: number): number {
   const first = 1 + ((wd - new Date(y, m, 1).getDay() + 7) % 7);
   if (n > 0) return first + 7 * (n - 1);
   const days = new Date(y, m + 1, 0).getDate();
@@ -229,8 +229,6 @@ export function firstOccurrence(r: RepeatRule, now: Date, hours: number, minutes
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, hours, minutes);
 }
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 /** Monday first, Sunday last, as people list a week. */
 function weekOrder(days: number[]): number[] {
   return [...days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
@@ -251,23 +249,22 @@ export function repeatLabel(r: RepeatRule, now: Date): string {
   const n = r.interval && r.interval > 1 ? r.interval : 1;
   const days = r.every === "week" && !r.fromDone ? weekOrder(r.weekdays ?? []) : [];
   let out: string;
-  if (nthWeekdayOfMonth(r)) out = `${n === 1 ? "Every month" : `Every ${n} months`} on the ${WEEK_OF_WORDS[r.weekOfMonth!]} ${DAY_NAMES[r.weekdays![0]]}`;
+  if (nthWeekdayOfMonth(r)) out = `${n === 1 ? "Every month" : `Every ${n} months`} on the ${WEEK_OF_WORDS[r.weekOfMonth!]} ${SHORT_DAYS[r.weekdays![0]]}`;
   else if (n === 1 && days.join() === "1,2,3,4,5") out = "Every weekday";
   else {
     out = n === 1 ? `Every ${r.every}` : `Every ${n} ${r.every}s`;
-    if (days.length) out += ` on ${days.map((d) => DAY_NAMES[d]).join(", ")}`;
+    if (days.length) out += ` on ${days.map((d) => SHORT_DAYS[d]).join(", ")}`;
   }
   if (r.fromDone) out += " after done";
   const until = r.until ? fromYmd(r.until) : null;
   return until ? `${out} until ${fmtDate(until, now)}` : out;
 }
 
-const FULL_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const WEEK_OF_WORDS: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", [-1]: "last" };
 
 /** "Mon and Thu", "Mon, Wed and Fri". */
 function dayList(days: number[]): string {
-  const names = weekOrder(days).map((d) => DAY_NAMES[d]);
+  const names = weekOrder(days).map((d) => SHORT_DAYS[d]);
   return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
 }
 
@@ -281,14 +278,14 @@ export function repeatWords(r: RepeatRule, now: Date): string {
   let out: string;
   if (r.fromDone) out = `Then ${unit} after you finish it`;
   else if (nthWeekdayOfMonth(r)) {
-    const day = `${WEEK_OF_WORDS[r.weekOfMonth!]} ${FULL_DAY_NAMES[r.weekdays![0]]}`;
+    const day = `${WEEK_OF_WORDS[r.weekOfMonth!]} ${DAY_NAMES[r.weekdays![0]]}`;
     out = n === 1 ? `Every ${day} of the month` : `Every ${unit} on the ${day}`;
   } else {
     const days = r.every === "week" ? weekOrder(r.weekdays ?? []) : [];
     if (!days.length) out = n === 1 ? `Every ${r.every}` : `Every ${unit}`;
     else if (n > 1) out = `Every ${unit} on ${dayList(days)}`;
     else if (days.join() === "1,2,3,4,5") out = "Every weekday";
-    else if (days.length === 1) out = `Every ${FULL_DAY_NAMES[days[0]]}`;
+    else if (days.length === 1) out = `Every ${DAY_NAMES[days[0]]}`;
     else out = `Every ${dayList(days)}`;
   }
   const until = r.until ? fromYmd(r.until) : null;

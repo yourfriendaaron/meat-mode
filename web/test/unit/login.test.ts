@@ -1,13 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ApiError } from "../../src/api.ts";
-import { gate, loginErrorText, needsLogin } from "../../src/login.ts";
-
-test("the login screen shows only when the hub has a password and this browser is not in", () => {
-  assert.equal(needsLogin({ login: true, authenticated: false }), true);
-  assert.equal(needsLogin({ login: true, authenticated: true }), false);
-  assert.equal(needsLogin({ login: false, authenticated: false }), false);
-});
+import { gate, loginErrorText } from "../../src/login.ts";
 
 test("a hub with no password shows only the claim step; one with a password logs in first", () => {
   assert.equal(gate({ login: false, authenticated: false }), "claim");
