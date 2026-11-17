@@ -5,6 +5,7 @@ package tracker
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,21 @@ func TestRunTimesOutAHungTool(t *testing.T) {
 	}
 	if took := time.Since(start); took > 10*time.Second {
 		t.Errorf("Run took %s; the hung tool was not stopped", took)
+	}
+}
+
+// The caller's own deadline, when it comes first, is named as the caller's,
+// not as the tool's timeout, and a missing tool still reads as missing.
+func TestRunParentDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, _, err := Run(ctx, Cmd{Bin: "sh", Args: []string{"-c", "sleep 30 & wait"}})
+	if !errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), DefaultTimeout.String()) {
+		t.Fatalf("err = %v; want the caller's deadline, not the tool's timeout", err)
+	}
+	_, _, err = Run(ctx, Cmd{Bin: "meat-mode-no-such-tool"})
+	if !errors.Is(err, exec.ErrNotFound) {
+		t.Fatalf("missing tool after the deadline: err = %v; want not found", err)
 	}
 }
 

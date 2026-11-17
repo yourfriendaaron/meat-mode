@@ -59,7 +59,7 @@ The bridge parses the files itself, since `tk` prints no JSON for a title or not
 - `tk close` rewrites every line starting `status:` in the file, body included, so avoid starting a description line that way. Meat Mode's own reads are not affected.
 - ticket does not check that a new id is unused, and two writers at the same moment can lose one change; both are ticket's own limits.
 - Closing a task with open sub-tasks is allowed, as in `tk`.
-- Only the last note decides whether a closed task reads as dismissed: closing again after a dismiss and a reopen still shows "dismissed".
+- Only the last note decides whether a closed task reads as Won't do: closing again after a dismiss and a reopen still shows it as Won't do.
 
 ## Epics
 

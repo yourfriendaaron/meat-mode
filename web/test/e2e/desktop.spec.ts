@@ -178,8 +178,12 @@ test("a Done the hub refuses puts the row back and says why", async ({ page, hub
       ? route.fulfill({ status: 429, contentType: "application/json", headers: { "Retry-After": "30" }, body: JSON.stringify({ error: "too many requests" }) })
       : route.fallback(),
   );
+  const loads = () => hub.requests.filter((r) => r === "GET /api/state").length;
+  const before = loads();
   await row(page, "Water the plants").getByRole("button", { name: "Mark done: Water the plants" }).click();
   await expect(page.locator("#toast")).toContainText("Too many tries. Wait 30 seconds and try again.");
+  // The row comes back with the state the app loads after the refusal.
+  await expect.poll(loads).toBeGreaterThan(before);
   await expect(page.locator(".group-pastdue")).toContainText("Water the plants");
   await expect(page.locator(".group-done")).not.toContainText("Water the plants");
   expect(hub.posted).toEqual([]);

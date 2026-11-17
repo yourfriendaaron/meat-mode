@@ -73,10 +73,15 @@ func writeJSONGzip(w http.ResponseWriter, r *http.Request, status int, v any) {
 
 // noRanges drops the Accept-Ranges that http.ServeContent sets, for a
 // gzipped body: a range request gets the plain file, so a range of the
-// gzipped one would not match.
+// gzipped one would not match. An answer other than 200 carries no
+// gzipped body, so it also drops the encoding and length set for one.
 type noRanges struct{ http.ResponseWriter }
 
 func (w noRanges) WriteHeader(code int) {
 	w.Header().Del("Accept-Ranges")
+	if code != http.StatusOK {
+		w.Header().Del("Content-Encoding")
+		w.Header().Del("Content-Length")
+	}
 	w.ResponseWriter.WriteHeader(code)
 }

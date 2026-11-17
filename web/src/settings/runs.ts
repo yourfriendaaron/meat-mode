@@ -29,9 +29,12 @@ registerSection({
   async act(act, _el, ctx) {
     if (act !== "stop-all") return;
     const working = workingItems(ctx.state?.items ?? []);
-    await ctx.act(working.map((i) => ({ id: newId(), kind: "stop", key: i.key, payload: {} })), (h) => {
-      const failed = working.length - h.posted.length;
+    const summary = (posted: number) => {
+      const failed = working.length - posted;
       return failed ? `Could not stop ${failed} of ${working.length}` : working.length === 1 ? "Stopped 1 agent" : `Stopped ${working.length} agents`;
-    });
+    };
+    const h = await ctx.act(working.map((i) => ({ id: newId(), kind: "stop", key: i.key, payload: {} })), (h) => summary(h.posted.length));
+    // act toasts only what landed; when no stop did, the count still says so.
+    if (working.length && !h.posted.length) ctx.toast(summary(0));
   },
 });

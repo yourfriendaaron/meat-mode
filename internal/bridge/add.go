@@ -81,7 +81,7 @@ func Add(ctx context.Context, args []string, env Env) error {
 		}
 		return err
 	}
-	fmt.Fprintln(env.Stdout, reply.ID)
+	fmt.Fprintln(env.Stdout, line(reply.ID))
 	return nil
 }
 

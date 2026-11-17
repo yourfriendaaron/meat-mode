@@ -362,24 +362,33 @@ func TestRestoreChecksTheWholeFileFirst(t *testing.T) {
 }
 
 // Text the hub truncated, from a bridge or an agent, is its limit and an
-// ellipsis long, and a hub's own export of it restores.
+// ellipsis long, and a hub's own export of it restores. So does an old
+// checklist entry past the title limit, cut the same way as it becomes a
+// sub-task.
 func TestRestoreKeepsTruncatedText(t *testing.T) {
 	s, _ := open(t)
 	desc := strings.Repeat("a", maxDescriptionLen) + "…"
 	by := strings.Repeat("b", maxCommentAuthorLen) + "…"
+	title := strings.Repeat("c", MaxTitleLen) + "…"
 	file := changeExport(t, func(ex map[string]any) {
 		it := exportList(ex, "items", 3)
-		it["description"], it["createdBy"] = desc, by
+		it["description"], it["createdBy"], it["title"] = desc, by, title
 		exportList(ex, "actions", 5)["author"] = by
+		exportList(ex, "items", 0)["checklist"].([]any)[1].(map[string]any)["text"] = strings.Repeat("d", MaxTitleLen+50)
 	})
 	_, err := s.Restore(bytes.NewReader(file))
 	must(t, err)
+	var kept, sub bool
 	for _, it := range mustState(t, s).Items {
-		if it.Description == desc && it.CreatedBy == by {
-			return
-		}
+		kept = kept || (it.Description == desc && it.CreatedBy == by && it.Title == title)
+		sub = sub || (it.Parent == "mm-1" && it.Title == strings.Repeat("d", MaxTitleLen)+"…")
 	}
-	t.Fatal("no restored item kept the truncated description and createdBy")
+	if !kept {
+		t.Fatal("no restored item kept the truncated title, description and createdBy")
+	}
+	if !sub {
+		t.Fatal("the long checklist entry did not come back as a truncated sub-task")
+	}
 }
 
 // A file with anything but white space after its one JSON value is not an

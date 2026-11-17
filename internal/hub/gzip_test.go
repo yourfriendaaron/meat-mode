@@ -131,6 +131,19 @@ func TestStaticGzip(t *testing.T) {
 		}
 	}
 
+	// A failed precondition has no body, so it announces none in either form.
+	for _, hdr := range []map[string]string{nil, gz} {
+		cond := map[string]string{"If-Match": `"x"`}
+		for k, v := range hdr {
+			cond[k] = v
+		}
+		w := h.doHeader("GET", "/assets/app-1a.js", cond)
+		h.expect(w, http.StatusPreconditionFailed)
+		if w.Header().Get("Content-Encoding") != "" || w.Header().Get("Content-Length") != "" || w.Body.Len() != 0 {
+			t.Fatalf("412 %v: headers %v", hdr, w.Header())
+		}
+	}
+
 	// A file gzip would not shrink is served plain, with no Vary.
 	w = h.doHeader("GET", "/manifest.json", gz)
 	if w.Header().Get("Content-Encoding") != "" || w.Header().Get("Vary") != "" || w.Body.String() != "{}" {
