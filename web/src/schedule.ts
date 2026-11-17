@@ -3,7 +3,7 @@
 // a repeating item moved to another time. Pure: callers pass `now`.
 
 import type { Edit, Item } from "./types.ts";
-import { addDays, fmtDay, fmtTime, sameDay, ymd } from "./dates.ts";
+import { addDays, DAY_NAMES, fmtDay, fmtTime, sameDay, ymd } from "./dates.ts";
 import { diffEdit, draftDue, draftRule, editError, fitMonthBy, hhmm, type EditDraft } from "./edit.ts";
 import { parseQuickAdd } from "./quickadd.ts";
 import { firstOccurrence, isLastOfMonth, repeatWords, sameRule, weekOfDate } from "./repeat.ts";
@@ -82,7 +82,6 @@ export function scheduleReadout(d: EditDraft, now: Date): string {
 }
 
 const ORDINALS = ["1st", "2nd", "3rd", "4th"];
-const LONG_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** "the 14th": a day of the month in words. */
 function nth(n: number): string {
@@ -93,7 +92,7 @@ function nth(n: number): string {
 
 /** The ways a monthly repeat can follow a date: its day, its weekday of the month, and its last weekday when it is one. */
 export function monthByChoices(due: Date): [EditDraft["monthBy"], string][] {
-  const day = LONG_DAYS[due.getDay()];
+  const day = DAY_NAMES[due.getDay()];
   const out: [EditDraft["monthBy"], string][] = [["date", `The ${nth(due.getDate())}`]];
   if (weekOfDate(due) <= 4) out.push(["weekday", `The ${ORDINALS[weekOfDate(due) - 1]} ${day}`]);
   if (isLastOfMonth(due)) out.push(["last", `The last ${day}`]);
