@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -75,33 +73,26 @@ func (c *CLI) run(ctx context.Context, dir string, args ...string) ([]byte, erro
 	if bin == "" {
 		bin = "bd"
 	}
-	timeout := c.Timeout
-	if timeout == 0 {
-		timeout = time.Minute
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	full := args
 	if dir != "" {
 		full = append([]string{"-C=" + dir}, args...)
 	}
-	cmd := exec.CommandContext(ctx, bin, full...)
-	cmd.Env = append(tracker.ChildEnv(os.Environ()), "BD_NON_INTERACTIVE=1", "NO_COLOR=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
+	stdout, stderr, err := tracker.Run(ctx, tracker.Cmd{
+		Bin: bin, Args: full, Timeout: c.Timeout,
+		Env: []string{"BD_NON_INTERACTIVE=1", "NO_COLOR=1"},
+	})
 	if err == nil {
-		return stdout.Bytes(), nil
+		return stdout, nil
 	}
 	msg := ""
 	var body struct {
 		Error string `json:"error"`
 	}
-	if i := bytes.IndexByte(stdout.Bytes(), '{'); i >= 0 && json.Unmarshal(stdout.Bytes()[i:], &body) == nil {
+	if i := bytes.IndexByte(stdout, '{'); i >= 0 && json.Unmarshal(stdout[i:], &body) == nil {
 		msg = body.Error
 	}
 	if msg == "" {
-		msg = errorLine(stderr.String())
+		msg = errorLine(string(stderr))
 	}
 	if msg == "" {
 		msg = err.Error()

@@ -5,7 +5,6 @@
 package ticket
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -87,11 +86,14 @@ func (t *Ticket) Check(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("tk not found: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, path, "--version")
-	cmd.Env = tracker.ChildEnv(os.Environ(), "TICKETS_DIR")
-	out, err := cmd.Output()
-	if err != nil {
+	out, _, err := tracker.Run(ctx, tracker.Cmd{Bin: path, Args: []string{"--version"}, Drop: []string{"TICKETS_DIR"}})
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		// A tk that refuses --version is a release that prints none.
 		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("cannot run tk: %w", err)
 	}
 	return versionNumber.FindString(string(out)), nil
 }
@@ -445,19 +447,18 @@ func (t *Ticket) exec(ctx context.Context, dir string, args ...string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("tk not found: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Dir = dir
-	cmd.Env = append(tracker.ChildEnv(os.Environ(), "TICKETS_DIR"), "TICKETS_DIR="+filepath.Join(dir, storeDir))
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
+	stdout, stderr, err := tracker.Run(ctx, tracker.Cmd{
+		Bin: path, Dir: dir, Args: args, Drop: []string{"TICKETS_DIR"},
+		Env: []string{"TICKETS_DIR=" + filepath.Join(dir, storeDir)},
+	})
+	if err != nil {
+		msg := strings.TrimSpace(string(stderr))
 		if msg == "" {
 			msg = err.Error()
 		}
 		return "", fmt.Errorf("tk %s: %s", args[0], msg)
 	}
-	return stdout.String(), nil
+	return string(stdout), nil
 }
 
 // Prompt tells an agent run where the task is, how to answer and the rules,

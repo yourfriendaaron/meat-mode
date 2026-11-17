@@ -376,3 +376,25 @@ func TestEpicsConformance(t *testing.T) {
 		}
 	})
 }
+
+// A tk that hangs fails Check with its timeout instead of blocking it, and
+// one that refuses --version is a release that prints none.
+func TestCheckReportsAHungTk(t *testing.T) {
+	dir := t.TempDir()
+	hung := filepath.Join(dir, "hung")
+	if err := os.WriteFile(hung, []byte("#!/bin/sh\nsleep 30 & wait\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if v, err := (&Ticket{bin: hung, look: exec.LookPath}).Check(ctx); err == nil {
+		t.Errorf("Check of a hung tk = %q, nil; want an error", v)
+	}
+	refuses := filepath.Join(dir, "refuses")
+	if err := os.WriteFile(refuses, []byte("#!/bin/sh\necho 'Unknown command' >&2\nexit 1\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := (&Ticket{bin: refuses, look: exec.LookPath}).Check(context.Background()); err != nil || v != "" {
+		t.Errorf("Check of a tk with no --version = %q, %v; want empty and no error", v, err)
+	}
+}

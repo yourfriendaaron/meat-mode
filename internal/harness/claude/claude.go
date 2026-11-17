@@ -6,14 +6,10 @@ package claude
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/harness"
 )
@@ -62,23 +58,7 @@ var versionNumber = regexp.MustCompile(`\d+(\.\d+)+`)
 // Check runs `<program> --version`, which prints something like
 // "2.1.303 (Claude Code)".
 func (c *Claude) Check(ctx context.Context) (string, error) {
-	path, err := c.look(c.command[0])
-	if err != nil {
-		return "", fmt.Errorf("%s not found: %w", c.command[0], err)
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, path, "--version")
-	cmd.Env = harness.StripEnv(os.Environ())
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("%s --version: %w", c.command[0], err)
-	}
-	v := versionNumber.FindString(string(out))
-	if v == "" {
-		return "", errors.New(c.command[0] + " --version printed no version")
-	}
-	return v, nil
+	return harness.CheckVersion(ctx, c.look, c.command[0], versionNumber)
 }
 
 func (c *Claude) Launch(s harness.Spec) (harness.Launch, error) {
