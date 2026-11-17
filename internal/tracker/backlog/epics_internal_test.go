@@ -4,6 +4,7 @@ import "testing"
 
 // TestSweepDescs: a read keeps cached only what it described in its own repo.
 func TestSweepDescs(t *testing.T) {
+	t.Parallel()
 	tr := &Tracker{descs: map[string]descCache{
 		descKey("/garden", "task-1"):  {desc: "kept"},
 		descKey("/garden", "task-2"):  {desc: "no longer described"},

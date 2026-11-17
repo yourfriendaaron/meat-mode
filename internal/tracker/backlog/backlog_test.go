@@ -54,6 +54,7 @@ func factory(t *testing.T) tracker.Factory {
 }
 
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	trackertest.Run(t, backlog.Name, newRepo)
 }
 
@@ -70,6 +71,7 @@ func run(t *testing.T, dir string, args ...string) string {
 
 // The action id is a reference, which Backlog.md keeps through later edits.
 func TestActionIDSurvivesEdits(t *testing.T) {
+	t.Parallel()
 	tr, dir := newRepo(t)
 	ctx := context.Background()
 	id, err := tr.Create(ctx, dir, tracker.NewIssue{Title: "Water the plants", ActionID: "act-1", Actor: "alex"})
@@ -91,6 +93,7 @@ func TestActionIDSurvivesEdits(t *testing.T) {
 }
 
 func TestDismissAndReopen(t *testing.T) {
+	t.Parallel()
 	tr, dir := newRepo(t)
 	ctx := context.Background()
 	id, err := tr.Create(ctx, dir, tracker.NewIssue{Title: "Renew the library card", Actor: "alex"})
@@ -104,7 +107,7 @@ func TestDismissAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != tracker.StatusClosed || got.CloseReason != "Dismissed" || got.ClosedAt == nil {
+	if got.Status != tracker.StatusClosed || got.CloseReason != api.ReasonDismissed || got.ClosedAt == nil {
 		t.Fatalf("after Dismiss: %+v", got)
 	}
 	for _, l := range got.Labels {
@@ -123,6 +126,7 @@ func TestDismissAndReopen(t *testing.T) {
 // Statuses come from the project's config: here a four-column board whose
 // last column is Shipped.
 func TestCustomStatuses(t *testing.T) {
+	t.Parallel()
 	tr, dir := newRepo(t)
 	ctx := context.Background()
 	cfg := filepath.Join(dir, "backlog", "config.yml")
@@ -160,6 +164,7 @@ func TestCustomStatuses(t *testing.T) {
 
 // List holds only the tasks for the person, with their parents' titles.
 func TestListOnlyHuman(t *testing.T) {
+	t.Parallel()
 	tr, dir := newRepo(t)
 	ctx := context.Background()
 	run(t, dir, "task", "create", "Refactor the parser")
@@ -178,6 +183,7 @@ func TestListOnlyHuman(t *testing.T) {
 }
 
 func TestNoteWithRule(t *testing.T) {
+	t.Parallel()
 	tr, dir := newRepo(t)
 	ctx := context.Background()
 	id, err := tr.Create(ctx, dir, tracker.NewIssue{Title: "Pick up the parcel", Actor: "alex"})
@@ -232,6 +238,7 @@ func add(t *testing.T, run func(args ...string) string, title string, args ...st
 }
 
 func TestEpicsConformance(t *testing.T) {
+	t.Parallel()
 	trackertest.RunEpics(t, func(t *testing.T) (tracker.Epics, string, trackertest.EpicSeed) {
 		tr, dir, run := newEpicRepo(t)
 		return tr, dir, trackertest.EpicSeed{
@@ -257,6 +264,7 @@ func TestEpicsConformance(t *testing.T) {
 // those in completed/ and archived ones, still count as closed children,
 // and that an archived task that was not done does not.
 func TestEpicRowsOffBoard(t *testing.T) {
+	t.Parallel()
 	tr, dir, run := newEpicRepo(t)
 	parent := add(t, run, "Plan the garden", "--type", "epic", "-d", "Beds and paths.")
 	completed := add(t, run, "Dig the beds", "--parent", parent)
@@ -351,6 +359,7 @@ func wrapBacklog(t *testing.T, bin, msg string) (string, func() []string) {
 // even when its type would make it a card, and so is one that is not a
 // task file at all; neither reaches the CLI nor fails the set.
 func TestEpicRowsSkipsStrayFiles(t *testing.T) {
+	t.Parallel()
 	tr, dir, run := newEpicRepo(t)
 	parent := add(t, run, "Plan the roof", "--type", "epic", "-d", "Tiles first.")
 	add(t, run, "Check the flashing", "--parent", parent)
@@ -381,6 +390,7 @@ func TestEpicRowsSkipsStrayFiles(t *testing.T) {
 // set: a card the CLI cannot find keeps an empty description, and any
 // other failure fails the whole set.
 func TestEpicRowsViewFailure(t *testing.T) {
+	t.Parallel()
 	_, dir, run := newEpicRepo(t)
 	parent := add(t, run, "Plan the balcony", "--type", "epic", "-d", "Boxes first.")
 	add(t, run, "Line the boxes", "--parent", parent)
@@ -404,6 +414,7 @@ func TestEpicRowsViewFailure(t *testing.T) {
 // TestEpicRowsCachesDescriptions checks that a second read of an unchanged
 // repo runs no `backlog task view`.
 func TestEpicRowsCachesDescriptions(t *testing.T) {
+	t.Parallel()
 	_, dir, run := newEpicRepo(t)
 	parent := add(t, run, "Plan the terrace", "--type", "epic", "-d", "Pots first.")
 	add(t, run, "Scrub the pots", "--parent", parent)

@@ -18,6 +18,7 @@ import (
 )
 
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	trackertest.Run(t, "beads", func(t *testing.T) (tracker.Tracker, string) {
 		dir := beadstest.NewRepo(t, "", "garden")
 		tr, err := beads.New(tracker.Env{})
@@ -29,6 +30,7 @@ func TestConformance(t *testing.T) {
 }
 
 func TestRegistered(t *testing.T) {
+	t.Parallel()
 	for _, f := range tracker.Factories() {
 		if f.Name == "beads" {
 			return
@@ -38,6 +40,7 @@ func TestRegistered(t *testing.T) {
 }
 
 func TestNewFindsBD(t *testing.T) {
+	t.Parallel()
 	tr, _ := beads.New(tracker.Env{LookPath: func(string) (string, error) { return "/opt/tools/bin/bd", nil }})
 	if c := tr.(*beads.CLI); c.Bin != "/opt/tools/bin/bd" || c.Missing {
 		t.Fatalf("bd from PATH: %+v", c)
@@ -53,6 +56,7 @@ func TestNewFindsBD(t *testing.T) {
 }
 
 func TestDetectAndOptIn(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	mk := func(rel, body string) {
 		p := filepath.Join(root, rel)
@@ -84,6 +88,7 @@ func TestDetectAndOptIn(t *testing.T) {
 }
 
 func TestDescribe(t *testing.T) {
+	t.Parallel()
 	tr := &beads.CLI{}
 	for cmd, want := range map[string]string{
 		"bd show tst-1":              "Reading the bead",
@@ -104,6 +109,7 @@ func TestDescribe(t *testing.T) {
 
 // TestOptInLines reads the opt-in line in .beads/config.yaml as YAML does.
 func TestOptInLines(t *testing.T) {
+	t.Parallel()
 	tr := &beads.CLI{}
 	for config, want := range map[string]bool{
 		"meat-mode.sync: true":                      true,
@@ -130,6 +136,7 @@ func TestOptInLines(t *testing.T) {
 }
 
 func TestEpicsConformance(t *testing.T) {
+	t.Parallel()
 	trackertest.RunEpics(t, func(t *testing.T) (tracker.Epics, string, trackertest.EpicSeed) {
 		dir := beadstest.NewRepo(t, "", "garden")
 		tr, err := beads.New(tracker.Env{})
@@ -164,6 +171,7 @@ func TestEpicsConformance(t *testing.T) {
 // held by an open one names it, that a closed blocker frees it, and that a
 // deferred bead brings its date and a commented one its count.
 func TestEpicRowsWaitsDatesAndComments(t *testing.T) {
+	t.Parallel()
 	dir := beadstest.NewRepo(t, "", "garden")
 	tr, err := beads.New(tracker.Env{})
 	if err != nil {
@@ -218,6 +226,7 @@ func TestEpicRowsWaitsDatesAndComments(t *testing.T) {
 // bead its comments oldest first, that a bead bd does not hold is left out
 // without losing the others, and that a flag-shaped id never reaches bd.
 func TestEpicComments(t *testing.T) {
+	t.Parallel()
 	dir := beadstest.NewRepo(t, "", "garden")
 	tr, err := beads.New(tracker.Env{})
 	if err != nil {
@@ -264,6 +273,7 @@ func TestEpicComments(t *testing.T) {
 }
 
 func TestStoreID(t *testing.T) {
+	t.Parallel()
 	var _ tracker.StoreIDer = (*beads.CLI)(nil)
 	dir := t.TempDir()
 	if got := (&beads.CLI{}).StoreID(dir); got != "" {

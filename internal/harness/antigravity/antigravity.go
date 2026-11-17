@@ -9,9 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -37,13 +34,14 @@ func init() {
 		if len(env.Command) > 0 {
 			cmd = env.Command
 		}
-		return &Antigravity{command: append([]string{}, cmd...)}, nil
+		return &Antigravity{command: append([]string{}, cmd...), look: env.LookPath}, nil
 	}})
 }
 
 // Antigravity drives `agy`.
 type Antigravity struct {
 	command []string
+	look    func(string) (string, error)
 }
 
 var _ harness.Harness = (*Antigravity)(nil)
@@ -69,17 +67,7 @@ var versionNumber = regexp.MustCompile(`\d+\.\d+\.\d+\S*`)
 
 // Check runs `agy --version`.
 func (a *Antigravity) Check(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, a.command[0], "--version")
-	cmd.Env = harness.StripEnv(os.Environ())
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("agy --version: %w", err)
-	}
-	v := versionNumber.FindString(string(out))
-	if v == "" {
-		return "", fmt.Errorf("agy --version printed no version: %q", strings.TrimSpace(string(out)))
-	}
-	return v, nil
+	return harness.CheckVersion(ctx, a.look, a.command[0], versionNumber)
 }
 
 // Launch builds `agy ... [--conversation <id>]` with the prompt as the first

@@ -12,12 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker/beads/beadstest"
 )
 
 func TestCheckVersion(t *testing.T) {
+	t.Parallel()
 	for v, ok := range map[string]bool{
 		"1.3.0": true, "1.3.1": true, "v1.4": true, "2.0.0": true, "1.3.1 (Homebrew)": true,
 		"1.2.9": false, "1.3.0-rc.1": false, "0.9": false, "": false, "abc": false,
@@ -29,6 +31,7 @@ func TestCheckVersion(t *testing.T) {
 }
 
 func TestKeepHuman(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 	old := now.Add(-8 * 24 * time.Hour)
 	recent := now.Add(-time.Hour)
@@ -50,6 +53,7 @@ func TestKeepHuman(t *testing.T) {
 }
 
 func TestFingerprintChanges(t *testing.T) {
+	t.Parallel()
 	a := beads.Bead{ID: "x-1", Title: "Water the plants", Status: "open", Labels: []string{"b", "a"}}
 	b := a
 	b.Labels = []string{"a", "b"}
@@ -71,6 +75,7 @@ func TestFingerprintChanges(t *testing.T) {
 // real bd: create with a parent, the parent in list and show, its title in
 // show, and the close of a parent refused while a child is open.
 func TestCLISubtasks(t *testing.T) {
+	t.Parallel()
 	dir := beadstest.NewRepo(t, "", "garden")
 	ctx := context.Background()
 	c := &beads.CLI{}
@@ -126,6 +131,7 @@ func TestCLISubtasks(t *testing.T) {
 
 // TestCLI runs every method against a real bd in a temp repo.
 func TestCLI(t *testing.T) {
+	t.Parallel()
 	dir := beadstest.NewRepo(t, "", "plants")
 	ctx := context.Background()
 	c := &beads.CLI{}
@@ -235,7 +241,7 @@ func TestCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = c.Show(ctx, dir, id)
-	if got.Status != "closed" || got.CloseReason != "Dismissed" {
+	if got.Status != "closed" || got.CloseReason != api.ReasonDismissed {
 		t.Fatalf("after dismiss: %+v", got)
 	}
 	if err := c.Dismiss(ctx, dir, id, "alex-app"); err == nil {
@@ -248,6 +254,7 @@ func TestCLI(t *testing.T) {
 }
 
 func TestCheckID(t *testing.T) {
+	t.Parallel()
 	for id, ok := range map[string]bool{
 		"tst-1": true, "tst-abc.1": true, "Water_2": true, "a": true,
 		"": false, "-f/etc/hostname": false, "--mem-profile=x": false, ".hidden": false,
@@ -262,6 +269,7 @@ func TestCheckID(t *testing.T) {
 // TestCLIRefusesFlagIDs passes bead ids that bd would read as flags. None may
 // reach bd as one: no file is read into a comment and none is written.
 func TestCLIRefusesFlagIDs(t *testing.T) {
+	t.Parallel()
 	dir := beadstest.NewRepo(t, "", "plants")
 	ctx := context.Background()
 	c := &beads.CLI{}
@@ -366,6 +374,7 @@ const humanList = `[
 // permissions warning on stderr and exits 0, and a bd that prints it on stdout
 // ahead of the JSON, even with brackets in the warning text.
 func TestCLIToleratesPermissionsWarning(t *testing.T) {
+	t.Parallel()
 	cases := map[string]struct{ stdout, stderr string }{
 		"stderr":            {humanList, permWarning + permWarning},
 		"stdout":            {permWarning + humanList, ""},
@@ -391,6 +400,7 @@ func TestCLIToleratesPermissionsWarning(t *testing.T) {
 // TestCLIRealFailureStillFails keeps a nonzero exit an error even with a
 // warning beside it.
 func TestCLIRealFailureStillFails(t *testing.T) {
+	t.Parallel()
 	cli := &beads.CLI{Bin: fakeBD(t, "", permWarning+"Error: no beads database found\n", 1)}
 	if _, err := cli.List(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "no beads database found") {
 		t.Fatalf("err = %v", err)
@@ -431,6 +441,7 @@ func TestCLIHidesBridgeEnvironment(t *testing.T) {
 // a call with the flags first, and that a chunk bd answers "not found" for
 // is read again one id at a time.
 func TestEpicCommentsChunks(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	log := filepath.Join(dir, "calls")
 	bin := filepath.Join(dir, "bd")

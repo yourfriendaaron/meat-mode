@@ -8,9 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -33,13 +30,14 @@ func init() {
 		if len(env.Command) > 0 {
 			cmd = env.Command
 		}
-		return &Codex{command: append([]string{}, cmd...)}, nil
+		return &Codex{command: append([]string{}, cmd...), look: env.LookPath}, nil
 	}})
 }
 
 // Codex drives `codex exec`.
 type Codex struct {
 	command []string
+	look    func(string) (string, error)
 }
 
 var _ harness.Harness = (*Codex)(nil)
@@ -65,17 +63,7 @@ var versionNumber = regexp.MustCompile(`\d+\.\d+\.\d+\S*`)
 
 // Check runs `codex --version`, which prints "codex-cli 0.163.0".
 func (c *Codex) Check(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, c.command[0], "--version")
-	cmd.Env = harness.StripEnv(os.Environ())
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("codex --version: %w", err)
-	}
-	v := versionNumber.FindString(string(out))
-	if v == "" {
-		return "", fmt.Errorf("codex --version printed no version: %q", strings.TrimSpace(string(out)))
-	}
-	return v, nil
+	return harness.CheckVersion(ctx, c.look, c.command[0], versionNumber)
 }
 
 // Launch builds `codex exec ... -C <dir> [resume <id>] -- <prompt>`. The

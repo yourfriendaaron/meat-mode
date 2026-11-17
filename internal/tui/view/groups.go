@@ -53,7 +53,7 @@ const eveningHour = 17
 const hubBridge = "hub"
 
 // dismissed is the close reason of a deleted personal item.
-const dismissed = "Dismissed"
+const dismissed = api.ReasonDismissed
 
 func isOpen(i *api.Item) bool { return i.Status != "closed" }
 

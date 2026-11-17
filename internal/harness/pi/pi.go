@@ -8,12 +8,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/harness"
 )
@@ -63,23 +60,7 @@ func (p *Pi) Info() harness.Info {
 
 // Check returns the version `pi --version` prints.
 func (p *Pi) Check(ctx context.Context) (string, error) {
-	bin, err := p.look(p.command[0])
-	if err != nil {
-		return "", fmt.Errorf("%s is not installed: %w", p.command[0], err)
-	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "--version")
-	cmd.Env = harness.StripEnv(os.Environ())
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("%s --version: %w", p.command[0], err)
-	}
-	v := strings.TrimSpace(string(out))
-	if v == "" {
-		return "", fmt.Errorf("%s --version printed nothing", p.command[0])
-	}
-	return v, nil
+	return harness.CheckVersion(ctx, p.look, p.command[0], nil)
 }
 
 // Launch starts the process in Dir (Pi has no directory flag). RPC mode

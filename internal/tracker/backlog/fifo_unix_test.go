@@ -13,6 +13,7 @@ import (
 // TestReadRootConfigSkipsFIFO: a repo whose backlog.config.yml links to a
 // pipe is not taken for a Backlog.md repo, and the scan does not hang.
 func TestReadRootConfigSkipsFIFO(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fifo := filepath.Join(dir, "fifo")
 	if err := syscall.Mkfifo(fifo, 0o644); err != nil {

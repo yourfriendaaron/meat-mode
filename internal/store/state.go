@@ -10,7 +10,7 @@ import (
 // Close reasons the hub shows before the bridge reports the real bead.
 const (
 	ReasonDone      = "Done in Meat Mode"
-	ReasonDismissed = "Dismissed"
+	ReasonDismissed = api.ReasonDismissed
 )
 
 // provisionalTTL bounds how long an applied add is shown as a provisional

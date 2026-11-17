@@ -5,7 +5,6 @@
 package backlog
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -207,27 +206,19 @@ func (b *Tracker) run(ctx context.Context, dir string, args ...string) ([]byte, 
 	if bin == "" {
 		bin = "backlog"
 	}
-	timeout := b.Timeout
-	if timeout == 0 {
-		timeout = time.Minute
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = dir
-	cmd.Env = append(tracker.ChildEnv(os.Environ(), "BACKLOG_CWD"), "NO_COLOR=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
+	stdout, stderr, err := tracker.Run(ctx, tracker.Cmd{
+		Bin: bin, Dir: dir, Args: args, Timeout: b.Timeout,
+		Drop: []string{"BACKLOG_CWD"}, Env: []string{"NO_COLOR=1"},
+	})
 	if err == nil {
-		return stdout.Bytes(), nil
+		return stdout, nil
 	}
 	if errors.Is(err, exec.ErrNotFound) {
 		return nil, fmt.Errorf("backlog is not installed: %w", err)
 	}
-	msg := firstLine(stderr.String())
+	msg := firstLine(string(stderr))
 	if msg == "" {
-		msg = firstLine(stdout.String())
+		msg = firstLine(string(stdout))
 	}
 	if msg == "" {
 		msg = err.Error()

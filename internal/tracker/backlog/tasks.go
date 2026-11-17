@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
@@ -353,7 +354,7 @@ func toIssue(t taskJSON, statuses []string) tracker.Issue {
 		closed := is.UpdatedAt
 		is.ClosedAt = &closed
 		if dismissed {
-			is.CloseReason = "Dismissed"
+			is.CloseReason = api.ReasonDismissed
 		}
 	}
 	for _, c := range t.Comments {

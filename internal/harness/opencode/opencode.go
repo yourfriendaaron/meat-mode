@@ -7,8 +7,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -63,23 +61,7 @@ func (o *OpenCode) Info() harness.Info {
 
 // Check returns the version `opencode --version` prints.
 func (o *OpenCode) Check(ctx context.Context) (string, error) {
-	bin, err := o.look(o.command[0])
-	if err != nil {
-		return "", fmt.Errorf("%s is not installed: %w", o.command[0], err)
-	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "--version")
-	cmd.Env = harness.StripEnv(os.Environ())
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("%s --version: %w", o.command[0], err)
-	}
-	v := strings.TrimSpace(string(out))
-	if v == "" {
-		return "", fmt.Errorf("%s --version printed nothing", o.command[0])
-	}
-	return v, nil
+	return harness.CheckVersion(ctx, o.look, o.command[0], nil)
 }
 
 // Launch runs the prompt in Dir. --dir makes the working directory explicit,

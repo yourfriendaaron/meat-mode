@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yourfriendaaron/meat-mode/internal/api"
 	"github.com/yourfriendaaron/meat-mode/internal/tracker"
 )
 
@@ -160,7 +161,7 @@ func (t ticketFile) issue(id, version string, mtime time.Time) tracker.Issue {
 		closed := mtime
 		is.ClosedAt = &closed
 		if n := len(is.Comments); n > 0 && is.Comments[n-1].Text == dismissedNote {
-			is.CloseReason = "dismissed"
+			is.CloseReason = api.ReasonDismissed
 		}
 	}
 	return is
