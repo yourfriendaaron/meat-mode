@@ -424,8 +424,8 @@ func TestEpicsConflictReportsRepos(t *testing.T) {
 	}
 }
 
-// TestEpicsRefusedSet: a set the hub refuses is logged and sent again only
-// once it changes.
+// TestEpicsRefusedSet: a set the hub refuses is logged and never sent
+// again, even after the hub took another.
 func TestEpicsRefusedSet(t *testing.T) {
 	ew := newEpicsWorld(t)
 	ew.hub.RefuseEpics(func(rows []api.EpicRow) bool { return len(rows) == 3 })
@@ -445,6 +445,15 @@ func TestEpicsRefusedSet(t *testing.T) {
 	ew.after(time.Minute)
 	if got := ids(ew.rows()); !reflect.DeepEqual(got, []string{"gd-1", "gd-2"}) {
 		t.Errorf("changed set: rows %v", got)
+	}
+	// A set refused before is not sent again, even after the hub took
+	// another, as with icons; a restart of the bridge sends it again.
+	puts := ew.puts()
+	ew.et.set(gardenEpic, gardenHose, extra)
+	ew.after(time.Minute)
+	ew.after(RefreshEvery)
+	if ew.puts() != puts {
+		t.Errorf("a refused set was sent again: %d puts, want %d", ew.puts(), puts)
 	}
 }
 

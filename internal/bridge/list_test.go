@@ -118,3 +118,38 @@ func TestListShowAndExtendAnotherMachinesList(t *testing.T) {
 		t.Errorf("projects printed %q", out)
 	}
 }
+
+// The hub's text reaches the terminal with no control, bidi or invisible
+// format character, so a title or note cannot move the cursor, write the
+// clipboard or disguise an id; a note keeps its lines.
+func TestListAndShowPrintTheHubsTextSafely(t *testing.T) {
+	hub := fakehub.New(map[string]string{token: us})
+	defer hub.Close()
+	hub.SetTimeZone("UTC")
+	ctx := context.Background()
+	env, _, out := testEnv(t, "")
+	if err := (Config{HubURL: hub.URL, Token: token}).Save(env.Paths.Config); err != nil {
+		t.Fatal(err)
+	}
+	if err := Add(ctx, []string{"\x1b]52;c;QUJD\x07Water‮ the plants", "--tag", "home", "--note", "Ferns\x1b[2J first\nthen​ the rest"}, env); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := List(ctx, nil, env); err != nil {
+		t.Fatal(err)
+	}
+	if err := Show(ctx, []string{"mm-1"}, env); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, bad := range []string{"\x1b", "\x07", "‮", "​"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("printed %q, which holds %q", got, bad)
+		}
+	}
+	for _, want := range []string{"mm-1     ]52;c;QUJDWater the plants  #home\n", "Ferns[2J first\nthen the rest"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("printed %q; want it to hold %q", got, want)
+		}
+	}
+}

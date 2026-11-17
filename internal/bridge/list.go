@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/yourfriendaaron/meat-mode/internal/api"
+	"github.com/yourfriendaaron/meat-mode/internal/netguard"
 )
 
 // List runs `meat-mode list`: it prints the to-dos of the personal list, or
@@ -98,7 +99,7 @@ func List(ctx context.Context, args []string, env Env) error {
 // a glance needs.
 func itemLine(it api.Item, indent string, loc *time.Location) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s%-8s %s", indent, it.ID, it.Title)
+	fmt.Fprintf(&b, "%s%-8s %s", indent, line(it.ID), line(it.Title))
 	if it.DueAt != nil {
 		fmt.Fprintf(&b, "  due %s", it.DueAt.In(loc).Format("2006-01-02 15:04"))
 	}
@@ -106,16 +107,19 @@ func itemLine(it api.Item, indent string, loc *time.Location) string {
 		b.WriteString("  repeats")
 	}
 	for _, t := range it.Labels {
-		fmt.Fprintf(&b, "  #%s", t)
+		fmt.Fprintf(&b, "  #%s", line(t))
 	}
 	if it.Parent != "" && indent == "" {
-		fmt.Fprintf(&b, "  (sub-task of %s)", it.Parent)
+		fmt.Fprintf(&b, "  (sub-task of %s)", line(it.Parent))
 	}
 	if it.Status == "closed" {
 		fmt.Fprintf(&b, "  [%s]", closedWord(it))
 	}
 	return b.String()
 }
+
+// line is one line of the hub's text, safe to print.
+func line(s string) string { return netguard.Printable(s, false) }
 
 // closedWord says how a closed to-do closed.
 func closedWord(it api.Item) string {
@@ -160,9 +164,9 @@ func Show(ctx context.Context, args []string, env Env) error {
 		return err
 	}
 	out := env.Stdout
-	fmt.Fprintf(out, "%s  %s\n", it.ID, it.Title)
+	fmt.Fprintf(out, "%s  %s\n", line(it.ID), line(it.Title))
 	field := func(name, v string) {
-		if v != "" {
+		if v = line(v); v != "" {
 			fmt.Fprintf(out, "%-10s %s\n", name+":", v)
 		}
 	}
@@ -182,11 +186,11 @@ func Show(ctx context.Context, args []string, env Env) error {
 	field("Parent", it.Parent)
 	field("Added by", it.CreatedBy)
 	field("Key", it.Key)
-	if d := strings.TrimSpace(it.Description); d != "" {
+	if d := strings.TrimSpace(netguard.Printable(it.Description, true)); d != "" {
 		fmt.Fprintf(out, "\n%s\n", d)
 	}
 	for _, c := range it.Comments {
-		fmt.Fprintf(out, "\n%s, %s:\n%s\n", c.Author, c.CreatedAt.In(loc).Format("2006-01-02 15:04"), strings.TrimSpace(c.Text))
+		fmt.Fprintf(out, "\n%s, %s:\n%s\n", line(c.Author), c.CreatedAt.In(loc).Format("2006-01-02 15:04"), strings.TrimSpace(netguard.Printable(c.Text, true)))
 	}
 	return nil
 }
@@ -225,7 +229,7 @@ func Projects(ctx context.Context, args []string, env Env) error {
 		return nil
 	}
 	for _, p := range ps {
-		fmt.Fprintf(env.Stdout, "%-32s %d open\n", p.Name, p.Open)
+		fmt.Fprintf(env.Stdout, "%-32s %d open\n", line(p.Name), p.Open)
 	}
 	return nil
 }

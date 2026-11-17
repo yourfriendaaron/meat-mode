@@ -211,6 +211,9 @@ func (h *Hub) item(i int) api.Item {
 	if it.CreatedBy == "" {
 		it.CreatedBy = p.Bridge
 	}
+	if p.Note != "" {
+		it.Comments = append(it.Comments, api.Comment{Author: it.CreatedBy, Text: p.Note})
+	}
 	for _, c := range h.changes {
 		if c.Project == p.Project && c.Item == id {
 			switch c.Kind {

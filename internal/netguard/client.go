@@ -52,6 +52,27 @@ func SafeMessage(s string) string {
 	return strings.TrimSpace(b.String())
 }
 
+// joiner is the zero width joiner, the one format character Printable
+// keeps, since emoji sequences need it.
+const joiner = '\u200d'
+
+// Printable makes the hub's text safe to print as part of the CLI's
+// output: no control character, bidi control or invisible format character
+// other than the zero width joiner survives, so the text cannot move the
+// cursor, change the terminal's state or reorder what it shows. lines keeps
+// line feeds, for text such as a note that holds several.
+func Printable(s string, lines bool) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' && lines, r == joiner:
+			return r
+		case unicode.IsControl(r), unicode.Is(unicode.Bidi_Control, r), unicode.Is(unicode.Cf, r):
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // HubMessage is the hub's {"error"} text, or the body as it is, made safe
 // to print.
 func HubMessage(data []byte) string {

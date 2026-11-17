@@ -317,6 +317,21 @@ test.describe("desktop", () => {
     await expect.poll(() => hub.posted.filter((a) => a.kind === "stop").map((a) => a.key).sort()).toEqual([COMPOST, FOOTER].sort());
   });
 
+  test("Settings: Stop all says so when no stop lands", async ({ page, hub }) => {
+    hub.allowAgents("website");
+    hub.allowAgents("garden");
+    hub.setRun(FOOTER, { state: "working", activity: "Shortening the second line" });
+    hub.setRun(COMPOST, { state: "working", activity: "Comparing suppliers" });
+    await openApp(page);
+    await page.route("**/api/actions", (route) =>
+      route.request().method() === "POST" ? route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "hub is busy" }) }) : route.fallback(),
+    );
+    await page.locator(".sidebar").getByRole("button", { name: "Settings" }).click();
+    await page.locator("[data-section=runs]").getByRole("button", { name: "Stop all" }).click();
+    await expect(page.locator("#toast")).toContainText("Could not stop 2 of 2");
+    expect(hub.posted.filter((a) => a.kind === "stop")).toEqual([]);
+  });
+
   test("a push's Reply link opens the item at its note box", async ({ page, hub }) => {
     hub.allowAgents("website");
     hub.setRun(FOOTER, { state: "waiting" });
