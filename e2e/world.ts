@@ -597,15 +597,17 @@ export class World {
   /**
    * Builds the fake agent (internal/bridge/fakeagent) once and returns the
    * bridge environment that runs it in place of Claude Code: stepDelay sets
-   * how far apart its slow steps are, timeout the longest one run may take.
+   * how far apart its slow steps are, timeout the longest one run may take,
+   * and gate, when given, the file a slow turn waits for before its steps.
    */
-  async fakeAgentEnv(stepDelay = "1500ms", timeout = "30s"): Promise<NodeJS.ProcessEnv> {
+  async fakeAgentEnv(stepDelay = "1500ms", timeout = "30s", gate = ""): Promise<NodeJS.ProcessEnv> {
     if (!this.fake) {
       const dir = join(this.tmp, "fakeagent-bin");
       await execFileP("go", ["build", "-o", dir + "/", "./internal/bridge/fakeagent"], { cwd: repoRoot, env: { ...process.env, CGO_ENABLED: "0" } });
       this.fake = join(dir, "fakeagent");
     }
-    return { MEAT_MODE_AGENT_COMMAND: `${this.fake} --step ${stepDelay}`, MEAT_MODE_AGENT_TIMEOUT: timeout };
+    const cmd = `${this.fake} --step ${stepDelay}${gate ? ` --gate ${gate}` : ""}`;
+    return { MEAT_MODE_AGENT_COMMAND: cmd, MEAT_MODE_AGENT_TIMEOUT: timeout };
   }
 
   /** Starts `meat-mode bridge run` for a machine. extra adds to its environment. */

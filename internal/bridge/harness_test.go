@@ -23,8 +23,8 @@ func (w *world) runLog(bead, run string) string {
 func TestFakeHarnessSteers(t *testing.T) {
 	t.Parallel()
 	w, dir, id := agentWorld(t)
-	// Each step outlasts the note's delivery, which runs bd and slows on a busy machine.
-	b := w.agentBridgeWith(true, fakeHarness(t, nil, "--step", "6s"))
+	gate, open := slowGate(t)
+	b := w.agentBridgeWith(true, fakeHarness(t, nil, gate...))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
@@ -32,6 +32,7 @@ func TestFakeHarnessSteers(t *testing.T) {
 	if rec := runOf(b, id); rec.Run.Queued != 1 || rec.Run.State != api.RunWorking {
 		t.Errorf("after the note: %+v", rec.Run)
 	}
+	open()
 	run := w.waitRun(b, id, settled)
 	if run.ID != first.ID || run.State != api.RunDone || run.Count != 1 {
 		t.Errorf("settled = %+v", run)
@@ -49,7 +50,8 @@ func TestFakeHarnessSteers(t *testing.T) {
 func TestFakeHarnessHoldsNotesUntilTheTurnEnds(t *testing.T) {
 	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }, "--step", "2s"))
+	gate, open := slowGate(t)
+	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }, gate...))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
@@ -58,6 +60,7 @@ func TestFakeHarnessHoldsNotesUntilTheTurnEnds(t *testing.T) {
 	if rec := runOf(b, id); rec.Run.Queued != 2 || rec.Run.State != api.RunWorking {
 		t.Errorf("after two notes: %+v", rec.Run)
 	}
+	open()
 	run := w.waitRun(b, id, settled)
 	rec := runOf(b, id)
 	if run.ID != first.ID || run.State != api.RunDone || run.Count != 1 || rec.Count != 1 || run.Queued != 0 {
@@ -82,11 +85,13 @@ func TestFakeHarnessHoldsNotesUntilTheTurnEnds(t *testing.T) {
 func TestFakeHarnessKeepsNotesAfterAFailedTurn(t *testing.T) {
 	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }, "--step", "2s"))
+	gate, open := slowGate(t)
+	b := w.agentBridgeWith(true, fakeHarness(t, func(i *harness.Info) { i.Steer = false }, gate...))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow fail")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
 	w.ask(b, "ask-close", id, "Then close it")
+	open()
 	run := w.waitRun(b, id, settled)
 	if run.ID != first.ID || run.Reason != api.ReasonFailed || run.Queued != 0 {
 		t.Errorf("settled = %+v", run)

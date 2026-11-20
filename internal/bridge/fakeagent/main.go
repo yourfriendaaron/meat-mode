@@ -15,7 +15,8 @@
 //
 //	reply   write a note with bd comment, then end the turn
 //	close   write a note and close the bead with bd close
-//	slow    take a few tool steps first, --step apart (default 500ms), so a follow-up lands mid-turn
+//	slow    take a few tool steps first, --step apart (default 500ms), so a follow-up lands mid-turn;
+//	        with --gate <file>, they start only once that file exists
 //	usage   report a rejected rate limit, then end the turn with a usage-limit error
 //	budget  end the turn with the max-budget error
 //	fail    end the turn with an error result
@@ -63,6 +64,8 @@ var (
 	fake    bool // --protocol fake
 	// stepPause is the time between the tool steps of a slow turn.
 	stepPause = 500 * time.Millisecond
+	// gate is the file a slow turn waits for before its tool steps; "" for none.
+	gate string
 )
 
 func main() {
@@ -83,6 +86,8 @@ func main() {
 			prompt = next
 		case "--protocol":
 			fake = next == "fake"
+		case "--gate":
+			gate = next
 		case "--step":
 			if d, err := time.ParseDuration(next); err == nil {
 				stepPause = d
@@ -189,6 +194,12 @@ func turn(words string, in chan string) {
 	}
 	step("Bash", map[string]any{"command": "bd show " + bead, "description": "Read the bead"}, bd("show", "--", bead))
 	if has("slow") {
+		for gate != "" {
+			if _, err := os.Stat(gate); err == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		for _, s := range []struct {
 			name  string
 			input map[string]any

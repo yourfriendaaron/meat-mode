@@ -67,6 +67,18 @@ func fakeAgent(t *testing.T) string {
 
 // claudeHarness is the Claude Code harness running the fake agent, which
 // speaks its stream-json, with args after its path.
+// slowGate is a --gate file for the fake agent, and the call that opens it,
+// so a slow turn holds still until the test has looked at it mid-run.
+func slowGate(t *testing.T) (args []string, open func()) {
+	t.Helper()
+	f := filepath.Join(t.TempDir(), "gate")
+	return []string{"--gate", f}, func() {
+		if err := os.WriteFile(f, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func claudeHarness(t *testing.T, args ...string) harness.Harness {
 	t.Helper()
 	cmd := append([]string{fakeAgent(t)}, args...)
@@ -299,7 +311,8 @@ func TestAgentRunOutcomes(t *testing.T) {
 func TestAgentFollowUpJoinsLiveRun(t *testing.T) {
 	t.Parallel()
 	w, dir, id := agentWorld(t)
-	b := w.agentBridgeWith(true, claudeHarness(t, "--step", "2s"))
+	gate, open := slowGate(t)
+	b := w.agentBridgeWith(true, claudeHarness(t, gate...))
 	w.tick(b)
 	w.ask(b, "ask-slow", id, "slow")
 	first := w.waitRun(b, id, func(r api.Run) bool { return r.Activity == "Reading the bead" })
@@ -313,6 +326,7 @@ func TestAgentFollowUpJoinsLiveRun(t *testing.T) {
 	}
 	// An ask with no note on a live run changes nothing.
 	w.ask(b, "ask-empty", id, "")
+	open()
 	run := w.waitRun(b, id, settled)
 	if run.ID != first.ID || run.State != api.RunDone || run.Count != 1 || run.Queued != 0 {
 		t.Errorf("settled = %+v", run)

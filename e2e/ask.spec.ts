@@ -4,7 +4,7 @@
 // steers it from the note box as a user would. The tests share one world and
 // run in order: the first switches the repo on in Settings and its agents on at the machine.
 
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 import { hasBd, World, type Captured } from "./world.ts";
@@ -31,6 +31,8 @@ let world: World | undefined;
 let failed = false;
 /** Set once the first test has switched the repo and its agents on. */
 let ready = false;
+// gate is the fake agent's --gate file, which the journey opens.
+let gate = "";
 
 const test = base.extend<{ w: World }>({
   w: async ({}, use, info) => {
@@ -53,9 +55,10 @@ base.beforeAll(async () => {
     body: JSON.stringify({ name: "laptop" }),
   });
   await w.pair("laptop", w.hubURL, token);
-  // 4 s between the fake's slow steps: the follow-up must reach the run while it
-  // still works, and CI's runners can take longer than 2 s to deliver it.
-  w.startBridge("laptop", { ...(await w.fakeAgentEnv("4s")), MEAT_MODE_AGENT_NAME: AGENT });
+  // A slow turn waits at the gate until the follow-up is on its way, then
+  // takes 4 s a step, so the run still works while the checks after it run.
+  gate = join(w.tmp, "fake-gate");
+  w.startBridge("laptop", { ...(await w.fakeAgentEnv("4s", "30s", gate)), MEAT_MODE_AGENT_NAME: AGENT });
 });
 
 base.afterEach(async ({}, info) => {
@@ -155,6 +158,7 @@ test(JOURNEY, async ({ page, w }) => {
   await page.getByRole("button", { name: `Send to ${AGENT}` }).click();
   const followUp = page.locator("#detail .note", { hasText: "Use the blue watering can" });
   await expect(followUp.getByText(`On its way to ${AGENT}`)).toBeVisible();
+  await writeFile(gate, "");
   // Reached: the note is shown without the marker while the run still works.
   await expect(page.locator("#detail .note:not([data-run])", { hasText: "Use the blue watering can" })).toBeVisible();
   await expect(card).toHaveAttribute("data-run", "working");
