@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -217,5 +218,57 @@ func TestHereTakesLinkedCopies(t *testing.T) {
 	repos[0].OptedIn, repos[1].OptedIn = true, true
 	if v := visibleRepos(repos); len(v) != 1 || v[0].Bridge != "desk" {
 		t.Errorf("visibleRepos = %v, want desk's copy alone", v)
+	}
+}
+
+// TestHereSaysWhenOff checks that a project in scope whose sync switch is
+// off, or whose epics are off, says so with the way to switch it on, and
+// does not read as an empty list ("Nothing due today.", "No epics yet.")
+// while another repo has its epics on.
+func TestHereSaysWhenOff(t *testing.T) {
+	here := Here{Home: "/srv/sam", Dir: "/srv/sam/acme/api"}
+	// off is the fixtures with acme/api changed by set, its items and
+	// epics gone as the hub drops them.
+	off := func(set func(r *api.Repo)) Model {
+		s, e := load(t)
+		for k := range s.Repos {
+			if s.Repos[k].Name == "acme/api" {
+				set(&s.Repos[k])
+			}
+		}
+		s.Items = slices.DeleteFunc(s.Items, func(it api.Item) bool { return it.Repo == "acme/api" })
+		e.Repos = slices.DeleteFunc(e.Repos, func(re api.RepoEpics) bool { return re.Repo == "acme/api" })
+		return New(hub).SetHere(here).Resize(100, 30).SetConn(ConnLive).SetData(s, e, now)
+	}
+	page := func(m Model) string { return strings.Join(plain(m), "\n") }
+	for _, tc := range []struct {
+		name      string
+		set       func(r *api.Repo)
+		want, not []string
+	}{
+		{"unsynced", func(r *api.Repo) { r.OptedIn = false },
+			[]string{"api isn't synced: switch it on in Settings.", "Epics show once api is synced."},
+			[]string{"Nothing due today.", "No epics yet."}},
+		{"epics off", func(r *api.Repo) { r.EpicsOn = false },
+			[]string{"Nothing due today.", "api's epics are off: switch them on in Settings."},
+			[]string{"No epics yet.", "isn't synced"}},
+	} {
+		m := off(tc.set)
+		got := page(m)
+		for _, w := range tc.want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: page does not say %q:\n%s", tc.name, w, got)
+			}
+		}
+		for _, n := range tc.not {
+			if strings.Contains(got, n) {
+				t.Errorf("%s: page says %q:\n%s", tc.name, n, got)
+			}
+		}
+		// Every list shown, the other repos fill the page and nothing is off.
+		m, _ = m.Key("p")
+		if got := page(m); strings.Contains(got, "switch it on") || strings.Contains(got, "switch them on") {
+			t.Errorf("%s: every list shown, page still says the project is off:\n%s", tc.name, got)
+		}
 	}
 }

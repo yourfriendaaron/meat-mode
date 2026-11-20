@@ -487,6 +487,17 @@ test("Settings lists each machine's repos with a sync switch", async ({ page, hu
   await axe(page);
 });
 
+// The bug: a list switched off while open read "Nothing here.", like an empty list.
+test("a list whose sync is switched off says so, not that it is empty", async ({ page, hub }) => {
+  hub.eventRetryMs = 200;
+  await openApp(page);
+  await page.locator("#lists .nav-item", { hasText: "garden" }).click();
+  hub.repos.find((r) => r.name === "garden")!.optedIn = false;
+  hub.items = hub.items.filter((i) => i.repo !== "garden");
+  hub.items.push({ ...hub.items[0], key: "hub/personal/pe-9", id: "pe-9", title: "Feed the cat" });
+  await expect(page.locator("#list .empty")).toHaveText("garden isn't synced: switch it on in Settings.");
+});
+
 test("Settings has no detail pane; a task view brings it back", async ({ page, hub }) => {
   void hub;
   await openApp(page);

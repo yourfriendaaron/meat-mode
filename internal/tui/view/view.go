@@ -190,6 +190,14 @@ func (m *Model) reindex(now time.Time) {
 		s, e = scoped(s, e, m.here)
 	}
 	m.d = index(s, e, now)
+	if m.inScope() {
+		m.d.scope = []*api.Repo{}
+		for k := range m.d.state.Repos {
+			if r := &m.d.state.Repos[k]; m.here[listKey(r.Bridge, r.Name)] {
+				m.d.scope = append(m.d.scope, r)
+			}
+		}
+	}
 }
 
 // inScope reports whether the viewer shows here's lists alone.

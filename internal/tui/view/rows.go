@@ -58,6 +58,9 @@ type data struct {
 	items map[string]*api.Item
 	repos map[string]*api.Repo // by "<bridge>/<repo>"
 	codes map[string]string    // each visible list's badge code, by "<bridge>/<repo>"
+	// scope is the State repos of the project the viewer shows alone; nil
+	// while it shows every list.
+	scope []*api.Repo
 	// blockers caches what each epic row waits on, per repo (blockerMap).
 	blockers map[*api.RepoEpics]map[string][]string
 }
@@ -248,14 +251,31 @@ func (d *data) cardCount() int {
 	return n
 }
 
-// epicsSwitchedOn reports whether any repo has its epics on.
+// epicsSwitchedOn reports whether any repo shown has its epics on: in the
+// project in scope, or anywhere.
 func (d *data) epicsSwitchedOn() bool {
-	for _, r := range d.state.Repos {
-		if r.EpicsOn {
-			return true
-		}
+	if d.scope != nil {
+		return slices.ContainsFunc(d.scope, func(r *api.Repo) bool { return r.EpicsOn })
 	}
-	return len(d.epics.Repos) > 0
+	return slices.ContainsFunc(d.state.Repos, func(r api.Repo) bool { return r.EpicsOn })
+}
+
+// scopeOff is why the project in scope shows nothing: "" while it shows
+// every list or is synced, else the project's name and the way to sync it.
+func (d *data) scopeOff() string {
+	if len(d.scope) == 0 || slices.ContainsFunc(d.scope, func(r *api.Repo) bool { return r.OptedIn }) {
+		return ""
+	}
+	return repoLabel(d.scope[0].Name) + " isn't synced: switch it on in Settings."
+}
+
+// scopeEpicsOff is the project in scope's name when its tracker can show
+// epics but none of its lists has them on, else "".
+func (d *data) scopeEpicsOff() string {
+	if !slices.ContainsFunc(d.scope, func(r *api.Repo) bool { return r.Epics }) || d.epicsSwitchedOn() {
+		return ""
+	}
+	return repoLabel(d.scope[0].Name)
 }
 
 // repoOf is the State repo of a list, or nil.
@@ -299,7 +319,10 @@ func (d *data) pageRows(q string, lay Layout, expanded map[string]bool) []row {
 	rows := d.todoRows(q)
 	if len(rows) == 0 {
 		text := "Nothing due today."
-		if q != "" {
+		switch {
+		case d.scopeOff() != "":
+			text = d.scopeOff()
+		case q != "":
 			text = "No to-dos match."
 		}
 		rows = append(rows, headRow(sg(" "+text, sDim)))
@@ -318,6 +341,10 @@ func (d *data) pageRows(q string, lay Layout, expanded map[string]bool) []row {
 	}
 	switch {
 	case len(epics) > 0:
+	case d.scopeOff() != "":
+		epics = []row{headRow(sg("   Epics show once "+repoLabel(d.scope[0].Name)+" is synced.", sDim))}
+	case d.scopeEpicsOff() != "":
+		epics = []row{headRow(sg("   "+d.scopeEpicsOff()+"'s epics are off: switch them on in Settings.", sDim))}
 	case q != "":
 		epics = []row{headRow(sg("   No epics or tasks match.", sDim))}
 	default:
@@ -326,8 +353,11 @@ func (d *data) pageRows(q string, lay Layout, expanded map[string]bool) []row {
 	return append(rows, epics...)
 }
 
-// hasEpics reports whether the page has its epics section.
-func (d *data) hasEpics() bool { return len(d.epics.Repos) > 0 || d.epicsSwitchedOn() }
+// hasEpics reports whether the page has its epics section: while any repo
+// shown sends epics or has them on, or the project in scope could.
+func (d *data) hasEpics() bool {
+	return len(d.epics.Repos) > 0 || d.epicsSwitchedOn() || slices.ContainsFunc(d.scope, func(r *api.Repo) bool { return r.Epics })
+}
 
 // todoRows are the Today view's groups, as rows.
 func (d *data) todoRows(q string) []row {

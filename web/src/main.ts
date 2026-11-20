@@ -750,6 +750,7 @@ function renderMain() {
   const showList = !S.view.startsWith("list:") && new Set(groups.flatMap((g) => g.items.map(repoKey))).size > 1;
   const agenda = S.view === "today" && !searching() && !filtering();
   if (!groups.length) {
+    const off = offList();
     const none = searching()
       ? "No matches."
       : filtering()
@@ -760,7 +761,9 @@ function renderMain() {
           ? "Nothing completed in the last 7 days."
           : S.view === "deleted"
             ? "Nothing deleted in the last 7 days."
-            : "Nothing here.";
+            : off
+              ? `${esc(listLabel(off))} isn't synced: switch it on in Settings.`
+              : "Nothing here.";
     setHTML(list, `<p class="empty">${none}</p>`);
     return;
   }
@@ -1097,6 +1100,13 @@ function renderTagBar() {
       ? `<span class="tagbar-chip">${ICON.tag}<span>Tag: <b>${esc(S.tag!)}</b></span><button type="button" class="tagbar-clear" data-act="tag-clear" aria-label="${esc(`Clear the tag filter ${S.tag!}`)}" title="Clear">${ICON.close}</button></span>`
       : "",
   );
+}
+
+/** The list on screen when its sync switch is off, so it shows nothing; undefined on any other view. */
+function offList(): Repo | undefined {
+  if (!S.view.startsWith("list:")) return undefined;
+  const r = repos().find((x) => `list:${repoKey(x)}` === S.view);
+  return r && !isPersonal(r) && !r.optedIn ? r : undefined;
 }
 
 /** The project on screen, which the app can delete; undefined on any other view, search or tag filter. */
